@@ -3,16 +3,17 @@ requires = ["setuptools>=68.0.0", "wheel>=0.41.0", "build>=1.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "shell-scripts"
+name = "shellscripts"
 version = "0.0.0"
-description = "Execute usefull shell scripts via an uvx-compatible interface."
+description = "Execute useful shell scripts via an uvx-compatible CLI interface."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 authors = [
   { name = "Francesco Rolando" }
 ]
-keywords = ["shell", "scripts", "uv", "astral", "uvx"]
+keywords = ["shell", "scripts", "uv", "astral", "uvx", "cli"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
@@ -22,7 +23,7 @@ classifiers = [
   "Topic :: Software Development :: Configuration Management",
 ]
 
-dependencies = ["pathspec"]
+dependencies = []
 
 [dependency-groups]
 dev = ["pytest"]
@@ -32,7 +33,7 @@ Homepage = "https://github.com/Ogekuri/shellScripts"
 Repository = "https://github.com/Ogekuri/shellScripts"
 
 [project.scripts]
-shell-scripts = "shell_scripts.core:main"
+shellscripts = "shell_scripts.core:main"
 s = "shell_scripts.core:main"
 
 [tool.setuptools]
