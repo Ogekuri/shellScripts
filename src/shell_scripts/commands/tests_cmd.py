@@ -2,9 +2,8 @@
 import os
 import sys
 import subprocess
-from pathlib import Path
 
-from shell_scripts.utils import require_project_root, print_info, print_success, print_error
+from shell_scripts.utils import require_project_root, print_info, print_success
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Run pytest test suite in a Python virtual environment."

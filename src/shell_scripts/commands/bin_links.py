@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 import sys
 from pathlib import Path
 
@@ -13,7 +12,9 @@ def print_help(version):
     print(f"Usage: {PROGRAM} bin-links [options] ({version})")
     print()
     print("bin-links options:")
-    print("  <directory>    - Source directory containing files to link (default: current dir).")
+    print(
+        "  <directory>    - Source directory containing files to link (default: current dir)."
+    )
     print("  --dest <dir>   - Destination directory for symlinks (default: $HOME/bin).")
     print("  --help         - Show this help message.")
 
@@ -60,7 +61,7 @@ def run(args):
                 if current_target == abs_src:
                     print(f"  [OK] Link already points correctly to {filename}.")
                 else:
-                    print(f"  [UPDATE] Link points elsewhere. Updating...")
+                    print("  [UPDATE] Link points elsewhere. Updating...")
                     target_link.unlink()
                     target_link.symlink_to(abs_src)
             else:
@@ -70,7 +71,7 @@ def run(args):
                     file=sys.stderr,
                 )
         else:
-            print(f"  [NEW] Creating symlink...")
+            print("  [NEW] Creating symlink...")
             target_link.symlink_to(abs_src)
 
     print("--- Operation completed ---")

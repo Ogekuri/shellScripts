@@ -4,12 +4,20 @@ import sys
 import re
 import subprocess
 import time
-from pathlib import Path
+from typing import NoReturn
 
 from shell_scripts.utils import (
-    require_commands, print_error, color_enabled,
-    RESET, BOLD, BRIGHT_RED, BRIGHT_GREEN, BRIGHT_YELLOW,
-    BRIGHT_CYAN, BRIGHT_WHITE, WHITE, c,
+    require_commands,
+    color_enabled,
+    RESET,
+    BOLD,
+    BRIGHT_RED,
+    BRIGHT_GREEN,
+    BRIGHT_YELLOW,
+    BRIGHT_CYAN,
+    BRIGHT_WHITE,
+    WHITE,
+    c,
 )
 
 PROGRAM = "shellscripts"
@@ -29,23 +37,37 @@ def _init_ui():
 
 
 def _use_unicode():
-    lang = os.environ.get("LC_ALL", os.environ.get("LC_CTYPE", os.environ.get("LANG", "")))
+    lang = os.environ.get(
+        "LC_ALL", os.environ.get("LC_CTYPE", os.environ.get("LANG", ""))
+    )
     return "UTF-8" in lang.upper() or "utf8" in lang.lower() or "utf-8" in lang.lower()
 
 
 def _icons():
     if _use_unicode():
-        return {"thick": "\u2550", "thin": "\u2500", "section": "\u25b6",
-                "done": "\u2714", "warn": "\u26a0", "bbox": "\u25fc"}
-    return {"thick": "=", "thin": "-", "section": ">",
-            "done": "OK", "warn": "!!", "bbox": "#"}
+        return {
+            "thick": "\u2550",
+            "thin": "\u2500",
+            "section": "\u25b6",
+            "done": "\u2714",
+            "warn": "\u26a0",
+            "bbox": "\u25fc",
+        }
+    return {
+        "thick": "=",
+        "thin": "-",
+        "section": ">",
+        "done": "OK",
+        "warn": "!!",
+        "bbox": "#",
+    }
 
 
 def print_help(version):
     print(f"Usage: {PROGRAM} pdf-crop [options] ({version})")
     print()
     print("pdf-crop options:")
-    print('  --in <file>              - Input PDF file (required).')
+    print("  --in <file>              - Input PDF file (required).")
     print("  --out <file>             - Output PDF file (default: crop-<input>).")
     print('  --bbox "L B R T"         - Manual bounding box in PDF points.')
     print('  --margins "L T R B"      - Margin adjustments in PDF points.')
@@ -66,8 +88,8 @@ def _fmt_size(w, h):
     return f"{_fmt(w)} x {_fmt(h)} pt"
 
 
-def _fmt_bbox_line(l, b, r, t):
-    return f"L={_fmt(l)}  B={_fmt(b)}  R={_fmt(r)}  T={_fmt(t)}"
+def _fmt_bbox_line(left, bottom, right, top):
+    return f"L={_fmt(left)}  B={_fmt(bottom)}  R={_fmt(right)}  T={_fmt(top)}"
 
 
 def _hr(char):
@@ -84,12 +106,14 @@ def _section(title):
 
 def _kv(key, value):
     if color_enabled():
-        print(f"  {BRIGHT_CYAN}{BOLD}{key:<{LABEL_WIDTH}}{RESET} {BRIGHT_WHITE}{BOLD}:{RESET} {value}")
+        print(
+            f"  {BRIGHT_CYAN}{BOLD}{key:<{LABEL_WIDTH}}{RESET} {BRIGHT_WHITE}{BOLD}:{RESET} {value}"
+        )
     else:
         print(f"  {key:<{LABEL_WIDTH}} : {value}")
 
 
-def _die(msg):
+def _die(msg) -> NoReturn:
     print(c(f"Error: {msg}", BRIGHT_RED + BOLD), file=sys.stderr)
     sys.exit(1)
 
@@ -103,28 +127,40 @@ def _parse_page_range(spec, max_pages, opt_name):
     if not spec:
         _die(f"{opt_name} requires a value")
 
-    m = re.fullmatch(r"(\d+)", spec)
-    if m:
-        s = e = int(m.group(1))
-    elif (m := re.fullmatch(r"(\d+)-", spec)):
-        s, e = int(m.group(1)), max_pages
-    elif (m := re.fullmatch(r"-(\d+)", spec)):
-        s, e = 1, int(m.group(1))
-    elif (m := re.fullmatch(r"(\d+)-(\d+)", spec)):
-        s, e = int(m.group(1)), int(m.group(2))
+    start = 0
+    end = 0
+    match = re.fullmatch(r"(\d+)", spec)
+    if match:
+        start = int(match.group(1))
+        end = start
     else:
-        _die(f"{opt_name} must be: N, N-, -N, or N-M")
+        match = re.fullmatch(r"(\d+)-", spec)
+        if match:
+            start = int(match.group(1))
+            end = max_pages
+        else:
+            match = re.fullmatch(r"-(\d+)", spec)
+            if match:
+                start = 1
+                end = int(match.group(1))
+            else:
+                match = re.fullmatch(r"(\d+)-(\d+)", spec)
+                if match:
+                    start = int(match.group(1))
+                    end = int(match.group(2))
+                else:
+                    _die(f"{opt_name} must be: N, N-, -N, or N-M")
 
-    if s < 1:
+    if start < 1:
         _die(f"{opt_name} start must be >= 1")
-    if e < s:
+    if end < start:
         _die(f"{opt_name} invalid: end < start")
-    if s > max_pages:
+    if start > max_pages:
         _die(f"{opt_name} starts beyond document pages ({max_pages})")
-    if e > max_pages:
+    if end > max_pages:
         _die(f"{opt_name} ends beyond document pages ({max_pages})")
 
-    return s, e
+    return start, end
 
 
 def _get_page_count(pdf):
@@ -138,20 +174,31 @@ def _get_page_count(pdf):
 def _get_mediabox(pdf, page=1):
     r = subprocess.run(
         ["pdfinfo", "-f", str(page), "-l", str(page), "-box", pdf],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     for line in r.stdout.splitlines():
         if "MediaBox:" in line:
             parts = line.split()
-            return [float(x) for x in parts[-4:]]
+            return tuple(float(x) for x in parts[-4:])
     return None
 
 
 def _compute_auto_bbox(pdf, first_page, last_page):
     r = subprocess.run(
-        ["gs", "-dSAFER", "-dNOPAUSE", "-dBATCH", "-sDEVICE=bbox",
-         f"-dFirstPage={first_page}", f"-dLastPage={last_page}", "-f", pdf],
-        capture_output=True, text=True,
+        [
+            "gs",
+            "-dSAFER",
+            "-dNOPAUSE",
+            "-dBATCH",
+            "-sDEVICE=bbox",
+            f"-dFirstPage={first_page}",
+            f"-dLastPage={last_page}",
+            "-f",
+            pdf,
+        ],
+        capture_output=True,
+        text=True,
     )
     output = r.stderr + "\n" + r.stdout
     minx = miny = float("inf")
@@ -160,7 +207,12 @@ def _compute_auto_bbox(pdf, first_page, last_page):
     for line in output.splitlines():
         if line.startswith("%%HiResBoundingBox:"):
             parts = line.split()
-            llx, lly, urx, ury = float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
+            llx, lly, urx, ury = (
+                float(parts[1]),
+                float(parts[2]),
+                float(parts[3]),
+                float(parts[4]),
+            )
             if urx <= llx or ury <= lly:
                 continue
             if not found:
@@ -210,7 +262,9 @@ def _render_progress(current, total, label):
             f"  {BRIGHT_WHITE}{current}/{total}{RESET}"
         )
     else:
-        sys.stdout.write(f"\r  {label:<{LABEL_WIDTH}} : [{body}{tail}{empty}] {pct:3d}%  {current}/{total}")
+        sys.stdout.write(
+            f"\r  {label:<{LABEL_WIDTH}} : [{body}{tail}{empty}] {pct:3d}%  {current}/{total}"
+        )
     sys.stdout.flush()
 
 
@@ -218,21 +272,38 @@ def _convert_pdf_with_progress(input_f, output_f, first, last, cw, ch, cl, cb, t
     _render_progress(0, total, "Progress")
 
     proc = subprocess.Popen(
-        ["gs", "-dSAFER", "-dNOPAUSE", "-dBATCH", "-sDEVICE=pdfwrite",
-         "-dAutoRotatePages=/None", "-dFIXEDMEDIA", "-dModifiesPageSize=true",
-         f"-dDEVICEWIDTHPOINTS={cw}", f"-dDEVICEHEIGHTPOINTS={ch}",
-         f"-dFirstPage={first}", f"-dLastPage={last}",
-         "-o", output_f,
-         "-c", f"<</BeginPage{{0 0 {cw} {ch} rectclip -{cl} -{cb} translate}}>> setpagedevice",
-         "-f", input_f],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        [
+            "gs",
+            "-dSAFER",
+            "-dNOPAUSE",
+            "-dBATCH",
+            "-sDEVICE=pdfwrite",
+            "-dAutoRotatePages=/None",
+            "-dFIXEDMEDIA",
+            "-dModifiesPageSize=true",
+            f"-dDEVICEWIDTHPOINTS={cw}",
+            f"-dDEVICEHEIGHTPOINTS={ch}",
+            f"-dFirstPage={first}",
+            f"-dLastPage={last}",
+            "-o",
+            output_f,
+            "-c",
+            f"<</BeginPage{{0 0 {cw} {ch} rectclip -{cl} -{cb} translate}}>> setpagedevice",
+            "-f",
+            input_f,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
 
     count = 0
-    for line in proc.stdout:
-        if re.match(r"^Page\s+\d+\s*$", line):
-            count += 1
-            _render_progress(min(count, total), total, "Progress")
+    stdout_stream = proc.stdout
+    if stdout_stream is not None:
+        for line in stdout_stream:
+            if re.match(r"^Page\s+\d+\s*$", line):
+                count += 1
+                _render_progress(min(count, total), total, "Progress")
     proc.wait()
 
     if sys.stdout.isatty():
@@ -254,11 +325,14 @@ def run(args):
     while i < len(args):
         a = args[i]
         if a == "--in":
-            input_file = args[i + 1]; i += 2
+            input_file = args[i + 1]
+            i += 2
         elif a == "--out":
-            out_file = args[i + 1]; i += 2
+            out_file = args[i + 1]
+            i += 2
         elif a == "--bbox":
-            bbox_custom = args[i + 1]; i += 2
+            bbox_custom = args[i + 1]
+            i += 2
         elif a == "--margins":
             parts = args[i + 1].split()
             if len(parts) != 4:
@@ -266,30 +340,35 @@ def run(args):
             margleft, margtop, margright, margbot = (float(x) for x in parts)
             i += 2
         elif a == "--analyze-pages":
-            analyze_pages_spec = args[i + 1]; i += 2
+            analyze_pages_spec = args[i + 1]
+            i += 2
         elif a == "--pages":
-            export_range = args[i + 1]; i += 2
+            export_range = args[i + 1]
+            i += 2
         elif a in ("-h", "--help"):
-            print_help(""); return 0
+            print_help("")
+            return 0
         else:
             _die(f"Unknown option: {a}")
 
     if not input_file:
-        print_help(""); return 1
+        print_help("")
+        return 1
     if not os.path.isfile(input_file):
         _die(f"File not found: {input_file}")
 
     if not out_file:
         out_file = f"crop-{os.path.basename(input_file)}"
 
-    npages = _get_page_count(input_file)
-    if npages is None:
+    page_count = _get_page_count(input_file)
+    if page_count is None:
         _die("Cannot read page count")
+    npages = page_count
 
-    mbox = _get_mediabox(input_file, 1)
-    if mbox is None:
+    page_mediabox = _get_mediabox(input_file, 1)
+    if page_mediabox is None:
         _die("Cannot read MediaBox of page 1")
-    page_llx, page_lly, page_urx, page_ury = mbox
+    page_llx, page_lly, page_urx, page_ury = page_mediabox
     orig_w = page_urx - page_llx
     orig_h = page_ury - page_lly
 
@@ -299,7 +378,9 @@ def run(args):
     export_total = export_last - export_first + 1
 
     if analyze_pages_spec:
-        analyze_first, analyze_last = _parse_page_range(analyze_pages_spec, npages, "--analyze-pages")
+        analyze_first, analyze_last = _parse_page_range(
+            analyze_pages_spec, npages, "--analyze-pages"
+        )
     else:
         analyze_first = export_first
         analyze_last = min(export_last, export_first + default_analyze_pages - 1)
@@ -356,20 +437,45 @@ def run(args):
     _kv("Input", c(input_file, BRIGHT_WHITE))
     _kv("Output", c(out_file, BRIGHT_WHITE))
     _kv("Document pages", c(str(npages), BRIGHT_WHITE))
-    _kv("Export pages", f"{c(f'{export_first}-{export_last}', BRIGHT_WHITE)}  {c(f'[{export_total} pages]', BRIGHT_YELLOW)}")
-    _kv("Analysis pages", f"{c(f'{analyze_first}-{analyze_last}', BRIGHT_WHITE)}  {c(f'[{analyze_total} pages]', BRIGHT_YELLOW)}")
-    _kv("Page 1 MediaBox", c(_fmt_quad(page_llx, page_lly, page_urx, page_ury), BRIGHT_WHITE))
+    _kv(
+        "Export pages",
+        f"{c(f'{export_first}-{export_last}', BRIGHT_WHITE)}  {c(f'[{export_total} pages]', BRIGHT_YELLOW)}",
+    )
+    _kv(
+        "Analysis pages",
+        f"{c(f'{analyze_first}-{analyze_last}', BRIGHT_WHITE)}  {c(f'[{analyze_total} pages]', BRIGHT_YELLOW)}",
+    )
+    _kv(
+        "Page 1 MediaBox",
+        c(_fmt_quad(page_llx, page_lly, page_urx, page_ury), BRIGHT_WHITE),
+    )
     _kv("Page 1 size", c(_fmt_size(orig_w, orig_h), BRIGHT_WHITE))
-    bbox_str = c(f"{icons['bbox']} {_fmt_bbox_line(raw_left, raw_bot, raw_right, raw_top)}", BRIGHT_YELLOW + BOLD)
+    bbox_str = c(
+        f"{icons['bbox']} {_fmt_bbox_line(raw_left, raw_bot, raw_right, raw_top)}",
+        BRIGHT_YELLOW + BOLD,
+    )
     _kv("BBox detected", f"{bbox_str}  {c(f'[{bbox_source}]', BRIGHT_WHITE)}")
     if any(v != 0 for v in (margleft, margtop, margright, margbot)):
-        _kv("Margins applied", c(f"L={_fmt(margleft)}  T={_fmt(margtop)}  R={_fmt(margright)}  B={_fmt(margbot)}", BRIGHT_WHITE))
+        _kv(
+            "Margins applied",
+            c(
+                f"L={_fmt(margleft)}  T={_fmt(margtop)}  R={_fmt(margright)}  B={_fmt(margbot)}",
+                BRIGHT_WHITE,
+            ),
+        )
     _kv("Final crop", c(_fmt_size(crop_w, crop_h), BRIGHT_GREEN + BOLD))
     print()
 
     rc = _convert_pdf_with_progress(
-        input_file, out_file, export_first, export_last,
-        crop_w, crop_h, left, bot, export_total,
+        input_file,
+        out_file,
+        export_first,
+        export_last,
+        crop_w,
+        crop_h,
+        left,
+        bot,
+        export_total,
     )
     if rc != 0:
         _die("Ghostscript conversion failed")
@@ -382,7 +488,8 @@ def run(args):
 
     r = subprocess.run(
         ["pdfinfo", "-f", "1", "-l", "1", "-box", out_file],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     out_crop_w = out_crop_h = 0
     for line in r.stdout.splitlines():
@@ -399,8 +506,14 @@ def run(args):
     _kv("Status", c(f"{icons['done']} Completed", BRIGHT_GREEN + BOLD))
     _kv("Input", c(input_file, BRIGHT_WHITE))
     _kv("Output", c(out_file, BRIGHT_WHITE))
-    _kv("Pages converted", f"{c(str(export_total), BRIGHT_WHITE)}  {c(f'[{export_first}-{export_last}]', BRIGHT_YELLOW)}")
-    _kv("BBox used", f"{c(_fmt_bbox_line(left, bot, right, top), BRIGHT_YELLOW + BOLD)}  {c(f'[{bbox_source}]', BRIGHT_WHITE)}")
+    _kv(
+        "Pages converted",
+        f"{c(str(export_total), BRIGHT_WHITE)}  {c(f'[{export_first}-{export_last}]', BRIGHT_YELLOW)}",
+    )
+    _kv(
+        "BBox used",
+        f"{c(_fmt_bbox_line(left, bot, right, top), BRIGHT_YELLOW + BOLD)}  {c(f'[{bbox_source}]', BRIGHT_WHITE)}",
+    )
     _kv("Output MediaBox", c(_fmt_size(out_media_w, out_media_h), BRIGHT_WHITE))
     _kv("Output CropBox", c(_fmt_size(out_crop_w, out_crop_h), BRIGHT_WHITE))
     _kv("Duration", c(f"{elapsed}s", BRIGHT_WHITE))

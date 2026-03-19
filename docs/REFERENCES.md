@@ -151,13 +151,12 @@ import shutil
 
 ---
 
-# ai_install.py | Python | 150L | 11 symbols | 10 imports | 1 comments
+# ai_install.py | Python | 153L | 11 symbols | 9 imports | 1 comments
 > Path: `src/shell_scripts/commands/ai_install.py`
 
 ## Imports
 ```
 import os
-import sys
 import subprocess
 import shutil
 import zipfile
@@ -170,46 +169,45 @@ import urllib.request
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L12)
-- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L13)
-- var `TOOLS = {` (L15)
-- var `CLAUDE_BUCKET = (` (L34)
-- var `KIRO_URL = "https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip"` (L38)
-### fn `def print_help(version)` (L41-54)
+- var `PROGRAM = "shellscripts"` (L11)
+- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L12)
+- var `TOOLS = {` (L14)
+- var `CLAUDE_BUCKET = (` (L33)
+- var `KIRO_URL = (` (L37)
+### fn `def print_help(version)` (L42-55)
 
-### fn `def _install_npm_tool(tool_key)` `priv` (L55-65)
+### fn `def _install_npm_tool(tool_key)` `priv` (L56-66)
 
-### fn `def _install_claude()` `priv` (L66-87)
+### fn `def _install_claude()` `priv` (L67-89)
 
-### fn `def _install_kiro()` `priv` (L88-116)
+### fn `def _install_kiro()` `priv` (L90-119)
 
-- var `ALL_INSTALLERS = {` (L117)
-### fn `def run(args)` (L127-150)
+- var `ALL_INSTALLERS = {` (L120)
+### fn `def run(args)` (L130-153)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|12||
-|`DESCRIPTION`|var|pub|13||
-|`TOOLS`|var|pub|15||
-|`CLAUDE_BUCKET`|var|pub|34||
-|`KIRO_URL`|var|pub|38||
-|`print_help`|fn|pub|41-54|def print_help(version)|
-|`_install_npm_tool`|fn|priv|55-65|def _install_npm_tool(tool_key)|
-|`_install_claude`|fn|priv|66-87|def _install_claude()|
-|`_install_kiro`|fn|priv|88-116|def _install_kiro()|
-|`ALL_INSTALLERS`|var|pub|117||
-|`run`|fn|pub|127-150|def run(args)|
+|`PROGRAM`|var|pub|11||
+|`DESCRIPTION`|var|pub|12||
+|`TOOLS`|var|pub|14||
+|`CLAUDE_BUCKET`|var|pub|33||
+|`KIRO_URL`|var|pub|37||
+|`print_help`|fn|pub|42-55|def print_help(version)|
+|`_install_npm_tool`|fn|priv|56-66|def _install_npm_tool(tool_key)|
+|`_install_claude`|fn|priv|67-89|def _install_claude()|
+|`_install_kiro`|fn|priv|90-119|def _install_kiro()|
+|`ALL_INSTALLERS`|var|pub|120||
+|`run`|fn|pub|130-153|def run(args)|
 
 
 ---
 
-# bin_links.py | Python | 77L | 4 symbols | 4 imports | 1 comments
+# bin_links.py | Python | 78L | 4 symbols | 3 imports | 1 comments
 > Path: `src/shell_scripts/commands/bin_links.py`
 
 ## Imports
 ```
-import os
 import sys
 from pathlib import Path
 from shell_scripts.utils import print_error
@@ -217,30 +215,29 @@ from shell_scripts.utils import print_error
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L8)
-- var `DESCRIPTION = "Create or update command symlinks in $HOME/bin."` (L9)
-### fn `def print_help(version)` (L12-20)
+- var `PROGRAM = "shellscripts"` (L7)
+- var `DESCRIPTION = "Create or update command symlinks in $HOME/bin."` (L8)
+### fn `def print_help(version)` (L11-21)
 
-### fn `def run(args)` (L21-77)
+### fn `def run(args)` (L22-78)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|8||
-|`DESCRIPTION`|var|pub|9||
-|`print_help`|fn|pub|12-20|def print_help(version)|
-|`run`|fn|pub|21-77|def run(args)|
+|`PROGRAM`|var|pub|7||
+|`DESCRIPTION`|var|pub|8||
+|`print_help`|fn|pub|11-21|def print_help(version)|
+|`run`|fn|pub|22-78|def run(args)|
 
 
 ---
 
-# clean.py | Python | 99L | 5 symbols | 5 imports | 1 comments
+# clean.py | Python | 98L | 5 symbols | 4 imports | 1 comments
 > Path: `src/shell_scripts/commands/clean.py`
 
 ## Imports
 ```
 import os
-import sys
 import shutil
 from pathlib import Path
 from shell_scripts.utils import require_project_root, print_error
@@ -248,72 +245,42 @@ from shell_scripts.utils import require_project_root, print_error
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L9)
-- var `DESCRIPTION = "Find and delete cache directories under the project root."` (L10)
-- var `CACHE_DIRS = [` (L12)
-### fn `def print_help(version)` (L26-34)
-
-### fn `def run(args)` (L35-99)
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|9||
-|`DESCRIPTION`|var|pub|10||
-|`CACHE_DIRS`|var|pub|12||
-|`print_help`|fn|pub|26-34|def print_help(version)|
-|`run`|fn|pub|35-99|def run(args)|
-
-
----
-
-# cli_claude.py | Python | 24L | 4 symbols | 4 imports | 1 comments
-> Path: `src/shell_scripts/commands/cli_claude.py`
-
-## Imports
-```
-import os
-import sys
-from pathlib import Path
-from shell_scripts.utils import require_project_root
-```
-
-## Definitions
-
 - var `PROGRAM = "shellscripts"` (L8)
-- var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L9)
-### fn `def print_help(version)` (L12-19)
+- var `DESCRIPTION = "Find and delete cache directories under the project root."` (L9)
+- var `CACHE_DIRS = [` (L11)
+### fn `def print_help(version)` (L25-33)
 
-### fn `def run(args)` (L20-24)
+### fn `def run(args)` (L34-98)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
 |`PROGRAM`|var|pub|8||
 |`DESCRIPTION`|var|pub|9||
-|`print_help`|fn|pub|12-19|def print_help(version)|
-|`run`|fn|pub|20-24|def run(args)|
+|`CACHE_DIRS`|var|pub|11||
+|`print_help`|fn|pub|25-33|def print_help(version)|
+|`run`|fn|pub|34-98|def run(args)|
 
 
 ---
 
-# cli_codex.py | Python | 24L | 4 symbols | 3 imports | 1 comments
-> Path: `src/shell_scripts/commands/cli_codex.py`
+# cli_claude.py | Python | 23L | 4 symbols | 3 imports | 1 comments
+> Path: `src/shell_scripts/commands/cli_claude.py`
 
 ## Imports
 ```
 import os
-import sys
+from pathlib import Path
 from shell_scripts.utils import require_project_root
 ```
 
 ## Definitions
 
 - var `PROGRAM = "shellscripts"` (L7)
-- var `DESCRIPTION = "Launch OpenAI Codex CLI in the project context."` (L8)
+- var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L8)
 ### fn `def print_help(version)` (L11-18)
 
-### fn `def run(args)` (L19-24)
+### fn `def run(args)` (L19-23)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -321,7 +288,35 @@ from shell_scripts.utils import require_project_root
 |`PROGRAM`|var|pub|7||
 |`DESCRIPTION`|var|pub|8||
 |`print_help`|fn|pub|11-18|def print_help(version)|
-|`run`|fn|pub|19-24|def run(args)|
+|`run`|fn|pub|19-23|def run(args)|
+
+
+---
+
+# cli_codex.py | Python | 23L | 4 symbols | 2 imports | 1 comments
+> Path: `src/shell_scripts/commands/cli_codex.py`
+
+## Imports
+```
+import os
+from shell_scripts.utils import require_project_root
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L6)
+- var `DESCRIPTION = "Launch OpenAI Codex CLI in the project context."` (L7)
+### fn `def print_help(version)` (L10-17)
+
+### fn `def run(args)` (L18-23)
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|6||
+|`DESCRIPTION`|var|pub|7||
+|`print_help`|fn|pub|10-17|def print_help(version)|
+|`run`|fn|pub|18-23|def run(args)|
 
 
 ---
@@ -535,41 +530,40 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dicom2jpg.py | Python | 76L | 7 symbols | 5 imports | 1 comments
+# dicom2jpg.py | Python | 81L | 7 symbols | 4 imports | 1 comments
 > Path: `src/shell_scripts/commands/dicom2jpg.py`
 
 ## Imports
 ```
 import os
-import sys
 import subprocess
 import shutil
-from shell_scripts.utils import print_error, require_commands
+from shell_scripts.utils import print_error
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L9)
-- var `DESCRIPTION = "Convert DICOM images to JPEG using PixelMed."` (L10)
-- var `JAVA_WRAPPERS = "/usr/lib/java-wrappers/java-wrappers.sh"` (L12)
-### fn `def print_help(version)` (L15-23)
+- var `PROGRAM = "shellscripts"` (L8)
+- var `DESCRIPTION = "Convert DICOM images to JPEG using PixelMed."` (L9)
+- var `JAVA_WRAPPERS = "/usr/lib/java-wrappers/java-wrappers.sh"` (L11)
+### fn `def print_help(version)` (L14-22)
 
-### fn `def _find_java()` `priv` (L24-30)
+### fn `def _find_java()` `priv` (L23-29)
 
-### fn `def _find_jars(*jar_names)` `priv` (L31-42)
+### fn `def _find_jars(*jar_names)` `priv` (L30-41)
 
-### fn `def run(args)` (L43-76)
+### fn `def run(args)` (L42-81)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|9||
-|`DESCRIPTION`|var|pub|10||
-|`JAVA_WRAPPERS`|var|pub|12||
-|`print_help`|fn|pub|15-23|def print_help(version)|
-|`_find_java`|fn|priv|24-30|def _find_java()|
-|`_find_jars`|fn|priv|31-42|def _find_jars(*jar_names)|
-|`run`|fn|pub|43-76|def run(args)|
+|`PROGRAM`|var|pub|8||
+|`DESCRIPTION`|var|pub|9||
+|`JAVA_WRAPPERS`|var|pub|11||
+|`print_help`|fn|pub|14-22|def print_help(version)|
+|`_find_java`|fn|priv|23-29|def _find_java()|
+|`_find_jars`|fn|priv|30-41|def _find_jars(*jar_names)|
+|`run`|fn|pub|42-81|def run(args)|
 
 
 ---
@@ -612,13 +606,12 @@ from shell_scripts.utils import print_error
 
 ---
 
-# doxygen_cmd.py | Python | 155L | 7 symbols | 9 imports | 2 comments
+# doxygen_cmd.py | Python | 157L | 7 symbols | 8 imports | 2 comments
 > Path: `src/shell_scripts/commands/doxygen_cmd.py`
 
 ## Imports
 ```
 import os
-import sys
 import shutil
 import subprocess
 import tempfile
@@ -630,33 +623,33 @@ from shell_scripts.utils import command_exists
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L12)
-- var `DESCRIPTION = "Generate Doxygen documentation (HTML, PDF, Markdown)."` (L13)
-### fn `def print_help(version)` (L16-25)
+- var `PROGRAM = "shellscripts"` (L11)
+- var `DESCRIPTION = "Generate Doxygen documentation (HTML, PDF, Markdown)."` (L12)
+### fn `def print_help(version)` (L15-24)
 
-### fn `def _supports_generate_markdown()` `priv` (L26-36)
+### fn `def _supports_generate_markdown()` `priv` (L25-37)
 
-### fn `def _write_doxyfile(path, project_root, src_dir, doxygen_dir, has_md)` `priv` (L37-38)
+### fn `def _write_doxyfile(path, project_root, src_dir, doxygen_dir, has_md)` `priv` (L38-39)
 
-### fn `def _generate_markdown_fallback(xml_dir, markdown_dir)` `priv` (L74-96)
+### fn `def _generate_markdown_fallback(xml_dir, markdown_dir)` `priv` (L75-97)
 
-### fn `def run(args)` (L97-155)
+### fn `def run(args)` (L98-157)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|12||
-|`DESCRIPTION`|var|pub|13||
-|`print_help`|fn|pub|16-25|def print_help(version)|
-|`_supports_generate_markdown`|fn|priv|26-36|def _supports_generate_markdown()|
-|`_write_doxyfile`|fn|priv|37-38|def _write_doxyfile(path, project_root, src_dir, doxygen_...|
-|`_generate_markdown_fallback`|fn|priv|74-96|def _generate_markdown_fallback(xml_dir, markdown_dir)|
-|`run`|fn|pub|97-155|def run(args)|
+|`PROGRAM`|var|pub|11||
+|`DESCRIPTION`|var|pub|12||
+|`print_help`|fn|pub|15-24|def print_help(version)|
+|`_supports_generate_markdown`|fn|priv|25-37|def _supports_generate_markdown()|
+|`_write_doxyfile`|fn|priv|38-39|def _write_doxyfile(path, project_root, src_dir, doxygen_...|
+|`_generate_markdown_fallback`|fn|priv|75-97|def _generate_markdown_fallback(xml_dir, markdown_dir)|
+|`run`|fn|pub|98-157|def run(args)|
 
 
 ---
 
-# pdf_crop.py | Python | 409L | 27 symbols | 7 imports | 1 comments
+# pdf_crop.py | Python | 522L | 27 symbols | 7 imports | 1 comments
 > Path: `src/shell_scripts/commands/pdf_crop.py`
 
 ## Imports
@@ -666,139 +659,135 @@ import sys
 import re
 import subprocess
 import time
-from pathlib import Path
+from typing import NoReturn
 from shell_scripts.utils import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L15)
-- var `DESCRIPTION = "Crop PDF pages using Ghostscript with auto or manual bounding box."` (L16)
-- var `LABEL_WIDTH = 19` (L18)
-- var `TERM_COLS = 80` (L19)
-### fn `def _init_ui()` `priv` (L22-30)
-
-- var `TERM_COLS = os.get_terminal_size().columns` (L25)
+- var `PROGRAM = "shellscripts"` (L23)
+- var `DESCRIPTION = "Crop PDF pages using Ghostscript with auto or manual bounding box."` (L24)
+- var `LABEL_WIDTH = 19` (L26)
 - var `TERM_COLS = 80` (L27)
-- var `TERM_COLS = max(60, min(120, TERM_COLS))` (L28)
-### fn `def _use_unicode()` `priv` (L31-35)
+### fn `def _init_ui()` `priv` (L30-38)
 
-### fn `def _icons()` `priv` (L36-43)
+- var `TERM_COLS = os.get_terminal_size().columns` (L33)
+- var `TERM_COLS = 80` (L35)
+- var `TERM_COLS = max(60, min(120, TERM_COLS))` (L36)
+### fn `def _use_unicode()` `priv` (L39-45)
 
-### fn `def print_help(version)` (L44-56)
+### fn `def _icons()` `priv` (L46-65)
 
-### fn `def _fmt(n)` `priv` (L57-60)
+### fn `def print_help(version)` (L66-78)
 
-### fn `def _fmt_quad(a, b, cc, d)` `priv` (L61-64)
+### fn `def _fmt(n)` `priv` (L79-82)
 
-### fn `def _fmt_size(w, h)` `priv` (L65-68)
+### fn `def _fmt_quad(a, b, cc, d)` `priv` (L83-86)
 
-### fn `def _fmt_bbox_line(l, b, r, t)` `priv` (L69-72)
+### fn `def _fmt_size(w, h)` `priv` (L87-90)
 
-### fn `def _hr(char)` `priv` (L73-77)
+### fn `def _fmt_bbox_line(left, bottom, right, top)` `priv` (L91-94)
 
-### fn `def _section(title)` `priv` (L78-84)
+### fn `def _hr(char)` `priv` (L95-99)
 
-### fn `def _kv(key, value)` `priv` (L85-91)
+### fn `def _section(title)` `priv` (L100-106)
 
-### fn `def _die(msg)` `priv` (L92-96)
+### fn `def _kv(key, value)` `priv` (L107-115)
 
-### fn `def _warn(msg)` `priv` (L97-101)
+### fn `def _die(msg) -> NoReturn` `priv` (L116-120)
 
-### fn `def _parse_page_range(spec, max_pages, opt_name)` `priv` (L102-129)
+### fn `def _warn(msg)` `priv` (L121-125)
 
-### fn `def _get_page_count(pdf)` `priv` (L130-137)
+### fn `def _parse_page_range(spec, max_pages, opt_name)` `priv` (L126-165)
 
-### fn `def _get_mediabox(pdf, page=1)` `priv` (L138-149)
+### fn `def _get_page_count(pdf)` `priv` (L166-173)
 
-### fn `def _compute_auto_bbox(pdf, first_page, last_page)` `priv` (L150-178)
+### fn `def _get_mediabox(pdf, page=1)` `priv` (L174-186)
 
-### fn `def _render_progress(current, total, label)` `priv` (L179-216)
+### fn `def _compute_auto_bbox(pdf, first_page, last_page)` `priv` (L187-230)
 
-### fn `def _convert_pdf_with_progress(input_f, output_f, first, last, cw, ch, cl, cb, total)` `priv` (L217-244)
+### fn `def _render_progress(current, total, label)` `priv` (L231-270)
 
-### fn `def run(args)` (L245-409)
+### fn `def _convert_pdf_with_progress(input_f, output_f, first, last, cw, ch, cl, cb, total)` `priv` (L271-315)
+
+### fn `def run(args)` (L316-515)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|15||
-|`DESCRIPTION`|var|pub|16||
-|`LABEL_WIDTH`|var|pub|18||
-|`TERM_COLS`|var|pub|19||
-|`_init_ui`|fn|priv|22-30|def _init_ui()|
-|`TERM_COLS`|var|pub|25||
+|`PROGRAM`|var|pub|23||
+|`DESCRIPTION`|var|pub|24||
+|`LABEL_WIDTH`|var|pub|26||
 |`TERM_COLS`|var|pub|27||
-|`TERM_COLS`|var|pub|28||
-|`_use_unicode`|fn|priv|31-35|def _use_unicode()|
-|`_icons`|fn|priv|36-43|def _icons()|
-|`print_help`|fn|pub|44-56|def print_help(version)|
-|`_fmt`|fn|priv|57-60|def _fmt(n)|
-|`_fmt_quad`|fn|priv|61-64|def _fmt_quad(a, b, cc, d)|
-|`_fmt_size`|fn|priv|65-68|def _fmt_size(w, h)|
-|`_fmt_bbox_line`|fn|priv|69-72|def _fmt_bbox_line(l, b, r, t)|
-|`_hr`|fn|priv|73-77|def _hr(char)|
-|`_section`|fn|priv|78-84|def _section(title)|
-|`_kv`|fn|priv|85-91|def _kv(key, value)|
-|`_die`|fn|priv|92-96|def _die(msg)|
-|`_warn`|fn|priv|97-101|def _warn(msg)|
-|`_parse_page_range`|fn|priv|102-129|def _parse_page_range(spec, max_pages, opt_name)|
-|`_get_page_count`|fn|priv|130-137|def _get_page_count(pdf)|
-|`_get_mediabox`|fn|priv|138-149|def _get_mediabox(pdf, page=1)|
-|`_compute_auto_bbox`|fn|priv|150-178|def _compute_auto_bbox(pdf, first_page, last_page)|
-|`_render_progress`|fn|priv|179-216|def _render_progress(current, total, label)|
-|`_convert_pdf_with_progress`|fn|priv|217-244|def _convert_pdf_with_progress(input_f, output_f, first, ...|
-|`run`|fn|pub|245-409|def run(args)|
+|`_init_ui`|fn|priv|30-38|def _init_ui()|
+|`TERM_COLS`|var|pub|33||
+|`TERM_COLS`|var|pub|35||
+|`TERM_COLS`|var|pub|36||
+|`_use_unicode`|fn|priv|39-45|def _use_unicode()|
+|`_icons`|fn|priv|46-65|def _icons()|
+|`print_help`|fn|pub|66-78|def print_help(version)|
+|`_fmt`|fn|priv|79-82|def _fmt(n)|
+|`_fmt_quad`|fn|priv|83-86|def _fmt_quad(a, b, cc, d)|
+|`_fmt_size`|fn|priv|87-90|def _fmt_size(w, h)|
+|`_fmt_bbox_line`|fn|priv|91-94|def _fmt_bbox_line(left, bottom, right, top)|
+|`_hr`|fn|priv|95-99|def _hr(char)|
+|`_section`|fn|priv|100-106|def _section(title)|
+|`_kv`|fn|priv|107-115|def _kv(key, value)|
+|`_die`|fn|priv|116-120|def _die(msg) -> NoReturn|
+|`_warn`|fn|priv|121-125|def _warn(msg)|
+|`_parse_page_range`|fn|priv|126-165|def _parse_page_range(spec, max_pages, opt_name)|
+|`_get_page_count`|fn|priv|166-173|def _get_page_count(pdf)|
+|`_get_mediabox`|fn|priv|174-186|def _get_mediabox(pdf, page=1)|
+|`_compute_auto_bbox`|fn|priv|187-230|def _compute_auto_bbox(pdf, first_page, last_page)|
+|`_render_progress`|fn|priv|231-270|def _render_progress(current, total, label)|
+|`_convert_pdf_with_progress`|fn|priv|271-315|def _convert_pdf_with_progress(input_f, output_f, first, ...|
+|`run`|fn|pub|316-515|def run(args)|
 
 
 ---
 
-# pdf_merge.py | Python | 165L | 6 symbols | 7 imports | 1 comments
+# pdf_merge.py | Python | 180L | 6 symbols | 4 imports | 1 comments
 > Path: `src/shell_scripts/commands/pdf_merge.py`
 
 ## Imports
 ```
 import os
-import sys
-import re
 import subprocess
 import tempfile
-import shutil
-from shell_scripts.utils import require_commands, print_error, print_info, print_success
+from shell_scripts.utils import require_commands, print_error
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L11)
-- var `DESCRIPTION = "Merge multiple PDF files preserving table of contents."` (L12)
-### fn `def print_help(version)` (L15-23)
+- var `PROGRAM = "shellscripts"` (L8)
+- var `DESCRIPTION = "Merge multiple PDF files preserving table of contents."` (L9)
+### fn `def print_help(version)` (L12-22)
 
-### fn `def _parse_bookmarks(dump_file)` `priv` (L24-44)
+### fn `def _parse_bookmarks(dump_file)` `priv` (L23-43)
 
-### fn `def _get_num_pages(dump_file)` `priv` (L45-52)
+### fn `def _get_num_pages(dump_file)` `priv` (L44-51)
 
-### fn `def run(args)` (L53-165)
+### fn `def run(args)` (L52-180)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|11||
-|`DESCRIPTION`|var|pub|12||
-|`print_help`|fn|pub|15-23|def print_help(version)|
-|`_parse_bookmarks`|fn|priv|24-44|def _parse_bookmarks(dump_file)|
-|`_get_num_pages`|fn|priv|45-52|def _get_num_pages(dump_file)|
-|`run`|fn|pub|53-165|def run(args)|
+|`PROGRAM`|var|pub|8||
+|`DESCRIPTION`|var|pub|9||
+|`print_help`|fn|pub|12-22|def print_help(version)|
+|`_parse_bookmarks`|fn|priv|23-43|def _parse_bookmarks(dump_file)|
+|`_get_num_pages`|fn|priv|44-51|def _get_num_pages(dump_file)|
+|`run`|fn|pub|52-180|def run(args)|
 
 
 ---
 
-# pdf_split_by_format.py | Python | 215L | 9 symbols | 6 imports | 1 comments
+# pdf_split_by_format.py | Python | 243L | 9 symbols | 5 imports | 1 comments
 > Path: `src/shell_scripts/commands/pdf_split_by_format.py`
 
 ## Imports
 ```
 import os
-import sys
 import re
 import subprocess
 import tempfile
@@ -807,34 +796,34 @@ from shell_scripts.utils import require_commands, print_error
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L10)
-- var `DESCRIPTION = "Split PDF into parts by page format changes."` (L11)
-### fn `def print_help(version)` (L14-21)
+- var `PROGRAM = "shellscripts"` (L9)
+- var `DESCRIPTION = "Split PDF into parts by page format changes."` (L10)
+### fn `def print_help(version)` (L13-22)
 
-### fn `def _get_page_formats(pdf, total_pages)` `priv` (L22-34)
+### fn `def _get_page_formats(pdf, total_pages)` `priv` (L23-37)
 
-### fn `def _get_total_pages(pdf)` `priv` (L35-44)
+### fn `def _get_total_pages(pdf)` `priv` (L38-50)
 
-### fn `def _has_toc(pdf)` `priv` (L45-62)
+### fn `def _has_toc(pdf)` `priv` (L51-69)
 
-### fn `def _extract_toc_for_range(data_file, start, end)` `priv` (L63-98)
+### fn `def _extract_toc_for_range(data_file, start, end)` `priv` (L70-104)
 
-### fn `def _apply_toc(output_file, toc_content)` `priv` (L99-131)
+### fn `def _apply_toc(output_file, toc_content)` `priv` (L105-137)
 
-### fn `def run(args)` (L132-215)
+### fn `def run(args)` (L138-243)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|10||
-|`DESCRIPTION`|var|pub|11||
-|`print_help`|fn|pub|14-21|def print_help(version)|
-|`_get_page_formats`|fn|priv|22-34|def _get_page_formats(pdf, total_pages)|
-|`_get_total_pages`|fn|priv|35-44|def _get_total_pages(pdf)|
-|`_has_toc`|fn|priv|45-62|def _has_toc(pdf)|
-|`_extract_toc_for_range`|fn|priv|63-98|def _extract_toc_for_range(data_file, start, end)|
-|`_apply_toc`|fn|priv|99-131|def _apply_toc(output_file, toc_content)|
-|`run`|fn|pub|132-215|def run(args)|
+|`PROGRAM`|var|pub|9||
+|`DESCRIPTION`|var|pub|10||
+|`print_help`|fn|pub|13-22|def print_help(version)|
+|`_get_page_formats`|fn|priv|23-37|def _get_page_formats(pdf, total_pages)|
+|`_get_total_pages`|fn|priv|38-50|def _get_total_pages(pdf)|
+|`_has_toc`|fn|priv|51-69|def _has_toc(pdf)|
+|`_extract_toc_for_range`|fn|priv|70-104|def _extract_toc_for_range(data_file, start, end)|
+|`_apply_toc`|fn|priv|105-137|def _apply_toc(output_file, toc_content)|
+|`run`|fn|pub|138-243|def run(args)|
 
 
 ---
@@ -882,62 +871,60 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# pdf_tiler_090.py | Python | 42L | 4 symbols | 4 imports | 1 comments
+# pdf_tiler_090.py | Python | 49L | 4 symbols | 3 imports | 1 comments
 > Path: `src/shell_scripts/commands/pdf_tiler_090.py`
 
 ## Imports
 ```
 import os
-import sys
 from pathlib import Path
 from shell_scripts.utils import require_commands, print_error
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L8)
-- var `DESCRIPTION = "Tile PDF to A4 pages at 90% scale using plakativ."` (L9)
-### fn `def print_help(version)` (L12-21)
+- var `PROGRAM = "shellscripts"` (L7)
+- var `DESCRIPTION = "Tile PDF to A4 pages at 90% scale using plakativ."` (L8)
+### fn `def print_help(version)` (L11-20)
 
-### fn `def run(args)` (L22-42)
+### fn `def run(args)` (L21-49)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|8||
-|`DESCRIPTION`|var|pub|9||
-|`print_help`|fn|pub|12-21|def print_help(version)|
-|`run`|fn|pub|22-42|def run(args)|
+|`PROGRAM`|var|pub|7||
+|`DESCRIPTION`|var|pub|8||
+|`print_help`|fn|pub|11-20|def print_help(version)|
+|`run`|fn|pub|21-49|def run(args)|
 
 
 ---
 
-# pdf_tiler_100.py | Python | 42L | 4 symbols | 4 imports | 1 comments
+# pdf_tiler_100.py | Python | 49L | 4 symbols | 3 imports | 1 comments
 > Path: `src/shell_scripts/commands/pdf_tiler_100.py`
 
 ## Imports
 ```
 import os
-import sys
 from pathlib import Path
 from shell_scripts.utils import require_commands, print_error
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L8)
-- var `DESCRIPTION = "Tile PDF to A4 pages at original A1 size using plakativ."` (L9)
-### fn `def print_help(version)` (L12-21)
+- var `PROGRAM = "shellscripts"` (L7)
+- var `DESCRIPTION = "Tile PDF to A4 pages at original A1 size using plakativ."` (L8)
+### fn `def print_help(version)` (L11-20)
 
-### fn `def run(args)` (L22-42)
+### fn `def run(args)` (L21-49)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|8||
-|`DESCRIPTION`|var|pub|9||
-|`print_help`|fn|pub|12-21|def print_help(version)|
-|`run`|fn|pub|22-42|def run(args)|
+|`PROGRAM`|var|pub|7||
+|`DESCRIPTION`|var|pub|8||
+|`print_help`|fn|pub|11-20|def print_help(version)|
+|`run`|fn|pub|21-49|def run(args)|
 
 
 ---
@@ -984,7 +971,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# tests_cmd.py | Python | 63L | 4 symbols | 5 imports | 1 comments
+# tests_cmd.py | Python | 62L | 4 symbols | 4 imports | 1 comments
 > Path: `src/shell_scripts/commands/tests_cmd.py`
 
 ## Imports
@@ -992,25 +979,24 @@ from shell_scripts.utils import require_commands, print_error
 import os
 import sys
 import subprocess
-from pathlib import Path
-from shell_scripts.utils import require_project_root, print_info, print_success, print_error
+from shell_scripts.utils import require_project_root, print_info, print_success
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L9)
-- var `DESCRIPTION = "Run pytest test suite in a Python virtual environment."` (L10)
-### fn `def print_help(version)` (L13-20)
+- var `PROGRAM = "shellscripts"` (L8)
+- var `DESCRIPTION = "Run pytest test suite in a Python virtual environment."` (L9)
+### fn `def print_help(version)` (L12-19)
 
-### fn `def run(args)` (L21-63)
+### fn `def run(args)` (L20-62)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|9||
-|`DESCRIPTION`|var|pub|10||
-|`print_help`|fn|pub|13-20|def print_help(version)|
-|`run`|fn|pub|21-63|def run(args)|
+|`PROGRAM`|var|pub|8||
+|`DESCRIPTION`|var|pub|9||
+|`print_help`|fn|pub|12-19|def print_help(version)|
+|`run`|fn|pub|20-62|def run(args)|
 
 
 ---
@@ -1044,7 +1030,7 @@ import os
 
 ---
 
-# venv_cmd.py | Python | 60L | 4 symbols | 6 imports | 1 comments
+# venv_cmd.py | Python | 59L | 4 symbols | 5 imports | 1 comments
 > Path: `src/shell_scripts/commands/venv_cmd.py`
 
 ## Imports
@@ -1053,25 +1039,24 @@ import os
 import sys
 import shutil
 import subprocess
-from pathlib import Path
-from shell_scripts.utils import require_project_root, print_info, print_success, print_error
+from shell_scripts.utils import require_project_root, print_info, print_success
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L10)
-- var `DESCRIPTION = "Create or recreate Python virtual environment with requirements."` (L11)
-### fn `def print_help(version)` (L14-21)
+- var `PROGRAM = "shellscripts"` (L9)
+- var `DESCRIPTION = "Create or recreate Python virtual environment with requirements."` (L10)
+### fn `def print_help(version)` (L13-20)
 
-### fn `def run(args)` (L22-60)
+### fn `def run(args)` (L21-59)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|10||
-|`DESCRIPTION`|var|pub|11||
-|`print_help`|fn|pub|14-21|def print_help(version)|
-|`run`|fn|pub|22-60|def run(args)|
+|`PROGRAM`|var|pub|9||
+|`DESCRIPTION`|var|pub|10||
+|`print_help`|fn|pub|13-20|def print_help(version)|
+|`run`|fn|pub|21-59|def run(args)|
 
 
 ---
@@ -1132,7 +1117,7 @@ from shell_scripts.utils import require_project_root
 
 ---
 
-# core.py | Python | 109L | 7 symbols | 6 imports | 1 comments
+# core.py | Python | 115L | 7 symbols | 6 imports | 1 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1150,13 +1135,13 @@ from shell_scripts.utils import is_linux, print_error
 - var `PROGRAM = "shellscripts"` (L10)
 - var `OWNER = "Ogekuri"` (L11)
 - var `REPOSITORY = "shellScripts"` (L12)
-### fn `def print_help(command_name=None)` (L15-40)
+### fn `def print_help(command_name=None)` (L15-46)
 
-### fn `def do_upgrade()` (L41-56)
+### fn `def do_upgrade()` (L47-62)
 
-### fn `def do_uninstall()` (L57-69)
+### fn `def do_uninstall()` (L63-75)
 
-### fn `def main()` (L70-109)
+### fn `def main()` (L76-115)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1164,10 +1149,10 @@ from shell_scripts.utils import is_linux, print_error
 |`PROGRAM`|var|pub|10||
 |`OWNER`|var|pub|11||
 |`REPOSITORY`|var|pub|12||
-|`print_help`|fn|pub|15-40|def print_help(command_name=None)|
-|`do_upgrade`|fn|pub|41-56|def do_upgrade()|
-|`do_uninstall`|fn|pub|57-69|def do_uninstall()|
-|`main`|fn|pub|70-109|def main()|
+|`print_help`|fn|pub|15-46|def print_help(command_name=None)|
+|`do_upgrade`|fn|pub|47-62|def do_upgrade()|
+|`do_uninstall`|fn|pub|63-75|def do_uninstall()|
+|`main`|fn|pub|76-115|def main()|
 
 
 ---

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-import sys
 import re
 import subprocess
 import tempfile
@@ -12,7 +11,9 @@ DESCRIPTION = "Split PDF into parts by page format changes."
 
 
 def print_help(version):
-    print(f"Usage: {PROGRAM} pdf-split-by-format <file1.pdf> [file2.pdf ...] ({version})")
+    print(
+        f"Usage: {PROGRAM} pdf-split-by-format <file1.pdf> [file2.pdf ...] ({version})"
+    )
     print()
     print("pdf-split-by-format options:")
     print("  <files...>  - Input PDF files to split.")
@@ -22,7 +23,9 @@ def print_help(version):
 def _get_page_formats(pdf, total_pages):
     r = subprocess.run(
         ["pdfinfo", "-f", "1", "-l", str(total_pages), pdf],
-        capture_output=True, text=True, stderr=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        stderr=subprocess.DEVNULL,
     )
     formats = []
     for line in r.stdout.splitlines():
@@ -34,7 +37,10 @@ def _get_page_formats(pdf, total_pages):
 
 def _get_total_pages(pdf):
     r = subprocess.run(
-        ["pdfinfo", pdf], capture_output=True, text=True, stderr=subprocess.DEVNULL,
+        ["pdfinfo", pdf],
+        capture_output=True,
+        text=True,
+        stderr=subprocess.DEVNULL,
     )
     for line in r.stdout.splitlines():
         if line.startswith("Pages:"):
@@ -52,7 +58,8 @@ def _has_toc(pdf):
         )
         r = subprocess.run(
             ["pdftk", tmp_path, "dump_data"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         os.unlink(tmp_path)
         return "BookmarkBegin" in r.stdout
@@ -61,7 +68,6 @@ def _has_toc(pdf):
 
 
 def _extract_toc_for_range(data_file, start, end):
-    lines = []
     entries = []
     with open(data_file) as f:
         content = f.read()
@@ -157,7 +163,9 @@ def run(args):
 
         unique = set(formats)
         if len(unique) <= 1:
-            print(f"-> INFO: All pages have the same format: [{formats[0] if formats else 'unknown'}].")
+            print(
+                f"-> INFO: All pages have the same format: [{formats[0] if formats else 'unknown'}]."
+            )
             print("-> No splitting needed. Moving to next...")
             continue
 
@@ -186,9 +194,19 @@ def run(args):
             if current_format != prev_format:
                 end_page = i
                 out_name = f"{basename}_{chunk_num:02d}.pdf"
-                print(f"-> Generating: {out_name} (Pages {start_page} - {end_page}) [Format: {prev_format}]")
+                print(
+                    f"-> Generating: {out_name} (Pages {start_page} - {end_page}) [Format: {prev_format}]"
+                )
                 subprocess.run(
-                    ["qpdf", input_pdf, "--pages", ".", f"{start_page}-{end_page}", "--", out_name],
+                    [
+                        "qpdf",
+                        input_pdf,
+                        "--pages",
+                        ".",
+                        f"{start_page}-{end_page}",
+                        "--",
+                        out_name,
+                    ],
                 )
                 if has_toc and data_file:
                     toc = _extract_toc_for_range(data_file, start_page, end_page)
@@ -199,9 +217,19 @@ def run(args):
                 chunk_num += 1
 
         out_name = f"{basename}_{chunk_num:02d}.pdf"
-        print(f"-> Generating: {out_name} (Pages {start_page} - {total_pages}) [Format: {prev_format}]")
+        print(
+            f"-> Generating: {out_name} (Pages {start_page} - {total_pages}) [Format: {prev_format}]"
+        )
         subprocess.run(
-            ["qpdf", input_pdf, "--pages", ".", f"{start_page}-{total_pages}", "--", out_name],
+            [
+                "qpdf",
+                input_pdf,
+                "--pages",
+                ".",
+                f"{start_page}-{total_pages}",
+                "--",
+                out_name,
+            ],
         )
         if has_toc and data_file:
             toc = _extract_toc_for_range(data_file, start_page, total_pages)

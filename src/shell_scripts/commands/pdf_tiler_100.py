@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-import sys
 from pathlib import Path
 
 from shell_scripts.utils import require_commands, print_error
@@ -35,8 +34,16 @@ def run(args):
     output_file = input_file.parent / f"{input_file.stem}_tiled-A4.pdf"
 
     cmd = [
-        "plakativ", "--size", "A1", "--pagesize", "A4",
-        "--border", "5mm", "--cutting-guides",
-        "-o", str(output_file), str(input_file),
+        "plakativ",
+        "--size",
+        "A1",
+        "--pagesize",
+        "A4",
+        "--border",
+        "5mm",
+        "--cutting-guides",
+        "-o",
+        str(output_file),
+        str(input_file),
     ]
     os.execvp(cmd[0], cmd)

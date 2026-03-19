@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-import sys
 import subprocess
 import shutil
 import zipfile
@@ -35,7 +34,9 @@ CLAUDE_BUCKET = (
     "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819"
     "/claude-code-releases"
 )
-KIRO_URL = "https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip"
+KIRO_URL = (
+    "https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip"
+)
 
 
 def print_help(version):
@@ -65,6 +66,7 @@ def _install_npm_tool(tool_key):
 
 def _install_claude():
     import urllib.request
+
     print_info("Installing Claude CLI...")
     install_dir = Path.home() / ".claude" / "bin"
     install_dir.mkdir(parents=True, exist_ok=True)
@@ -87,6 +89,7 @@ def _install_claude():
 
 def _install_kiro():
     import urllib.request
+
     print_info("Installing Kiro CLI...")
     install_dir = Path.home() / ".local" / "bin"
     install_dir.mkdir(parents=True, exist_ok=True)

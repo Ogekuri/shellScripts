@@ -25,11 +25,17 @@ def print_help(command_name=None):
     print(f"Usage: {PROGRAM} [command] [options] ({__version__})")
     print()
     print("Management Commands:")
-    print(f"  --upgrade    - Reinstall {PROGRAM} on Linux; print manual command elsewhere.")
-    print(f"  --uninstall  - Uninstall {PROGRAM} on Linux; print manual command elsewhere.")
+    print(
+        f"  --upgrade    - Reinstall {PROGRAM} on Linux; print manual command elsewhere."
+    )
+    print(
+        f"  --uninstall  - Uninstall {PROGRAM} on Linux; print manual command elsewhere."
+    )
     print(f"  --ver        - Print the {PROGRAM} version.")
     print(f"  --version    - Print the {PROGRAM} version.")
-    print(f"  --help       - Print the full help screen or the help text of a specific command.")
+    print(
+        "  --help       - Print the full help screen or the help text of a specific command."
+    )
     print()
     print("Commands:")
     commands = get_all_commands()
@@ -49,7 +55,7 @@ def do_upgrade():
         return result.returncode
     else:
         print(f"{PROGRAM} automatic upgrade is only supported on Linux.")
-        print(f"Run this command manually:")
+        print("Run this command manually:")
         print(f"  {install_cmd}")
         return 0
 
@@ -62,7 +68,7 @@ def do_uninstall():
         return result.returncode
     else:
         print(f"{PROGRAM} automatic uninstall is only supported on Linux.")
-        print(f"Run this command manually:")
+        print("Run this command manually:")
         print(f"  {uninstall_cmd}")
         return 0
 

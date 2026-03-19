@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import os
-import sys
 import subprocess
 import shutil
 
-from shell_scripts.utils import print_error, require_commands
+from shell_scripts.utils import print_error
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Convert DICOM images to JPEG using PixelMed."
@@ -49,9 +48,7 @@ def run(args):
     output_file = args[1]
 
     if not os.path.exists(JAVA_WRAPPERS):
-        print_error(
-            "java-wrappers not found. Install the 'java-wrappers' package."
-        )
+        print_error("java-wrappers not found. Install the 'java-wrappers' package.")
         return 1
 
     java = _find_java()
@@ -60,16 +57,24 @@ def run(args):
         return 1
 
     jars = _find_jars(
-        "pixelmed", "hsqldb", "vecmath", "jmdns",
-        "commons-codec", "jai_imageio", "clibwrapper_jiio"
+        "pixelmed",
+        "hsqldb",
+        "vecmath",
+        "jmdns",
+        "commons-codec",
+        "jai_imageio",
+        "clibwrapper_jiio",
     )
     classpath = ":".join(jars) if jars else ""
 
     cmd = [
-        java, "-Djava.awt.headless=true",
-        "-cp", classpath,
+        java,
+        "-Djava.awt.headless=true",
+        "-cp",
+        classpath,
         "com.pixelmed.display.ConsumerFormatImageMaker",
-        input_file, output_file,
+        input_file,
+        output_file,
     ]
 
     result = subprocess.run(cmd)

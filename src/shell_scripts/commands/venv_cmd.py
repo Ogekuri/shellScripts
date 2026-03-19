@@ -3,9 +3,8 @@ import os
 import sys
 import shutil
 import subprocess
-from pathlib import Path
 
-from shell_scripts.utils import require_project_root, print_info, print_success, print_error
+from shell_scripts.utils import require_project_root, print_info, print_success
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Create or recreate Python virtual environment with requirements."

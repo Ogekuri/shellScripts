@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-import sys
 import shutil
 import subprocess
 import tempfile
@@ -27,7 +26,9 @@ def _supports_generate_markdown():
     try:
         result = subprocess.run(
             ["doxygen", "-x"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return "GENERATE_MARKDOWN" in result.stdout
     except Exception:
@@ -137,6 +138,7 @@ def run(args):
     makefile = latex_dir / "Makefile"
     if makefile.exists():
         from shell_scripts.utils import command_exists
+
         if command_exists("make") and command_exists("pdflatex"):
             subprocess.run(["make", "-C", str(latex_dir)], stdout=subprocess.DEVNULL)
             refman = latex_dir / "refman.pdf"

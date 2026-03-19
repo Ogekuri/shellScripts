@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 import os
-import sys
-import re
 import subprocess
 import tempfile
-import shutil
 
-from shell_scripts.utils import require_commands, print_error, print_info, print_success
+from shell_scripts.utils import require_commands, print_error
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Merge multiple PDF files preserving table of contents."
 
 
 def print_help(version):
-    print(f"Usage: {PROGRAM} pdf-merge [-o output.pdf] file1.pdf file2.pdf ... ({version})")
+    print(
+        f"Usage: {PROGRAM} pdf-merge [-o output.pdf] file1.pdf file2.pdf ... ({version})"
+    )
     print()
     print("pdf-merge options:")
     print("  -o, --output <file>  - Output filename (default: documento_unito.pdf).")
@@ -102,7 +101,9 @@ def run(args):
         all_bookmarks = []
 
         for f in decompressed:
-            dump_file = os.path.join(tmp_dir, os.path.basename(f).replace(".pdf", ".dump.txt"))
+            dump_file = os.path.join(
+                tmp_dir, os.path.basename(f).replace(".pdf", ".dump.txt")
+            )
             r = subprocess.run(
                 ["pdftk", f, "dump_data_utf8", "output", dump_file],
                 capture_output=True,
@@ -138,14 +139,28 @@ def run(args):
         if os.path.getsize(bookmarks_file) > 0:
             merged_bm = os.path.join(tmp_dir, "merged_with_bookmarks.pdf")
             r = subprocess.run(
-                ["pdftk", merge_input, "update_info_utf8", bookmarks_file, "output", merged_bm],
+                [
+                    "pdftk",
+                    merge_input,
+                    "update_info_utf8",
+                    bookmarks_file,
+                    "output",
+                    merged_bm,
+                ],
                 capture_output=True,
             )
             if r.returncode == 0:
                 merge_input = merged_bm
             else:
                 r = subprocess.run(
-                    ["pdftk", merge_input, "update_info", bookmarks_file, "output", merged_bm],
+                    [
+                        "pdftk",
+                        merge_input,
+                        "update_info",
+                        bookmarks_file,
+                        "output",
+                        merged_bm,
+                    ],
                     capture_output=True,
                 )
                 if r.returncode == 0:
