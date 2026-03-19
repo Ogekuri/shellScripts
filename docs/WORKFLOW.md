@@ -25,9 +25,9 @@
   - parent_process: `null`
   - role: `GitHub Actions release workflow job process for tag-based package release`
   - entrypoint_symbols:
-    - `.github/workflows/release-uvx.yml::jobs.release`
+    - `.github/workflows/release.yml::jobs.release`
   - defining_files:
-    - `.github/workflows/release-uvx.yml`
+    - `.github/workflows/release.yml`
 
 ## Execution Units
 
@@ -214,7 +214,7 @@
 ### `PROC:release-uvx`
 
 - Entrypoint(s):
-  - `.github/workflows/release-uvx.yml::jobs.release` [`.github/workflows/release-uvx.yml`]
+  - `.github/workflows/release.yml::jobs.release` [`.github/workflows/release.yml`]
 - Lifecycle/trigger:
   - Trigger: GitHub push event on tags matching `v*`.
   - Runtime: GitHub runner executes ordered workflow steps (checkout, Python setup, build dependency installation, package build, release creation).
@@ -250,4 +250,4 @@
   - payload_data_shape_reference: `No explicit runtime communication path detected between local CLI process and release workflow process in repository-defined execution logic`
   - declaration_file_paths:
     - `src/shell_scripts/core.py`
-    - `.github/workflows/release-uvx.yml`
+    - `.github/workflows/release.yml`

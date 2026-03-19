@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.0"
+version: "0.1.1"
 date: "2026-03-19"
 author: "Auto-generated from repository evidence"
 scope:
@@ -44,7 +44,7 @@ Repository structure (evidence-oriented view, depth-limited):
 .
 ├── .github/
 │   └── workflows/
-│       └── release-uvx.yml
+│       └── release.yml
 ├── docs/
 ├── scripts/
 │   └── s.sh
@@ -82,7 +82,7 @@ Repository structure (evidence-oriented view, depth-limited):
 | Python 3.11+ | Runtime constraint | `pyproject.toml` `requires-python = ">=3.11"` |
 | setuptools, wheel, build | Packaging toolchain | `pyproject.toml` `[build-system].requires` |
 | pytest | Development dependency | `pyproject.toml` `[dependency-groups].dev = ["pytest"]` |
-| GitHub Actions release pipeline | CI/CD component | `.github/workflows/release-uvx.yml` |
+| GitHub Actions release pipeline | CI/CD component | `.github/workflows/release.yml` |
 | External CLI tools (e.g., qpdf, pdftk, gs, doxygen, java, plakativ) | System dependencies invoked by subprocess/exec | direct imports and command invocations in `src/shell_scripts/commands/*.py` |
 
 ## 2. Project Requirements
@@ -92,6 +92,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
 - **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, Double Commander dispatching, environment/test management, editor launchers, theme application, symlink maintenance, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against GitHub releases with cooldown caching.
+- **PRJ-005**: MUST publish package releases through a GitHub Actions workflow triggered by version tag pushes.
 
 ### 2.2 Project Constraints
 - **CTN-001**: MUST target Python runtime version 3.11 or newer.
@@ -113,6 +114,9 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-008**: MUST expose command modules with `DESCRIPTION`, `print_help(version)`, and `run(args)` call patterns.
 - **DES-009**: MUST recreate `.venv` whenever `.venv` already exists in `venv` command execution and `--force` MUST NOT change this behavior.
 - **DES-010**: MUST request deletion confirmation in `clean` unless `--yes` is provided.
+- **DES-011**: MUST define the release workflow trigger on push events for tags matching `v*`.
+- **DES-012**: MUST execute release workflow steps in order: checkout, Python setup, build dependency installation, package build, version extraction, and GitHub release creation.
+- **DES-013**: MUST derive release display version by removing prefix `refs/tags/v` from `GITHUB_REF` and exporting it through step outputs.
 
 No explicit performance optimizations identified.
 
@@ -155,6 +159,10 @@ No explicit performance optimizations identified.
 - **REQ-036**: MUST run pytest through `.venv/bin/python3` in `tests` and MUST prepend `<project-root>/src` to `PYTHONPATH`.
 - **REQ-037**: MUST create `.venv` in `tests` when missing and MUST install `requirements.txt` only when that file exists.
 - **REQ-038**: MUST recreate `.venv` in `venv` and MUST install `requirements.txt` when present; otherwise it MUST skip pip installation and continue successfully.
+- **REQ-039**: MUST run release workflow on `ubuntu-latest` with `permissions.contents` set to `write`.
+- **REQ-040**: MUST install build dependencies with `python -m pip install --upgrade pip` and `pip install setuptools wheel build`, then execute `python -m build`.
+- **REQ-041**: MUST create a GitHub release with `softprops/action-gh-release@v2`, attaching `dist/*.whl` and `dist/*.tar.gz`, and enabling generated release notes.
+- **REQ-042**: MUST set release body install command to `uv tool install shellscripts --from git+https://github.com/Ogekuri/shellScripts.git@${{ github.ref_name }}` and upgrade command to `shellscripts --upgrade`.
 
 ## 4. Test Requirements
 
@@ -172,6 +180,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-006**: MUST verify REQ-023 and REQ-024 with file fixtures and mocked MIME detection, passing only if missing-file-argument status is `2` and category dispatch selects mapped commands.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
+- **TST-009**: MUST verify REQ-039 through REQ-042 by parsing `.github/workflows/release.yml` and asserting trigger, runner, release action configuration, artifact globs, and release body command strings.
 
 ## 5. Evidence
 
@@ -180,6 +189,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003 | `src/shell_scripts/core.py` | `main`, `print_help` | `if not args: print_help(); return 0`, unknown command path returns `1`, `--version` and `--ver` print `__version__`. |
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
 | PRJ-004, DES-002..DES-006 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_write_idle_config`, `_should_check` | Uses GitHub latest release API, 300s cooldown, 429/403 handling, cache path under `~/.cache/shellscripts`. |
+| PRJ-005, DES-011, DES-012, DES-013, REQ-039, REQ-040, REQ-041, REQ-042 | `.github/workflows/release.yml` | `jobs.release`, `steps.version`, `steps.Create GitHub Release` | Tag trigger `v*`, ordered build-and-release steps, version output extraction from `GITHUB_REF`, release action, artifact globs, and release body install/upgrade commands. |
 | CTN-001 | `pyproject.toml` | `[project].requires-python` | `requires-python = ">=3.11"`. |
 | CTN-002 | `pyproject.toml` | `[project.scripts]` | `shellscripts = "shell_scripts.core:main"`, `s = "shell_scripts.core:main"`. |
 | CTN-003 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/*.py` | `require_commands`, command `run` functions | Multiple commands call `require_commands(...)` and terminate on missing tools. |
