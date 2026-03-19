@@ -1,5 +1,5 @@
 #!/bin/bash
-# VERSION: 0.0.0
+# VERSION: 0.1.0
 # AUTHORS: Ogekuri
 # Launcher script for shellscripts CLI via Astral UV
 
