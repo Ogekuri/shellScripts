@@ -1,0 +1,253 @@
+## Execution Units Index
+
+- ID: `PROC:launcher`
+  - type: `process`
+  - parent_process: `null`
+  - role: `Local shell launcher that resolves repository path and transfers control to Python CLI`
+  - entrypoint_symbols:
+    - `scripts/s.sh (top-level script entrypoint)`
+  - defining_files:
+    - `scripts/s.sh`
+
+- ID: `PROC:main`
+  - type: `process`
+  - parent_process: `null`
+  - role: `Primary CLI dispatcher for shellscripts commands and management flags`
+  - entrypoint_symbols:
+    - `shell_scripts.__main__ module bootstrap`
+    - `main(...)`
+  - defining_files:
+    - `src/shell_scripts/__main__.py`
+    - `src/shell_scripts/core.py`
+
+- ID: `PROC:release-uvx`
+  - type: `process`
+  - parent_process: `null`
+  - role: `GitHub Actions release workflow job process for tag-based package release`
+  - entrypoint_symbols:
+    - `.github/workflows/release-uvx.yml::jobs.release`
+  - defining_files:
+    - `.github/workflows/release-uvx.yml`
+
+## Execution Units
+
+### `PROC:launcher`
+
+- Entrypoint(s):
+  - `scripts/s.sh (top-level script entrypoint)` [`scripts/s.sh`]
+- Lifecycle/trigger:
+  - Trigger: user invokes launcher script `s`.
+  - Startup: resolves full script path, script directory, and repository root; validates base directory equals git root.
+  - Transfer: executes `uv run --project <base_dir> python -m shell_scripts "$@"` with `exec` (process image replacement).
+  - Shutdown: exits via `exec` replacement or explicit non-zero exit on path/root validation failure.
+  - Thread model: `no explicit threads detected`.
+- Internal Call-Trace Tree:
+  - No internal function declarations detected in this script file.
+- External Boundaries:
+  - OS/process boundary: shell built-ins and external commands (`readlink`, `dirname`, `git`, `uv`, `python`).
+  - Environment boundary: positional argument vector `$@` forwarded unchanged.
+
+### `PROC:main`
+
+- Entrypoint(s):
+  - `shell_scripts.__main__ module bootstrap` [`src/shell_scripts/__main__.py`]
+  - `main(...)` [`src/shell_scripts/core.py`]
+- Lifecycle/trigger:
+  - Trigger: invoked through `python -m shell_scripts` or console script entrypoint mapping to `shell_scripts.core:main`.
+  - Startup: executes update-check gate before argument dispatch.
+  - Runtime mode: single-dispatch CLI process; selected command path may terminate current process via `os.execvp` or run child processes via `subprocess`.
+  - Shutdown: returns explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
+  - Thread model: `no explicit threads detected`.
+- Internal Call-Trace Tree:
+  - `main(...)`: Entry dispatcher for all CLI invocations [`src/shell_scripts/core.py`]
+    - `check_for_updates(...)`: Startup version-check gate with cooldown persistence [`src/shell_scripts/version_check.py`]
+      - `_should_check(...)`: Evaluate cooldown expiration before network request [`src/shell_scripts/version_check.py`]
+        - `_read_idle_config(...)`: Read cached cooldown JSON from user cache directory [`src/shell_scripts/version_check.py`]
+      - `_compare_versions(...)`: Compare semantic version tuples (`latest` > `current`) [`src/shell_scripts/version_check.py`]
+      - `_write_idle_config(...)`: Persist check timestamp and next allowed check timestamp [`src/shell_scripts/version_check.py`]
+      - `_read_idle_config(...)`: Read existing cooldown for HTTP 429 max-idle merge path [`src/shell_scripts/version_check.py`]
+    - `print_help(...)`: Print global help or command-specific help [`src/shell_scripts/core.py`]
+      - `get_command(...)`: Resolve command module by static mapping key [`src/shell_scripts/commands/__init__.py`]
+      - `get_all_commands(...)`: Materialize full command description map [`src/shell_scripts/commands/__init__.py`]
+        - `get_command(...)`: Lazy-import each mapped command module [`src/shell_scripts/commands/__init__.py`]
+    - `do_upgrade(...)`: Linux-only self-upgrade wrapper [`src/shell_scripts/core.py`]
+      - `is_linux(...)`: Platform gate for Linux-specific automation [`src/shell_scripts/utils.py`]
+    - `do_uninstall(...)`: Linux-only self-uninstall wrapper [`src/shell_scripts/core.py`]
+      - `is_linux(...)`: Platform gate for Linux-specific automation [`src/shell_scripts/utils.py`]
+    - `get_command(...)`: Resolve first positional argument to command module [`src/shell_scripts/commands/__init__.py`]
+      - `ai_install.run(...)`: Multi-tool AI CLI installer dispatcher [`src/shell_scripts/commands/ai_install.py`]
+        - `ai_install._install_npm_tool(...)`: Run NPM global installation for selected tool [`src/shell_scripts/commands/ai_install.py`]
+        - `ai_install._install_claude(...)`: Download and install Claude binary under user home [`src/shell_scripts/commands/ai_install.py`]
+        - `ai_install._install_kiro(...)`: Download/extract/copy Kiro binaries into local bin [`src/shell_scripts/commands/ai_install.py`]
+      - `bin_links.run(...)`: Create/update symlinks from source directory into destination bin directory [`src/shell_scripts/commands/bin_links.py`]
+      - `clean.run(...)`: Find and optionally delete cache directories under project root [`src/shell_scripts/commands/clean.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `cli_claude.run(...)`: Launch Claude CLI in project context [`src/shell_scripts/commands/cli_claude.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `cli_codex.run(...)`: Launch Codex CLI with project-scoped CODEX_HOME [`src/shell_scripts/commands/cli_codex.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `cli_copilot.run(...)`: Launch Copilot CLI in project context [`src/shell_scripts/commands/cli_copilot.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `cli_gemini.run(...)`: Launch Gemini CLI in project context [`src/shell_scripts/commands/cli_gemini.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `cli_kiro.run(...)`: Launch Kiro CLI in project context [`src/shell_scripts/commands/cli_kiro.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `cli_opencode.run(...)`: Launch OpenCode CLI in project context [`src/shell_scripts/commands/cli_opencode.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `dc_differ.run(...)`: Double Commander differ wrapper [`src/shell_scripts/commands/dc_differ.py`]
+        - `dispatch(...)`: Select command by categorized file type and replace process with selected tool [`src/shell_scripts/commands/_dc_common.py`]
+          - `categorize(...)`: Determine category from MIME + extension [`src/shell_scripts/commands/_dc_common.py`]
+            - `get_extension(...)`: Parse lowercase extension from file basename [`src/shell_scripts/commands/_dc_common.py`]
+            - `detect_mime(...)`: Probe MIME type via `mimetype` or `file` commands [`src/shell_scripts/commands/_dc_common.py`]
+          - `pick_cmd(...)`: Choose primary command if available, else fallback [`src/shell_scripts/commands/_dc_common.py`]
+      - `dc_editor.run(...)`: Double Commander editor wrapper [`src/shell_scripts/commands/dc_editor.py`]
+        - `dispatch(...)`: Select editor command by file category [`src/shell_scripts/commands/_dc_common.py`]
+          - `categorize(...)`: Determine category from MIME + extension [`src/shell_scripts/commands/_dc_common.py`]
+            - `get_extension(...)`: Parse lowercase extension from file basename [`src/shell_scripts/commands/_dc_common.py`]
+            - `detect_mime(...)`: Probe MIME type via `mimetype` or `file` commands [`src/shell_scripts/commands/_dc_common.py`]
+          - `pick_cmd(...)`: Choose primary command if available, else fallback [`src/shell_scripts/commands/_dc_common.py`]
+      - `dc_viewer.run(...)`: Double Commander viewer wrapper [`src/shell_scripts/commands/dc_viewer.py`]
+        - `dispatch(...)`: Select viewer command by file category [`src/shell_scripts/commands/_dc_common.py`]
+          - `categorize(...)`: Determine category from MIME + extension [`src/shell_scripts/commands/_dc_common.py`]
+            - `get_extension(...)`: Parse lowercase extension from file basename [`src/shell_scripts/commands/_dc_common.py`]
+            - `detect_mime(...)`: Probe MIME type via `mimetype` or `file` commands [`src/shell_scripts/commands/_dc_common.py`]
+          - `pick_cmd(...)`: Choose primary command if available, else fallback [`src/shell_scripts/commands/_dc_common.py`]
+      - `dicom2jpg.run(...)`: Convert one DICOM file to JPEG via Java class invocation [`src/shell_scripts/commands/dicom2jpg.py`]
+        - `dicom2jpg._find_java(...)`: Resolve Java executable path [`src/shell_scripts/commands/dicom2jpg.py`]
+        - `dicom2jpg._find_jars(...)`: Resolve required JAR paths from standard directories [`src/shell_scripts/commands/dicom2jpg.py`]
+      - `dicomviewer.run(...)`: Open DICOM viewer via Java class invocation [`src/shell_scripts/commands/dicomviewer.py`]
+        - `dicomviewer._find_java(...)`: Resolve Java executable path [`src/shell_scripts/commands/dicomviewer.py`]
+        - `dicomviewer._find_jars(...)`: Resolve required JAR paths from standard directories [`src/shell_scripts/commands/dicomviewer.py`]
+      - `doxygen_cmd.run(...)`: Generate HTML/XML/Markdown/PDF documentation artifacts [`src/shell_scripts/commands/doxygen_cmd.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate required executables before execution [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+        - `doxygen_cmd._supports_generate_markdown(...)`: Inspect Doxygen capabilities [`src/shell_scripts/commands/doxygen_cmd.py`]
+        - `doxygen_cmd._write_doxyfile(...)`: Emit generated Doxygen configuration file [`src/shell_scripts/commands/doxygen_cmd.py`]
+        - `doxygen_cmd._generate_markdown_fallback(...)`: Build Markdown index from Doxygen XML when native mode unavailable [`src/shell_scripts/commands/doxygen_cmd.py`]
+        - `command_exists(...)`: Gate optional LaTeX PDF build tools (`make`, `pdflatex`) [`src/shell_scripts/utils.py`]
+      - `pdf_crop.run(...)`: Crop PDF pages by auto/manual bounding boxes and optional ranges [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._init_ui(...)`: Initialize terminal width constraints [`src/shell_scripts/commands/pdf_crop.py`]
+        - `require_commands(...)`: Validate required executables (`gs`, `pdfinfo`) [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+        - `pdf_crop._get_page_count(...)`: Read document page count via `pdfinfo` [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._get_mediabox(...)`: Read page MediaBox coordinates via `pdfinfo -box` [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._parse_page_range(...)`: Parse validated page-range tokens (`N`, `N-`, `-N`, `N-M`) [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._compute_auto_bbox(...)`: Aggregate HiResBoundingBox from Ghostscript bbox pass [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._section(...)`: Render titled section delimiters [`src/shell_scripts/commands/pdf_crop.py`]
+          - `pdf_crop._icons(...)`: Provide Unicode/ASCII icon set by locale capability [`src/shell_scripts/commands/pdf_crop.py`]
+            - `pdf_crop._use_unicode(...)`: Detect UTF-8 locale compatibility [`src/shell_scripts/commands/pdf_crop.py`]
+          - `pdf_crop._hr(...)`: Render horizontal rule at bounded terminal width [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._kv(...)`: Render key-value output rows [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._fmt_quad(...)`: Render four-number tuple with fixed precision [`src/shell_scripts/commands/pdf_crop.py`]
+          - `pdf_crop._fmt(...)`: Render numeric scalar with two decimals [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._fmt_size(...)`: Render width/height summary with fixed precision [`src/shell_scripts/commands/pdf_crop.py`]
+          - `pdf_crop._fmt(...)`: Render numeric scalar with two decimals [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._fmt_bbox_line(...)`: Render bbox key-value tuple [`src/shell_scripts/commands/pdf_crop.py`]
+          - `pdf_crop._fmt(...)`: Render numeric scalar with two decimals [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._convert_pdf_with_progress(...)`: Execute Ghostscript conversion while parsing per-page progress output [`src/shell_scripts/commands/pdf_crop.py`]
+          - `pdf_crop._render_progress(...)`: Render progress bar in TTY/non-TTY modes [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._die(...)`: Fail-fast termination for invalid options/state [`src/shell_scripts/commands/pdf_crop.py`]
+        - `pdf_crop._warn(...)`: Emit warning paths for degraded/non-fatal conditions [`src/shell_scripts/commands/pdf_crop.py`]
+      - `pdf_merge.run(...)`: Merge PDFs and rebuild deduplicated bookmark tree with page offsets [`src/shell_scripts/commands/pdf_merge.py`]
+        - `require_commands(...)`: Validate required executables (`pdftk`, `qpdf`) [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+        - `pdf_merge._get_num_pages(...)`: Parse page counts from `pdftk dump_data` output [`src/shell_scripts/commands/pdf_merge.py`]
+        - `pdf_merge._parse_bookmarks(...)`: Parse bookmark entries from dump format [`src/shell_scripts/commands/pdf_merge.py`]
+      - `pdf_split_by_format.run(...)`: Split PDFs at format transitions and optionally transfer in-range TOC entries [`src/shell_scripts/commands/pdf_split_by_format.py`]
+        - `require_commands(...)`: Validate required executables (`qpdf`, `pdfinfo`, `pdftk`) [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+        - `pdf_split_by_format._get_total_pages(...)`: Parse total page count via `pdfinfo` [`src/shell_scripts/commands/pdf_split_by_format.py`]
+        - `pdf_split_by_format._get_page_formats(...)`: Parse per-page format descriptors via `pdfinfo` [`src/shell_scripts/commands/pdf_split_by_format.py`]
+        - `pdf_split_by_format._has_toc(...)`: Detect bookmark presence by dump-data inspection [`src/shell_scripts/commands/pdf_split_by_format.py`]
+        - `pdf_split_by_format._extract_toc_for_range(...)`: Rebase bookmark page numbers for extracted range [`src/shell_scripts/commands/pdf_split_by_format.py`]
+        - `pdf_split_by_format._apply_toc(...)`: Apply generated bookmark info to extracted output PDF [`src/shell_scripts/commands/pdf_split_by_format.py`]
+      - `pdf_split_by_toc.run(...)`: Split PDF into chapter files using level-1 TOC entries [`src/shell_scripts/commands/pdf_split_by_toc.py`]
+        - `require_commands(...)`: Validate required executables (`pdftk`, `qpdf`) [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+        - `pdf_split_by_toc._parse_level1_toc(...)`: Parse level-1 bookmarks from dump content [`src/shell_scripts/commands/pdf_split_by_toc.py`]
+        - `pdf_split_by_toc._sanitize_title(...)`: Normalize chapter titles to filename-safe tokens [`src/shell_scripts/commands/pdf_split_by_toc.py`]
+        - `pdf_split_by_toc._extract_toc_for_range(...)`: Rebase bookmark page numbers for extracted range [`src/shell_scripts/commands/pdf_split_by_toc.py`]
+        - `pdf_split_by_toc._apply_toc_to_file(...)`: Apply rebased TOC to output PDF artifact [`src/shell_scripts/commands/pdf_split_by_toc.py`]
+      - `pdf_tiler_090.run(...)`: Build tiled A4 output at 0.90 scaling and replace process with `plakativ` [`src/shell_scripts/commands/pdf_tiler_090.py`]
+        - `require_commands(...)`: Validate required executable (`plakativ`) [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+      - `pdf_tiler_100.run(...)`: Build tiled A4 output at A1 source size and replace process with `plakativ` [`src/shell_scripts/commands/pdf_tiler_100.py`]
+        - `require_commands(...)`: Validate required executable (`plakativ`) [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+      - `pdf_toc_clean.run(...)`: Clean out-of-range bookmarks for each input PDF [`src/shell_scripts/commands/pdf_toc_clean.py`]
+        - `require_commands(...)`: Validate required executables (`pdftk`, `qpdf`) [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+        - `pdf_toc_clean._clean_one(...)`: Execute per-file sanitize pipeline with qpdf/pdftk transformations [`src/shell_scripts/commands/pdf_toc_clean.py`]
+          - `pdf_toc_clean._get_num_pages(...)`: Parse total page count from dump content [`src/shell_scripts/commands/pdf_toc_clean.py`]
+          - `pdf_toc_clean._filter_bookmarks(...)`: Keep only bookmark entries in `[1, max_pages]` [`src/shell_scripts/commands/pdf_toc_clean.py`]
+          - `pdf_toc_clean._has_out_of_range(...)`: Verify resulting bookmark set does not exceed valid page interval [`src/shell_scripts/commands/pdf_toc_clean.py`]
+      - `tests_cmd.run(...)`: Ensure `.venv`, optional dependency install, and execute pytest with project PYTHONPATH [`src/shell_scripts/commands/tests_cmd.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `ubuntu_dark_theme.run(...)`: Apply GTK and Qt dark-theme command sequence [`src/shell_scripts/commands/ubuntu_dark_theme.py`]
+        - `command_exists(...)`: Probe optional desktop utility availability before invocation [`src/shell_scripts/utils.py`]
+      - `venv_cmd.run(...)`: Recreate `.venv` and optionally install requirements [`src/shell_scripts/commands/venv_cmd.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `vscode_cmd.run(...)`: Launch VS Code in project root with CODEX_HOME set [`src/shell_scripts/commands/vscode_cmd.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `vsinsider_cmd.run(...)`: Launch VS Code Insiders in project root with CODEX_HOME set [`src/shell_scripts/commands/vsinsider_cmd.py`]
+        - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
+          - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+- External Boundaries:
+  - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
+  - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
+  - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `_dc_common.dispatch`).
+  - File-system boundary: local cache/config writes, temporary files/directories, PDF intermediate artifacts, symlink operations, venv creation/removal.
+  - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
+
+### `PROC:release-uvx`
+
+- Entrypoint(s):
+  - `.github/workflows/release-uvx.yml::jobs.release` [`.github/workflows/release-uvx.yml`]
+- Lifecycle/trigger:
+  - Trigger: GitHub push event on tags matching `v*`.
+  - Runtime: GitHub runner executes ordered workflow steps (checkout, Python setup, build dependency installation, package build, release creation).
+  - Shutdown: job ends after release step completion or earlier on step failure.
+  - Thread model: `no explicit threads detected`.
+- Internal Call-Trace Tree:
+  - No internal function declarations detected in workflow YAML.
+- External Boundaries:
+  - GitHub Actions boundaries: reusable actions (`actions/checkout`, `actions/setup-python`, `softprops/action-gh-release`).
+  - Tooling boundaries: external shell commands (`pip`, `python -m build`).
+  - Network/API boundary: GitHub Releases publication with built artifacts.
+
+## Communication Edges
+
+- Edge ID: `EDGE:001`
+  - source_execution_unit: `PROC:launcher`
+  - destination_execution_unit: `PROC:main`
+  - direction: `PROC:launcher -> PROC:main`
+  - mechanism: `OS exec handoff`
+  - endpoint_channel: `process argv/env transfer via exec uv run --project <base_dir> python -m shell_scripts`
+  - payload_data_shape_reference: `CLI argument vector ($@), inherited environment variables`
+  - declaration_file_paths:
+    - `scripts/s.sh`
+    - `src/shell_scripts/__main__.py`
+    - `src/shell_scripts/core.py`
+
+- Edge ID: `EDGE:002`
+  - source_execution_unit: `PROC:main`
+  - destination_execution_unit: `PROC:release-uvx`
+  - direction: `none`
+  - mechanism: `none`
+  - endpoint_channel: `none`
+  - payload_data_shape_reference: `No explicit runtime communication path detected between local CLI process and release workflow process in repository-defined execution logic`
+  - declaration_file_paths:
+    - `src/shell_scripts/core.py`
+    - `.github/workflows/release-uvx.yml`
