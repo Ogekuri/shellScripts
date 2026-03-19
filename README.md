@@ -9,8 +9,10 @@
 </p>
 
 <p align="center">
-<strong>TODO: fill shot one-line project description.</strong><br>
-TODO: fill full project description.<br>
+<strong>Execute useful shell scripts via an uvx-compatible CLI interface.</strong><br>
+<code>shellscripts</code> is a Linux-first command collection for project automation, AI CLI launchers,
+PDF/DICOM utilities, development helpers, and editor integrations, exposed through a single command.
+<br>
 <i>This is a companion script for the <b><a href="https://github.com/Ogekuri/useReq">useReq/req</a></b> </i>🤖✨.
 </p>
 
@@ -30,43 +32,167 @@ TODO: fill full project description.<br>
 
 
 ## Feature Highlights
-- TODO: fill hitlights bullet list
+- Single CLI entrypoint with command dispatch and built-in command help.
+- AI tooling bootstrap command (`ai-install`) for Codex, Copilot, Gemini, OpenCode, Claude, and Kiro CLIs.
+- Project-context launchers for AI CLIs, VS Code, and VS Code Insiders.
+- PDF workflow commands for crop, merge, split, TOC cleanup, and tiling.
+- DICOM helpers for image conversion (`dicom2jpg`) and viewer launch (`dicomviewer`).
+- Project maintenance commands (`clean`, `venv`, `tests`, `bin-links`, `ubuntu-dark-theme`, `doxygen`).
+- Startup update notification with rate-limited checks against GitHub Releases.
 
 
 ## Requirements
 
-- Astral `uv` tool is required for project execution (`uv tool`, `uvx`, and `uv run` flows).
-- A separate external or system-managed Python virtual environment is not required.
-- When needed, you can generate a transient `requirements.txt` file with:
-  ```bash
-  uv export --format requirements-txt > requirements.txt
-  ```
+- Linux environment is the supported platform.
+- Python `>=3.11`.
+- Astral `uv` is required for install and runtime flows (`uv tool install`, `uvx`, `uv run`).
+- Command-specific external tools are required only for related commands:
+  - `npm`/`sudo` for `ai-install` npm-based installers.
+  - `doxygen` (plus optional `make` and `pdflatex`) for `doxygen`.
+  - `gs`, `pdfinfo`, `qpdf`, `pdftk`, `plakativ` for PDF commands.
+  - Java runtime + PixelMed jars for DICOM commands.
 
 
 ## Quick Start
 
 ### Prerequisites
 
-- Use supported environment: `linux`
-- Install the `uv` tool from: [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
+- Install `uv`: [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
 
 
-### Install G/Git-Alias
+### Install / Upgrade
 
-  - Install or Upgrade
-  ```bash
-  uv tool install shell-scripts --force --from git+https://github.com/Ogekuri/shellScripts.git
-  ```
+```bash
+uv tool install shellscripts --force --from git+https://github.com/Ogekuri/shellScripts.git
+```
 
-  - Run Directly from the Repository
-  ```bash
-  uvx --from git+https://github.com/Ogekuri/shellScripts.git shell-scripts <command> [args...]
-  ```
+
+### Run Without Installing (uvx)
+
+```bash
+uvx --from git+https://github.com/Ogekuri/shellScripts.git shellscripts <command> [args...]
+```
+
+
+### Run From a Local Clone
+
+```bash
+./scripts/s.sh <command> [args...]
+```
+
+or
+
+```bash
+uv run --project . python -m shell_scripts <command> [args...]
+```
+
+
+## Management Commands
+
+Global syntax:
+
+```bash
+shellscripts [command] [options]
+```
+
+Built-in management flags:
+
+- `--help` : show full help or command help (`shellscripts --help <command>`).
+- `--version` / `--ver` : print installed version.
+- `--upgrade` : reinstall via `uv tool install ... --force` (automatic on Linux).
+- `--uninstall` : uninstall via `uv tool uninstall` (automatic on Linux).
+
 
 ## Shell Scripts
 
-TODO: document all shell scripts avalables and each command-line parameters
-g `CHANGELOG.md`.
+### Command List
+
+| Command | Purpose |
+|---|---|
+| `ai-install` | Install AI CLIs (all or selected tools). |
+| `bin-links` | Create/update symlinks from a source directory into a destination bin dir. |
+| `clean` | Find and delete cache directories under a target path (default: git root). |
+| `cli-claude` | Launch Claude CLI in git-project context. |
+| `cli-codex` | Launch Codex CLI in git-project context with `CODEX_HOME=.codex`. |
+| `cli-copilot` | Launch Copilot CLI in git-project context. |
+| `cli-gemini` | Launch Gemini CLI in git-project context. |
+| `cli-kiro` | Launch Kiro CLI in git-project context. |
+| `cli-opencode` | Launch OpenCode CLI in git-project context. |
+| `dicom2jpg` | Convert one DICOM file to JPEG. |
+| `dicomviewer` | Open DICOM viewer for one or more DICOM files. |
+| `double-commander-differ` | Dispatch file differ by MIME/category. |
+| `double-commander-editor` | Dispatch file editor by MIME/category. |
+| `double-commander-viewer` | Dispatch file viewer by MIME/category. |
+| `doxygen` | Generate HTML/XML/Markdown docs (and optional PDF). |
+| `pdf-crop` | Crop PDF pages with auto or manual bounding boxes. |
+| `pdf-merge` | Merge multiple PDFs and preserve/rebuild TOC bookmarks. |
+| `pdf-split-by-format` | Split PDFs into parts when page format changes. |
+| `pdf-split-by-toc` | Split a PDF into chapter files using level-1 TOC entries. |
+| `pdf-tiler-090` | Tile PDF to A4 at 90% scale. |
+| `pdf-tiler-100` | Tile PDF to A4 from A1 source size. |
+| `pdf-toc-clean` | Remove out-of-range TOC entries and write cleaned files. |
+| `tests` | Ensure/create `.venv` then run pytest (arguments passed through). |
+| `ubuntu-dark-theme` | Apply GNOME/Qt dark theme commands. |
+| `venv` | Recreate `.venv` and install `requirements.txt` if present. |
+| `vscode` | Open project in VS Code with `CODEX_HOME` set. |
+| `vsinsider` | Open project in VS Code Insiders with `CODEX_HOME` set. |
+
+### Selected Usage Examples
+
+Install all AI CLIs (default behavior):
+
+```bash
+shellscripts ai-install
+```
+
+Install only selected AI tools:
+
+```bash
+shellscripts ai-install --codex --gemini --claude
+```
+
+Clean caches without interactive confirmation:
+
+```bash
+shellscripts clean --yes
+```
+
+Create symlinks from `scripts/` into `~/bin`:
+
+```bash
+shellscripts bin-links scripts/
+```
+
+Crop PDF with automatic bbox over a page window:
+
+```bash
+shellscripts pdf-crop --in input.pdf --out cropped.pdf --analyze-pages 1-10 --pages 1-
+```
+
+Merge PDFs and choose output file:
+
+```bash
+shellscripts pdf-merge -o merged.pdf a.pdf b.pdf c.pdf
+```
+
+Split PDF by TOC chapters:
+
+```bash
+shellscripts pdf-split-by-toc document.pdf
+```
+
+Run tests and pass pytest options:
+
+```bash
+shellscripts tests -q -k "pdf"
+```
+
+Open current git project in VS Code / Insiders:
+
+```bash
+shellscripts vscode
+shellscripts vsinsider
+```
+
 
 ## Acknowledgments
-
