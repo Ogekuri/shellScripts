@@ -25,9 +25,9 @@
   - parent_process: `null`
   - role: `GitHub Actions release workflow job process for tag-based package release`
   - entrypoint_symbols:
-    - `.github/workflows/release.yml::jobs.release`
+    - `.github/workflows/release-uvx.yml::jobs.build-release`
   - defining_files:
-    - `.github/workflows/release.yml`
+    - `.github/workflows/release-uvx.yml`
 
 ## Execution Units
 
@@ -215,17 +215,17 @@
 ### `PROC:release-uvx`
 
 - Entrypoint(s):
-  - `.github/workflows/release.yml::jobs.release` [`.github/workflows/release.yml`]
+  - `.github/workflows/release-uvx.yml::jobs.build-release` [`.github/workflows/release-uvx.yml`]
 - Lifecycle/trigger:
-  - Trigger: GitHub push event on tags matching `v*`.
-  - Runtime: GitHub runner executes ordered workflow steps (checkout, Python setup, build dependency installation, package build, release creation).
+  - Trigger: GitHub push event on tags matching `v[0-9]+.[0-9]+.[0-9]+`.
+  - Runtime: GitHub runner executes check-branch and build-release jobs for branch validation, distribution build, artifact attestation, changelog generation, and release publication.
   - Shutdown: job ends after release step completion or earlier on step failure.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - No internal function declarations detected in workflow YAML.
 - External Boundaries:
   - GitHub Actions boundaries: reusable actions (`actions/checkout`, `actions/setup-python`, `softprops/action-gh-release`).
-  - Tooling boundaries: external shell commands (`pip`, `python -m build`).
+  - Tooling boundaries: external shell commands (`git`, `uv`, `python -m build`).
   - Network/API boundary: GitHub Releases publication with built artifacts.
 
 ## Communication Edges
@@ -251,4 +251,4 @@
   - payload_data_shape_reference: `No explicit runtime communication path detected between local CLI process and release workflow process in repository-defined execution logic`
   - declaration_file_paths:
     - `src/shell_scripts/core.py`
-    - `.github/workflows/release.yml`
+    - `.github/workflows/release-uvx.yml`
