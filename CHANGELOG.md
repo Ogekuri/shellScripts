@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0](https://github.com/Ogekuri/shellScripts/compare/v0.4.0..v0.5.0) - 2026-03-20
+### 🐛  Bug Fixes
+- propagate external req failure exit code [useReq] *(req_cmd)*
+  - handle subprocess.CalledProcessError in req command
+  - return external exit code and emit deterministic error
+  - add reproducer test for failure path
+  - update WORKFLOW runtime note
+  - regenerate REFERENCES index
+
 ## [0.4.0](https://github.com/Ogekuri/shellScripts/compare/v0.3.0..v0.4.0) - 2026-03-20
 ### 🐛  Bug Fixes
 - use npm.cmd on Windows when resolving npm [useReq] *(ai-install)*
@@ -89,8 +98,10 @@
 - \[0.2.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.2.0
 - \[0.3.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.3.0
 - \[0.4.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.4.0
+- \[0.5.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.5.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
 [0.3.0]: https://github.com/Ogekuri/shellScripts/compare/v0.2.0..v0.3.0
 [0.4.0]: https://github.com/Ogekuri/shellScripts/compare/v0.3.0..v0.4.0
+[0.5.0]: https://github.com/Ogekuri/shellScripts/compare/v0.4.0..v0.5.0
