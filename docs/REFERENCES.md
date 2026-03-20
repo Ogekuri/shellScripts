@@ -37,6 +37,7 @@
         │   ├── view_cmd.py
         │   ├── vscode_cmd.py
         │   └── vsinsider_cmd.py
+        ├── config.py
         ├── core.py
         ├── utils.py
         └── version_check.py
@@ -561,31 +562,30 @@ from shell_scripts.utils import print_error
 
 ---
 
-# diff_cmd.py | Python | 58L | 6 symbols | 2 imports | 4 comments
+# diff_cmd.py | Python | 50L | 4 symbols | 3 imports | 4 comments
 > Path: `src/shell_scripts/commands/diff_cmd.py`
 
 ## Imports
 ```
 import sys
+from shell_scripts.config import get_dispatch_profile
 from shell_scripts.commands._dc_common import dispatch
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "File differ dispatcher by MIME type."` (L14)
-- var `CATEGORY_CMDS = {` (L16)
-- var `FALLBACK = ["bcompare"]` (L24)
-### fn `def print_help(version)` (L27-43)
+- var `PROGRAM = "shellscripts"` (L14)
+- var `DESCRIPTION = "File differ dispatcher by MIME type."` (L15)
+### fn `def print_help(version)` (L18-34)
 - @brief Render command help for `diff`.
 - @details Prints usage, required file argument semantics, and argument forwarding contract for the selected external diff executable.
 - @param version {str} Version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L44-58)
+### fn `def run(args)` (L35-50)
 - @brief Execute MIME-routed diff dispatch.
-- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise dispatches by file category through shared `_dc_common`.
+- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise resolves runtime dispatch profile and delegates by file category through shared `_dc_common`.
 - @param args {list[str]} CLI args where `args[0]` is file path.
 - @return {int} Return code `2` on missing file; otherwise delegated dispatch result.
 - @satisfies REQ-023, REQ-024
@@ -593,12 +593,10 @@ from shell_scripts.commands._dc_common import dispatch
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`CATEGORY_CMDS`|var|pub|16||
-|`FALLBACK`|var|pub|24||
-|`print_help`|fn|pub|27-43|def print_help(version)|
-|`run`|fn|pub|44-58|def run(args)|
+|`PROGRAM`|var|pub|14||
+|`DESCRIPTION`|var|pub|15||
+|`print_help`|fn|pub|18-34|def print_help(version)|
+|`run`|fn|pub|35-50|def run(args)|
 
 
 ---
@@ -646,31 +644,30 @@ from shell_scripts.utils import command_exists
 
 ---
 
-# edit_cmd.py | Python | 58L | 6 symbols | 2 imports | 4 comments
+# edit_cmd.py | Python | 50L | 4 symbols | 3 imports | 4 comments
 > Path: `src/shell_scripts/commands/edit_cmd.py`
 
 ## Imports
 ```
 import sys
+from shell_scripts.config import get_dispatch_profile
 from shell_scripts.commands._dc_common import dispatch
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "File editor dispatcher by MIME type."` (L14)
-- var `CATEGORY_CMDS = {` (L16)
-- var `FALLBACK = ["/opt/sublime_text/sublime_text", "-n", "-wait"]` (L24)
-### fn `def print_help(version)` (L27-43)
+- var `PROGRAM = "shellscripts"` (L14)
+- var `DESCRIPTION = "File editor dispatcher by MIME type."` (L15)
+### fn `def print_help(version)` (L18-34)
 - @brief Render command help for `edit`.
 - @details Prints usage, required file argument semantics, and argument forwarding contract for the selected external editor executable.
 - @param version {str} Version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L44-58)
+### fn `def run(args)` (L35-50)
 - @brief Execute MIME-routed edit dispatch.
-- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise dispatches by file category through shared `_dc_common`.
+- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise resolves runtime dispatch profile and delegates by file category through shared `_dc_common`.
 - @param args {list[str]} CLI args where `args[0]` is file path.
 - @return {int} Return code `2` on missing file; otherwise delegated dispatch result.
 - @satisfies REQ-023, REQ-024
@@ -678,12 +675,10 @@ from shell_scripts.commands._dc_common import dispatch
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`CATEGORY_CMDS`|var|pub|16||
-|`FALLBACK`|var|pub|24||
-|`print_help`|fn|pub|27-43|def print_help(version)|
-|`run`|fn|pub|44-58|def run(args)|
+|`PROGRAM`|var|pub|14||
+|`DESCRIPTION`|var|pub|15||
+|`print_help`|fn|pub|18-34|def print_help(version)|
+|`run`|fn|pub|35-50|def run(args)|
 
 
 ---
@@ -1100,31 +1095,30 @@ from shell_scripts.utils import require_project_root, print_info, print_success
 
 ---
 
-# view_cmd.py | Python | 58L | 6 symbols | 2 imports | 4 comments
+# view_cmd.py | Python | 50L | 4 symbols | 3 imports | 4 comments
 > Path: `src/shell_scripts/commands/view_cmd.py`
 
 ## Imports
 ```
 import sys
+from shell_scripts.config import get_dispatch_profile
 from shell_scripts.commands._dc_common import dispatch
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "File viewer dispatcher by MIME type."` (L14)
-- var `CATEGORY_CMDS = {` (L16)
-- var `FALLBACK = ["sushi"]` (L24)
-### fn `def print_help(version)` (L27-43)
+- var `PROGRAM = "shellscripts"` (L14)
+- var `DESCRIPTION = "File viewer dispatcher by MIME type."` (L15)
+### fn `def print_help(version)` (L18-34)
 - @brief Render command help for `view`.
 - @details Prints usage, required file argument semantics, and argument forwarding contract for the selected external viewer executable.
 - @param version {str} Version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L44-58)
+### fn `def run(args)` (L35-50)
 - @brief Execute MIME-routed view dispatch.
-- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise dispatches by file category through shared `_dc_common`.
+- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise resolves runtime dispatch profile and delegates by file category through shared `_dc_common`.
 - @param args {list[str]} CLI args where `args[0]` is file path.
 - @return {int} Return code `2` on missing file; otherwise delegated dispatch result.
 - @satisfies REQ-023, REQ-024
@@ -1132,12 +1126,10 @@ from shell_scripts.commands._dc_common import dispatch
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`CATEGORY_CMDS`|var|pub|16||
-|`FALLBACK`|var|pub|24||
-|`print_help`|fn|pub|27-43|def print_help(version)|
-|`run`|fn|pub|44-58|def run(args)|
+|`PROGRAM`|var|pub|14||
+|`DESCRIPTION`|var|pub|15||
+|`print_help`|fn|pub|18-34|def print_help(version)|
+|`run`|fn|pub|35-50|def run(args)|
 
 
 ---
@@ -1198,7 +1190,106 @@ from shell_scripts.utils import require_project_root
 
 ---
 
-# core.py | Python | 115L | 7 symbols | 6 imports | 1 comments
+# config.py | Python | 262L | 9 symbols | 6 imports | 20 comments
+> Path: `src/shell_scripts/config.py`
+
+## Imports
+```
+from __future__ import annotations
+import copy
+import json
+from pathlib import Path
+from typing import Any
+from shell_scripts.utils import print_warn
+```
+
+## Definitions
+
+### fn `def get_config_path() -> Path` (L78-89)
+- @brief In-memory runtime configuration snapshot.
+- @brief Return canonical runtime config location.
+- @details Initialized from defaults; updated only by `load_runtime_config`.
+- @details Resolves path as `$HOME/.config/shellScripts/config.json` using `Path.home()` for user directory abstraction.
+- @return {Path} Absolute config file path.
+- @satisfies DES-011, REQ-045
+- @satisfies DES-011, DES-012, REQ-045, REQ-046
+
+### fn `def get_default_runtime_config() -> dict[str, Any]` (L90-101)
+- @brief Return deep-copied default configuration payload.
+- @details Produces an isolated copy to avoid external mutation of the global defaults constant and to keep write/load operations deterministic.
+- @return {dict[str, Any]} Fresh deep copy of `DEFAULT_RUNTIME_CONFIG`.
+- @satisfies DES-011, DES-012
+
+### fn `def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]` `priv` (L102-121)
+- @brief Recursively merge nested mapping values.
+- @details For keys where both base and override values are dictionaries, recursively merges child keys; otherwise replaces base value with override. Time complexity O(N) over override node count.
+- @param base {dict[str, Any]} Target mapping mutated in place.
+- @param override {dict[str, Any]} Source mapping with overriding values.
+- @return {dict[str, Any]} The mutated `base` reference.
+- @satisfies DES-011, REQ-045
+
+### fn `def _normalize_command_vector(value: Any) -> list[str] | None` `priv` (L122-138)
+- @brief Validate and normalize an executable argv vector.
+- @details Accepts only non-empty lists of non-empty strings and returns a cloned list for defensive immutability.
+- @param value {Any} Candidate command vector.
+- @return {list[str]|None} Sanitized vector or `None` if invalid.
+- @satisfies DES-011, REQ-045
+
+### fn `def _normalize_categories(value: Any) -> dict[str, list[str]] | None` `priv` (L139-161)
+- @brief Validate category-to-command mapping payload.
+- @details Keeps only entries with string keys and valid command vectors. Invalid entries are dropped and can trigger fallback usage upstream.
+- @param value {Any} Candidate category map payload.
+- @return {dict[str, list[str]]|None} Sanitized category map or `None`.
+- @satisfies DES-011, REQ-024, REQ-045
+
+### fn `def load_runtime_config(path: Path | None = None) -> dict[str, Any]` (L162-201)
+- @brief Load runtime configuration file and merge into defaults.
+- @details Resets in-memory state to defaults for each call, then attempts to read and parse JSON payload from target path and recursively merge override keys. Missing file, invalid JSON, non-object root, or read errors preserve defaults and emit warnings.
+- @param path {Path|None} Optional override path; default is canonical path.
+- @return {dict[str, Any]} Active in-memory runtime configuration snapshot.
+- @exception {json.JSONDecodeError} Handled internally and downgraded to warn.
+- @exception {OSError} Handled internally and downgraded to warn.
+- @satisfies DES-011, REQ-045
+
+### fn `def get_management_command(name: str) -> str` (L202-218)
+- @brief Resolve management command string with safe default fallback.
+- @details Reads runtime key under `management.<name>`; returns default value when key is absent or not a non-empty string.
+- @param name {str} Management operation key (`upgrade` or `uninstall`).
+- @return {str} Shell command string to execute.
+- @satisfies REQ-004, REQ-005, REQ-045
+
+### fn `def get_dispatch_profile(name: str) -> tuple[dict[str, list[str]], list[str]]` (L219-244)
+- @brief Resolve dispatch profile for diff/edit/view command wrappers.
+- @details Builds profile from `dispatch.<name>` runtime payload with typed normalization and per-section fallback to hardcoded defaults for missing or invalid values.
+- @param name {str} Dispatch command key (`diff`, `edit`, or `view`).
+- @return {tuple[dict[str, list[str]], list[str]]} `(categories, fallback)`.
+- @satisfies DES-007, REQ-024, REQ-045
+
+### fn `def write_default_runtime_config(path: Path | None = None) -> Path` (L245-262)
+- @brief Write default runtime configuration file to disk.
+- @details Creates parent directories when missing and writes canonical JSON payload using sorted keys and indentation for deterministic content.
+- @param path {Path|None} Optional override path; default is canonical path.
+- @return {Path} Path where the file has been written.
+- @exception {OSError} Propagated when filesystem write fails.
+- @satisfies DES-012, REQ-046
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`get_config_path`|fn|pub|78-89|def get_config_path() -> Path|
+|`get_default_runtime_config`|fn|pub|90-101|def get_default_runtime_config() -> dict[str, Any]|
+|`_deep_merge_dict`|fn|priv|102-121|def _deep_merge_dict(base: dict[str, Any], override: dict...|
+|`_normalize_command_vector`|fn|priv|122-138|def _normalize_command_vector(value: Any) -> list[str] | ...|
+|`_normalize_categories`|fn|priv|139-161|def _normalize_categories(value: Any) -> dict[str, list[s...|
+|`load_runtime_config`|fn|pub|162-201|def load_runtime_config(path: Path | None = None) -> dict...|
+|`get_management_command`|fn|pub|202-218|def get_management_command(name: str) -> str|
+|`get_dispatch_profile`|fn|pub|219-244|def get_dispatch_profile(name: str) -> tuple[dict[str, li...|
+|`write_default_runtime_config`|fn|pub|245-262|def write_default_runtime_config(path: Path | None = None...|
+
+
+---
+
+# core.py | Python | 180L | 6 symbols | 7 imports | 7 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1206,34 +1297,57 @@ from shell_scripts.utils import require_project_root
 import sys
 import subprocess
 from shell_scripts import __version__
+from shell_scripts.config import (
 from shell_scripts.version_check import check_for_updates
 from shell_scripts.commands import get_command, get_all_commands
-from shell_scripts.utils import is_linux, print_error
+from shell_scripts.utils import is_linux, print_error, print_info
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L10)
-- var `OWNER = "Ogekuri"` (L11)
-- var `REPOSITORY = "shellScripts"` (L12)
-### fn `def print_help(command_name=None)` (L15-46)
+- var `PROGRAM = "shellscripts"` (L23)
+### fn `def print_help(command_name=None)` (L26-69)
+- @brief Print global or command-specific help text.
+- @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and all command descriptions sorted by registry key.
+- @param command_name {str|None} Optional command token for scoped help.
+- @return {None} Writes to stdout/stderr; may terminate process on invalid command.
+- @throws {SystemExit} Raised when unknown command name is requested.
+- @satisfies PRJ-002, REQ-001, REQ-002
 
-### fn `def do_upgrade()` (L47-62)
+### fn `def do_upgrade()` (L70-91)
+- @brief Execute Linux-only upgrade command resolved from runtime config.
+- @details Reads management command string from runtime config key `management.upgrade`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
+- @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
+- @satisfies REQ-004, REQ-045
 
-### fn `def do_uninstall()` (L63-75)
+### fn `def do_uninstall()` (L92-113)
+- @brief Execute Linux-only uninstall command resolved from runtime config.
+- @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
+- @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
+- @satisfies REQ-005, REQ-045
 
-### fn `def main()` (L76-115)
+### fn `def do_write_config()` (L114-128)
+- @brief Persist default runtime configuration file to disk.
+- @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
+- @return {int} `0` on successful write.
+- @throws {OSError} Propagated on filesystem write failure.
+- @satisfies REQ-046
+
+### fn `def main()` (L129-180)
+- @brief Entrypoint for shellscripts argument dispatch.
+- @details Performs update check, loads runtime configuration overrides, then routes management flags and subcommands with explicit return codes.
+- @return {int} Process-compatible return code for caller (`sys.exit`).
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|10||
-|`OWNER`|var|pub|11||
-|`REPOSITORY`|var|pub|12||
-|`print_help`|fn|pub|15-46|def print_help(command_name=None)|
-|`do_upgrade`|fn|pub|47-62|def do_upgrade()|
-|`do_uninstall`|fn|pub|63-75|def do_uninstall()|
-|`main`|fn|pub|76-115|def main()|
+|`PROGRAM`|var|pub|23||
+|`print_help`|fn|pub|26-69|def print_help(command_name=None)|
+|`do_upgrade`|fn|pub|70-91|def do_upgrade()|
+|`do_uninstall`|fn|pub|92-113|def do_uninstall()|
+|`do_write_config`|fn|pub|114-128|def do_write_config()|
+|`main`|fn|pub|129-180|def main()|
 
 
 ---

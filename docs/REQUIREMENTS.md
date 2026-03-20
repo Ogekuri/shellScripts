@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.5"
+version: "0.1.6"
 date: "2026-03-20"
 author: "Auto-generated from repository evidence"
 scope:
@@ -87,7 +87,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ## 2. Project Requirements
 
 ### 2.1 Project Functions
-- **PRJ-001**: MUST parse CLI arguments and route execution to management flags or registered subcommands with explicit process return codes.
+- **PRJ-001**: MUST parse CLI arguments and route execution to management flags (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`) or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
 - **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against GitHub releases with cooldown caching.
@@ -109,10 +109,12 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-004**: MUST apply a minimum cooldown of 300 seconds after successful update checks and after HTTP 403 responses.
 - **DES-005**: MUST apply HTTP 429 `Retry-After` cooldown when larger than default and MUST preserve a longer existing cooldown value.
 - **DES-006**: MUST suppress non-HTTP update-check exceptions without aborting command execution.
-- **DES-007**: MUST implement `diff`, `edit`, and `view` commands as wrappers around shared MIME-based dispatch logic in `_dc_common`.
+- **DES-007**: MUST implement `diff`, `edit`, and `view` commands as wrappers around shared MIME-based dispatch logic in `_dc_common` and runtime-configurable command profiles.
 - **DES-008**: MUST expose command modules with `DESCRIPTION`, `print_help(version)`, and `run(args)` call patterns.
 - **DES-009**: MUST recreate `.venv` whenever `.venv` already exists in `venv` command execution and `--force` MUST NOT change this behavior.
 - **DES-010**: MUST request deletion confirmation in `clean` unless `--yes` is provided.
+- **DES-011**: MUST implement centralized runtime configuration loading from `~/.config/shellScripts/config.json` with recursive merge semantics where missing keys preserve hardcoded defaults.
+- **DES-012**: MUST provide a management operation that writes default runtime configuration JSON to `~/.config/shellScripts/config.json`, creating parent directories when absent.
 
 No explicit performance optimizations identified.
 
@@ -120,8 +122,8 @@ No explicit performance optimizations identified.
 - **REQ-001**: MUST print global help and return code `0` when invoked without CLI arguments.
 - **REQ-002**: MUST print an error plus global help and return code `1` when the first argument is an unknown command.
 - **REQ-003**: MUST print the package version and return code `0` for `--version` and `--ver`.
-- **REQ-004**: MUST run `uv tool install shellscripts --force --from git+https://github.com/Ogekuri/shellScripts.git` for `--upgrade` on Linux.
-- **REQ-005**: MUST run `uv tool uninstall shellscripts` for `--uninstall` on Linux.
+- **REQ-004**: MUST execute the Linux `--upgrade` command from runtime config key `management.upgrade`, using default `uv tool install shellscripts --force --from git+https://github.com/Ogekuri/shellScripts.git` when unset.
+- **REQ-005**: MUST execute the Linux `--uninstall` command from runtime config key `management.uninstall`, using default `uv tool uninstall shellscripts` when unset.
 - **REQ-006**: MUST execute all AI installers by default in `ai-install` when no selector options are provided.
 - **REQ-007**: MUST reject unknown `ai-install` selector options with return code `1`.
 - **REQ-008**: MUST install Codex, Copilot, Gemini, and OpenCode CLIs via `sudo npm install -g` commands.
@@ -138,7 +140,7 @@ No explicit performance optimizations identified.
 - **REQ-021**: MUST set `CODEX_HOME` to `<project-root>/.codex` before VS Code and VS Code Insiders command execution.
 - **REQ-022**: MUST attempt GNOME GTK dark theme configuration via `gsettings` and MAY launch `gtk-chtheme`, `qt5ct`, and `qt6ct` when available.
 - **REQ-023**: MUST print help using `diff`/`edit`/`view` command names and return code `2` when the required file argument is missing.
-- **REQ-024**: MUST classify files by MIME and extension in `_dc_common.categorize` and dispatch execution to category-specific command mappings.
+- **REQ-024**: MUST classify files by MIME and extension in `_dc_common.categorize` and dispatch execution using runtime-configured `diff`/`edit`/`view` command mappings with hardcoded defaults for missing keys.
 - **REQ-025**: MUST execute PixelMed `DicomImageViewer` with discovered Java classpath in `dicomviewer` when `java-wrappers` and Java runtime are available.
 - **REQ-026**: MUST execute PixelMed `ConsumerFormatImageMaker` in `dicom2jpg` using provided input DICOM and output JPEG paths.
 - **REQ-027**: MUST regenerate Doxygen outputs under `<project-root>/doxygen` and remove preexisting html, markdown, pdf, latex, and xml output directories before generation.
@@ -155,6 +157,8 @@ No explicit performance optimizations identified.
 - **REQ-038**: MUST recreate `.venv` in `venv` and MUST install `requirements.txt` when present; otherwise it MUST skip pip installation and continue successfully.
 - **REQ-043**: MUST ensure `<project-root>/.codex/auth.json` is a symlink to `~/.codex/auth.json` before `cli-codex` executes `/usr/bin/codex --yolo`.
 - **REQ-044**: MUST create the symlink and print an informational message when `<project-root>/.codex/auth.json` is not already that exact symlink.
+- **REQ-045**: MUST load runtime configuration from `~/.config/shellScripts/config.json` during CLI startup, and MUST keep hardcoded defaults for missing file, missing keys, or invalid value types.
+- **REQ-046**: MUST write the default runtime configuration JSON to `~/.config/shellScripts/config.json` and return code `0` when invoked with `--write-config`.
 
 ## 4. Test Requirements
 
@@ -165,11 +169,12 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 
 ### 4.2 Verification Requirements
 - **TST-001**: MUST verify REQ-001 and REQ-002 by invoking `shell_scripts.core.main` with empty and unknown arguments, passing only if return codes and help/error outputs match specified behavior.
-- **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting exact generated `uv tool` commands and propagated return codes.
+- **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting command values resolved from runtime config with default command fallback and propagated return codes.
 - **TST-003**: MUST verify REQ-006 through REQ-010 by monkeypatching installer call sites and passing only if option parsing selects expected installer sets and unknown options return code `1`.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
 - **TST-005**: MUST verify REQ-014 through REQ-021 and REQ-043 through REQ-044 by monkeypatching `os.execvp` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, and codex auth symlink behavior match requirements.
-- **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and category dispatch selects mapped commands.
+- **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
+- **TST-009**: MUST verify REQ-045 and REQ-046 by monkeypatching config I/O boundaries and asserting startup load invocation plus `--write-config` success behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
 

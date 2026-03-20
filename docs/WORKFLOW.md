@@ -54,7 +54,7 @@
   - `main(...)` [`src/shell_scripts/core.py`]
 - Lifecycle/trigger:
   - Trigger: invoked through `python -m shell_scripts` or console script entrypoint mapping to `shell_scripts.core:main`.
-  - Startup: executes update-check gate before argument dispatch.
+  - Startup: executes update-check gate and runtime-config load before argument dispatch.
   - Runtime mode: single-dispatch CLI process; selected command path may terminate current process via `os.execvp` or run child processes via `subprocess`.
   - Shutdown: returns explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
   - Thread model: `no explicit threads detected`.
@@ -66,14 +66,23 @@
       - `_compare_versions(...)`: Compare semantic version tuples (`latest` > `current`) [`src/shell_scripts/version_check.py`]
       - `_write_idle_config(...)`: Persist check timestamp and next allowed check timestamp [`src/shell_scripts/version_check.py`]
       - `_read_idle_config(...)`: Read existing cooldown for HTTP 429 max-idle merge path [`src/shell_scripts/version_check.py`]
+    - `load_runtime_config(...)`: Load JSON overrides into active runtime config snapshot [`src/shell_scripts/config.py`]
+      - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
+      - `get_default_runtime_config(...)`: Clone hardcoded runtime defaults [`src/shell_scripts/config.py`]
+      - `_deep_merge_dict(...)`: Recursively merge nested override keys into defaults [`src/shell_scripts/config.py`]
     - `print_help(...)`: Print global help or command-specific help [`src/shell_scripts/core.py`]
       - `get_command(...)`: Resolve command module by static mapping key [`src/shell_scripts/commands/__init__.py`]
       - `get_all_commands(...)`: Materialize full command description map [`src/shell_scripts/commands/__init__.py`]
         - `get_command(...)`: Lazy-import each mapped command module [`src/shell_scripts/commands/__init__.py`]
     - `do_upgrade(...)`: Linux-only self-upgrade wrapper [`src/shell_scripts/core.py`]
+      - `get_management_command(...)`: Resolve upgrade command string from runtime config with default fallback [`src/shell_scripts/config.py`]
       - `is_linux(...)`: Platform gate for Linux-specific automation [`src/shell_scripts/utils.py`]
     - `do_uninstall(...)`: Linux-only self-uninstall wrapper [`src/shell_scripts/core.py`]
+      - `get_management_command(...)`: Resolve uninstall command string from runtime config with default fallback [`src/shell_scripts/config.py`]
       - `is_linux(...)`: Platform gate for Linux-specific automation [`src/shell_scripts/utils.py`]
+    - `do_write_config(...)`: Write default runtime config file to user config directory [`src/shell_scripts/core.py`]
+      - `write_default_runtime_config(...)`: Persist default runtime config JSON to filesystem [`src/shell_scripts/config.py`]
+        - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
     - `get_command(...)`: Resolve first positional argument to command module [`src/shell_scripts/commands/__init__.py`]
       - `ai_install.run(...)`: Multi-tool AI CLI installer dispatcher [`src/shell_scripts/commands/ai_install.py`]
         - `ai_install._install_npm_tool(...)`: Run NPM global installation for selected tool [`src/shell_scripts/commands/ai_install.py`]
@@ -103,18 +112,30 @@
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
       - `diff_cmd.run(...)`: Generic differ wrapper [`src/shell_scripts/commands/diff_cmd.py`]
+        - `get_dispatch_profile(...)`: Resolve command-category and fallback vectors for diff from runtime config [`src/shell_scripts/config.py`]
+          - `_normalize_categories(...)`: Validate category command map payload [`src/shell_scripts/config.py`]
+            - `_normalize_command_vector(...)`: Validate command vector payload type and values [`src/shell_scripts/config.py`]
+          - `_normalize_command_vector(...)`: Validate fallback command vector payload [`src/shell_scripts/config.py`]
         - `dispatch(...)`: Select command by categorized file type and replace process with selected tool [`src/shell_scripts/commands/_dc_common.py`]
           - `categorize(...)`: Determine category from MIME + extension [`src/shell_scripts/commands/_dc_common.py`]
             - `get_extension(...)`: Parse lowercase extension from file basename [`src/shell_scripts/commands/_dc_common.py`]
             - `detect_mime(...)`: Probe MIME type via `mimetype` or `file` commands [`src/shell_scripts/commands/_dc_common.py`]
           - `pick_cmd(...)`: Choose primary command if available, else fallback [`src/shell_scripts/commands/_dc_common.py`]
       - `edit_cmd.run(...)`: Generic editor wrapper [`src/shell_scripts/commands/edit_cmd.py`]
+        - `get_dispatch_profile(...)`: Resolve command-category and fallback vectors for edit from runtime config [`src/shell_scripts/config.py`]
+          - `_normalize_categories(...)`: Validate category command map payload [`src/shell_scripts/config.py`]
+            - `_normalize_command_vector(...)`: Validate command vector payload type and values [`src/shell_scripts/config.py`]
+          - `_normalize_command_vector(...)`: Validate fallback command vector payload [`src/shell_scripts/config.py`]
         - `dispatch(...)`: Select editor command by file category [`src/shell_scripts/commands/_dc_common.py`]
           - `categorize(...)`: Determine category from MIME + extension [`src/shell_scripts/commands/_dc_common.py`]
             - `get_extension(...)`: Parse lowercase extension from file basename [`src/shell_scripts/commands/_dc_common.py`]
             - `detect_mime(...)`: Probe MIME type via `mimetype` or `file` commands [`src/shell_scripts/commands/_dc_common.py`]
           - `pick_cmd(...)`: Choose primary command if available, else fallback [`src/shell_scripts/commands/_dc_common.py`]
       - `view_cmd.run(...)`: Generic viewer wrapper [`src/shell_scripts/commands/view_cmd.py`]
+        - `get_dispatch_profile(...)`: Resolve command-category and fallback vectors for view from runtime config [`src/shell_scripts/config.py`]
+          - `_normalize_categories(...)`: Validate category command map payload [`src/shell_scripts/config.py`]
+            - `_normalize_command_vector(...)`: Validate command vector payload type and values [`src/shell_scripts/config.py`]
+          - `_normalize_command_vector(...)`: Validate fallback command vector payload [`src/shell_scripts/config.py`]
         - `dispatch(...)`: Select viewer command by file category [`src/shell_scripts/commands/_dc_common.py`]
           - `categorize(...)`: Determine category from MIME + extension [`src/shell_scripts/commands/_dc_common.py`]
             - `get_extension(...)`: Parse lowercase extension from file basename [`src/shell_scripts/commands/_dc_common.py`]
@@ -209,7 +230,7 @@
   - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
   - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
   - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `_dc_common.dispatch`).
-  - File-system boundary: local cache/config writes, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
+  - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
 
 ### `PROC:release-uvx`

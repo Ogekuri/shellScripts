@@ -8,20 +8,11 @@ selection to shared `_dc_common.dispatch` logic.
 
 import sys
 
+from shell_scripts.config import get_dispatch_profile
 from shell_scripts.commands._dc_common import dispatch
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "File viewer dispatcher by MIME type."
-
-CATEGORY_CMDS = {
-    "image":    ["sushi"],
-    "pdf":      ["sushi"],
-    "text":     ["sushi"],
-    "code":     ["sushi"],
-    "html":     ["sushi"],
-    "markdown": ["typora"],
-}
-FALLBACK = ["sushi"]
 
 
 def print_help(version):
@@ -45,8 +36,8 @@ def run(args):
     """@brief Execute MIME-routed view dispatch.
 
     @details Validates that a file argument exists; on missing argument prints
-    error plus help and returns status code `2`; otherwise dispatches by file
-    category through shared `_dc_common`.
+    error plus help and returns status code `2`; otherwise resolves runtime
+    dispatch profile and delegates by file category through shared `_dc_common`.
     @param args {list[str]} CLI args where `args[0]` is file path.
     @return {int} Return code `2` on missing file; otherwise delegated dispatch result.
     @satisfies REQ-023, REQ-024
@@ -55,4 +46,5 @@ def run(args):
         print("Error: file argument required.", file=sys.stderr)
         print_help("")
         return 2
-    return dispatch(CATEGORY_CMDS, FALLBACK, args[0], args[1:])
+    category_cmds, fallback = get_dispatch_profile("view")
+    return dispatch(category_cmds, fallback, args[0], args[1:])

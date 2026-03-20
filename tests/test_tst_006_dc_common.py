@@ -1,8 +1,9 @@
 """
 @brief Validate generic diff/edit/view wrapper behavior and MIME dispatch.
 @details Verifies missing-file return code path and category resolution using
-  MIME and extension evidence with mocked process boundaries.
-@satisfies TST-006, REQ-023, REQ-024
+  MIME and extension evidence with mocked process boundaries, including runtime
+  dispatch-profile resolution.
+@satisfies TST-006, REQ-023, REQ-024, REQ-045
 @return {None} Pytest module scope.
 """
 
@@ -92,6 +93,48 @@ def test_dispatch_selects_category_specific_command(monkeypatch):
 
     assert observed["executable"] == "typora"
     assert observed["args"] == ["typora", "/tmp/readme.md", "--line", "3"]
+
+
+def test_wrappers_use_runtime_dispatch_profiles(monkeypatch):
+    """
+    @brief Validate wrapper dispatch profile sourcing from runtime config.
+    @details Monkeypatches profile resolvers for diff/edit/view wrappers and
+      asserts `dispatch` receives the configured category/fallback payload.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-006, REQ-024, REQ-045
+    """
+
+    observed = []
+
+    def _fake_dispatch(category_cmds, fallback_cmd, filepath, extra_args):
+        """
+        @brief Mock shared dispatch execution for wrappers.
+        @details Captures payload and returns deterministic zero code.
+        @param category_cmds {dict[str, list[str]]} Category command map.
+        @param fallback_cmd {list[str]} Fallback command vector.
+        @param filepath {str} Input path.
+        @param extra_args {list[str]} Forwarded extra args.
+        @return {int} Deterministic success code.
+        """
+
+        observed.append((category_cmds, fallback_cmd, filepath, extra_args))
+        return 0
+
+    monkeypatch.setattr(diff_cmd, "get_dispatch_profile", lambda _name: ({"text": ["difftool"]}, ["diff-fallback"]))
+    monkeypatch.setattr(edit_cmd, "get_dispatch_profile", lambda _name: ({"text": ["edittool"]}, ["edit-fallback"]))
+    monkeypatch.setattr(view_cmd, "get_dispatch_profile", lambda _name: ({"text": ["viewtool"]}, ["view-fallback"]))
+    monkeypatch.setattr(diff_cmd, "dispatch", _fake_dispatch)
+    monkeypatch.setattr(edit_cmd, "dispatch", _fake_dispatch)
+    monkeypatch.setattr(view_cmd, "dispatch", _fake_dispatch)
+
+    assert diff_cmd.run(["/tmp/a.txt", "--left"]) == 0
+    assert edit_cmd.run(["/tmp/b.txt", "--line", "2"]) == 0
+    assert view_cmd.run(["/tmp/c.txt"]) == 0
+
+    assert observed[0] == ({"text": ["difftool"]}, ["diff-fallback"], "/tmp/a.txt", ["--left"])
+    assert observed[1] == ({"text": ["edittool"]}, ["edit-fallback"], "/tmp/b.txt", ["--line", "2"])
+    assert observed[2] == ({"text": ["viewtool"]}, ["view-fallback"], "/tmp/c.txt", [])
 
 
 

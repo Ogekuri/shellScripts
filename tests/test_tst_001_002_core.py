@@ -1,12 +1,14 @@
 """
 @brief Validate core CLI dispatch and Linux management flags.
 @details Verifies empty-argument help flow, unknown-command error flow,
-  and Linux-only upgrade/uninstall command construction with propagated
-  return codes. Tests are deterministic and isolate subprocess boundaries.
-@satisfies TST-001, TST-002, REQ-001, REQ-002, REQ-004, REQ-005
+  Linux-only upgrade/uninstall command resolution from runtime config,
+  and management write-config behavior. Tests are deterministic and isolate
+  subprocess and filesystem boundaries.
+@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046
 @return {None} Pytest module scope.
 """
 
+from pathlib import Path
 import types
 
 import shell_scripts.core as core
@@ -64,11 +66,12 @@ def test_main_unknown_command_returns_one_and_prints_error_and_help(
 def test_do_upgrade_linux_runs_expected_uv_command(monkeypatch):
     """
     @brief Validate Linux upgrade command composition.
-    @details Forces Linux path and intercepts subprocess invocation to assert
-      exact shell command string and return code propagation semantics.
+    @details Forces Linux path, injects runtime-config command override, and
+      intercepts subprocess invocation to assert resolved command string and
+      return code propagation semantics.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-002, REQ-004
+    @satisfies TST-002, REQ-004, REQ-045
     """
 
     observed = {}
@@ -87,26 +90,29 @@ def test_do_upgrade_linux_runs_expected_uv_command(monkeypatch):
         return types.SimpleNamespace(returncode=17)
 
     monkeypatch.setattr(core, "is_linux", lambda: True)
+    monkeypatch.setattr(
+        core,
+        "get_management_command",
+        lambda name: "custom-upgrade" if name == "upgrade" else "unused",
+    )
     monkeypatch.setattr(core.subprocess, "run", _fake_run)
 
     result = core.do_upgrade()
 
     assert result == 17
     assert observed["shell"] is True
-    assert (
-        observed["command"] == "uv tool install shellscripts --force "
-        "--from git+https://github.com/Ogekuri/shellScripts.git"
-    )
+    assert observed["command"] == "custom-upgrade"
 
 
 def test_do_uninstall_linux_runs_expected_uv_command(monkeypatch):
     """
     @brief Validate Linux uninstall command composition.
-    @details Forces Linux path and intercepts subprocess invocation to assert
-      exact shell command string and return code propagation semantics.
+    @details Forces Linux path, injects runtime-config command override, and
+      intercepts subprocess invocation to assert resolved command string and
+      return code propagation semantics.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-002, REQ-005
+    @satisfies TST-002, REQ-005, REQ-045
     """
 
     observed = {}
@@ -125,10 +131,72 @@ def test_do_uninstall_linux_runs_expected_uv_command(monkeypatch):
         return types.SimpleNamespace(returncode=9)
 
     monkeypatch.setattr(core, "is_linux", lambda: True)
+    monkeypatch.setattr(
+        core,
+        "get_management_command",
+        lambda name: "custom-uninstall" if name == "uninstall" else "unused",
+    )
     monkeypatch.setattr(core.subprocess, "run", _fake_run)
 
     result = core.do_uninstall()
 
     assert result == 9
     assert observed["shell"] is True
-    assert observed["command"] == "uv tool uninstall shellscripts"
+    assert observed["command"] == "custom-uninstall"
+
+
+def test_main_loads_runtime_config_before_dispatch(monkeypatch):
+    """
+    @brief Validate startup runtime-config loading.
+    @details Suppresses update checks, tracks config loader calls, and verifies
+      main flow invokes loader once before handling version flag.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-009, REQ-045
+    """
+
+    observed = {"loaded": 0}
+    monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
+    monkeypatch.setattr(core, "load_runtime_config", lambda: observed.__setitem__("loaded", observed["loaded"] + 1))
+    monkeypatch.setattr(core.sys, "argv", ["shellscripts", "--version"])
+
+    result = core.main()
+
+    assert result == 0
+    assert observed["loaded"] == 1
+
+
+def test_main_write_config_returns_zero_and_calls_writer(monkeypatch, capsys):
+    """
+    @brief Validate management write-config command behavior.
+    @details Forces `--write-config` flow and asserts config writer invocation
+      plus success return code.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
+    @return {None} Assertions only.
+    @satisfies TST-009, REQ-046
+    """
+
+    observed = {}
+
+    def _fake_write_default_runtime_config():
+        """
+        @brief Mock default config write operation.
+        @details Stores invocation and returns deterministic target path.
+        @return {Path} Mock destination path.
+        """
+
+        observed["called"] = True
+        return Path("/tmp/config.json")
+
+    monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
+    monkeypatch.setattr(core, "load_runtime_config", lambda: {})
+    monkeypatch.setattr(core, "write_default_runtime_config", _fake_write_default_runtime_config)
+    monkeypatch.setattr(core.sys, "argv", ["shellscripts", "--write-config"])
+
+    result = core.main()
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert observed["called"] is True
+    assert "/tmp/config.json" in output
