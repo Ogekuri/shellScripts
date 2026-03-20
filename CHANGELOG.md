@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/Ogekuri/shellScripts/compare/v0.3.0..v0.4.0) - 2026-03-20
+### 🐛  Bug Fixes
+- use npm.cmd on Windows when resolving npm [useReq] *(ai-install)*
+  - Reproduce WinError 2 with a dedicated failing unit test for ai-install npm execution on Windows.
+  - Fix _install_npm_tool to resolve and use npm.cmd on Windows, preserving non-Windows sudo behavior.
+  - Keep behavior aligned with existing REQ-008/REQ-047 without SRS changes.
+  - Regenerate REFERENCES.md and verify with static-check plus targeted/full pytest suites.
+
 ## [0.3.0](https://github.com/Ogekuri/shellScripts/compare/v0.2.0..v0.3.0) - 2026-03-20
 ### 🚜  Changes
 - make npm sudo usage OS-aware [useReq] *(ai-install)*
@@ -80,7 +88,9 @@
 - \[0.1.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 - \[0.2.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.2.0
 - \[0.3.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.3.0
+- \[0.4.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.4.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
 [0.3.0]: https://github.com/Ogekuri/shellScripts/compare/v0.2.0..v0.3.0
+[0.4.0]: https://github.com/Ogekuri/shellScripts/compare/v0.3.0..v0.4.0
