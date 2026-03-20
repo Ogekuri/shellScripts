@@ -1,10 +1,10 @@
 """
 @brief Validate core CLI dispatch and Linux management flags.
 @details Verifies empty-argument help flow, unknown-command error flow,
-  Linux-only upgrade/uninstall command resolution from runtime config,
-  and management write-config behavior. Tests are deterministic and isolate
-  subprocess and filesystem boundaries.
-@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046
+  startup OS detection, Linux-only upgrade/uninstall command resolution from
+  runtime config, and management write-config behavior. Tests are deterministic
+  and isolate subprocess and filesystem boundaries.
+@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047
 @return {None} Pytest module scope.
 """
 
@@ -21,20 +21,24 @@ def test_main_without_args_returns_zero_and_prints_help(
     """
     @brief Validate empty CLI invocation behavior.
     @details Forces argv to contain only program name, suppresses update
-      checks, and validates that global help is emitted with return code 0.
+      checks, tracks startup OS detection call, and validates global help
+      emission with return code 0.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
-    @satisfies TST-001, REQ-001
+    @satisfies TST-001, REQ-001, REQ-047
     """
 
+    observed = {"detected": 0}
     monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
+    monkeypatch.setattr(core, "detect_runtime_os", lambda: observed.__setitem__("detected", observed["detected"] + 1))
     monkeypatch.setattr(core.sys, "argv", ["shellscripts"])
 
     result = core.main()
     captured = capsys.readouterr()
 
     assert result == 0
+    assert observed["detected"] == 1
     assert "Usage: shellscripts" in captured.out
 
 

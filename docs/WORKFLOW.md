@@ -54,12 +54,13 @@
   - `main(...)` [`src/shell_scripts/core.py`]
 - Lifecycle/trigger:
   - Trigger: invoked through `python -m shell_scripts` or console script entrypoint mapping to `shell_scripts.core:main`.
-  - Startup: executes update-check gate and runtime-config load before argument dispatch.
+  - Startup: executes runtime OS detection, update-check gate, and runtime-config load before argument dispatch.
   - Runtime mode: single-dispatch CLI process; selected command path may terminate current process via `os.execvp` or run child processes via `subprocess`.
   - Shutdown: returns explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - `main(...)`: Entry dispatcher for all CLI invocations [`src/shell_scripts/core.py`]
+    - `detect_runtime_os(...)`: Detect and cache normalized runtime OS token for startup-wide platform decisions [`src/shell_scripts/utils.py`]
     - `check_for_updates(...)`: Startup version-check gate with cooldown persistence [`src/shell_scripts/version_check.py`]
       - `_should_check(...)`: Evaluate cooldown expiration before network request [`src/shell_scripts/version_check.py`]
         - `_read_idle_config(...)`: Read cached cooldown JSON from user cache directory [`src/shell_scripts/version_check.py`]
@@ -85,7 +86,10 @@
         - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
     - `get_command(...)`: Resolve first positional argument to command module [`src/shell_scripts/commands/__init__.py`]
       - `ai_install.run(...)`: Multi-tool AI CLI installer dispatcher [`src/shell_scripts/commands/ai_install.py`]
-        - `ai_install._install_npm_tool(...)`: Run NPM global installation for selected tool [`src/shell_scripts/commands/ai_install.py`]
+        - `ai_install._install_npm_tool(...)`: Run OS-aware NPM global installation for selected tool with conditional `sudo` prefix [`src/shell_scripts/commands/ai_install.py`]
+          - `is_windows(...)`: Resolve cached runtime OS branch for npm command prefix selection [`src/shell_scripts/utils.py`]
+            - `get_runtime_os(...)`: Read cached runtime OS token with lazy initialization [`src/shell_scripts/utils.py`]
+              - `detect_runtime_os(...)`: Detect and cache normalized runtime OS token [`src/shell_scripts/utils.py`]
         - `ai_install._install_claude(...)`: Download and install Claude binary under user home [`src/shell_scripts/commands/ai_install.py`]
         - `ai_install._install_kiro(...)`: Download/extract/copy Kiro binaries into local bin [`src/shell_scripts/commands/ai_install.py`]
       - `clean.run(...)`: Find and optionally delete cache directories under project root [`src/shell_scripts/commands/clean.py`]

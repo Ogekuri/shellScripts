@@ -18,7 +18,7 @@ from shell_scripts.config import (
 )
 from shell_scripts.version_check import check_for_updates
 from shell_scripts.commands import get_command, get_all_commands
-from shell_scripts.utils import is_linux, print_error, print_info
+from shell_scripts.utils import detect_runtime_os, is_linux, print_error, print_info
 
 PROGRAM = "shellscripts"
 
@@ -129,12 +129,13 @@ def do_write_config():
 def main():
     """@brief Entrypoint for shellscripts argument dispatch.
 
-    @details Performs update check, loads runtime configuration overrides, then
-    routes management flags and subcommands with explicit return codes.
+    @details Performs runtime OS detection, update check, runtime configuration
+    load, and argument dispatch through management flags and subcommands.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047
     """
 
+    detect_runtime_os()
     check_for_updates(__version__)
     load_runtime_config()
 

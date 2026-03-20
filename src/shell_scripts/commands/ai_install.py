@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""@brief AI CLI installers dispatcher with OS-aware npm command behavior.
+
+@details Provides selector-based installation flows for npm-distributed tools
+and direct-download installers. Npm command prefix is resolved from detected
+runtime OS, omitting `sudo` on Windows and using `sudo` on non-Windows.
+@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047
+"""
+
 import os
 import subprocess
 import shutil
@@ -6,7 +14,7 @@ import zipfile
 import tempfile
 from pathlib import Path
 
-from shell_scripts.utils import print_info, print_error, print_success
+from shell_scripts.utils import is_windows, print_info, print_error, print_success
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."
@@ -14,19 +22,19 @@ DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, K
 TOOLS = {
     "codex": {
         "name": "OpenAI Codex CLI",
-        "install": ["sudo", "npm", "i", "-g", "@openai/codex"],
+        "install": ["npm", "install", "-g", "@openai/codex"],
     },
     "copilot": {
         "name": "GitHub Copilot CLI",
-        "install": ["sudo", "npm", "install", "-g", "@github/copilot"],
+        "install": ["npm", "install", "-g", "@github/copilot"],
     },
     "gemini": {
         "name": "Google Gemini CLI",
-        "install": ["sudo", "npm", "install", "-g", "@google/gemini-cli"],
+        "install": ["npm", "install", "-g", "@google/gemini-cli"],
     },
     "opencode": {
         "name": "OpenCode CLI",
-        "install": ["sudo", "npm", "install", "-g", "opencode-ai"],
+        "install": ["npm", "install", "-g", "opencode-ai"],
     },
 }
 
@@ -40,6 +48,15 @@ KIRO_URL = (
 
 
 def print_help(version):
+    """@brief Render command help for `ai-install`.
+
+    @details Prints supported selectors and execution contract for installer
+    dispatch.
+    @param version {str} CLI version string appended in usage output.
+    @return {None} Writes help text to stdout.
+    @satisfies DES-008
+    """
+
     print(f"Usage: {PROGRAM} ai-install [options] ({version})")
     print()
     print("ai-install options:")
@@ -54,9 +71,22 @@ def print_help(version):
 
 
 def _install_npm_tool(tool_key):
+    """@brief Execute npm-based installer command for selected tool.
+
+    @details Resolves base npm command from static tool mapping and prepends
+    `sudo` when runtime OS is not Windows. Executes subprocess and emits status
+    messages.
+    @param tool_key {str} Tool identifier key from `TOOLS`.
+    @return {None} Executes side effects and prints result messages.
+    @satisfies DES-013, REQ-008, REQ-047
+    """
+
     info = TOOLS[tool_key]
+    command = list(info["install"])
+    if not is_windows():
+        command = ["sudo"] + command
     print_info(f"Installing {info['name']}...")
-    result = subprocess.run(info["install"])
+    result = subprocess.run(command)
     if result.returncode != 0:
         print_error(f"Failed to install {info['name']}.")
     else:
@@ -65,6 +95,16 @@ def _install_npm_tool(tool_key):
 
 
 def _install_claude():
+    """@brief Install Claude CLI by direct binary download.
+
+    @details Downloads latest version metadata and Linux binary from configured
+    bucket, writes executable into `~/.claude/bin/claude`, and sets execute
+    permissions.
+    @return {None} Executes side effects and prints result messages.
+    @throws {Exception} Handled internally and logged as installer failure.
+    @satisfies REQ-009
+    """
+
     import urllib.request
 
     print_info("Installing Claude CLI...")
@@ -88,6 +128,15 @@ def _install_claude():
 
 
 def _install_kiro():
+    """@brief Install Kiro CLI binaries by ZIP extraction flow.
+
+    @details Downloads platform ZIP package, extracts binaries, copies
+    `kiro-cli*` executables into `~/.local/bin`, and applies executable mode.
+    @return {None} Executes side effects and prints result messages.
+    @throws {Exception} Handled internally and logged as installer failure.
+    @satisfies REQ-010
+    """
+
     import urllib.request
 
     print_info("Installing Kiro CLI...")
@@ -128,6 +177,15 @@ ALL_INSTALLERS = {
 
 
 def run(args):
+    """@brief Parse selectors and execute selected AI installer routines.
+
+    @details Accepts explicit selectors or defaults to full installer set when
+    omitted; rejects unknown selectors with return code `1`.
+    @param args {list[str]} CLI selector tokens for installer filtering.
+    @return {int} `0` on successful dispatch; `1` on unknown selector.
+    @satisfies REQ-006, REQ-007
+    """
+
     selected = []
     for arg in args:
         key = arg.lstrip("-")

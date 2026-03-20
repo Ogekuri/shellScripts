@@ -3,7 +3,7 @@
 @details Verifies selector parsing, unknown-selector rejection, npm-based
   installer command construction, Claude binary installation flow, and Kiro ZIP
   extraction/copy flow. External network/process boundaries are mocked.
-@satisfies TST-003, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010
+@satisfies TST-003, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047
 @return {None} Pytest module scope.
 """
 
@@ -62,7 +62,7 @@ def test_run_unknown_selector_returns_one(monkeypatch):
 @pytest.mark.parametrize(
     "tool_key, expected_cmd",
     [
-        ("codex", ["sudo", "npm", "i", "-g", "@openai/codex"]),
+        ("codex", ["sudo", "npm", "install", "-g", "@openai/codex"]),
         (
             "copilot",
             ["sudo", "npm", "install", "-g", "@github/copilot"],
@@ -84,8 +84,8 @@ def test_install_npm_tool_uses_expected_command(
 ):
     """
     @brief Validate npm installer command vectors.
-    @details Intercepts subprocess invocation and asserts exact command tokens
-      used by each npm-based installer.
+    @details Intercepts subprocess invocation on non-Windows path and asserts
+      exact command tokens with `sudo` prefix for each npm-based installer.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tool_key {str} Installer key in ai_install.TOOLS.
     @param expected_cmd {list[str]} Expected subprocess command tokens.
@@ -107,10 +107,42 @@ def test_install_npm_tool_uses_expected_command(
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
+    monkeypatch.setattr(ai_install, "is_windows", lambda: False)
 
     ai_install._install_npm_tool(tool_key)
 
     assert observed["command"] == expected_cmd
+
+
+def test_install_npm_tool_omits_sudo_on_windows(monkeypatch):
+    """
+    @brief Validate npm installer command prefix on Windows.
+    @details Forces Windows runtime branch and verifies npm command executes
+      without `sudo` prefix.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-008, REQ-047
+    """
+
+    observed = {}
+
+    def _fake_run(command):
+        """
+        @brief Mock subprocess.run for Windows npm install path.
+        @details Captures command payload and returns successful status.
+        @param command {list[str]} Command token vector.
+        @return {types.SimpleNamespace} Object with returncode field.
+        """
+
+        observed["command"] = command
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
+    monkeypatch.setattr(ai_install, "is_windows", lambda: True)
+
+    ai_install._install_npm_tool("copilot")
+
+    assert observed["command"] == ["npm", "install", "-g", "@github/copilot"]
 
 
 def test_install_claude_downloads_latest_and_installs_binary(monkeypatch, tmp_path):

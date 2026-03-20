@@ -168,7 +168,7 @@ import shutil
 
 ---
 
-# ai_install.py | Python | 153L | 11 symbols | 9 imports | 1 comments
+# ai_install.py | Python | 211L | 11 symbols | 9 imports | 7 comments
 > Path: `src/shell_scripts/commands/ai_install.py`
 
 ## Imports
@@ -179,43 +179,68 @@ import shutil
 import zipfile
 import tempfile
 from pathlib import Path
-from shell_scripts.utils import print_info, print_error, print_success
+from shell_scripts.utils import is_windows, print_info, print_error, print_success
 import urllib.request
 import urllib.request
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L11)
-- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L12)
-- var `TOOLS = {` (L14)
-- var `CLAUDE_BUCKET = (` (L33)
-- var `KIRO_URL = (` (L37)
-### fn `def print_help(version)` (L42-55)
+- var `PROGRAM = "shellscripts"` (L19)
+- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L20)
+- var `TOOLS = {` (L22)
+- var `CLAUDE_BUCKET = (` (L41)
+- var `KIRO_URL = (` (L45)
+### fn `def print_help(version)` (L50-72)
+- @brief Render command help for `ai-install`.
+- @details Prints supported selectors and execution contract for installer dispatch.
+- @param version {str} CLI version string appended in usage output.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
 
-### fn `def _install_npm_tool(tool_key)` `priv` (L56-66)
+### fn `def _install_npm_tool(tool_key)` `priv` (L73-96)
+- @brief Execute npm-based installer command for selected tool.
+- @details Resolves base npm command from static tool mapping and prepends `sudo` when runtime OS is not Windows. Executes subprocess and emits status messages.
+- @param tool_key {str} Tool identifier key from `TOOLS`.
+- @return {None} Executes side effects and prints result messages.
+- @satisfies DES-013, REQ-008, REQ-047
 
-### fn `def _install_claude()` `priv` (L67-89)
+### fn `def _install_claude()` `priv` (L97-129)
+- @brief Install Claude CLI by direct binary download.
+- @details Downloads latest version metadata and Linux binary from configured bucket, writes executable into `~/.claude/bin/claude`, and sets execute permissions.
+- @return {None} Executes side effects and prints result messages.
+- @throws {Exception} Handled internally and logged as installer failure.
+- @satisfies REQ-009
 
-### fn `def _install_kiro()` `priv` (L90-119)
+### fn `def _install_kiro()` `priv` (L130-168)
+- @brief Install Kiro CLI binaries by ZIP extraction flow.
+- @details Downloads platform ZIP package, extracts binaries, copies `kiro-cli*` executables into `~/.local/bin`, and applies executable mode.
+- @return {None} Executes side effects and prints result messages.
+- @throws {Exception} Handled internally and logged as installer failure.
+- @satisfies REQ-010
 
-- var `ALL_INSTALLERS = {` (L120)
-### fn `def run(args)` (L130-153)
+- var `ALL_INSTALLERS = {` (L169)
+### fn `def run(args)` (L179-211)
+- @brief Parse selectors and execute selected AI installer routines.
+- @details Accepts explicit selectors or defaults to full installer set when omitted; rejects unknown selectors with return code `1`.
+- @param args {list[str]} CLI selector tokens for installer filtering.
+- @return {int} `0` on successful dispatch; `1` on unknown selector.
+- @satisfies REQ-006, REQ-007
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|11||
-|`DESCRIPTION`|var|pub|12||
-|`TOOLS`|var|pub|14||
-|`CLAUDE_BUCKET`|var|pub|33||
-|`KIRO_URL`|var|pub|37||
-|`print_help`|fn|pub|42-55|def print_help(version)|
-|`_install_npm_tool`|fn|priv|56-66|def _install_npm_tool(tool_key)|
-|`_install_claude`|fn|priv|67-89|def _install_claude()|
-|`_install_kiro`|fn|priv|90-119|def _install_kiro()|
-|`ALL_INSTALLERS`|var|pub|120||
-|`run`|fn|pub|130-153|def run(args)|
+|`PROGRAM`|var|pub|19||
+|`DESCRIPTION`|var|pub|20||
+|`TOOLS`|var|pub|22||
+|`CLAUDE_BUCKET`|var|pub|41||
+|`KIRO_URL`|var|pub|45||
+|`print_help`|fn|pub|50-72|def print_help(version)|
+|`_install_npm_tool`|fn|priv|73-96|def _install_npm_tool(tool_key)|
+|`_install_claude`|fn|priv|97-129|def _install_claude()|
+|`_install_kiro`|fn|priv|130-168|def _install_kiro()|
+|`ALL_INSTALLERS`|var|pub|169||
+|`run`|fn|pub|179-211|def run(args)|
 
 
 ---
@@ -1289,7 +1314,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 180L | 6 symbols | 7 imports | 7 comments
+# core.py | Python | 181L | 6 symbols | 7 imports | 7 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1300,7 +1325,7 @@ from shell_scripts import __version__
 from shell_scripts.config import (
 from shell_scripts.version_check import check_for_updates
 from shell_scripts.commands import get_command, get_all_commands
-from shell_scripts.utils import is_linux, print_error, print_info
+from shell_scripts.utils import detect_runtime_os, is_linux, print_error, print_info
 ```
 
 ## Definitions
@@ -1333,11 +1358,11 @@ from shell_scripts.utils import is_linux, print_error, print_info
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L129-180)
+### fn `def main()` (L129-181)
 - @brief Entrypoint for shellscripts argument dispatch.
-- @details Performs update check, loads runtime configuration overrides, then routes management flags and subcommands with explicit return codes.
+- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
-- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1347,12 +1372,12 @@ from shell_scripts.utils import is_linux, print_error, print_info
 |`do_upgrade`|fn|pub|70-91|def do_upgrade()|
 |`do_uninstall`|fn|pub|92-113|def do_uninstall()|
 |`do_write_config`|fn|pub|114-128|def do_write_config()|
-|`main`|fn|pub|129-180|def main()|
+|`main`|fn|pub|129-181|def main()|
 
 
 ---
 
-# utils.py | Python | 90L | 27 symbols | 5 imports | 1 comments
+# utils.py | Python | 160L | 30 symbols | 5 imports | 11 comments
 > Path: `src/shell_scripts/utils.py`
 
 ## Imports
@@ -1366,75 +1391,104 @@ from pathlib import Path
 
 ## Definitions
 
-- var `RESET = "\033[0m"` (L8)
-- var `BOLD = "\033[1m"` (L9)
-- var `RED = "\033[31m"` (L10)
-- var `GREEN = "\033[32m"` (L11)
-- var `YELLOW = "\033[33m"` (L12)
-- var `BLUE = "\033[34m"` (L13)
-- var `MAGENTA = "\033[35m"` (L14)
-- var `CYAN = "\033[36m"` (L15)
-- var `WHITE = "\033[37m"` (L16)
-- var `BRIGHT_RED = "\033[91m"` (L17)
-- var `BRIGHT_GREEN = "\033[92m"` (L18)
-- var `BRIGHT_YELLOW = "\033[93m"` (L19)
-- var `BRIGHT_BLUE = "\033[94m"` (L20)
-- var `BRIGHT_CYAN = "\033[96m"` (L21)
-- var `BRIGHT_WHITE = "\033[97m"` (L22)
-### fn `def color_enabled()` (L25-30)
+- var `RESET = "\033[0m"` (L16)
+- var `BOLD = "\033[1m"` (L17)
+- var `RED = "\033[31m"` (L18)
+- var `GREEN = "\033[32m"` (L19)
+- var `YELLOW = "\033[33m"` (L20)
+- var `BLUE = "\033[34m"` (L21)
+- var `MAGENTA = "\033[35m"` (L22)
+- var `CYAN = "\033[36m"` (L23)
+- var `WHITE = "\033[37m"` (L24)
+- var `BRIGHT_RED = "\033[91m"` (L25)
+- var `BRIGHT_GREEN = "\033[92m"` (L26)
+- var `BRIGHT_YELLOW = "\033[93m"` (L27)
+- var `BRIGHT_BLUE = "\033[94m"` (L28)
+- var `BRIGHT_CYAN = "\033[96m"` (L29)
+- var `BRIGHT_WHITE = "\033[97m"` (L30)
+### fn `def color_enabled()` (L40-45)
+- @brief Cached normalized runtime operating-system token.
+- @details Initialized on first detection and reused to guarantee stable
+startup-level OS semantics across command execution flow.
+- @satisfies DES-002, REQ-047
 
-### fn `def c(text, color)` (L31-36)
+### fn `def c(text, color)` (L46-51)
 
-### fn `def print_info(msg)` (L37-40)
+### fn `def print_info(msg)` (L52-55)
 
-### fn `def print_error(msg)` (L41-44)
+### fn `def print_error(msg)` (L56-59)
 
-### fn `def print_warn(msg)` (L45-48)
+### fn `def print_warn(msg)` (L60-63)
 
-### fn `def print_success(msg)` (L49-52)
+### fn `def print_success(msg)` (L64-67)
 
-### fn `def get_project_root()` (L53-65)
+### fn `def get_project_root()` (L68-80)
 
-### fn `def require_project_root()` (L66-73)
+### fn `def require_project_root()` (L81-88)
 
-### fn `def is_linux()` (L74-77)
+### fn `def detect_runtime_os()` (L89-111)
+- @brief Detect and cache runtime operating-system token.
+- @details Normalizes `sys.platform` into deterministic categories (`windows`, `linux`, `darwin`, `other`) and stores the result in module cache for subsequent calls. Time complexity O(1).
+- @return {str} Normalized runtime operating-system token.
+- @satisfies DES-002, REQ-047
 
-### fn `def command_exists(cmd)` (L78-81)
+### fn `def get_runtime_os()` (L112-125)
+- @brief Return cached runtime operating-system token.
+- @details Lazily initializes the cache via `detect_runtime_os` when unset, preserving a single startup-consistent OS classification.
+- @return {str} Normalized runtime operating-system token.
+- @satisfies DES-002, REQ-047
 
-### fn `def require_commands(*cmds)` (L82-88)
+### fn `def is_windows()` (L126-136)
+- @brief Check whether runtime operating system is Windows.
+- @details Evaluates cached runtime token from `get_runtime_os`.
+- @return {bool} `True` when runtime OS is Windows; otherwise `False`.
+- @satisfies DES-013, REQ-008, REQ-047
 
-### fn `def run_cmd(cmd, **kwargs)` (L89-90)
+### fn `def is_linux()` (L137-147)
+- @brief Check whether runtime operating system is Linux.
+- @details Evaluates cached runtime token from `get_runtime_os`.
+- @return {bool} `True` when runtime OS is Linux; otherwise `False`.
+- @satisfies CTN-004, REQ-004, REQ-005, REQ-047
+
+### fn `def command_exists(cmd)` (L148-151)
+
+### fn `def require_commands(*cmds)` (L152-158)
+
+### fn `def run_cmd(cmd, **kwargs)` (L159-160)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`RESET`|var|pub|8||
-|`BOLD`|var|pub|9||
-|`RED`|var|pub|10||
-|`GREEN`|var|pub|11||
-|`YELLOW`|var|pub|12||
-|`BLUE`|var|pub|13||
-|`MAGENTA`|var|pub|14||
-|`CYAN`|var|pub|15||
-|`WHITE`|var|pub|16||
-|`BRIGHT_RED`|var|pub|17||
-|`BRIGHT_GREEN`|var|pub|18||
-|`BRIGHT_YELLOW`|var|pub|19||
-|`BRIGHT_BLUE`|var|pub|20||
-|`BRIGHT_CYAN`|var|pub|21||
-|`BRIGHT_WHITE`|var|pub|22||
-|`color_enabled`|fn|pub|25-30|def color_enabled()|
-|`c`|fn|pub|31-36|def c(text, color)|
-|`print_info`|fn|pub|37-40|def print_info(msg)|
-|`print_error`|fn|pub|41-44|def print_error(msg)|
-|`print_warn`|fn|pub|45-48|def print_warn(msg)|
-|`print_success`|fn|pub|49-52|def print_success(msg)|
-|`get_project_root`|fn|pub|53-65|def get_project_root()|
-|`require_project_root`|fn|pub|66-73|def require_project_root()|
-|`is_linux`|fn|pub|74-77|def is_linux()|
-|`command_exists`|fn|pub|78-81|def command_exists(cmd)|
-|`require_commands`|fn|pub|82-88|def require_commands(*cmds)|
-|`run_cmd`|fn|pub|89-90|def run_cmd(cmd, **kwargs)|
+|`RESET`|var|pub|16||
+|`BOLD`|var|pub|17||
+|`RED`|var|pub|18||
+|`GREEN`|var|pub|19||
+|`YELLOW`|var|pub|20||
+|`BLUE`|var|pub|21||
+|`MAGENTA`|var|pub|22||
+|`CYAN`|var|pub|23||
+|`WHITE`|var|pub|24||
+|`BRIGHT_RED`|var|pub|25||
+|`BRIGHT_GREEN`|var|pub|26||
+|`BRIGHT_YELLOW`|var|pub|27||
+|`BRIGHT_BLUE`|var|pub|28||
+|`BRIGHT_CYAN`|var|pub|29||
+|`BRIGHT_WHITE`|var|pub|30||
+|`color_enabled`|fn|pub|40-45|def color_enabled()|
+|`c`|fn|pub|46-51|def c(text, color)|
+|`print_info`|fn|pub|52-55|def print_info(msg)|
+|`print_error`|fn|pub|56-59|def print_error(msg)|
+|`print_warn`|fn|pub|60-63|def print_warn(msg)|
+|`print_success`|fn|pub|64-67|def print_success(msg)|
+|`get_project_root`|fn|pub|68-80|def get_project_root()|
+|`require_project_root`|fn|pub|81-88|def require_project_root()|
+|`detect_runtime_os`|fn|pub|89-111|def detect_runtime_os()|
+|`get_runtime_os`|fn|pub|112-125|def get_runtime_os()|
+|`is_windows`|fn|pub|126-136|def is_windows()|
+|`is_linux`|fn|pub|137-147|def is_linux()|
+|`command_exists`|fn|pub|148-151|def command_exists(cmd)|
+|`require_commands`|fn|pub|152-158|def require_commands(*cmds)|
+|`run_cmd`|fn|pub|159-160|def run_cmd(cmd, **kwargs)|
 
 
 ---

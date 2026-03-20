@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.6"
+version: "0.1.7"
 date: "2026-03-20"
 author: "Auto-generated from repository evidence"
 scope:
@@ -104,7 +104,7 @@ Repository structure (evidence-oriented view, depth-limited):
 
 ### 3.1 Design and Implementation
 - **DES-001**: MUST implement command discovery with a static command-to-module mapping and lazy module imports.
-- **DES-002**: MUST execute update-check logic before normal CLI argument dispatch.
+- **DES-002**: MUST execute runtime OS detection and update-check logic before normal CLI argument dispatch.
 - **DES-003**: MUST persist update-check cooldown state in `~/.cache/shellscripts/check_version_idle-time.json`.
 - **DES-004**: MUST apply a minimum cooldown of 300 seconds after successful update checks and after HTTP 403 responses.
 - **DES-005**: MUST apply HTTP 429 `Retry-After` cooldown when larger than default and MUST preserve a longer existing cooldown value.
@@ -115,6 +115,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-010**: MUST request deletion confirmation in `clean` unless `--yes` is provided.
 - **DES-011**: MUST implement centralized runtime configuration loading from `~/.config/shellScripts/config.json` with recursive merge semantics where missing keys preserve hardcoded defaults.
 - **DES-012**: MUST provide a management operation that writes default runtime configuration JSON to `~/.config/shellScripts/config.json`, creating parent directories when absent.
+- **DES-013**: MUST resolve `ai-install` npm command prefixes from detected runtime OS, omitting `sudo` on Windows and using `sudo` on non-Windows systems.
 
 No explicit performance optimizations identified.
 
@@ -126,7 +127,7 @@ No explicit performance optimizations identified.
 - **REQ-005**: MUST execute the Linux `--uninstall` command from runtime config key `management.uninstall`, using default `uv tool uninstall shellscripts` when unset.
 - **REQ-006**: MUST execute all AI installers by default in `ai-install` when no selector options are provided.
 - **REQ-007**: MUST reject unknown `ai-install` selector options with return code `1`.
-- **REQ-008**: MUST install Codex, Copilot, Gemini, and OpenCode CLIs via `sudo npm install -g` commands.
+- **REQ-008**: MUST install Codex, Copilot, Gemini, and OpenCode CLIs via `npm install -g` commands without `sudo` on Windows and with `sudo` on non-Windows systems.
 - **REQ-009**: MUST install Claude CLI by downloading `latest` version metadata and installing an executable binary at `~/.claude/bin/claude`.
 - **REQ-010**: MUST install Kiro CLI by downloading a ZIP archive, extracting binaries, and copying `kiro-cli*` executables into `~/.local/bin` with executable permissions.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
@@ -159,6 +160,7 @@ No explicit performance optimizations identified.
 - **REQ-044**: MUST create the symlink and print an informational message when `<project-root>/.codex/auth.json` is not already that exact symlink.
 - **REQ-045**: MUST load runtime configuration from `~/.config/shellScripts/config.json` during CLI startup, and MUST keep hardcoded defaults for missing file, missing keys, or invalid value types.
 - **REQ-046**: MUST write the default runtime configuration JSON to `~/.config/shellScripts/config.json` and return code `0` when invoked with `--write-config`.
+- **REQ-047**: MUST determine and cache the runtime operating system at CLI startup before command dispatch.
 
 ## 4. Test Requirements
 
@@ -168,9 +170,9 @@ Implemented verification support exists via the `tests` command (`tests_cmd.py`)
 High-risk areas without observed unit-test evidence are PDF transformation pipelines, TOC rewriting logic, and subprocess/`os.execvp` integrations with system tools.
 
 ### 4.2 Verification Requirements
-- **TST-001**: MUST verify REQ-001 and REQ-002 by invoking `shell_scripts.core.main` with empty and unknown arguments, passing only if return codes and help/error outputs match specified behavior.
+- **TST-001**: MUST verify REQ-001, REQ-002, and REQ-047 by invoking `shell_scripts.core.main`, passing only if return codes, help/error outputs, and startup OS-detection invocation match specified behavior.
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting command values resolved from runtime config with default command fallback and propagated return codes.
-- **TST-003**: MUST verify REQ-006 through REQ-010 by monkeypatching installer call sites and passing only if option parsing selects expected installer sets and unknown options return code `1`.
+- **TST-003**: MUST verify REQ-006 through REQ-010 by monkeypatching installer call sites and passing only if selector parsing is correct, unknown options return code `1`, and REQ-008 `sudo` usage changes by runtime OS.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
 - **TST-005**: MUST verify REQ-014 through REQ-021 and REQ-043 through REQ-044 by monkeypatching `os.execvp` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, and codex auth symlink behavior match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
@@ -182,7 +184,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 
 | Requirement IDs | File Path | Symbol / Function | Short Evidence Excerpt |
 |---|---|---|---|
-| PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003 | `src/shell_scripts/core.py` | `main`, `print_help` | `if not args: print_help(); return 0`, unknown command path returns `1`, `--version` and `--ver` print `__version__`. |
+| PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047 | `src/shell_scripts/core.py` | `main`, `print_help` | Startup path detects runtime OS before dispatch; empty args print help and return `0`; unknown command path returns `1`; `--version` and `--ver` print `__version__`. |
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
 | PRJ-004, DES-002..DES-006 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_write_idle_config`, `_should_check` | Uses GitHub latest release API, 300s cooldown, 429/403 handling, cache path under `~/.cache/shellscripts`. |
 | PRJ-005 | `.github/workflows/release-uvx.yml` | `jobs.check-branch`, `jobs.build-release` | Workflow script is present at required path and defines release automation jobs. |
@@ -194,7 +196,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | DES-007, REQ-023, REQ-024 | `src/shell_scripts/commands/diff_cmd.py`; `src/shell_scripts/commands/edit_cmd.py`; `src/shell_scripts/commands/view_cmd.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `diff`/`edit`/`view` wrappers call shared dispatch; missing file argument returns `2`; category routes by MIME/extension. |
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
-| REQ-006, REQ-007, REQ-008, REQ-009, REQ-010 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm/Claude/Kiro installers implemented via subprocess/download/extract/copy. |
+| REQ-006, REQ-007, REQ-008, REQ-009, REQ-010 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm install command omits `sudo` on Windows and uses `sudo` on non-Windows; Claude/Kiro installers use download/extract/copy flows. |
 | REQ-014, REQ-043, REQ-044 | `src/shell_scripts/commands/cli_codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; ensures `.codex/auth.json` symlink target `~/.codex/auth.json`; prints creation info when symlink is created; executes `/usr/bin/codex --yolo`. |
 | REQ-015 | `src/shell_scripts/commands/cli_copilot.py` | `run` | Executes `/usr/bin/copilot --yolo --allow-all-tools`. |
 | REQ-016 | `src/shell_scripts/commands/cli_gemini.py` | `run` | Executes `/usr/bin/gemini --yolo`. |
