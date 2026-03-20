@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.3"
+version: "0.1.4"
 date: "2026-03-20"
 author: "Auto-generated from repository evidence"
 scope:
@@ -36,7 +36,7 @@ Requirement ID prefixes used in this document are `PRJ`, `CTN`, `DES`, `REQ`, an
 On every modification, YAML front matter `date` and `version` MUST be updated and in-body revision history MUST NOT be added.
 
 ### 1.2 Project Scope
-shellScripts is a Python CLI package that dispatches utility subcommands for AI tool bootstrapping, PDF operations, DICOM operations, Double Commander integrations, project environment management, and editor/theme helpers.
+shellScripts is a Python CLI package that dispatches utility subcommands for AI tool bootstrapping, PDF operations, DICOM operations, generic file diff/edit/view dispatching, project environment management, and editor/theme helpers.
 
 Repository structure (evidence-oriented view, depth-limited):
 
@@ -60,7 +60,7 @@ Repository structure (evidence-oriented view, depth-limited):
 │   │       ├── ai_install.py
 │   │       ├── clean.py
 │   │       ├── cli_*.py
-│   │       ├── dc_*.py
+│   │       ├── {diff,edit,view}_cmd.py
 │   │       ├── dicom*.py
 │   │       ├── doxygen_cmd.py
 │   │       ├── pdf_*.py
@@ -89,7 +89,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ### 2.1 Project Functions
 - **PRJ-001**: MUST parse CLI arguments and route execution to management flags or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
-- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, Double Commander dispatching, environment/test management, editor launchers, theme application, and cache cleanup.
+- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against GitHub releases with cooldown caching.
 - **PRJ-005**: MUST publish package releases through a GitHub Actions workflow triggered by version tag pushes.
 
@@ -109,7 +109,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-004**: MUST apply a minimum cooldown of 300 seconds after successful update checks and after HTTP 403 responses.
 - **DES-005**: MUST apply HTTP 429 `Retry-After` cooldown when larger than default and MUST preserve a longer existing cooldown value.
 - **DES-006**: MUST suppress non-HTTP update-check exceptions without aborting command execution.
-- **DES-007**: MUST implement `double-commander-*` commands as wrappers around shared MIME-based dispatch logic in `_dc_common`.
+- **DES-007**: MUST implement `diff`, `edit`, and `view` commands as wrappers around shared MIME-based dispatch logic in `_dc_common`.
 - **DES-008**: MUST expose command modules with `DESCRIPTION`, `print_help(version)`, and `run(args)` call patterns.
 - **DES-009**: MUST recreate `.venv` whenever `.venv` already exists in `venv` command execution and `--force` MUST NOT change this behavior.
 - **DES-010**: MUST request deletion confirmation in `clean` unless `--yes` is provided.
@@ -140,7 +140,7 @@ No explicit performance optimizations identified.
 - **REQ-020**: MUST open the project root in VS Code or VS Code Insiders commands and append the project path as final argument.
 - **REQ-021**: MUST set `CODEX_HOME` to `<project-root>/.codex` before VS Code and VS Code Insiders command execution.
 - **REQ-022**: MUST attempt GNOME GTK dark theme configuration via `gsettings` and MAY launch `gtk-chtheme`, `qt5ct`, and `qt6ct` when available.
-- **REQ-023**: MUST return code `2` in `double-commander-*` commands when required file argument is missing.
+- **REQ-023**: MUST print help using `diff`/`edit`/`view` command names and return code `2` when the required file argument is missing.
 - **REQ-024**: MUST classify files by MIME and extension in `_dc_common.categorize` and dispatch execution to category-specific command mappings.
 - **REQ-025**: MUST execute PixelMed `DicomImageViewer` with discovered Java classpath in `dicomviewer` when `java-wrappers` and Java runtime are available.
 - **REQ-026**: MUST execute PixelMed `ConsumerFormatImageMaker` in `dicom2jpg` using provided input DICOM and output JPEG paths.
@@ -176,7 +176,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-003**: MUST verify REQ-006 through REQ-010 by monkeypatching installer call sites and passing only if option parsing selects expected installer sets and unknown options return code `1`.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
 - **TST-005**: MUST verify REQ-014 through REQ-021 and REQ-043 through REQ-044 by monkeypatching `os.execvp` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, and codex auth symlink behavior match requirements.
-- **TST-006**: MUST verify REQ-023 and REQ-024 with file fixtures and mocked MIME detection, passing only if missing-file-argument status is `2` and category dispatch selects mapped commands.
+- **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and category dispatch selects mapped commands.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
 - **TST-009**: MUST verify REQ-039 through REQ-042 by parsing `.github/workflows/release.yml` and asserting trigger, runner, release action configuration, artifact globs, and release body command strings.
@@ -194,7 +194,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | CTN-003 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/*.py` | `require_commands`, command `run` functions | Multiple commands call `require_commands(...)` and terminate on missing tools. |
 | CTN-004, REQ-004, REQ-005 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `do_upgrade`, `do_uninstall`, `is_linux` | Linux executes `uv tool ...`; non-Linux prints manual command text and returns `0`. |
 | CTN-005 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/cli_*.py` | `require_project_root`, `run` | Project-context commands call `require_project_root()` and exit on missing Git root. |
-| DES-007, REQ-023, REQ-024 | `src/shell_scripts/commands/dc_*.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `double-commander-*` wrappers call shared dispatch; missing file argument returns `2`; category routes by MIME/extension. |
+| DES-007, REQ-023, REQ-024 | `src/shell_scripts/commands/diff_cmd.py`; `src/shell_scripts/commands/edit_cmd.py`; `src/shell_scripts/commands/view_cmd.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `diff`/`edit`/`view` wrappers call shared dispatch; missing file argument returns `2`; category routes by MIME/extension. |
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
 | REQ-006, REQ-007, REQ-008, REQ-009, REQ-010 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm/Claude/Kiro installers implemented via subprocess/download/extract/copy. |

@@ -19,12 +19,11 @@
         │   ├── cli_gemini.py
         │   ├── cli_kiro.py
         │   ├── cli_opencode.py
-        │   ├── dc_differ.py
-        │   ├── dc_editor.py
-        │   ├── dc_viewer.py
         │   ├── dicom2jpg.py
         │   ├── dicomviewer.py
+        │   ├── diff_cmd.py
         │   ├── doxygen_cmd.py
+        │   ├── edit_cmd.py
         │   ├── pdf_crop.py
         │   ├── pdf_merge.py
         │   ├── pdf_split_by_format.py
@@ -35,6 +34,7 @@
         │   ├── tests_cmd.py
         │   ├── ubuntu_dark_theme.py
         │   ├── venv_cmd.py
+        │   ├── view_cmd.py
         │   ├── vscode_cmd.py
         │   └── vsinsider_cmd.py
         ├── core.py
@@ -485,102 +485,6 @@ from shell_scripts.utils import require_project_root
 
 ---
 
-# dc_differ.py | Python | 34L | 6 symbols | 2 imports | 1 comments
-> Path: `src/shell_scripts/commands/dc_differ.py`
-
-## Imports
-```
-import sys
-from shell_scripts.commands._dc_common import dispatch
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "File differ dispatcher by MIME type for Double Commander."` (L7)
-- var `CATEGORY_CMDS = {` (L9)
-- var `FALLBACK = ["bcompare"]` (L17)
-### fn `def print_help(version)` (L20-28)
-
-### fn `def run(args)` (L29-34)
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`CATEGORY_CMDS`|var|pub|9||
-|`FALLBACK`|var|pub|17||
-|`print_help`|fn|pub|20-28|def print_help(version)|
-|`run`|fn|pub|29-34|def run(args)|
-
-
----
-
-# dc_editor.py | Python | 34L | 6 symbols | 2 imports | 1 comments
-> Path: `src/shell_scripts/commands/dc_editor.py`
-
-## Imports
-```
-import sys
-from shell_scripts.commands._dc_common import dispatch
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "File editor dispatcher by MIME type for Double Commander."` (L7)
-- var `CATEGORY_CMDS = {` (L9)
-- var `FALLBACK = ["/opt/sublime_text/sublime_text", "-n", "-wait"]` (L17)
-### fn `def print_help(version)` (L20-28)
-
-### fn `def run(args)` (L29-34)
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`CATEGORY_CMDS`|var|pub|9||
-|`FALLBACK`|var|pub|17||
-|`print_help`|fn|pub|20-28|def print_help(version)|
-|`run`|fn|pub|29-34|def run(args)|
-
-
----
-
-# dc_viewer.py | Python | 34L | 6 symbols | 2 imports | 1 comments
-> Path: `src/shell_scripts/commands/dc_viewer.py`
-
-## Imports
-```
-import sys
-from shell_scripts.commands._dc_common import dispatch
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "File viewer dispatcher by MIME type for Double Commander."` (L7)
-- var `CATEGORY_CMDS = {` (L9)
-- var `FALLBACK = ["sushi"]` (L17)
-### fn `def print_help(version)` (L20-28)
-
-### fn `def run(args)` (L29-34)
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`CATEGORY_CMDS`|var|pub|9||
-|`FALLBACK`|var|pub|17||
-|`print_help`|fn|pub|20-28|def print_help(version)|
-|`run`|fn|pub|29-34|def run(args)|
-
-
----
-
 # dicom2jpg.py | Python | 81L | 7 symbols | 4 imports | 1 comments
 > Path: `src/shell_scripts/commands/dicom2jpg.py`
 
@@ -657,6 +561,48 @@ from shell_scripts.utils import print_error
 
 ---
 
+# diff_cmd.py | Python | 58L | 6 symbols | 2 imports | 4 comments
+> Path: `src/shell_scripts/commands/diff_cmd.py`
+
+## Imports
+```
+import sys
+from shell_scripts.commands._dc_common import dispatch
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "File differ dispatcher by MIME type."` (L14)
+- var `CATEGORY_CMDS = {` (L16)
+- var `FALLBACK = ["bcompare"]` (L24)
+### fn `def print_help(version)` (L27-43)
+- @brief Render command help for `diff`.
+- @details Prints usage, required file argument semantics, and argument forwarding contract for the selected external diff executable.
+- @param version {str} Version string appended in usage output.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
+
+### fn `def run(args)` (L44-58)
+- @brief Execute MIME-routed diff dispatch.
+- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise dispatches by file category through shared `_dc_common`.
+- @param args {list[str]} CLI args where `args[0]` is file path.
+- @return {int} Return code `2` on missing file; otherwise delegated dispatch result.
+- @satisfies REQ-023, REQ-024
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`CATEGORY_CMDS`|var|pub|16||
+|`FALLBACK`|var|pub|24||
+|`print_help`|fn|pub|27-43|def print_help(version)|
+|`run`|fn|pub|44-58|def run(args)|
+
+
+---
+
 # doxygen_cmd.py | Python | 157L | 7 symbols | 8 imports | 2 comments
 > Path: `src/shell_scripts/commands/doxygen_cmd.py`
 
@@ -696,6 +642,48 @@ from shell_scripts.utils import command_exists
 |`_write_doxyfile`|fn|priv|38-39|def _write_doxyfile(path, project_root, src_dir, doxygen_...|
 |`_generate_markdown_fallback`|fn|priv|75-97|def _generate_markdown_fallback(xml_dir, markdown_dir)|
 |`run`|fn|pub|98-157|def run(args)|
+
+
+---
+
+# edit_cmd.py | Python | 58L | 6 symbols | 2 imports | 4 comments
+> Path: `src/shell_scripts/commands/edit_cmd.py`
+
+## Imports
+```
+import sys
+from shell_scripts.commands._dc_common import dispatch
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "File editor dispatcher by MIME type."` (L14)
+- var `CATEGORY_CMDS = {` (L16)
+- var `FALLBACK = ["/opt/sublime_text/sublime_text", "-n", "-wait"]` (L24)
+### fn `def print_help(version)` (L27-43)
+- @brief Render command help for `edit`.
+- @details Prints usage, required file argument semantics, and argument forwarding contract for the selected external editor executable.
+- @param version {str} Version string appended in usage output.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
+
+### fn `def run(args)` (L44-58)
+- @brief Execute MIME-routed edit dispatch.
+- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise dispatches by file category through shared `_dc_common`.
+- @param args {list[str]} CLI args where `args[0]` is file path.
+- @return {int} Return code `2` on missing file; otherwise delegated dispatch result.
+- @satisfies REQ-023, REQ-024
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`CATEGORY_CMDS`|var|pub|16||
+|`FALLBACK`|var|pub|24||
+|`print_help`|fn|pub|27-43|def print_help(version)|
+|`run`|fn|pub|44-58|def run(args)|
 
 
 ---
@@ -1108,6 +1096,48 @@ from shell_scripts.utils import require_project_root, print_info, print_success
 |`DESCRIPTION`|var|pub|10||
 |`print_help`|fn|pub|13-20|def print_help(version)|
 |`run`|fn|pub|21-59|def run(args)|
+
+
+---
+
+# view_cmd.py | Python | 58L | 6 symbols | 2 imports | 4 comments
+> Path: `src/shell_scripts/commands/view_cmd.py`
+
+## Imports
+```
+import sys
+from shell_scripts.commands._dc_common import dispatch
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "File viewer dispatcher by MIME type."` (L14)
+- var `CATEGORY_CMDS = {` (L16)
+- var `FALLBACK = ["sushi"]` (L24)
+### fn `def print_help(version)` (L27-43)
+- @brief Render command help for `view`.
+- @details Prints usage, required file argument semantics, and argument forwarding contract for the selected external viewer executable.
+- @param version {str} Version string appended in usage output.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
+
+### fn `def run(args)` (L44-58)
+- @brief Execute MIME-routed view dispatch.
+- @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise dispatches by file category through shared `_dc_common`.
+- @param args {list[str]} CLI args where `args[0]` is file path.
+- @return {int} Return code `2` on missing file; otherwise delegated dispatch result.
+- @satisfies REQ-023, REQ-024
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`CATEGORY_CMDS`|var|pub|16||
+|`FALLBACK`|var|pub|24||
+|`print_help`|fn|pub|27-43|def print_help(version)|
+|`run`|fn|pub|44-58|def run(args)|
 
 
 ---

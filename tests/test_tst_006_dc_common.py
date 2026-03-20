@@ -1,5 +1,5 @@
 """
-@brief Validate Double Commander wrapper behavior and MIME dispatch.
+@brief Validate generic diff/edit/view wrapper behavior and MIME dispatch.
 @details Verifies missing-file return code path and category resolution using
   MIME and extension evidence with mocked process boundaries.
 @satisfies TST-006, REQ-023, REQ-024
@@ -7,23 +7,23 @@
 """
 
 import shell_scripts.commands._dc_common as dc_common
-import shell_scripts.commands.dc_differ as dc_differ
-import shell_scripts.commands.dc_editor as dc_editor
-import shell_scripts.commands.dc_viewer as dc_viewer
+import shell_scripts.commands.diff_cmd as diff_cmd
+import shell_scripts.commands.edit_cmd as edit_cmd
+import shell_scripts.commands.view_cmd as view_cmd
 
 
-def test_double_commander_wrappers_return_two_when_missing_file_argument():
+def test_diff_edit_view_wrappers_return_two_when_missing_file_argument():
     """
     @brief Validate missing-file-argument status code.
-    @details Executes each double-commander wrapper with empty args and asserts
+    @details Executes each diff/edit/view wrapper with empty args and asserts
       mandated return code 2.
     @return {None} Assertions only.
     @satisfies TST-006, REQ-023
     """
 
-    assert dc_differ.run([]) == 2
-    assert dc_editor.run([]) == 2
-    assert dc_viewer.run([]) == 2
+    assert diff_cmd.run([]) == 2
+    assert edit_cmd.run([]) == 2
+    assert view_cmd.run([]) == 2
 
 
 def test_categorize_uses_mime_and_extension_mapping(monkeypatch):
@@ -92,3 +92,52 @@ def test_dispatch_selects_category_specific_command(monkeypatch):
 
     assert observed["executable"] == "typora"
     assert observed["args"] == ["typora", "/tmp/readme.md", "--line", "3"]
+
+
+
+def test_diff_help_mentions_generic_command_name(capsys):
+    """
+    @brief Validate `diff` help naming.
+    @details Ensures help output references the generic `diff` command token and
+      excludes legacy naming tokens.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
+    @return {None} Assertions only.
+    @satisfies TST-006, REQ-023
+    """
+
+    diff_cmd.print_help("v")
+    out = capsys.readouterr().out
+    assert "diff options:" in out
+    assert "double-commander" not in out
+
+
+def test_edit_help_mentions_generic_command_name(capsys):
+    """
+    @brief Validate `edit` help naming.
+    @details Ensures help output references the generic `edit` command token and
+      excludes legacy naming tokens.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
+    @return {None} Assertions only.
+    @satisfies TST-006, REQ-023
+    """
+
+    edit_cmd.print_help("v")
+    out = capsys.readouterr().out
+    assert "edit options:" in out
+    assert "double-commander" not in out
+
+
+def test_view_help_mentions_generic_command_name(capsys):
+    """
+    @brief Validate `view` help naming.
+    @details Ensures help output references the generic `view` command token and
+      excludes legacy naming tokens.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
+    @return {None} Assertions only.
+    @satisfies TST-006, REQ-023
+    """
+
+    view_cmd.print_help("v")
+    out = capsys.readouterr().out
+    assert "view options:" in out
+    assert "double-commander" not in out

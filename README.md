@@ -120,9 +120,9 @@ Built-in management flags:
 | `cli-opencode` | Launch OpenCode CLI in git-project context. |
 | `dicom2jpg` | Convert one DICOM file to JPEG. |
 | `dicomviewer` | Open DICOM viewer for one or more DICOM files. |
-| `double-commander-differ` | Dispatch file differ by MIME/category. |
-| `double-commander-editor` | Dispatch file editor by MIME/category. |
-| `double-commander-viewer` | Dispatch file viewer by MIME/category. |
+| `diff` | Dispatch file differ by MIME/category. |
+| `edit` | Dispatch file editor by MIME/category. |
+| `view` | Dispatch file viewer by MIME/category. |
 | `doxygen` | Generate HTML/XML/Markdown docs (and optional PDF). |
 | `pdf-crop` | Crop PDF pages with auto or manual bounding boxes. |
 | `pdf-merge` | Merge multiple PDFs and preserve/rebuild TOC bookmarks. |
