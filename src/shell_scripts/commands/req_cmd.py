@@ -180,9 +180,13 @@ def run(args: list[str]) -> int:
 
     @details Parses mutually exclusive selector options, resolves target set,
     applies cleanup/scaffold phase, and executes external `req` for each target.
-    Returns `1` on invalid option combinations or unknown options.
+    Returns `1` on invalid option combinations or unknown options. Converts
+    external `req` non-zero exits into explicit error output and propagated
+    return codes.
     @param args {list[str]} Command arguments excluding `req` token.
     @return {int} `0` on success; non-zero for option or subprocess failures.
+    @exception {subprocess.CalledProcessError} Internally handled and converted
+      to deterministic return code + error output.
     @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054
     """
 
@@ -227,7 +231,11 @@ def run(args: list[str]) -> int:
         if not target_dir.is_dir():
             print_error(f"Path does not exist: {target_dir}")
             return 1
-        subprocess.run(_build_req_args(target_dir), check=True)
+        try:
+            subprocess.run(_build_req_args(target_dir), check=True)
+        except subprocess.CalledProcessError as exc:
+            print_error(f"req failed for {target_dir} with exit code {exc.returncode}.")
+            return int(exc.returncode)
         print("-----------------------------------------------------------------------------------------------------------------")
         print()
 

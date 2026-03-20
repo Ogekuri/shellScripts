@@ -216,7 +216,7 @@
           - `pdf_toc_clean._get_num_pages(...)`: Parse total page count from dump content [`src/shell_scripts/commands/pdf_toc_clean.py`]
           - `pdf_toc_clean._filter_bookmarks(...)`: Keep only bookmark entries in `[1, max_pages]` [`src/shell_scripts/commands/pdf_toc_clean.py`]
           - `pdf_toc_clean._has_out_of_range(...)`: Verify resulting bookmark set does not exceed valid page interval [`src/shell_scripts/commands/pdf_toc_clean.py`]
-      - `req_cmd.run(...)`: Apply cleanup/scaffold and execute external `req` on selected targets [`src/shell_scripts/commands/req_cmd.py`]
+      - `req_cmd.run(...)`: Apply cleanup/scaffold, execute external `req` on selected targets, and propagate external non-zero exit codes as command return values [`src/shell_scripts/commands/req_cmd.py`]
         - `req_cmd._iter_first_level_dirs(...)`: Resolve first-level non-hidden child targets for `--dirs` mode [`src/shell_scripts/commands/req_cmd.py`]
           - `req_cmd._is_hidden_path(...)`: Filter hidden-path segments relative to current base directory [`src/shell_scripts/commands/req_cmd.py`]
         - `req_cmd._iter_descendant_dirs(...)`: Resolve non-hidden descendant targets for `--recursive` mode [`src/shell_scripts/commands/req_cmd.py`]

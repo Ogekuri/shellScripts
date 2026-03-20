@@ -1031,7 +1031,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# req_cmd.py | Python | 234L | 9 symbols | 6 imports | 9 comments
+# req_cmd.py | Python | 242L | 9 symbols | 6 imports | 9 comments
 > Path: `src/shell_scripts/commands/req_cmd.py`
 
 ## Imports
@@ -1091,11 +1091,12 @@ from shell_scripts.utils import print_error
 - @return {None} Performs filesystem side effects.
 - @satisfies REQ-048
 
-### fn `def run(args: list[str]) -> int` (L178-234)
+### fn `def run(args: list[str]) -> int` (L178-242)
 - @brief Execute `req` orchestration for selected directory targets.
-- @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options.
+- @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options. Converts external `req` non-zero exits into explicit error output and propagated return codes.
 - @param args {list[str]} Command arguments excluding `req` token.
 - @return {int} `0` on success; non-zero for option or subprocess failures.
+- @exception {subprocess.CalledProcessError} Internally handled and converted to deterministic return code + error output.
 - @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054
 
 ## Symbol Index
@@ -1109,7 +1110,7 @@ from shell_scripts.utils import print_error
 |`_iter_descendant_dirs`|fn|priv|106-125|def _iter_descendant_dirs(base_dir: Path) -> list[Path]|
 |`_build_req_args`|fn|priv|126-161|def _build_req_args(target_dir: Path) -> list[str]|
 |`_prepare_target_directory`|fn|priv|162-177|def _prepare_target_directory(target_dir: Path) -> None|
-|`run`|fn|pub|178-234|def run(args: list[str]) -> int|
+|`run`|fn|pub|178-242|def run(args: list[str]) -> int|
 
 
 ---

@@ -187,6 +187,52 @@ def test_req_rejects_dirs_and_recursive_together(monkeypatch):
     assert observed["calls"] == 0
 
 
+def test_req_returns_error_code_when_external_req_fails(monkeypatch, tmp_path):
+    """
+    @brief Validate subprocess-failure propagation without traceback.
+    @details Simulates external `req` failure and asserts command returns the
+      subprocess exit code instead of raising `CalledProcessError`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-010, REQ-049, REQ-051
+    """
+
+    observed = {"error": ""}
+
+    def _fake_run(command, check):
+        """
+        @brief Mock subprocess.run for external req failure simulation.
+        @details Raises `CalledProcessError` with deterministic exit code.
+        @param command {list[str]} Command argv vector.
+        @param check {bool} Subprocess check flag.
+        @return {types.SimpleNamespace} Unused because exception is raised.
+        @exception {subprocess.CalledProcessError} Always raised for test flow.
+        """
+
+        raise req_cmd.subprocess.CalledProcessError(returncode=3, cmd=command)
+
+    def _fake_print_error(message):
+        """
+        @brief Capture error output from req command.
+        @details Stores the emitted error message for strict assertions.
+        @param message {str} Error message emitted by command.
+        @return {None} Side effects only.
+        """
+
+        observed["error"] = message
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
+    monkeypatch.setattr(req_cmd, "print_error", _fake_print_error)
+    monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
+
+    result = req_cmd.run([])
+
+    assert result == 3
+    assert "exit code 3" in observed["error"]
+
+
 def test_req_builds_hardcoded_and_configurable_args(monkeypatch, tmp_path):
     """
     @brief Validate req argv assembly contract.
