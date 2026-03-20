@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/Ogekuri/shellScripts/compare/v0.2.0..v0.3.0) - 2026-03-20
+### 🚜  Changes
+- make npm sudo usage OS-aware [useReq] *(ai-install)*
+  - Update SRS for startup OS detection and ai-install OS-aware sudo behavior.
+  - Implement cached runtime OS detection at CLI startup in utils/core.
+  - Change ai-install npm command assembly: no sudo on Windows, sudo otherwise.
+  - Extend TST-001 and TST-003 mapped tests for OS detection and sudo branching.
+  - Update WORKFLOW.md and regenerate REFERENCES.md for traceability.
+
 ## [0.2.0](https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0) - 2026-03-20
 ### ⛰️  Features
 - Update github workflow.
@@ -70,6 +79,8 @@
 
 - \[0.1.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 - \[0.2.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.2.0
+- \[0.3.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.3.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
+[0.3.0]: https://github.com/Ogekuri/shellScripts/compare/v0.2.0..v0.3.0
