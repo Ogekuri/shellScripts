@@ -1,8 +1,21 @@
-import importlib
+"""@brief Command registry and lazy command module resolver.
 
+@details Defines a static command-to-module map consumed by the CLI dispatcher.
+Dictionary lookup enforces deterministic command availability; missing keys
+resolve to `None` to drive unknown-command error handling in the caller.
+@satisfies PRJ-001, PRJ-002, PRJ-003, DES-001, DES-008
+"""
+
+import importlib
+from types import ModuleType
+
+## @var _COMMAND_MODULES
+#  @brief Static map from CLI command names to importable module paths.
+#  @details Enables lazy command loading and deterministic command exposure.
+#  Removing an entry removes command discoverability and dispatch reachability.
+#  @satisfies PRJ-003, DES-001
 _COMMAND_MODULES = {
     "ai-install": "shell_scripts.commands.ai_install",
-    "bin-links": "shell_scripts.commands.bin_links",
     "clean": "shell_scripts.commands.clean",
     "cli-claude": "shell_scripts.commands.cli_claude",
     "cli-codex": "shell_scripts.commands.cli_codex",
@@ -31,15 +44,33 @@ _COMMAND_MODULES = {
 }
 
 
-def get_command(name):
+def get_command(name: str) -> ModuleType | None:
+    """@brief Resolve one CLI command token to its command module.
+
+    @details Performs O(1) dictionary lookup on `_COMMAND_MODULES`; returns
+    `None` for unknown tokens; imports target module lazily only on hit.
+    @param name {str} CLI command token.
+    @return {ModuleType|None} Imported command module for known token; `None` otherwise.
+    @throws {ImportError} If module path exists in map but import fails.
+    @satisfies PRJ-001, DES-001, DES-008
+    """
     module_path = _COMMAND_MODULES.get(name)
     if module_path is None:
         return None
     return importlib.import_module(module_path)
 
 
-def get_all_commands():
-    result = {}
+def get_all_commands() -> dict[str, str]:
+    """@brief Build command-description index for help rendering.
+
+    @details Iterates sorted command keys for stable output ordering; imports
+    each module via `get_command`; extracts `DESCRIPTION` or empty string.
+    Time complexity O(N log N) for N commands due to key sorting.
+    @return {dict[str, str]} Mapping `command_name -> description`.
+    @throws {ImportError} If any mapped command module import fails.
+    @satisfies PRJ-002, DES-001, DES-008
+    """
+    result: dict[str, str] = {}
     for name in sorted(_COMMAND_MODULES):
         mod = get_command(name)
         result[name] = getattr(mod, "DESCRIPTION", "")

@@ -85,25 +85,41 @@ import sys
 
 ---
 
-# __init__.py | Python | 46L | 2 symbols | 1 imports | 0 comments
+# __init__.py | Python | 77L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
 ```
 import importlib
+from types import ModuleType
 ```
 
 ## Definitions
 
-### fn `def get_command(name)` (L34-40)
+### fn `def get_command(name: str) -> ModuleType | None` (L47-62)
+- @brief Static map from CLI command names to importable module paths.
+- @brief Resolve one CLI command token to its command module.
+- @details Enables lazy command loading and deterministic command exposure.
+Removing an entry removes command discoverability and dispatch reachability.
+- @details Performs O(1) dictionary lookup on `_COMMAND_MODULES`; returns `None` for unknown tokens; imports target module lazily only on hit.
+- @param name {str} CLI command token.
+- @return {ModuleType|None} Imported command module for known token; `None` otherwise.
+- @throws {ImportError} If module path exists in map but import fails.
+- @satisfies PRJ-003, DES-001
+- @satisfies PRJ-001, DES-001, DES-008
 
-### fn `def get_all_commands()` (L41-46)
+### fn `def get_all_commands() -> dict[str, str]` (L63-77)
+- @brief Build command-description index for help rendering.
+- @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
+- @return {dict[str, str]} Mapping `command_name -> description`.
+- @throws {ImportError} If any mapped command module import fails.
+- @satisfies PRJ-002, DES-001, DES-008
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|34-40|def get_command(name)|
-|`get_all_commands`|fn|pub|41-46|def get_all_commands()|
+|`get_command`|fn|pub|47-62|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|63-77|def get_all_commands() -> dict[str, str]|
 
 
 ---

@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.1"
-date: "2026-03-19"
+version: "0.1.2"
+date: "2026-03-20"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -58,7 +58,6 @@ Repository structure (evidence-oriented view, depth-limited):
 │   │   └── commands/
 │   │       ├── __init__.py
 │   │       ├── ai_install.py
-│   │       ├── bin_links.py
 │   │       ├── clean.py
 │   │       ├── cli_*.py
 │   │       ├── dc_*.py
@@ -90,7 +89,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ### 2.1 Project Functions
 - **PRJ-001**: MUST parse CLI arguments and route execution to management flags or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
-- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, Double Commander dispatching, environment/test management, editor launchers, theme application, symlink maintenance, and cache cleanup.
+- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, Double Commander dispatching, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against GitHub releases with cooldown caching.
 - **PRJ-005**: MUST publish package releases through a GitHub Actions workflow triggered by version tag pushes.
 
@@ -131,8 +130,6 @@ No explicit performance optimizations identified.
 - **REQ-008**: MUST install Codex, Copilot, Gemini, and OpenCode CLIs via `sudo npm install -g` commands.
 - **REQ-009**: MUST install Claude CLI by downloading `latest` version metadata and installing an executable binary at `~/.claude/bin/claude`.
 - **REQ-010**: MUST install Kiro CLI by downloading a ZIP archive, extracting binaries, and copying `kiro-cli*` executables into `~/.local/bin` with executable permissions.
-- **REQ-011**: MUST create destination directory in `bin-links` and strip `.sh` suffixes when generating symlink names.
-- **REQ-012**: MUST update mismatched existing symlinks in `bin-links` and MUST NOT overwrite regular files at destination paths.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
 - **REQ-014**: MUST execute `/usr/bin/codex --yolo` in `cli-codex` and MUST set `CODEX_HOME` to `<project-root>/.codex` before execution.
 - **REQ-015**: MUST execute `/usr/bin/copilot --yolo --allow-all-tools` in `cli-copilot`.
@@ -175,7 +172,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-001**: MUST verify REQ-001 and REQ-002 by invoking `shell_scripts.core.main` with empty and unknown arguments, passing only if return codes and help/error outputs match specified behavior.
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting exact generated `uv tool` commands and propagated return codes.
 - **TST-003**: MUST verify REQ-006 through REQ-010 by monkeypatching installer call sites and passing only if option parsing selects expected installer sets and unknown options return code `1`.
-- **TST-004**: MUST verify REQ-011 through REQ-013 using temporary directories, passing only if symlink update rules and cache-deletion confirmation gates behave exactly as specified.
+- **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
 - **TST-005**: MUST verify REQ-014 through REQ-021 by monkeypatching `os.execvp` and environment state, passing only if executables, arguments, and `CODEX_HOME` assignments match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024 with file fixtures and mocked MIME detection, passing only if missing-file-argument status is `2` and category dispatch selects mapped commands.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
@@ -199,7 +196,6 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
 | REQ-006, REQ-007, REQ-008, REQ-009, REQ-010 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm/Claude/Kiro installers implemented via subprocess/download/extract/copy. |
-| REQ-011, REQ-012 | `src/shell_scripts/commands/bin_links.py` | `run` | Creates destination directory, strips `.sh` suffix, updates mismatched symlinks, skips regular files to avoid data loss. |
 | REQ-014 | `src/shell_scripts/commands/cli_codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; executes `/usr/bin/codex --yolo`. |
 | REQ-015 | `src/shell_scripts/commands/cli_copilot.py` | `run` | Executes `/usr/bin/copilot --yolo --allow-all-tools`. |
 | REQ-016 | `src/shell_scripts/commands/cli_gemini.py` | `run` | Executes `/usr/bin/gemini --yolo`. |

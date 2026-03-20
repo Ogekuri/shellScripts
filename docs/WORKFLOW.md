@@ -79,7 +79,6 @@
         - `ai_install._install_npm_tool(...)`: Run NPM global installation for selected tool [`src/shell_scripts/commands/ai_install.py`]
         - `ai_install._install_claude(...)`: Download and install Claude binary under user home [`src/shell_scripts/commands/ai_install.py`]
         - `ai_install._install_kiro(...)`: Download/extract/copy Kiro binaries into local bin [`src/shell_scripts/commands/ai_install.py`]
-      - `bin_links.run(...)`: Create/update symlinks from source directory into destination bin directory [`src/shell_scripts/commands/bin_links.py`]
       - `clean.run(...)`: Find and optionally delete cache directories under project root [`src/shell_scripts/commands/clean.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
@@ -208,7 +207,7 @@
   - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
   - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
   - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `_dc_common.dispatch`).
-  - File-system boundary: local cache/config writes, temporary files/directories, PDF intermediate artifacts, symlink operations, venv creation/removal.
+  - File-system boundary: local cache/config writes, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
 
 ### `PROC:release-uvx`
