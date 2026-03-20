@@ -7,14 +7,13 @@
   <img src="https://img.shields.io/badge/docs-live-b31b1b" alt="Docs">
 <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json" alt="uv">
 </p>
-
 <p align="center">
 <strong>Execute useful shell scripts via an uvx-compatible CLI interface.</strong><br>
 <code>shellscripts</code> is a Linux-first command collection for project automation, AI CLI launchers,
 PDF/DICOM utilities, development helpers, and editor integrations, exposed through a single command.
 <br>
-<i>This is a companion script for the <b><a href="https://github.com/Ogekuri/useReq">useReq/req</a></b> </i>🤖✨.
 </p>
+
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> |
@@ -92,7 +91,7 @@ uv run --project . python -m shell_scripts <command> [args...]
 Global syntax:
 
 ```bash
-shellscripts [command] [options]
+shellscripts/s [command] [options]
 ```
 
 Built-in management flags:
@@ -142,56 +141,56 @@ Built-in management flags:
 Install all AI CLIs (default behavior):
 
 ```bash
-shellscripts ai-install
+s ai-install
 ```
 
 Install only selected AI tools:
 
 ```bash
-shellscripts ai-install --codex --gemini --claude
+s ai-install --codex --gemini --claude
 ```
 
 Clean caches without interactive confirmation:
 
 ```bash
-shellscripts clean --yes
+s clean --yes
 ```
 
 Create symlinks from `scripts/` into `~/bin`:
 
 ```bash
-shellscripts bin-links scripts/
+s bin-links scripts/
 ```
 
 Crop PDF with automatic bbox over a page window:
 
 ```bash
-shellscripts pdf-crop --in input.pdf --out cropped.pdf --analyze-pages 1-10 --pages 1-
+s pdf-crop --in input.pdf --out cropped.pdf --analyze-pages 1-10 --pages 1-
 ```
 
 Merge PDFs and choose output file:
 
 ```bash
-shellscripts pdf-merge -o merged.pdf a.pdf b.pdf c.pdf
+s pdf-merge -o merged.pdf a.pdf b.pdf c.pdf
 ```
 
 Split PDF by TOC chapters:
 
 ```bash
-shellscripts pdf-split-by-toc document.pdf
+s pdf-split-by-toc document.pdf
 ```
 
 Run tests and pass pytest options:
 
 ```bash
-shellscripts tests -q -k "pdf"
+s tests -q -k "pdf"
 ```
 
 Open current git project in VS Code / Insiders:
 
 ```bash
-shellscripts vscode
-shellscripts vsinsider
+s vscode
+s vsinsider
 ```
 
 
