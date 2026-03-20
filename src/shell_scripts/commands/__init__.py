@@ -36,6 +36,7 @@ _COMMAND_MODULES = {
     "pdf-tiler-090": "shell_scripts.commands.pdf_tiler_090",
     "pdf-tiler-100": "shell_scripts.commands.pdf_tiler_100",
     "pdf-toc-clean": "shell_scripts.commands.pdf_toc_clean",
+    "req": "shell_scripts.commands.req_cmd",
     "tests": "shell_scripts.commands.tests_cmd",
     "ubuntu-dark-theme": "shell_scripts.commands.ubuntu_dark_theme",
     "venv": "shell_scripts.commands.venv_cmd",

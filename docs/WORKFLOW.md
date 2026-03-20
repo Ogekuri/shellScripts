@@ -216,6 +216,15 @@
           - `pdf_toc_clean._get_num_pages(...)`: Parse total page count from dump content [`src/shell_scripts/commands/pdf_toc_clean.py`]
           - `pdf_toc_clean._filter_bookmarks(...)`: Keep only bookmark entries in `[1, max_pages]` [`src/shell_scripts/commands/pdf_toc_clean.py`]
           - `pdf_toc_clean._has_out_of_range(...)`: Verify resulting bookmark set does not exceed valid page interval [`src/shell_scripts/commands/pdf_toc_clean.py`]
+      - `req_cmd.run(...)`: Apply cleanup/scaffold and execute external `req` on selected targets [`src/shell_scripts/commands/req_cmd.py`]
+        - `req_cmd._iter_first_level_dirs(...)`: Resolve first-level non-hidden child targets for `--dirs` mode [`src/shell_scripts/commands/req_cmd.py`]
+          - `req_cmd._is_hidden_path(...)`: Filter hidden-path segments relative to current base directory [`src/shell_scripts/commands/req_cmd.py`]
+        - `req_cmd._iter_descendant_dirs(...)`: Resolve non-hidden descendant targets for `--recursive` mode [`src/shell_scripts/commands/req_cmd.py`]
+          - `req_cmd._is_hidden_path(...)`: Filter hidden-path segments relative to current base directory [`src/shell_scripts/commands/req_cmd.py`]
+        - `req_cmd._prepare_target_directory(...)`: Remove predefined integration directories and ensure required scaffold directories exist [`src/shell_scripts/commands/req_cmd.py`]
+        - `req_cmd._build_req_args(...)`: Build external `req` argv with hardcoded base flags plus runtime-configured provider/static-check vectors [`src/shell_scripts/commands/req_cmd.py`]
+          - `get_req_profile(...)`: Resolve `req.providers` and `req.static_checks` runtime profile values with fallback to defaults [`src/shell_scripts/config.py`]
+            - `_normalize_string_list(...)`: Validate provider/static-check vectors as non-empty string lists [`src/shell_scripts/config.py`]
       - `tests_cmd.run(...)`: Ensure `.venv`, optional dependency install, and execute pytest with project PYTHONPATH [`src/shell_scripts/commands/tests_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
@@ -232,7 +241,7 @@
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
 - External Boundaries:
   - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
-  - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
+  - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
   - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `_dc_common.dispatch`).
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.

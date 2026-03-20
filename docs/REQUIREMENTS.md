@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.7"
+version: "0.1.8"
 date: "2026-03-20"
 author: "Auto-generated from repository evidence"
 scope:
@@ -89,7 +89,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ### 2.1 Project Functions
 - **PRJ-001**: MUST parse CLI arguments and route execution to management flags (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`) or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
-- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, environment/test management, editor launchers, theme application, and cache cleanup.
+- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against GitHub releases with cooldown caching.
 - **PRJ-005**: MUST include a GitHub automation workflow script at `.github/workflows/release-uvx.yml`.
 
@@ -113,7 +113,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-008**: MUST expose command modules with `DESCRIPTION`, `print_help(version)`, and `run(args)` call patterns.
 - **DES-009**: MUST recreate `.venv` whenever `.venv` already exists in `venv` command execution and `--force` MUST NOT change this behavior.
 - **DES-010**: MUST request deletion confirmation in `clean` unless `--yes` is provided.
-- **DES-011**: MUST implement centralized runtime configuration loading from `~/.config/shellScripts/config.json` with recursive merge semantics where missing keys preserve hardcoded defaults.
+- **DES-011**: MUST implement centralized runtime configuration loading from `~/.config/shellScripts/config.json` with recursive merge semantics where missing keys preserve hardcoded defaults, including `req` providers and static checks.
 - **DES-012**: MUST provide a management operation that writes default runtime configuration JSON to `~/.config/shellScripts/config.json`, creating parent directories when absent.
 - **DES-013**: MUST resolve `ai-install` npm command prefixes from detected runtime OS, omitting `sudo` on Windows and using `sudo` on non-Windows systems.
 
@@ -161,6 +161,13 @@ No explicit performance optimizations identified.
 - **REQ-045**: MUST load runtime configuration from `~/.config/shellScripts/config.json` during CLI startup, and MUST keep hardcoded defaults for missing file, missing keys, or invalid value types.
 - **REQ-046**: MUST write the default runtime configuration JSON to `~/.config/shellScripts/config.json` and return code `0` when invoked with `--write-config`.
 - **REQ-047**: MUST determine and cache the runtime operating system at CLI startup before command dispatch.
+- **REQ-048**: MUST implement `req` command that removes predefined AI-integration directories and creates `guidelines`, `docs`, `tests`, `src`, `scripts`, and `.github/workflows` for each selected target directory.
+- **REQ-049**: MUST invoke external `req` once per target directory using hardcoded arguments `--base`, `--docs-dir`, `--guidelines-dir`, three `--src-dir`, `--tests-dir`, and `--upgrade-guidelines`.
+- **REQ-050**: MUST source repeated `--provider` and `--enable-static-check` arguments for `req` from runtime config and MUST use hardcoded defaults when config keys are missing or invalid.
+- **REQ-051**: MUST target current directory when `req` is invoked without selector options.
+- **REQ-052**: MUST make `req --dirs` target only first-level child directories and MUST exclude the current directory.
+- **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.
+- **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
 
 ## 4. Test Requirements
 
@@ -177,6 +184,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-005**: MUST verify REQ-014 through REQ-021 and REQ-043 through REQ-044 by monkeypatching `os.execvp` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, and codex auth symlink behavior match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
 - **TST-009**: MUST verify REQ-045 and REQ-046 by monkeypatching config I/O boundaries and asserting startup load invocation plus `--write-config` success behavior.
+- **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
 
@@ -215,4 +223,5 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | REQ-033 | `src/shell_scripts/commands/pdf_toc_clean.py` | `run`, `_filter_bookmarks` | Outputs `_toc-clean.pdf` with bookmark entries filtered to valid page range. |
 | REQ-034, REQ-035 | `src/shell_scripts/commands/pdf_crop.py` | `run`, `_parse_page_range`, `_compute_auto_bbox` | Supports bbox/margins/analyze-pages/pages options and validates range syntax `N`, `N-`, `-N`, `N-M`. |
 | REQ-036, REQ-037 | `src/shell_scripts/commands/tests_cmd.py` | `run` | Creates `.venv` if missing, conditionally installs `requirements.txt`, runs pytest with `PYTHONPATH` prefixed by `src`. |
+| REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054 | `src/shell_scripts/commands/req_cmd.py`; `src/shell_scripts/config.py` | `run`, `_build_req_args`, `get_req_profile` | `req` command resolves targets by selector mode, applies cleanup/scaffold operations, and executes external `req` with hardcoded base args plus runtime-configured providers/static checks. |
 | TST-001..TST-008 | `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py`; `tests/` | multiple | Existing code paths define verifiable behaviors; no unit test files currently exist under `tests/` directory. |

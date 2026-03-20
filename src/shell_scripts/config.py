@@ -6,7 +6,7 @@ deterministic runtime loading from `~/.config/shellScripts/config.json` with
 recursive merge semantics. Missing files/keys preserve defaults; invalid value
 types are ignored at accessor boundaries. Time complexity for load is O(N) over
 JSON node count.
-@satisfies DES-011, DES-012, REQ-004, REQ-005, REQ-024, REQ-045, REQ-046
+@satisfies DES-011, DES-012, REQ-004, REQ-005, REQ-024, REQ-045, REQ-046, REQ-050
 """
 
 from __future__ import annotations
@@ -65,6 +65,25 @@ DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
             },
             "fallback": ["sushi"],
         },
+    },
+    "req": {
+        "providers": [
+            "claude:prompts",
+            "github:skills",
+            "codex:prompts",
+            "opencode:agents",
+            "gemini:prompts",
+            "kiro:agents",
+        ],
+        "static_checks": [
+            "C=Command,cppcheck,--error-exitcode=1,\"--enable=warning,style,performance,portability\",--std=c11",
+            "C=Command,clang-format,--dry-run,--Werror",
+            "C++=Command,cppcheck,--error-exitcode=1,\"--enable=warning,style,performance,portability\",--std=c++20",
+            "C++=Command,clang-format,--dry-run,--Werror",
+            "Python=Pylance",
+            "Python=Ruff",
+            "JavaScript=Command,node,--check",
+        ],
     },
 }
 
@@ -130,6 +149,23 @@ def _normalize_command_vector(value: Any) -> list[str] | None:
     """
 
     if not isinstance(value, list) or not value:
+        return None
+    if not all(isinstance(item, str) and item for item in value):
+        return None
+    return [item for item in value]
+
+
+def _normalize_string_list(value: Any) -> list[str] | None:
+    """@brief Validate and normalize a list of non-empty strings.
+
+    @details Accepts only list payloads containing non-empty string elements and
+    returns a cloned list for defensive immutability. Empty lists are valid.
+    @param value {Any} Candidate list payload.
+    @return {list[str]|None} Sanitized list or `None` if invalid.
+    @satisfies DES-011, REQ-045, REQ-050
+    """
+
+    if not isinstance(value, list):
         return None
     if not all(isinstance(item, str) and item for item in value):
         return None
@@ -240,6 +276,34 @@ def get_dispatch_profile(name: str) -> tuple[dict[str, list[str]], list[str]]:
     if categories is None or fallback is None:
         raise ValueError("Default dispatch profile is invalid.")
     return categories, fallback
+
+
+def get_req_profile() -> tuple[list[str], list[str]]:
+    """@brief Resolve `req` providers and static checks from runtime config.
+
+    @details Builds profile from `req.providers` and `req.static_checks` runtime
+    payload with typed normalization and per-section fallback to hardcoded
+    defaults for missing or invalid values.
+    @return {tuple[list[str], list[str]]} `(providers, static_checks)`.
+    @satisfies DES-011, REQ-045, REQ-050
+    """
+
+    default_profile = DEFAULT_RUNTIME_CONFIG["req"]
+    runtime_profile = _runtime_config.get("req", {})
+    if not isinstance(runtime_profile, dict):
+        runtime_profile = {}
+
+    providers = _normalize_string_list(runtime_profile.get("providers"))
+    if providers is None:
+        providers = _normalize_string_list(default_profile["providers"])
+
+    static_checks = _normalize_string_list(runtime_profile.get("static_checks"))
+    if static_checks is None:
+        static_checks = _normalize_string_list(default_profile["static_checks"])
+
+    if providers is None or static_checks is None:
+        raise ValueError("Default req profile is invalid.")
+    return providers, static_checks
 
 
 def write_default_runtime_config(path: Path | None = None) -> Path:

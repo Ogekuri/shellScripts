@@ -4,7 +4,7 @@
   startup OS detection, Linux-only upgrade/uninstall command resolution from
   runtime config, and management write-config behavior. Tests are deterministic
   and isolate subprocess and filesystem boundaries.
-@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047
+@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
 @return {None} Pytest module scope.
 """
 
@@ -204,3 +204,24 @@ def test_main_write_config_returns_zero_and_calls_writer(monkeypatch, capsys):
     assert result == 0
     assert observed["called"] is True
     assert "/tmp/config.json" in output
+
+
+def test_main_help_lists_req_command(monkeypatch, capsys):
+    """
+    @brief Validate global help command index includes `req`.
+    @details Forces empty-args global-help path and asserts command list
+      contains `req` entry.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
+    @return {None} Assertions only.
+    @satisfies TST-010, REQ-048
+    """
+
+    monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
+    monkeypatch.setattr(core.sys, "argv", ["shellscripts"])
+
+    result = core.main()
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "req" in output

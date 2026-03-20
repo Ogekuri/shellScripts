@@ -4,7 +4,7 @@
 @details Provides global help rendering, management command execution
 (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`), runtime
 configuration bootstrap, and subcommand delegation to lazily imported modules.
-@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046
+@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
 """
 
 import sys
@@ -132,7 +132,7 @@ def main():
     @details Performs runtime OS detection, update check, runtime configuration
     load, and argument dispatch through management flags and subcommands.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
     """
 
     detect_runtime_os()
