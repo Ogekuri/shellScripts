@@ -145,6 +145,46 @@ def test_install_npm_tool_omits_sudo_on_windows(monkeypatch):
     assert observed["command"] == ["npm", "install", "-g", "@github/copilot"]
 
 
+def test_install_npm_tool_uses_npm_cmd_on_windows(monkeypatch):
+    """
+    @brief Reproduce Windows npm executable resolution defect.
+    @details Simulates a Windows PATH where only `npm.cmd` exists and asserts
+      installer execution must use that executable without raising.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-008, REQ-047
+    """
+
+    observed = {}
+
+    def _fake_run(command):
+        """
+        @brief Mock subprocess.run for Windows npm-cmd path.
+        @details Captures command payload and raises when unresolved `npm` token
+          is used to mirror WinError 2 behavior.
+        @param command {list[str]} Command token vector.
+        @return {types.SimpleNamespace} Object with returncode field.
+        @throws {FileNotFoundError} When command executable is unresolved.
+        """
+
+        observed["command"] = command
+        if command[0] == "npm":
+            raise FileNotFoundError("[WinError 2] npm not found")
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
+    monkeypatch.setattr(ai_install, "is_windows", lambda: True)
+    monkeypatch.setattr(
+        ai_install.shutil,
+        "which",
+        lambda name: "C:/Program Files/nodejs/npm.cmd" if name == "npm.cmd" else None,
+    )
+
+    ai_install._install_npm_tool("codex")
+
+    assert observed["command"][0].endswith("npm.cmd")
+
+
 def test_install_claude_downloads_latest_and_installs_binary(monkeypatch, tmp_path):
     """
     @brief Validate Claude installer download/install flow.

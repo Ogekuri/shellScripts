@@ -73,9 +73,10 @@ def print_help(version):
 def _install_npm_tool(tool_key):
     """@brief Execute npm-based installer command for selected tool.
 
-    @details Resolves base npm command from static tool mapping and prepends
-    `sudo` when runtime OS is not Windows. Executes subprocess and emits status
-    messages.
+    @details Resolves base npm command from static tool mapping, prepends
+    `sudo` when runtime OS is not Windows, and uses resolved `npm.cmd` path on
+    Windows when available to avoid process-launch failures. Executes subprocess
+    and emits status messages.
     @param tool_key {str} Tool identifier key from `TOOLS`.
     @return {None} Executes side effects and prints result messages.
     @satisfies DES-013, REQ-008, REQ-047
@@ -83,7 +84,11 @@ def _install_npm_tool(tool_key):
 
     info = TOOLS[tool_key]
     command = list(info["install"])
-    if not is_windows():
+    if is_windows():
+        npm_cmd_path = shutil.which("npm.cmd")
+        if npm_cmd_path:
+            command[0] = npm_cmd_path
+    else:
         command = ["sudo"] + command
     print_info(f"Installing {info['name']}...")
     result = subprocess.run(command)
