@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.2"
+version: "0.1.3"
 date: "2026-03-20"
 author: "Auto-generated from repository evidence"
 scope:
@@ -160,6 +160,8 @@ No explicit performance optimizations identified.
 - **REQ-040**: MUST install build dependencies with `python -m pip install --upgrade pip` and `pip install setuptools wheel build`, then execute `python -m build`.
 - **REQ-041**: MUST create a GitHub release with `softprops/action-gh-release@v2`, attaching `dist/*.whl` and `dist/*.tar.gz`, and enabling generated release notes.
 - **REQ-042**: MUST set release body install command to `uv tool install shellscripts --from git+https://github.com/Ogekuri/shellScripts.git@${{ github.ref_name }}` and upgrade command to `shellscripts --upgrade`.
+- **REQ-043**: MUST ensure `<project-root>/.codex/auth.json` is a symlink to `~/.codex/auth.json` before `cli-codex` executes `/usr/bin/codex --yolo`.
+- **REQ-044**: MUST create the symlink and print an informational message when `<project-root>/.codex/auth.json` is not already that exact symlink.
 
 ## 4. Test Requirements
 
@@ -173,7 +175,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting exact generated `uv tool` commands and propagated return codes.
 - **TST-003**: MUST verify REQ-006 through REQ-010 by monkeypatching installer call sites and passing only if option parsing selects expected installer sets and unknown options return code `1`.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
-- **TST-005**: MUST verify REQ-014 through REQ-021 by monkeypatching `os.execvp` and environment state, passing only if executables, arguments, and `CODEX_HOME` assignments match requirements.
+- **TST-005**: MUST verify REQ-014 through REQ-021 and REQ-043 through REQ-044 by monkeypatching `os.execvp` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, and codex auth symlink behavior match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024 with file fixtures and mocked MIME detection, passing only if missing-file-argument status is `2` and category dispatch selects mapped commands.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
@@ -196,7 +198,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
 | REQ-006, REQ-007, REQ-008, REQ-009, REQ-010 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm/Claude/Kiro installers implemented via subprocess/download/extract/copy. |
-| REQ-014 | `src/shell_scripts/commands/cli_codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; executes `/usr/bin/codex --yolo`. |
+| REQ-014, REQ-043, REQ-044 | `src/shell_scripts/commands/cli_codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; ensures `.codex/auth.json` symlink target `~/.codex/auth.json`; prints creation info when symlink is created; executes `/usr/bin/codex --yolo`. |
 | REQ-015 | `src/shell_scripts/commands/cli_copilot.py` | `run` | Executes `/usr/bin/copilot --yolo --allow-all-tools`. |
 | REQ-016 | `src/shell_scripts/commands/cli_gemini.py` | `run` | Executes `/usr/bin/gemini --yolo`. |
 | REQ-017 | `src/shell_scripts/commands/cli_claude.py` | `run` | Executes `~/.claude/bin/claude --dangerously-skip-permissions`. |

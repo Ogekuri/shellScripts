@@ -88,6 +88,8 @@
       - `cli_codex.run(...)`: Launch Codex CLI with project-scoped CODEX_HOME [`src/shell_scripts/commands/cli_codex.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+        - `cli_codex._ensure_auth_symlink(...)`: Ensure project auth link points to user auth file before CLI exec [`src/shell_scripts/commands/cli_codex.py`]
+          - `cli_codex._is_expected_auth_link(...)`: Validate existing symlink destination against expected home auth target [`src/shell_scripts/commands/cli_codex.py`]
       - `cli_copilot.run(...)`: Launch Copilot CLI in project context [`src/shell_scripts/commands/cli_copilot.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
