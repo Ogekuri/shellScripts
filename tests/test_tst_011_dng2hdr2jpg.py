@@ -1211,8 +1211,11 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "├" in output and "┼" in output and "┤" in output
     assert "└" in output and "┴" in output and "┘" in output
     assert "│ Operator" in output
+    assert "│ Neutrality" in output and "│ When to use" in output
     assert "`reinhard02`" in output
     assert "`mantiuk08`" in output
+    assert "│ Medium" in output
+    assert "│ Natural-looking local adaptation with preserved detail" in output
     assert "`--tmoR02Key`" in output
     assert "`--tmoM08ColorSaturation`" in output
     assert "--tmo* <value> | --tmo*=<value>" in output

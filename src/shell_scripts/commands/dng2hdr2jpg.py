@@ -44,10 +44,29 @@ _LUMINANCE_OPERATOR_TABLE_HEADERS = (
     "Operator",
     "Family / idea",
     "Character / typical result",
+    "",
     "Neutrality",
     "When to use",
 )
-_LUMINANCE_OPERATOR_TABLE_ROWS = (
+_LUMINANCE_OPERATOR_TABLE_HEADER_ROWS = (
+    (
+        "Operator",
+        "Family / idea",
+        "Character / typical result",
+        "",
+        "",
+        "",
+    ),
+    (
+        "",
+        "",
+        "",
+        "",
+        "Neutrality",
+        "When to use",
+    ),
+)
+_LUMINANCE_OPERATOR_TABLE_ENTRIES = (
     (
         "`ashikhmin`",
         "Local HVS-inspired tone mapping",
@@ -252,6 +271,23 @@ def _print_box_table(headers, rows):
     print(_border("└", "┴", "┘"))
 
 
+def _build_two_line_operator_rows(operator_entries):
+    """@brief Build two-line physical rows for luminance operator table.
+
+    @details Expands each logical operator entry into two physical rows while
+    preserving the existing six-column bordered layout used by help rendering.
+    @param operator_entries {tuple[tuple[str, str, str, str, str], ...]} Logical operator rows in `(operator, family, character, neutrality, when_to_use)` format.
+    @return {tuple[tuple[str, str, str, str, str, str], ...]} Expanded physical rows for `_print_box_table`.
+    @satisfies REQ-070
+    """
+
+    rows = []
+    for operator, family, character, neutrality, when_to_use in operator_entries:
+        rows.append((operator, family, character, "", "", ""))
+        rows.append(("", "", "", "", neutrality, when_to_use))
+    return tuple(rows)
+
+
 def print_help(version):
     """@brief Print help text for the `dng2hdr2jpg` command.
 
@@ -298,7 +334,10 @@ def print_help(version):
     print(f"                   - Luminance tone mapper (default: {DEFAULT_LUMINANCE_TMO}).")
     print()
     print("  Luminance operators:")
-    _print_box_table(_LUMINANCE_OPERATOR_TABLE_HEADERS, _LUMINANCE_OPERATOR_TABLE_ROWS)
+    operator_rows = _LUMINANCE_OPERATOR_TABLE_HEADER_ROWS + _build_two_line_operator_rows(
+        _LUMINANCE_OPERATOR_TABLE_ENTRIES
+    )
+    _print_box_table(_LUMINANCE_OPERATOR_TABLE_HEADERS, operator_rows)
     print()
     print("  Luminance operator main CLI controls:")
     _print_box_table(_LUMINANCE_CONTROL_TABLE_HEADERS, _LUMINANCE_CONTROL_TABLE_ROWS)
