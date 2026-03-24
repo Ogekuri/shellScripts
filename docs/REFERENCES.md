@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 366L | 15 symbols | 8 imports | 13 comments
+# dng2hdr2jpg.py | Python | 375L | 15 symbols | 8 imports | 13 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -702,29 +702,29 @@ import imageio  # type: ignore
 - @exception subprocess.CalledProcessError Raised when `enfuse` returns non-zero exit status.
 - @satisfies REQ-058
 
-### fn `def _encode_jpg(imageio_module, merged_tiff, output_jpg)` `priv` (L220-245)
+### fn `def _encode_jpg(imageio_module, merged_tiff, output_jpg)` `priv` (L220-254)
 - @brief Encode merged HDR TIFF payload into final JPG output.
-- @details Loads merged image payload and down-converts to `uint8` when source dynamic range exceeds JPEG-native depth.
+- @details Loads merged image payload, down-converts to `uint8` when source dynamic range exceeds JPEG-native depth, and strips alpha channel payload (`RGBA` -> `RGB`) before JPEG write for both Pillow-mode and array payloads.
 - @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
 - @param merged_tiff {Path} Merged TIFF source path produced by `enfuse`.
 - @param output_jpg {Path} Final JPG output path.
 - @return {None} Side effects only.
 - @satisfies REQ-058
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L246-274)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L255-283)
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L275-294)
+### fn `def _is_supported_runtime_os()` `priv` (L284-303)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L295-366)
+### fn `def run(args)` (L304-375)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, merges HDR with `enfuse`, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -745,10 +745,10 @@ import imageio  # type: ignore
 |`_build_exposure_multipliers`|fn|priv|156-168|def _build_exposure_multipliers(ev_value)|
 |`_write_bracket_images`|fn|priv|169-198|def _write_bracket_images(raw_handle, imageio_module, mul...|
 |`_run_enfuse`|fn|priv|199-219|def _run_enfuse(bracket_paths, merged_tiff)|
-|`_encode_jpg`|fn|priv|220-245|def _encode_jpg(imageio_module, merged_tiff, output_jpg)|
-|`_collect_processing_errors`|fn|priv|246-274|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|275-294|def _is_supported_runtime_os()|
-|`run`|fn|pub|295-366|def run(args)|
+|`_encode_jpg`|fn|priv|220-254|def _encode_jpg(imageio_module, merged_tiff, output_jpg)|
+|`_collect_processing_errors`|fn|priv|255-283|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|284-303|def _is_supported_runtime_os()|
+|`run`|fn|pub|304-375|def run(args)|
 
 
 ---

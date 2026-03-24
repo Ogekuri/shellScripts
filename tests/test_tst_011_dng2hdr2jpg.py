@@ -468,3 +468,63 @@ def test_dng2hdr2jpg_runtime_dependencies_are_declared_in_pyproject():
 
     assert any(dep.startswith("rawpy") for dep in dependencies)
     assert any(dep.startswith("imageio") for dep in dependencies)
+
+
+def test_dng2hdr2jpg_handles_rgba_merged_image_for_jpeg_output(tmp_path):
+    """
+    @brief Validate JPG encode path strips alpha channel from merged HDR payload.
+    @details Simulates merged HDR decode that yields RGBA payload; encoder must
+      convert payload to RGB-compatible data before final JPEG write.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-058, REQ-059
+    """
+
+    observed = {"jpg_payload": None}
+
+    class _FakeRgbaPayload:
+        """@brief Minimal RGBA payload with PIL-style conversion surface."""
+
+        mode = "RGBA"
+
+        def convert(self, target_mode):
+            """@brief Return RGB payload marker when alpha channel is converted."""
+
+            assert target_mode == "RGB"
+            return "rgb-no-alpha"
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for RGBA encode reproducer."""
+
+        @staticmethod
+        def imwrite(path, data):
+            """@brief Persist intermediate artifacts and validate JPG payload mode."""
+
+            destination = Path(path)
+            if destination.suffix.lower() == ".jpg":
+                observed["jpg_payload"] = data
+                if data == "rgb-no-alpha":
+                    destination.write_text("jpg", encoding="utf-8")
+                    return
+                raise ValueError("cannot write mode RGBA as JPEG")
+            destination.write_text("tif", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake RGBA payload for merged HDR TIFF input."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeRgbaPayload()
+
+    merged_tiff = tmp_path / "merged_hdr.tif"
+    merged_tiff.write_text("merged", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    dng2hdr2jpg._encode_jpg(
+        imageio_module=_FakeImageIoModule,
+        merged_tiff=merged_tiff,
+        output_jpg=output_jpg,
+    )
+
+    assert observed["jpg_payload"] == "rgb-no-alpha"
+    assert output_jpg.exists()

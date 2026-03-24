@@ -220,8 +220,9 @@ def _run_enfuse(bracket_paths, merged_tiff):
 def _encode_jpg(imageio_module, merged_tiff, output_jpg):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
-    @details Loads merged image payload and down-converts to `uint8` when source
-    dynamic range exceeds JPEG-native depth.
+    @details Loads merged image payload, down-converts to `uint8` when source
+    dynamic range exceeds JPEG-native depth, and strips alpha channel payload
+    (`RGBA` -> `RGB`) before JPEG write for both Pillow-mode and array payloads.
     @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
     @param merged_tiff {Path} Merged TIFF source path produced by `enfuse`.
     @param output_jpg {Path} Final JPG output path.
@@ -239,6 +240,14 @@ def _encode_jpg(imageio_module, merged_tiff, output_jpg):
             merged_data = scaled.astype("uint8")
         else:
             merged_data = scaled
+
+    mode = getattr(merged_data, "mode", "")
+    if mode == "RGBA" and hasattr(merged_data, "convert"):
+        merged_data = merged_data.convert("RGB")
+    else:
+        shape = getattr(merged_data, "shape", ())
+        if len(shape) >= 3 and shape[-1] == 4:
+            merged_data = merged_data[..., :3]
 
     imageio_module.imwrite(str(output_jpg), merged_data)
 
