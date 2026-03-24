@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070
 """
 
 import shutil
@@ -34,12 +34,147 @@ DEFAULT_JPG_COMPRESSION = 15
 DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "triangular"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
-DEFAULT_LUMINANCE_TMO = "mantiuk08"
+DEFAULT_LUMINANCE_TMO = "reinhard02"
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
     "darwin": "MacOS",
 }
+_LUMINANCE_OPERATOR_TABLE_HEADERS = (
+    "Operator",
+    "Family / idea",
+    "Character / typical result",
+    "Neutrality",
+    "When to use",
+)
+_LUMINANCE_OPERATOR_TABLE_ROWS = (
+    (
+        "`ashikhmin`",
+        "Local HVS-inspired tone mapping",
+        "Natural local contrast, detail-preserving",
+        "Medium",
+        "Natural-looking local adaptation with preserved detail",
+    ),
+    (
+        "`drago`",
+        "Adaptive logarithmic compression",
+        "Smooth, simple, highlight-friendly",
+        "Medium",
+        "Fast global compression of very wide dynamic range",
+    ),
+    (
+        "`durand`",
+        "Bilateral base/detail decomposition",
+        "Soft local compression, photographic look",
+        "Low-Medium",
+        "Controlled local contrast compression",
+    ),
+    (
+        "`fattal`",
+        "Gradient-domain compression",
+        "Strong detail enhancement, dramatic HDR",
+        "Low",
+        "Detail-heavy, stylized rendering",
+    ),
+    (
+        "`ferradans`",
+        "Perception-inspired adaptation + local contrast",
+        "Realistic but locally adaptive",
+        "Low-Medium",
+        "Perceptual rendering with local contrast recovery",
+    ),
+    (
+        "`ferwerda`",
+        "Perceptually based visibility / adaptation",
+        "Vision-model oriented, scene-visibility focused",
+        "Medium",
+        "Research / perceptual-visibility oriented rendering",
+    ),
+    (
+        "`kimkautz`",
+        "Consistent global tone reproduction",
+        "Stable, consistent, restrained",
+        "Medium-High",
+        "Consistent results across different HDR images",
+    ),
+    (
+        "`pattanaik`",
+        "Human visual system adaptation model",
+        "Perceptual, adaptive, scene-aware",
+        "Low-Medium",
+        "HVS-inspired tone mapping with rod/cone adaptation",
+    ),
+    (
+        "`reinhard02`",
+        "Photographic tone reproduction",
+        "Natural, controllable, predictable",
+        "High",
+        "Best baseline when you want a relatively neutral operator",
+    ),
+    (
+        "`reinhard05`",
+        "Visual adaptation / photoreceptor model",
+        "Natural but more adaptive than `reinhard02`",
+        "Medium",
+        "Simple controls with a perceptual/natural look",
+    ),
+    (
+        "`mai`",
+        "Fast effective tone mapping",
+        "Clean, practical, generally easy to use",
+        "Medium",
+        "Quick all-purpose rendering with minimal tuning",
+    ),
+    (
+        "`mantiuk06`",
+        "Contrast mapping with detail enhancement",
+        "Punchy, detailed, classic \"HDR\" look",
+        "Low",
+        "Strong detail and local contrast enhancement",
+    ),
+    (
+        "`mantiuk08`",
+        "Display-adaptive contrast mapping",
+        "Perceptual, display-oriented, refined",
+        "Low-Medium",
+        "Optimizing HDR for display appearance",
+    ),
+    (
+        "`vanhateren`",
+        "Retina-inspired visual adaptation",
+        "Vision-model based, adaptive",
+        "Medium",
+        "Retina-style perceptual adaptation experiments",
+    ),
+    (
+        "`lischinski`",
+        "Optimization-based local tonal adjustment",
+        "Local, edge-aware, selective adjustments",
+        "Low",
+        "Local tonal manipulation with strong edge preservation",
+    ),
+)
+_LUMINANCE_CONTROL_TABLE_HEADERS = (
+    "Operator",
+    "Main CLI controls",
+)
+_LUMINANCE_CONTROL_TABLE_ROWS = (
+    ("`ashikhmin`", "`--tmoAshEq2`, `--tmoAshSimple`, `--tmoAshLocal`"),
+    ("`drago`", "`--tmoDrgBias`"),
+    ("`durand`", "`--tmoDurSigmaS`, `--tmoDurSigmaR`, `--tmoDurBase`"),
+    ("`fattal`", "`--tmoFatAlpha`, `--tmoFatBeta`, `--tmoFatColor`, `--tmoFatNoise`, `--tmoFatNew`"),
+    ("`ferradans`", "`--tmoFerRho`, `--tmoFerInvAlpha`"),
+    ("`ferwerda`", "none exposed in CLI"),
+    ("`kimkautz`", "`--tmoKimKautzC1`, `--tmoKimKautzC2`"),
+    ("`pattanaik`", "`--tmoPatMultiplier`, `--tmoPatLocal`, `--tmoPatAutoLum`, `--tmoPatCone`, `--tmoPatRod`"),
+    ("`reinhard02`", "`--tmoR02Key`, `--tmoR02Phi`, `--tmoR02Scales`, `--tmoR02Num`, `--tmoR02Low`, `--tmoR02High`"),
+    ("`reinhard05`", "`--tmoR05Brightness`, `--tmoR05Chroma`, `--tmoR05Lightness`"),
+    ("`mai`", "none exposed in CLI"),
+    ("`mantiuk06`", "`--tmoM06Contrast`, `--tmoM06Saturation`, `--tmoM06Detail`, `--tmoM06ContrastEqual`"),
+    ("`mantiuk08`", "`--tmoM08ColorSaturation`, `--tmoM08ConstrastEnh`, `--tmoM08LuminanceLvl`, `--tmoM08SetLuminance`"),
+    ("`vanhateren`", "`--tmoVanHaterenPupilArea`"),
+    ("`lischinski`", "`--tmoLischinskiAlpha`"),
+)
 
 
 @dataclass(frozen=True)
@@ -86,6 +221,37 @@ class LuminanceOptions:
     tmo_extra_args: tuple[str, ...]
 
 
+def _print_box_table(headers, rows):
+    """@brief Print one Unicode box-drawing table.
+
+    @details Computes deterministic column widths from headers and rows, then
+    prints aligned borders and cells using Unicode line-drawing glyphs.
+    @param headers {tuple[str, ...]} Table header labels in fixed output order.
+    @param rows {tuple[tuple[str, ...], ...]} Table body rows with one value per column.
+    @return {None} Writes formatted table to stdout.
+    @satisfies REQ-070
+    """
+
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for idx, value in enumerate(row):
+            widths[idx] = max(widths[idx], len(value))
+
+    def _border(left, middle, right):
+        return left + middle.join("─" * (width + 2) for width in widths) + right
+
+    def _line(values):
+        cells = [f" {value.ljust(widths[idx])} " for idx, value in enumerate(values)]
+        return "│" + "│".join(cells) + "│"
+
+    print(_border("┌", "┬", "┐"))
+    print(_line(headers))
+    print(_border("├", "┼", "┤"))
+    for row in rows:
+        print(_line(row))
+    print(_border("└", "┴", "┘"))
+
+
 def print_help(version):
     """@brief Print help text for the `dng2hdr2jpg` command.
 
@@ -94,7 +260,7 @@ def print_help(version):
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063
+    @satisfies DES-008, REQ-063, REQ-070
     """
 
     print(
@@ -130,6 +296,13 @@ def print_help(version):
     )
     print("  --luminance-tmo=<name>")
     print(f"                   - Luminance tone mapper (default: {DEFAULT_LUMINANCE_TMO}).")
+    print()
+    print("  Luminance operators:")
+    _print_box_table(_LUMINANCE_OPERATOR_TABLE_HEADERS, _LUMINANCE_OPERATOR_TABLE_ROWS)
+    print()
+    print("  Luminance operator main CLI controls:")
+    _print_box_table(_LUMINANCE_CONTROL_TABLE_HEADERS, _LUMINANCE_CONTROL_TABLE_ROWS)
+    print()
     print("  --tmo* <value> | --tmo*=<value>")
     print("                   - Forward explicit luminance-hdr-cli --tmo* parameters as-is.")
     print("  [platform]       - Command is available on Linux only.")

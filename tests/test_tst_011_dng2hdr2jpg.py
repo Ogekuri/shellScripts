@@ -3,7 +3,7 @@
 @details Verifies argument validation, EV parsing/default behavior, three-
   bracket extraction multipliers, dual-backend HDR merge behavior, shared
   postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070
 @return {None} Pytest module scope.
 """
 
@@ -443,7 +443,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     @brief Validate luminance-hdr-cli backend execution with default parameters.
     @details Enables luminance mode and verifies command argv shape uses
       `luminance-hdr-cli -e <ev-list> --hdrModel debevec --hdrWeight triangular`
-      `--hdrResponseCurve srgb --tmo mantiuk08 --ldrTiff 16b -o <merged_hdr.tif>`
+      `--hdrResponseCurve srgb --tmo reinhard02 --ldrTiff 16b -o <merged_hdr.tif>`
       plus three ordered bracket TIFF inputs.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
@@ -538,7 +538,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
         "--hdrResponseCurve",
         "srgb",
         "--tmo",
-        "mantiuk08",
+        "reinhard02",
         "--ldrTiff",
         "16b",
         "-o",
@@ -1186,7 +1186,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063
+    @satisfies TST-011, REQ-063, REQ-070
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -1204,6 +1204,17 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--luminance-hdr-weight=<name>" in output
     assert "--luminance-hdr-response-curve=<name>" in output
     assert "--luminance-tmo=<name>" in output
+    assert "default: reinhard02" in output
+    assert "Luminance operators:" in output
+    assert "Luminance operator main CLI controls:" in output
+    assert "┌" in output and "┬" in output and "┐" in output
+    assert "├" in output and "┼" in output and "┤" in output
+    assert "└" in output and "┴" in output and "┘" in output
+    assert "│ Operator" in output
+    assert "`reinhard02`" in output
+    assert "`mantiuk08`" in output
+    assert "`--tmoR02Key`" in output
+    assert "`--tmoM08ColorSaturation`" in output
     assert "--tmo* <value> | --tmo*=<value>" in output
 
 
