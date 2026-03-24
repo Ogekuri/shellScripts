@@ -104,17 +104,19 @@ class _FakeRawHandle:
         del exc_type, exc, tb
         return False
 
-    def postprocess(self, bright, output_bps, no_auto_bright):
+    def postprocess(self, bright, output_bps, use_camera_wb, no_auto_bright):
         """@brief Capture bracket extraction options and return payload marker.
 
         @param bright {float} Brightness multiplier.
         @param output_bps {int} Output bit depth.
+        @param use_camera_wb {bool} Camera white-balance enable flag.
         @param no_auto_bright {bool} Auto-bright disable flag.
         @return {str} Deterministic payload marker.
         """
 
         self._observed["brights"].append(bright)
         self._observed["output_bps"].append(output_bps)
+        self._observed["use_camera_wb"].append(use_camera_wb)
         self._observed["no_auto_bright"].append(no_auto_bright)
         return f"rgb-{bright}"
 
@@ -208,6 +210,7 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     observed = {
         "brights": [],
         "output_bps": [],
+        "use_camera_wb": [],
         "no_auto_bright": [],
         "writes": [],
         "enfuse_cmd": None,
@@ -299,7 +302,8 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     assert result == 0
     assert observed["brights"] == pytest.approx([0.25, 1.0, 4.0])
     assert observed["output_bps"] == [16, 16, 16]
-    assert observed["no_auto_bright"] == [True, True, True]
+    assert observed["use_camera_wb"] == [True, True, True]
+    assert observed["no_auto_bright"] == [False, False, False]
     assert observed["enfuse_cmd"][0] == "enfuse"
     assert len(observed["enfuse_cmd"]) == 6
     assert output_jpg.exists()
@@ -322,6 +326,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     observed = {
         "brights": [],
         "output_bps": [],
+        "use_camera_wb": [],
         "no_auto_bright": [],
         "luminance_cmd": None,
         "tmp_dir": None,
@@ -379,7 +384,8 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     assert result == 0
     assert observed["brights"] == pytest.approx([0.5, 1.0, 2.0])
     assert observed["output_bps"] == [16, 16, 16]
-    assert observed["no_auto_bright"] == [True, True, True]
+    assert observed["use_camera_wb"] == [True, True, True]
+    assert observed["no_auto_bright"] == [False, False, False]
     assert observed["luminance_cmd"][0] == "luminance-hdr-cli"
     assert observed["luminance_cmd"][1:8] == ["-a", "MTB", "--tmo", "mantiuk06", "-e", "-1,0,1", "-o"]
     assert observed["luminance_cmd"][8] == str(output_jpg)
@@ -416,7 +422,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_map_alias(monkeypatch, tmp_path
         def imread(_path):
             """@brief Return fake RAW handle."""
 
-            return _FakeRawHandle({"brights": [], "output_bps": [], "no_auto_bright": []})
+            return _FakeRawHandle({"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": []})
 
     class _FakeImageIoModule:
         """@brief Provide fake `imageio` module for bracket writes."""
@@ -495,7 +501,7 @@ def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch
             @return {_FakeRawHandle} Fake RAW handle.
             """
 
-            return _FakeRawHandle({"brights": [], "output_bps": [], "no_auto_bright": []})
+            return _FakeRawHandle({"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": []})
 
     class _FakeImageIoModule:
         """@brief Provide fake imageio module for failure-path test.

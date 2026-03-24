@@ -157,7 +157,7 @@
         - `dng2hdr2jpg._load_image_dependencies(...)`: Resolve optional Python image-processing modules (`rawpy`, `imageio`) [`src/shell_scripts/commands/dng2hdr2jpg.py`]
         - `dng2hdr2jpg._collect_processing_errors(...)`: Build handled processing exception class tuple from runtime module capabilities [`src/shell_scripts/commands/dng2hdr2jpg.py`]
         - `dng2hdr2jpg._build_exposure_multipliers(...)`: Compute `2^(-ev)`, `1.0`, and `2^(ev)` bracket multipliers [`src/shell_scripts/commands/dng2hdr2jpg.py`]
-        - `dng2hdr2jpg._write_bracket_images(...)`: Generate three temporary 16-bit TIFF exposures from one RAW input [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+        - `dng2hdr2jpg._write_bracket_images(...)`: Generate three temporary 16-bit TIFF exposures from one RAW input via `raw.postprocess` with `use_camera_wb=True` and `no_auto_bright=False` [`src/shell_scripts/commands/dng2hdr2jpg.py`]
         - `dng2hdr2jpg._run_enfuse(...)`: Merge temporary bracket images into one HDR TIFF artifact [`src/shell_scripts/commands/dng2hdr2jpg.py`]
         - `dng2hdr2jpg._run_luminance_hdr_cli(...)`: Merge bracket TIFF images into final JPG through luminance-hdr-cli using `MTB` alignment, selected tone mapper, and explicit EV list (`-e`) for EXIF-less intermediates [`src/shell_scripts/commands/dng2hdr2jpg.py`]
         - `dng2hdr2jpg._encode_jpg(...)`: Convert merged HDR TIFF payload into final JPG output with RGBA-to-RGB normalization before JPEG write [`src/shell_scripts/commands/dng2hdr2jpg.py`]

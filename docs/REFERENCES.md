@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 541L | 20 symbols | 8 imports | 16 comments
+# dng2hdr2jpg.py | Python | 543L | 20 symbols | 8 imports | 16 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -699,9 +699,9 @@ import imageio  # type: ignore
 - @return {tuple[float, float, float]} Multipliers in order `(under, base, over)`.
 - @satisfies REQ-057
 
-### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, temp_dir)` `priv` (L287-316)
+### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, temp_dir)` `priv` (L287-318)
 - @brief Materialize three bracket TIFF files from one RAW handle.
-- @details Invokes `raw.postprocess` with `output_bps=16` and `no_auto_bright=True` to preserve deterministic bracket math for HDR merge.
+- @details Invokes `raw.postprocess` with `output_bps=16`, `use_camera_wb=True`, and `no_auto_bright=False` for camera white-balance aware bracket extraction before HDR merge.
 - @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
 - @param imageio_module {ModuleType} Imported imageio module with `imwrite`.
 - @param multipliers {tuple[float, float, float]} Ordered exposure multipliers.
@@ -709,7 +709,7 @@ import imageio  # type: ignore
 - @return {list[Path]} Ordered temporary TIFF file paths.
 - @satisfies REQ-057
 
-### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L317-337)
+### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L319-339)
 - @brief Merge bracket TIFF files into one HDR TIFF via `enfuse`.
 - @details Builds deterministic enfuse argv with LZW compression and executes subprocess in checked mode to propagate command failures.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
@@ -718,7 +718,7 @@ import imageio  # type: ignore
 - @exception subprocess.CalledProcessError Raised when `enfuse` returns non-zero exit status.
 - @satisfies REQ-058
 
-### fn `def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator, ev_value)` `priv` (L338-367)
+### fn `def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator, ev_value)` `priv` (L340-369)
 - @brief Merge bracket TIFF files into final JPG via `luminance-hdr-cli`.
 - @details Builds deterministic luminance-hdr-cli argv using alignment engine `-a MTB`, tone mapper `--tmo <operator>`, and writes directly to requested JPG output path.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
@@ -729,7 +729,7 @@ import imageio  # type: ignore
 - @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
 - @satisfies REQ-060, REQ-061, REQ-062
 
-### fn `def _encode_jpg(imageio_module, merged_tiff, output_jpg)` `priv` (L368-402)
+### fn `def _encode_jpg(imageio_module, merged_tiff, output_jpg)` `priv` (L370-404)
 - @brief Encode merged HDR TIFF payload into final JPG output.
 - @details Loads merged image payload, down-converts to `uint8` when source dynamic range exceeds JPEG-native depth, and strips alpha channel payload (`RGBA` -> `RGB`) before JPEG write for both Pillow-mode and array payloads.
 - @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
@@ -738,20 +738,20 @@ import imageio  # type: ignore
 - @return {None} Side effects only.
 - @satisfies REQ-058
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L403-431)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L405-433)
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L432-451)
+### fn `def _is_supported_runtime_os()` `priv` (L434-453)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L452-541)
+### fn `def run(args)` (L454-543)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes default `enfuse` flow or optional luminance-hdr-cli flow, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -774,13 +774,13 @@ import imageio  # type: ignore
 |`_parse_run_options`|fn|priv|147-244|def _parse_run_options(args)|
 |`_load_image_dependencies`|fn|priv|245-273|def _load_image_dependencies()|
 |`_build_exposure_multipliers`|fn|priv|274-286|def _build_exposure_multipliers(ev_value)|
-|`_write_bracket_images`|fn|priv|287-316|def _write_bracket_images(raw_handle, imageio_module, mul...|
-|`_run_enfuse`|fn|priv|317-337|def _run_enfuse(bracket_paths, merged_tiff)|
-|`_run_luminance_hdr_cli`|fn|priv|338-367|def _run_luminance_hdr_cli(bracket_paths, output_jpg, lum...|
-|`_encode_jpg`|fn|priv|368-402|def _encode_jpg(imageio_module, merged_tiff, output_jpg)|
-|`_collect_processing_errors`|fn|priv|403-431|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|432-451|def _is_supported_runtime_os()|
-|`run`|fn|pub|452-541|def run(args)|
+|`_write_bracket_images`|fn|priv|287-318|def _write_bracket_images(raw_handle, imageio_module, mul...|
+|`_run_enfuse`|fn|priv|319-339|def _run_enfuse(bracket_paths, merged_tiff)|
+|`_run_luminance_hdr_cli`|fn|priv|340-369|def _run_luminance_hdr_cli(bracket_paths, output_jpg, lum...|
+|`_encode_jpg`|fn|priv|370-404|def _encode_jpg(imageio_module, merged_tiff, output_jpg)|
+|`_collect_processing_errors`|fn|priv|405-433|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|434-453|def _is_supported_runtime_os()|
+|`run`|fn|pub|454-543|def run(args)|
 
 
 ---

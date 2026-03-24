@@ -170,7 +170,7 @@ No explicit performance optimizations identified.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
 - **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
 - **REQ-056**: MUST parse optional `--ev=<value>` and `--ev <value>` in `dng2hdr2jpg`, default EV to `2.0`, and reject unsupported or non-numeric EV values with return code `1`.
-- **REQ-057**: MUST generate exactly three exposure images from one DNG input using brightness multipliers `2^(-ev)`, `1.0`, and `2^(ev)` before HDR merge.
+- **REQ-057**: MUST generate exactly three exposure images from one DNG input using `raw.postprocess(bright=<2^(-ev)|1.0|2^(ev)>, output_bps=16, use_camera_wb=True, no_auto_bright=False)` before HDR merge.
 - **REQ-058**: MUST execute HDR merge via `enfuse` over the three generated exposure files by default and then encode the merged TIFF payload as the requested JPG output path.
 - **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving Linux temporary-file cleanup and dependency-failure behavior.
 - **REQ-060**: MUST parse `--enable-luminance` to switch HDR merge backend from default `enfuse` flow to `luminance-hdr-cli` flow in `dng2hdr2jpg`.
@@ -196,7 +196,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-063 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if backend selection, EV parsing, operator parsing, bracketing multipliers, and cleanup behavior match requirements.
+- **TST-011**: MUST verify REQ-055 through REQ-063 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if backend selection, EV parsing, operator parsing, bracketing multipliers, RAW postprocess flags, and cleanup behavior match requirements.
 
 ## 5. Evidence
 

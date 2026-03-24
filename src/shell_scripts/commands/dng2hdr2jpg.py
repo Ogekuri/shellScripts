@@ -287,8 +287,9 @@ def _build_exposure_multipliers(ev_value):
 def _write_bracket_images(raw_handle, imageio_module, multipliers, temp_dir):
     """@brief Materialize three bracket TIFF files from one RAW handle.
 
-    @details Invokes `raw.postprocess` with `output_bps=16` and
-    `no_auto_bright=True` to preserve deterministic bracket math for HDR merge.
+    @details Invokes `raw.postprocess` with `output_bps=16`,
+    `use_camera_wb=True`, and `no_auto_bright=False` for camera white-balance
+    aware bracket extraction before HDR merge.
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
     @param imageio_module {ModuleType} Imported imageio module with `imwrite`.
     @param multipliers {tuple[float, float, float]} Ordered exposure multipliers.
@@ -306,7 +307,8 @@ def _write_bracket_images(raw_handle, imageio_module, multipliers, temp_dir):
         rgb_data = raw_handle.postprocess(
             bright=multiplier,
             output_bps=16,
-            no_auto_bright=True,
+            use_camera_wb=True,
+            no_auto_bright=False,
         )
         imageio_module.imwrite(str(temp_path), rgb_data)
         bracket_paths.append(temp_path)
