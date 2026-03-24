@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 537L | 20 symbols | 8 imports | 16 comments
+# dng2hdr2jpg.py | Python | 541L | 20 symbols | 8 imports | 16 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -718,17 +718,18 @@ import imageio  # type: ignore
 - @exception subprocess.CalledProcessError Raised when `enfuse` returns non-zero exit status.
 - @satisfies REQ-058
 
-### fn `def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator)` `priv` (L338-364)
+### fn `def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator, ev_value)` `priv` (L338-367)
 - @brief Merge bracket TIFF files into final JPG via `luminance-hdr-cli`.
 - @details Builds deterministic luminance-hdr-cli argv using alignment engine `-a MTB`, tone mapper `--tmo <operator>`, and writes directly to requested JPG output path.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
 - @param output_jpg {Path} Final JPG output target path.
 - @param luminance_operator {str} Selected luminance-hdr-cli tone-mapping operator.
+- @param ev_value {float} EV bracket delta used to generate exposure files.
 - @return {None} Side effects only.
 - @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
 - @satisfies REQ-060, REQ-061, REQ-062
 
-### fn `def _encode_jpg(imageio_module, merged_tiff, output_jpg)` `priv` (L365-399)
+### fn `def _encode_jpg(imageio_module, merged_tiff, output_jpg)` `priv` (L368-402)
 - @brief Encode merged HDR TIFF payload into final JPG output.
 - @details Loads merged image payload, down-converts to `uint8` when source dynamic range exceeds JPEG-native depth, and strips alpha channel payload (`RGBA` -> `RGB`) before JPEG write for both Pillow-mode and array payloads.
 - @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
@@ -737,20 +738,20 @@ import imageio  # type: ignore
 - @return {None} Side effects only.
 - @satisfies REQ-058
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L400-428)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L403-431)
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L429-448)
+### fn `def _is_supported_runtime_os()` `priv` (L432-451)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L449-537)
+### fn `def run(args)` (L452-541)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes default `enfuse` flow or optional luminance-hdr-cli flow, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -775,11 +776,11 @@ import imageio  # type: ignore
 |`_build_exposure_multipliers`|fn|priv|274-286|def _build_exposure_multipliers(ev_value)|
 |`_write_bracket_images`|fn|priv|287-316|def _write_bracket_images(raw_handle, imageio_module, mul...|
 |`_run_enfuse`|fn|priv|317-337|def _run_enfuse(bracket_paths, merged_tiff)|
-|`_run_luminance_hdr_cli`|fn|priv|338-364|def _run_luminance_hdr_cli(bracket_paths, output_jpg, lum...|
-|`_encode_jpg`|fn|priv|365-399|def _encode_jpg(imageio_module, merged_tiff, output_jpg)|
-|`_collect_processing_errors`|fn|priv|400-428|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|429-448|def _is_supported_runtime_os()|
-|`run`|fn|pub|449-537|def run(args)|
+|`_run_luminance_hdr_cli`|fn|priv|338-367|def _run_luminance_hdr_cli(bracket_paths, output_jpg, lum...|
+|`_encode_jpg`|fn|priv|368-402|def _encode_jpg(imageio_module, merged_tiff, output_jpg)|
+|`_collect_processing_errors`|fn|priv|403-431|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|432-451|def _is_supported_runtime_os()|
+|`run`|fn|pub|452-541|def run(args)|
 
 
 ---

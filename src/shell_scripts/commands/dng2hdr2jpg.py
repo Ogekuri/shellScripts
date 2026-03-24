@@ -335,7 +335,7 @@ def _run_enfuse(bracket_paths, merged_tiff):
     subprocess.run(command, check=True)
 
 
-def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator):
+def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator, ev_value):
     """@brief Merge bracket TIFF files into final JPG via `luminance-hdr-cli`.
 
     @details Builds deterministic luminance-hdr-cli argv using alignment engine
@@ -344,6 +344,7 @@ def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator):
     @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
     @param output_jpg {Path} Final JPG output target path.
     @param luminance_operator {str} Selected luminance-hdr-cli tone-mapping operator.
+    @param ev_value {float} EV bracket delta used to generate exposure files.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
     @satisfies REQ-060, REQ-061, REQ-062
@@ -355,6 +356,8 @@ def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator):
         "MTB",
         "--tmo",
         luminance_operator,
+        "-e",
+        f"{-ev_value:g},0,{ev_value:g}",
         "-o",
         str(output_jpg),
         *[str(path) for path in bracket_paths],
@@ -521,6 +524,7 @@ def run(args):
                     bracket_paths=bracket_paths,
                     output_jpg=output_jpg,
                     luminance_operator=luminance_operator,
+                    ev_value=ev_value,
                 )
             else:
                 _run_enfuse(bracket_paths=bracket_paths, merged_tiff=merged_tiff)
