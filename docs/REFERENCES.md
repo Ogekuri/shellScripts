@@ -23,7 +23,6 @@
         │   ├── dicomviewer.py
         │   ├── diff_cmd.py
         │   ├── dng2hdr2jpg.py
-        │   ├── dng2jpg.py
         │   ├── doxygen_cmd.py
         │   ├── edit_cmd.py
         │   ├── pdf_crop.py

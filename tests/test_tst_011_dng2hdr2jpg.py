@@ -10,6 +10,7 @@
 from pathlib import Path
 import subprocess
 import tempfile as std_tempfile
+import tomllib
 
 import pytest
 
@@ -448,3 +449,22 @@ def test_dng2hdr2jpg_returns_error_on_macos_runtime(monkeypatch, tmp_path):
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "darwin")
 
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg)]) == 1
+
+
+def test_dng2hdr2jpg_runtime_dependencies_are_declared_in_pyproject():
+    """
+    @brief Validate runtime dependency declaration for DNG processing modules.
+    @details Parses `pyproject.toml` and asserts that `rawpy` and `imageio`
+      are declared in `project.dependencies` so uv tool installs provide command
+      runtime requirements without manual post-install steps.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-059
+    """
+
+    project_root = Path(__file__).resolve().parents[1]
+    pyproject_path = project_root / "pyproject.toml"
+    pyproject_data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    dependencies = pyproject_data["project"].get("dependencies", [])
+
+    assert any(dep.startswith("rawpy") for dep in dependencies)
+    assert any(dep.startswith("imageio") for dep in dependencies)

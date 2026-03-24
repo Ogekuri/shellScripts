@@ -23,7 +23,10 @@ classifiers = [
   "Topic :: Software Development :: Configuration Management",
 ]
 
-dependencies = []
+dependencies = [
+  "rawpy; platform_system == 'Linux'",
+  "imageio; platform_system == 'Linux'",
+]
 
 [dependency-groups]
 dev = ["pytest"]
