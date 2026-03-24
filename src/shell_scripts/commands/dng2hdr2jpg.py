@@ -2,10 +2,11 @@
 """@brief Convert one DNG file into one HDR-merged JPG output.
 
 @details Implements bracketed RAW extraction with three synthetic exposures
-(`-ev`, `0`, `+ev`), merges them through `enfuse`, then writes final JPG to
-user-selected output path. Temporary artifacts are isolated in a temporary
-directory and removed automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059
+(`-ev`, `0`, `+ev`), merges them through default `enfuse` flow or optional
+`luminance-hdr-cli` flow, then writes final JPG to user-selected output path.
+Temporary artifacts are isolated in a temporary directory and removed
+automatically on success and failure.
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063
 """
 
 import shutil
@@ -21,9 +22,26 @@ from shell_scripts.utils import (
 )
 
 PROGRAM = "shellscripts"
-DESCRIPTION = "Convert DNG to HDR-merged JPG by 3-exposure HDR merge with optional --ev."
+DESCRIPTION = "Convert DNG to HDR-merged JPG with optional luminance-hdr-cli backend."
 DEFAULT_EV = 2.0
+DEFAULT_LUMINANCE_OPERATOR = "mantiuk06"
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
+LUMINANCE_MAP_ALIASES = {
+    "ashikhmin": "ashikhmin02",
+    "drago": "drago03",
+    "durand": "durand02",
+    "fattal": "fattal",
+    "ferradans": "ferradans11",
+    "ferwerda": "ferwerda96",
+    "kimkautz": "kimkautz08",
+    "lischinski": "lischinski06",
+    "mantiuk": "mantiuk06",
+    "mantiuk08": "mantiuk08",
+    "pattanaik": "pattanaik00",
+    "reinhard": "reinhard02",
+    "reinhard05": "reinhard05",
+    "vanhateren": "vanhateren06",
+}
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
     "darwin": "MacOS",
@@ -33,19 +51,32 @@ _RUNTIME_OS_LABELS = {
 def print_help(version):
     """@brief Print help text for the `dng2hdr2jpg` command.
 
-    @details Documents required positional arguments and optional `--ev` value
-    contract used by the exposure bracket generator.
+    @details Documents required positional arguments, optional EV control,
+    backend selection, and luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008
+    @satisfies DES-008, REQ-063
     """
 
-    print(f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>] ({version})")
+    print(
+        f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
+        f"[--ev=<value>] [--enable-luminance] "
+        f"[--luminance-operator=<name>] [--luminance-map-<name>] ({version})"
+    )
     print()
     print("dng2hdr2jpg options:")
     print("  <input.dng>      - Input DNG file (required).")
     print("  <output.jpg>     - Output JPG file (required).")
     print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
+    print("  --enable-luminance")
+    print("                   - Enable luminance-hdr-cli backend (default backend: enfuse).")
+    print("  --luminance-operator=<name>")
+    print(f"                   - Select luminance-hdr-cli operator (default: {DEFAULT_LUMINANCE_OPERATOR}).")
+    print("  --luminance-map-<name>")
+    print("                   - Shortcut aliases for common operators:")
+    for alias_name, operator_name in LUMINANCE_MAP_ALIASES.items():
+        print(f"                     --luminance-map-{alias_name:<10} -> {operator_name}")
+    print("                   - Generic form accepts any installed operator name.")
     print("  [platform]       - Command is available on Linux only.")
     print("  --help           - Show this help message.")
 
@@ -75,22 +106,98 @@ def _parse_ev_option(ev_raw):
     return ev_value
 
 
+def _parse_luminance_operator(operator_raw):
+    """@brief Parse and validate one luminance-hdr operator value.
+
+    @details Normalizes surrounding spaces and rejects empty operator values
+    required by luminance-hdr-cli `-a` argument generation.
+    @param operator_raw {str} Raw luminance operator token from CLI args.
+    @return {str|None} Normalized operator string; `None` when invalid.
+    @satisfies REQ-061
+    """
+
+    operator_value = operator_raw.strip().lower()
+    if not operator_value:
+        print_error("Invalid luminance operator: empty value")
+        return None
+    if operator_value.startswith("-"):
+        print_error(f"Invalid luminance operator: {operator_raw}")
+        return None
+    return operator_value
+
+
+def _parse_luminance_map_flag(map_flag):
+    """@brief Parse `--luminance-map-<name>` shortcut option.
+
+    @details Supports explicit aliases and pass-through operator names so every
+    installed luminance-hdr-cli operator remains reachable from CLI args.
+    @param map_flag {str} CLI token that starts with `--luminance-map-`.
+    @return {str|None} Resolved operator name for luminance-hdr-cli; `None` when malformed.
+    @satisfies REQ-061, REQ-063
+    """
+
+    map_name = map_flag[len("--luminance-map-") :].strip().lower()
+    if not map_name:
+        print_error("Malformed luminance map option: missing map name")
+        return None
+    return LUMINANCE_MAP_ALIASES.get(map_name, map_name)
+
+
 def _parse_run_options(args):
     """@brief Parse CLI args into input, output, and EV parameters.
 
-    @details Supports positional file arguments and optional `--ev=<value>` or
-    `--ev <value>` syntax; rejects unknown options and invalid arity.
+    @details Supports positional file arguments, optional `--ev=<value>` or
+    `--ev <value>`, optional `--enable-luminance`, and luminance operator
+    selectors; rejects unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @return {tuple[Path, Path, float]|None} Parsed `(input, output, ev)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056
+    @return {tuple[Path, Path, float, bool, str]|None} Parsed `(input, output, ev, enable_luminance, luminance_operator)` tuple; `None` on parse failure.
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061
     """
 
     positional = []
     ev_value = DEFAULT_EV
+    enable_luminance = False
+    luminance_operator = DEFAULT_LUMINANCE_OPERATOR
+    luminance_option_specified = False
     idx = 0
 
     while idx < len(args):
         token = args[idx]
+        if token == "--enable-luminance":
+            enable_luminance = True
+            idx += 1
+            continue
+
+        if token == "--luminance-operator":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --luminance-operator")
+                return None
+            parsed_operator = _parse_luminance_operator(args[idx + 1])
+            if parsed_operator is None:
+                return None
+            luminance_operator = parsed_operator
+            luminance_option_specified = True
+            idx += 2
+            continue
+
+        if token.startswith("--luminance-operator="):
+            parsed_operator = _parse_luminance_operator(token.split("=", 1)[1])
+            if parsed_operator is None:
+                return None
+            luminance_operator = parsed_operator
+            luminance_option_specified = True
+            idx += 1
+            continue
+
+        if token.startswith("--luminance-map-"):
+            parsed_operator = _parse_luminance_map_flag(token)
+            if parsed_operator is None:
+                return None
+            luminance_operator = parsed_operator
+            luminance_option_specified = True
+            idx += 1
+            continue
+
         if token == "--ev":
             if idx + 1 >= len(args):
                 print_error("Missing value for --ev")
@@ -121,7 +228,17 @@ def _parse_run_options(args):
         print_error("Usage: dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>]")
         return None
 
-    return Path(positional[0]), Path(positional[1]), ev_value
+    if luminance_option_specified and not enable_luminance:
+        print_error("Luminance operator options require --enable-luminance")
+        return None
+
+    return (
+        Path(positional[0]),
+        Path(positional[1]),
+        ev_value,
+        enable_luminance,
+        luminance_operator,
+    )
 
 
 def _load_image_dependencies():
@@ -217,6 +334,30 @@ def _run_enfuse(bracket_paths, merged_tiff):
     subprocess.run(command, check=True)
 
 
+def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator):
+    """@brief Merge bracket TIFF files into final JPG via `luminance-hdr-cli`.
+
+    @details Builds deterministic luminance-hdr-cli argv using `-a <operator>`
+    and writes directly to requested JPG output path.
+    @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
+    @param output_jpg {Path} Final JPG output target path.
+    @param luminance_operator {str} Selected luminance-hdr-cli tone-mapping operator.
+    @return {None} Side effects only.
+    @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
+    @satisfies REQ-060, REQ-061, REQ-062
+    """
+
+    command = [
+        "luminance-hdr-cli",
+        "-a",
+        luminance_operator,
+        "-o",
+        str(output_jpg),
+        *[str(path) for path in bracket_paths],
+    ]
+    subprocess.run(command, check=True)
+
+
 def _encode_jpg(imageio_module, merged_tiff, output_jpg):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
@@ -305,11 +446,12 @@ def run(args):
     """@brief Execute `dng2hdr2jpg` command pipeline.
 
     @details Parses command options, validates dependencies, extracts three RAW
-    brackets, merges HDR with `enfuse`, writes JPG output, and guarantees
-    temporary artifact cleanup through isolated temporary directory lifecycle.
+    brackets, executes default `enfuse` flow or optional luminance-hdr-cli flow,
+    writes JPG output, and guarantees temporary artifact cleanup through isolated
+    temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062
     """
 
     if not _is_supported_runtime_os():
@@ -319,7 +461,7 @@ def run(args):
     if parsed is None:
         return 1
 
-    input_dng, output_jpg, ev_value = parsed
+    input_dng, output_jpg, ev_value, enable_luminance, luminance_operator = parsed
 
     if input_dng.suffix.lower() != ".dng":
         print_error(f"Input file must have .dng extension: {input_dng}")
@@ -334,9 +476,14 @@ def run(args):
         print_error(f"Output directory does not exist: {output_parent}")
         return 1
 
-    if shutil.which("enfuse") is None:
-        print_error("Missing required dependency: enfuse")
-        return 1
+    if enable_luminance:
+        if shutil.which("luminance-hdr-cli") is None:
+            print_error("Missing required dependency: luminance-hdr-cli")
+            return 1
+    else:
+        if shutil.which("enfuse") is None:
+            print_error("Missing required dependency: enfuse")
+            return 1
 
     dependencies = _load_image_dependencies()
     if dependencies is None:
@@ -348,6 +495,10 @@ def run(args):
 
     print_info(f"Reading DNG input: {input_dng}")
     print_info(f"Using EV bracket: {ev_value}")
+    if enable_luminance:
+        print_info(f"HDR backend: luminance-hdr-cli (operator={luminance_operator})")
+    else:
+        print_info("HDR backend: enfuse")
 
     with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-") as temp_dir_raw:
         temp_dir = Path(temp_dir_raw)
@@ -361,12 +512,19 @@ def run(args):
                     multipliers=multipliers,
                     temp_dir=temp_dir,
                 )
-            _run_enfuse(bracket_paths=bracket_paths, merged_tiff=merged_tiff)
-            _encode_jpg(
-                imageio_module=imageio_module,
-                merged_tiff=merged_tiff,
-                output_jpg=output_jpg,
-            )
+            if enable_luminance:
+                _run_luminance_hdr_cli(
+                    bracket_paths=bracket_paths,
+                    output_jpg=output_jpg,
+                    luminance_operator=luminance_operator,
+                )
+            else:
+                _run_enfuse(bracket_paths=bracket_paths, merged_tiff=merged_tiff)
+                _encode_jpg(
+                    imageio_module=imageio_module,
+                    merged_tiff=merged_tiff,
+                    output_jpg=output_jpg,
+                )
         except processing_errors as error:
             print_error(f"dng2hdr2jpg processing failed: {error}")
             return 1

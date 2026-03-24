@@ -202,7 +202,7 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-056, REQ-057, REQ-058, REQ-059
+    @satisfies TST-011, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060
     """
 
     observed = {
@@ -305,6 +305,161 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     assert output_jpg.exists()
     assert observed["tmp_dir"] is not None
     assert not observed["tmp_dir"].exists()
+
+
+def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, tmp_path):
+    """
+    @brief Validate luminance-hdr-cli backend execution with default operator.
+    @details Enables luminance mode and verifies command argv shape uses
+      `luminance-hdr-cli -a mantiuk06 -o <output.jpg>` and three bracket TIFFs.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-057, REQ-060, REQ-061, REQ-062
+    """
+
+    observed = {
+        "brights": [],
+        "output_bps": [],
+        "no_auto_bright": [],
+        "luminance_cmd": None,
+        "tmp_dir": None,
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module surface for luminance backend test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            """@brief Return fake RAW context manager for the provided path."""
+
+            return _FakeRawHandle(observed)
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for bracket TIFF extraction only."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            """@brief Materialize deterministic intermediate files."""
+
+            Path(path).write_text("payload", encoding="utf-8")
+
+    def _fake_subprocess_run(command, check):
+        """@brief Capture luminance-hdr-cli invocation and materialize output JPG."""
+
+        assert check is True
+        observed["luminance_cmd"] = command
+        output_index = command.index("-o") + 1
+        Path(command[output_index]).write_text("jpg", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(dng2hdr2jpg, "_load_image_dependencies", lambda: (_FakeRawPyModule, _FakeImageIoModule))
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None,
+    )
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr(
+        dng2hdr2jpg.tempfile,
+        "TemporaryDirectory",
+        lambda *args, **kwargs: _TrackingTemporaryDirectory(observed, *args, **kwargs),
+    )
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--ev=1"])
+
+    assert result == 0
+    assert observed["brights"] == pytest.approx([0.5, 1.0, 2.0])
+    assert observed["output_bps"] == [16, 16, 16]
+    assert observed["no_auto_bright"] == [True, True, True]
+    assert observed["luminance_cmd"][0] == "luminance-hdr-cli"
+    assert observed["luminance_cmd"][1:4] == ["-a", "mantiuk06", "-o"]
+    assert observed["luminance_cmd"][4] == str(output_jpg)
+    assert [Path(value).name for value in observed["luminance_cmd"][5:]] == [
+        "ev_minus.tif",
+        "ev_zero.tif",
+        "ev_plus.tif",
+    ]
+    assert output_jpg.exists()
+    assert observed["tmp_dir"] is not None
+    assert not observed["tmp_dir"].exists()
+
+
+def test_dng2hdr2jpg_runs_luminance_backend_with_map_alias(monkeypatch, tmp_path):
+    """
+    @brief Validate luminance map alias option resolves to canonical operator.
+    @details Uses `--luminance-map-reinhard` and asserts generated backend argv
+      uses canonical operator value `reinhard02`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-060, REQ-061, REQ-062, REQ-063
+    """
+
+    observed = {"command": None}
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module surface for map alias test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            """@brief Return fake RAW handle."""
+
+            return _FakeRawHandle({"brights": [], "output_bps": [], "no_auto_bright": []})
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for bracket writes."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            """@brief Materialize deterministic placeholder files."""
+
+            Path(path).write_text("payload", encoding="utf-8")
+
+    def _fake_subprocess_run(command, check):
+        """@brief Capture command and materialize luminance output."""
+
+        assert check is True
+        observed["command"] = command
+        output_index = command.index("-o") + 1
+        Path(command[output_index]).write_text("jpg", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(dng2hdr2jpg, "_load_image_dependencies", lambda: (_FakeRawPyModule, _FakeImageIoModule))
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None,
+    )
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--enable-luminance",
+            "--luminance-map-reinhard",
+        ]
+    )
+
+    assert result == 0
+    assert observed["command"] is not None
+    assert observed["command"][0] == "luminance-hdr-cli"
+    assert observed["command"][1:3] == ["-a", "reinhard02"]
 
 
 def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch, tmp_path):
@@ -411,6 +566,69 @@ def test_dng2hdr2jpg_fails_when_enfuse_dependency_is_missing(monkeypatch, tmp_pa
     monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda _cmd: None)
 
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg)]) == 1
+
+
+def test_dng2hdr2jpg_fails_when_luminance_dependency_is_missing(monkeypatch, tmp_path):
+    """
+    @brief Validate missing `luminance-hdr-cli` dependency in luminance mode.
+    @details Enables luminance backend with missing executable lookup and
+      asserts deterministic non-zero return code.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-060, REQ-059
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: None if cmd == "luminance-hdr-cli" else "/usr/bin/enfuse",
+    )
+
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance"]) == 1
+
+
+def test_dng2hdr2jpg_rejects_luminance_operator_without_enable(tmp_path):
+    """
+    @brief Validate luminance operator options require enable flag.
+    @details Uses luminance operator selector without backend enable flag and
+      asserts deterministic parse failure.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-061
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--luminance-map-fattal"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--luminance-operator=drago03"]) == 1
+
+
+def test_dng2hdr2jpg_rejects_empty_luminance_operator(monkeypatch, tmp_path):
+    """
+    @brief Validate malformed luminance operator options are rejected.
+    @details Provides empty operator values using assignment and split-option
+      forms and asserts deterministic parse failure.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-061
+    """
+
+    del monkeypatch
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-operator="]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-operator", ""]) == 1
 
 
 def test_dng2hdr2jpg_returns_error_on_windows_runtime(monkeypatch, tmp_path):
@@ -528,3 +746,23 @@ def test_dng2hdr2jpg_handles_rgba_merged_image_for_jpeg_output(tmp_path):
 
     assert observed["jpg_payload"] == "rgb-no-alpha"
     assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
+    """
+    @brief Validate command help documents luminance backend options.
+    @details Calls help renderer and asserts presence of luminance enable flag,
+      operator selectors, and generic operator-name support note.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-063
+    """
+
+    dng2hdr2jpg.print_help("0.0.0")
+    captured = capsys.readouterr()
+    output = captured.out
+
+    assert "--enable-luminance" in output
+    assert "--luminance-operator=<name>" in output
+    assert "--luminance-map-<name>" in output
+    assert "any installed operator name" in output

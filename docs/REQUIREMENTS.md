@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.2.0"
+version: "0.3.0"
 date: "2026-03-24"
 author: "Auto-generated from repository evidence"
 scope:
@@ -169,10 +169,14 @@ No explicit performance optimizations identified.
 - **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
 - **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
-- **REQ-056**: MUST parse optional `--ev=<value>` in `dng2hdr2jpg`, default to `2.0` when omitted, and reject unsupported or non-numeric values with return code `1`.
+- **REQ-056**: MUST parse optional `--ev=<value>` and `--ev <value>` in `dng2hdr2jpg`, default EV to `2.0`, and reject unsupported or non-numeric EV values with return code `1`.
 - **REQ-057**: MUST generate exactly three exposure images from one DNG input using brightness multipliers `2^(-ev)`, `1.0`, and `2^(ev)` before HDR merge.
-- **REQ-058**: MUST execute HDR merge via `enfuse` over the three generated exposure files and then encode the merged result as the requested JPG output path.
-- **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving temporary-file cleanup and dependency-failure behavior on Linux.
+- **REQ-058**: MUST execute HDR merge via `enfuse` over the three generated exposure files by default and then encode the merged TIFF payload as the requested JPG output path.
+- **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving Linux temporary-file cleanup and dependency-failure behavior.
+- **REQ-060**: MUST parse `--enable-luminance` to switch HDR merge backend from default `enfuse` flow to `luminance-hdr-cli` flow in `dng2hdr2jpg`.
+- **REQ-061**: MUST parse `--luminance-operator=<name>`, `--luminance-operator <name>`, and `--luminance-map-<name>`, default luminance operator to `mantiuk06`, and return `1` for malformed luminance operator options.
+- **REQ-062**: MUST execute `luminance-hdr-cli -a <operator> -o <output.jpg> <ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` when luminance backend is enabled.
+- **REQ-063**: MUST document `--enable-luminance`, `--luminance-operator`, and `--luminance-map-<name>` in command help and MUST state that any installed luminance-hdr-cli tone-mapping operator name is accepted.
 
 ## 4. Test Requirements
 
@@ -192,7 +196,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-059 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if EV parsing, bracketing multipliers, and cleanup behavior match requirements.
+- **TST-011**: MUST verify REQ-055 through REQ-063 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if backend selection, EV parsing, operator parsing, bracketing multipliers, and cleanup behavior match requirements.
 
 ## 5. Evidence
 
