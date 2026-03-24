@@ -20,6 +20,8 @@ PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
 if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
+for module_name in ("shell_scripts.commands.dng2hdr2jpg", "shell_scripts.commands", "shell_scripts"):
+    sys.modules.pop(module_name, None)
 dng2hdr2jpg = import_module("shell_scripts.commands.dng2hdr2jpg")
 
 _ORIGINAL_TEMPORARY_DIRECTORY = std_tempfile.TemporaryDirectory
@@ -441,13 +443,12 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     @brief Validate luminance-hdr-cli backend execution with default parameters.
     @details Enables luminance mode and verifies command argv shape uses
       `luminance-hdr-cli -e <ev-list> --hdrModel debevec --hdrWeight triangular`
-      `--hdrResponseCurve srgb --tmo mantiuk08 --tmoM08ColorSaturation 1`
-      `--tmoM08ConstrastEnh 0.25 -o <merged_hdr.tif>`
-      plus three bracket TIFF inputs.
+      `--hdrResponseCurve srgb --tmo mantiuk08 --ldrTiff 16b -o <merged_hdr.tif>`
+      plus three ordered bracket TIFF inputs.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-057, REQ-060, REQ-061, REQ-062
+    @satisfies TST-011, REQ-057, REQ-060, REQ-061, REQ-062, REQ-068
     """
 
     observed = {
@@ -527,7 +528,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     assert observed["no_auto_bright"] == [True, True, True]
     assert observed["gamma"] == [(2.222, 4.5), (2.222, 4.5), (2.222, 4.5)]
     assert observed["luminance_cmd"][0] == "luminance-hdr-cli"
-    assert observed["luminance_cmd"][1:16] == [
+    assert observed["luminance_cmd"][1:14] == [
         "-e",
         "-1,0,1",
         "--hdrModel",
@@ -538,14 +539,12 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
         "srgb",
         "--tmo",
         "mantiuk08",
-        "--tmoM08ColorSaturation",
-        "1",
-        "--tmoM08ConstrastEnh",
-        "0.25",
+        "--ldrTiff",
+        "16b",
         "-o",
     ]
-    assert Path(observed["luminance_cmd"][16]).name == "merged_hdr.tif"
-    assert [Path(value).name for value in observed["luminance_cmd"][17:]] == [
+    assert Path(observed["luminance_cmd"][14]).name == "merged_hdr.tif"
+    assert [Path(value).name for value in observed["luminance_cmd"][15:]] == [
         "ev_minus.tif",
         "ev_zero.tif",
         "ev_plus.tif",
@@ -557,9 +556,10 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
 
 def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_path):
     """
-    @brief Validate simplified luminance options map to command argv.
-    @details Uses custom luminance backend values and asserts deterministic
-      argument order with EV sequence and bracket path order.
+    @brief Validate luminance `--tmo*` passthrough options map to command argv.
+    @details Uses custom luminance backend values plus explicit `--tmo*`
+      passthrough arguments and asserts deterministic argument order with EV
+      sequence and bracket path order.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -631,9 +631,12 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
             "--luminance-hdr-model=robertson",
             "--luminance-hdr-weight=gaussian",
             "--luminance-hdr-response-curve=from_file",
-            "--luminance-tmo=fattal",
-            "--luminance-m08-color-saturation=1.2",
-            "--luminance-m08-contrast-enh=0.4",
+            "--luminance-tmo=reinhard05",
+            "--tmoR05Brightness",
+            "0",
+            "--tmoR05Chroma=1.1",
+            "--tmoR05Lightness",
+            "1.2",
         ]
     )
 
@@ -641,7 +644,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
     command = observed["command"]
     assert command
     assert command[0] == "luminance-hdr-cli"
-    assert command[1:16] == [
+    assert command[1:20] == [
         "-e",
         "-2,0,2",
         "--hdrModel",
@@ -651,15 +654,19 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
         "--hdrResponseCurve",
         "from_file",
         "--tmo",
-        "fattal",
-        "--tmoM08ColorSaturation",
+        "reinhard05",
+        "--ldrTiff",
+        "16b",
+        "--tmoR05Brightness",
+        "0",
+        "--tmoR05Chroma",
+        "1.1",
+        "--tmoR05Lightness",
         "1.2",
-        "--tmoM08ConstrastEnh",
-        "0.4",
         "-o",
     ]
-    assert Path(command[16]).name == "merged_hdr.tif"
-    assert [Path(value).name for value in command[17:]] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
+    assert Path(command[20]).name == "merged_hdr.tif"
+    assert [Path(value).name for value in command[21:]] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
 
 
 def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch, tmp_path):
@@ -1019,7 +1026,7 @@ def test_dng2hdr2jpg_rejects_luminance_options_without_enable(tmp_path):
       asserts deterministic parse failure.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-061
+    @satisfies TST-011, REQ-061, REQ-067
     """
 
     input_dng = tmp_path / "scene.dng"
@@ -1028,12 +1035,14 @@ def test_dng2hdr2jpg_rejects_luminance_options_without_enable(tmp_path):
 
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--luminance-tmo=fattal"]) == 1
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--luminance-hdr-model=robertson"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--tmoR05Brightness=0"]) == 1
 
 
 def test_dng2hdr2jpg_rejects_malformed_luminance_options(monkeypatch, tmp_path):
     """
     @brief Validate malformed luminance options are rejected.
-    @details Provides empty and non-positive luminance values and asserts
+    @details Provides empty luminance selector values and malformed `--tmo*`
+      passthrough values and asserts deterministic parse failure.
       deterministic parse failure.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
@@ -1048,15 +1057,11 @@ def test_dng2hdr2jpg_rejects_malformed_luminance_options(monkeypatch, tmp_path):
 
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-tmo="]) == 1
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-hdr-model", ""]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--tmoR05Brightness"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--tmoR05Chroma="]) == 1
     assert (
         dng2hdr2jpg.run(
-            [str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-m08-color-saturation=0"]
-        )
-        == 1
-    )
-    assert (
-        dng2hdr2jpg.run(
-            [str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-m08-contrast-enh=-1"]
+            [str(input_dng), str(output_jpg), "--enable-luminance", "--tmoR05Lightness", "--invalid"]
         )
         == 1
     )
@@ -1181,7 +1186,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063, REQ-067
+    @satisfies TST-011, REQ-063
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -1199,8 +1204,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--luminance-hdr-weight=<name>" in output
     assert "--luminance-hdr-response-curve=<name>" in output
     assert "--luminance-tmo=<name>" in output
-    assert "--luminance-m08-color-saturation=<value>" in output
-    assert "--luminance-m08-contrast-enh=<value>" in output
+    assert "--tmo* <value> | --tmo*=<value>" in output
 
 
 def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):

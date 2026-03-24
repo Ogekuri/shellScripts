@@ -35,8 +35,6 @@ DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "triangular"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
 DEFAULT_LUMINANCE_TMO = "mantiuk08"
-DEFAULT_LUMINANCE_M08_COLOR_SATURATION = 1.0
-DEFAULT_LUMINANCE_M08_CONTRAST_ENH = 0.25
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
@@ -76,8 +74,7 @@ class LuminanceOptions:
     @param hdr_weight {str} Luminance weighting function (`--hdrWeight`).
     @param hdr_response_curve {str} Luminance response curve (`--hdrResponseCurve`).
     @param tmo {str} Tone-mapping operator (`--tmo`).
-    @param m08_color_saturation {float} Mantiuk08 color saturation (`--tmoM08ColorSaturation`).
-    @param m08_contrast_enh {float} Mantiuk08 contrast enhancement (`--tmoM08ConstrastEnh`).
+    @param tmo_extra_args {tuple[str, ...]} Explicit passthrough `--tmo*` option pairs in CLI order.
     @return {None} Immutable dataclass container.
     @satisfies REQ-061, REQ-067, REQ-068
     """
@@ -86,8 +83,7 @@ class LuminanceOptions:
     hdr_weight: str
     hdr_response_curve: str
     tmo: str
-    m08_color_saturation: float
-    m08_contrast_enh: float
+    tmo_extra_args: tuple[str, ...]
 
 
 def print_help(version):
@@ -108,8 +104,7 @@ def print_help(version):
         f"[--jpg-compression=<0..100>] [--enable-luminance] "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
-        f"[--luminance-m08-color-saturation=<value>] "
-        f"[--luminance-m08-contrast-enh=<value>] ({version})"
+        f"[--tmo*=<value>] ({version})"
     )
     print()
     print("dng2hdr2jpg options:")
@@ -135,16 +130,8 @@ def print_help(version):
     )
     print("  --luminance-tmo=<name>")
     print(f"                   - Luminance tone mapper (default: {DEFAULT_LUMINANCE_TMO}).")
-    print("  --luminance-m08-color-saturation=<value>")
-    print(
-        "                   - mantiuk08 color saturation "
-        f"(default: {DEFAULT_LUMINANCE_M08_COLOR_SATURATION})."
-    )
-    print("  --luminance-m08-contrast-enh=<value>")
-    print(
-        "                   - mantiuk08 contrast enhancement "
-        f"(default: {DEFAULT_LUMINANCE_M08_CONTRAST_ENH})."
-    )
+    print("  --tmo* <value> | --tmo*=<value>")
+    print("                   - Forward explicit luminance-hdr-cli --tmo* parameters as-is.")
     print("  [platform]       - Command is available on Linux only.")
     print("  --help           - Show this help message.")
 
@@ -240,7 +227,7 @@ def _parse_positive_float_option(option_name, option_raw):
     @param option_name {str} Long-option identifier used in error messages.
     @param option_raw {str} Raw option token value from CLI args.
     @return {float|None} Parsed positive float value when valid; `None` otherwise.
-    @satisfies REQ-065, REQ-067
+    @satisfies REQ-065
     """
 
     try:
@@ -254,6 +241,23 @@ def _parse_positive_float_option(option_name, option_raw):
         print_error(f"{option_name} must be greater than zero.")
         return None
     return option_value
+
+
+def _parse_tmo_passthrough_value(option_name, option_raw):
+    """@brief Parse and validate one luminance `--tmo*` passthrough value.
+
+    @details Rejects empty values and preserves original payload for
+    transparent forwarding to `luminance-hdr-cli`.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @return {str|None} Original value when valid; `None` otherwise.
+    @satisfies REQ-067
+    """
+
+    if option_raw.strip() == "":
+        print_error(f"Invalid {option_name} value: empty value")
+        return None
+    return option_raw
 
 
 def _parse_jpg_compression_option(compression_raw):
@@ -284,8 +288,9 @@ def _parse_run_options(args):
 
     @details Supports positional file arguments, optional `--ev=<value>` or
     `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
-    postprocess controls, optional `--enable-luminance`, and simplified
-    luminance backend controls; rejects unknown options and invalid arity.
+    postprocess controls, optional `--enable-luminance`, and luminance backend
+    controls including explicit `--tmo*` passthrough options; rejects unknown
+    options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
     @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067
@@ -304,8 +309,7 @@ def _parse_run_options(args):
     luminance_hdr_weight = DEFAULT_LUMINANCE_HDR_WEIGHT
     luminance_hdr_response_curve = DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE
     luminance_tmo = DEFAULT_LUMINANCE_TMO
-    luminance_m08_color_saturation = DEFAULT_LUMINANCE_M08_COLOR_SATURATION
-    luminance_m08_contrast_enh = DEFAULT_LUMINANCE_M08_CONTRAST_ENH
+    luminance_tmo_extra_args = []
     luminance_option_specified = False
     idx = 0
 
@@ -402,50 +406,32 @@ def _parse_run_options(args):
             idx += 1
             continue
 
-        if token == "--luminance-m08-color-saturation":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --luminance-m08-color-saturation")
+        if token.startswith("--tmo"):
+            if token == "--tmo":
+                print_error("Unknown option: --tmo")
                 return None
-            parsed_value = _parse_positive_float_option("--luminance-m08-color-saturation", args[idx + 1])
-            if parsed_value is None:
-                return None
-            luminance_m08_color_saturation = parsed_value
-            luminance_option_specified = True
-            idx += 2
-            continue
 
-        if token.startswith("--luminance-m08-color-saturation="):
-            parsed_value = _parse_positive_float_option(
-                "--luminance-m08-color-saturation", token.split("=", 1)[1]
-            )
-            if parsed_value is None:
-                return None
-            luminance_m08_color_saturation = parsed_value
-            luminance_option_specified = True
-            idx += 1
-            continue
+            option_name = token
+            option_value = None
+            consume_count = 1
+            if "=" in token:
+                option_name, option_value = token.split("=", 1)
+            else:
+                if idx + 1 >= len(args):
+                    print_error(f"Missing value for {token}")
+                    return None
+                option_value = args[idx + 1]
+                if option_value.startswith("--"):
+                    print_error(f"Missing value for {token}")
+                    return None
+                consume_count = 2
 
-        if token == "--luminance-m08-contrast-enh":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --luminance-m08-contrast-enh")
-                return None
-            parsed_value = _parse_positive_float_option("--luminance-m08-contrast-enh", args[idx + 1])
+            parsed_value = _parse_tmo_passthrough_value(option_name, option_value)
             if parsed_value is None:
                 return None
-            luminance_m08_contrast_enh = parsed_value
+            luminance_tmo_extra_args.extend((option_name, parsed_value))
             luminance_option_specified = True
-            idx += 2
-            continue
-
-        if token.startswith("--luminance-m08-contrast-enh="):
-            parsed_value = _parse_positive_float_option(
-                "--luminance-m08-contrast-enh", token.split("=", 1)[1]
-            )
-            if parsed_value is None:
-                return None
-            luminance_m08_contrast_enh = parsed_value
-            luminance_option_specified = True
-            idx += 1
+            idx += consume_count
             continue
 
         if token == "--ev":
@@ -614,8 +600,7 @@ def _parse_run_options(args):
             hdr_weight=luminance_hdr_weight,
             hdr_response_curve=luminance_hdr_response_curve,
             tmo=luminance_tmo,
-            m08_color_saturation=luminance_m08_color_saturation,
-            m08_contrast_enh=luminance_m08_contrast_enh,
+            tmo_extra_args=tuple(luminance_tmo_extra_args),
         ),
     )
 
@@ -755,9 +740,10 @@ def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_o
     """@brief Merge bracket TIFF files into one HDR TIFF via `luminance-hdr-cli`.
 
     @details Builds deterministic luminance-hdr-cli argv using EV sequence,
-    HDR model controls, tone-mapper controls, and ordered exposure inputs
-    (`ev_minus`, `ev_zero`, `ev_plus`), then writes to TIFF output path used by
-    shared postprocess conversion.
+    HDR model controls, tone-mapper controls, mandatory `--ldrTiff 16b`,
+    optional explicit `--tmo*` passthrough arguments, and ordered exposure
+    inputs (`ev_minus`, `ev_zero`, `ev_plus`), then writes to TIFF output path
+    used by shared postprocess conversion.
     @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
     @param output_hdr_tiff {Path} Output HDR TIFF target path.
     @param ev_value {float} EV bracket delta used to generate exposure files.
@@ -780,10 +766,9 @@ def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_o
         luminance_options.hdr_response_curve,
         "--tmo",
         luminance_options.tmo,
-        "--tmoM08ColorSaturation",
-        f"{luminance_options.m08_color_saturation:g}",
-        "--tmoM08ConstrastEnh",
-        f"{luminance_options.m08_contrast_enh:g}",
+        "--ldrTiff",
+        "16b",
+        *luminance_options.tmo_extra_args,
         "-o",
         str(output_hdr_tiff),
         *[str(path) for path in ordered_paths],
@@ -992,14 +977,15 @@ def run(args):
         f"jpg-compression={postprocess_options.jpg_compression}"
     )
     if enable_luminance:
+        extra_args_text = ""
+        if luminance_options.tmo_extra_args:
+            extra_args_text = f", tmoExtraArgs=[{' '.join(luminance_options.tmo_extra_args)}]"
         print_info(
             "HDR backend: luminance-hdr-cli "
             f"(hdrModel={luminance_options.hdr_model}, "
             f"hdrWeight={luminance_options.hdr_weight}, "
             f"hdrResponseCurve={luminance_options.hdr_response_curve}, "
-            f"tmo={luminance_options.tmo}, "
-            f"tmoM08ColorSaturation={luminance_options.m08_color_saturation:g}, "
-            f"tmoM08ConstrastEnh={luminance_options.m08_contrast_enh:g})"
+            f"tmo={luminance_options.tmo}{extra_args_text})"
         )
     else:
         print_info("HDR backend: enfuse")

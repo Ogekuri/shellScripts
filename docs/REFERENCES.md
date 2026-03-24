@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 1042L | 36 symbols | 11 imports | 22 comments
+# dng2hdr2jpg.py | Python | 1028L | 35 symbols | 11 imports | 23 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -661,10 +661,8 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - var `DEFAULT_LUMINANCE_HDR_WEIGHT = "triangular"` (L35)
 - var `DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"` (L36)
 - var `DEFAULT_LUMINANCE_TMO = "mantiuk08"` (L37)
-- var `DEFAULT_LUMINANCE_M08_COLOR_SATURATION = 1.0` (L38)
-- var `DEFAULT_LUMINANCE_M08_CONTRAST_ENH = 0.25` (L39)
-- var `SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)` (L40)
-### class `class PostprocessOptions` `@dataclass(frozen=True)` (L48-68)
+- var `SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)` (L38)
+### class `class PostprocessOptions` `@dataclass(frozen=True)` (L46-66)
 - @brief Hold deterministic postprocessing option values.
 - @details Encapsulates correction factors and JPEG compression level used by shared TIFF-to-JPG postprocessing for both HDR backends.
 - @param post_gamma {float} Gamma correction factor for postprocessing stage.
@@ -675,33 +673,32 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - @return {None} Immutable dataclass container.
 - @satisfies REQ-065, REQ-066
 
-### class `class LuminanceOptions` `@dataclass(frozen=True)` (L70-92)
+### class `class LuminanceOptions` `@dataclass(frozen=True)` (L68-88)
 - @brief Hold deterministic luminance-hdr-cli option values.
 - @details Encapsulates luminance backend model and tone-mapping parameters forwarded to `luminance-hdr-cli` command generation.
 - @param hdr_model {str} Luminance HDR model (`--hdrModel`).
 - @param hdr_weight {str} Luminance weighting function (`--hdrWeight`).
 - @param hdr_response_curve {str} Luminance response curve (`--hdrResponseCurve`).
 - @param tmo {str} Tone-mapping operator (`--tmo`).
-- @param m08_color_saturation {float} Mantiuk08 color saturation (`--tmoM08ColorSaturation`).
-- @param m08_contrast_enh {float} Mantiuk08 contrast enhancement (`--tmoM08ConstrastEnh`).
+- @param tmo_extra_args {tuple[str, ...]} Explicit passthrough `--tmo*` option pairs in CLI order.
 - @return {None} Immutable dataclass container.
 - @satisfies REQ-061, REQ-067, REQ-068
 
-### fn `def print_help(version)` (L93-151)
+### fn `def print_help(version)` (L89-138)
 - @brief Print help text for the `dng2hdr2jpg` command.
 - @details Documents required positional arguments, optional EV/RAW gamma controls, shared postprocessing controls, backend selection, and luminance-hdr-cli tone-mapping options.
 - @param version {str} CLI version label to append in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008, REQ-063
 
-### fn `def _parse_ev_option(ev_raw)` `priv` (L152-176)
+### fn `def _parse_ev_option(ev_raw)` `priv` (L139-163)
 - @brief Parse and validate one EV option value.
 - @details Converts the raw token to `float` and validates membership against the supported EV value set used by bracket multiplier computation.
 - @param ev_raw {str} EV token extracted from command arguments.
 - @return {float|None} Parsed EV value when valid; `None` otherwise.
 - @satisfies REQ-056
 
-### fn `def _parse_luminance_text_option(option_name, option_raw)` `priv` (L177-197)
+### fn `def _parse_luminance_text_option(option_name, option_raw)` `priv` (L164-184)
 - @brief Parse and validate non-empty luminance string option value.
 - @details Normalizes surrounding spaces, lowercases token, rejects empty values, and rejects ambiguous values that start with option prefix marker.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -709,49 +706,57 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - @return {str|None} Parsed normalized option token when valid; `None` otherwise.
 - @satisfies REQ-061
 
-### fn `def _parse_gamma_option(gamma_raw)` `priv` (L198-234)
+### fn `def _parse_gamma_option(gamma_raw)` `priv` (L185-221)
 - @brief Parse and validate one gamma option value pair.
 - @details Accepts comma-separated positive float pair in `a,b` format with optional surrounding parentheses, normalizes to `(a, b)` tuple, and rejects malformed, non-numeric, or non-positive values.
 - @param gamma_raw {str} Raw gamma token extracted from CLI args.
 - @return {tuple[float, float]|None} Parsed gamma tuple when valid; `None` otherwise.
 - @satisfies REQ-064
 
-### fn `def _parse_positive_float_option(option_name, option_raw)` `priv` (L235-258)
+### fn `def _parse_positive_float_option(option_name, option_raw)` `priv` (L222-245)
 - @brief Parse and validate one positive float option value.
 - @details Converts option token to `float`, requires value greater than zero, and emits deterministic parse errors on malformed values.
 - @param option_name {str} Long-option identifier used in error messages.
 - @param option_raw {str} Raw option token value from CLI args.
 - @return {float|None} Parsed positive float value when valid; `None` otherwise.
-- @satisfies REQ-065, REQ-067
+- @satisfies REQ-065
 
-### fn `def _parse_jpg_compression_option(compression_raw)` `priv` (L259-281)
+### fn `def _parse_tmo_passthrough_value(option_name, option_raw)` `priv` (L246-262)
+- @brief Parse and validate one luminance `--tmo*` passthrough value.
+- @details Rejects empty values and preserves original payload for transparent forwarding to `luminance-hdr-cli`.
+- @param option_name {str} Long-option identifier used in error messages.
+- @param option_raw {str} Raw option token value from CLI args.
+- @return {str|None} Original value when valid; `None` otherwise.
+- @satisfies REQ-067
+
+### fn `def _parse_jpg_compression_option(compression_raw)` `priv` (L263-285)
 - @brief Parse and validate JPEG compression option value.
 - @details Converts option token to `int`, requires inclusive range `[0, 100]`, and emits deterministic parse errors on malformed values.
 - @param compression_raw {str} Raw compression token value from CLI args.
 - @return {int|None} Parsed JPEG compression level when valid; `None` otherwise.
 - @satisfies REQ-065
 
-### fn `def _parse_run_options(args)` `priv` (L282-481)
+### fn `def _parse_run_options(args)` `priv` (L286-485)
 - @brief Parse CLI args into input, output, and EV parameters.
-- @details Supports positional file arguments, optional `--ev=<value>` or `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional postprocess controls, optional `--enable-luminance`, and simplified luminance backend controls; rejects unknown options and invalid arity.
+- @details Supports positional file arguments, optional `--ev=<value>` or `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional postprocess controls, optional `--enable-luminance`, and luminance backend controls including explicit `--tmo*` passthrough options; rejects unknown options and invalid arity.
 - @param args {list[str]} Raw command argument vector.
 - @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
 - @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067
 
-### fn `def _load_image_dependencies()` `priv` (L623-659)
+### fn `def _load_image_dependencies()` `priv` (L608-644)
 - @brief Load optional Python dependencies required by `dng2hdr2jpg`.
 - @details Imports `rawpy` for RAW decoding and `imageio` for image IO using `imageio.v3` when available with fallback to top-level `imageio` module.
 - @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module)` on success; `None` on missing dependency.
 - @satisfies REQ-059, REQ-066
 
-### fn `def _build_exposure_multipliers(ev_value)` `priv` (L660-672)
+### fn `def _build_exposure_multipliers(ev_value)` `priv` (L645-657)
 - @brief Compute bracketing brightness multipliers from EV value.
 - @details Produces exactly three multipliers mapped to exposure stops `[-ev, 0, +ev]` as powers of two for RAW postprocess brightness control.
 - @param ev_value {float} Exposure bracket EV delta.
 - @return {tuple[float, float, float]} Multipliers in order `(under, base, over)`.
 - @satisfies REQ-057
 
-### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, temp_dir)` `priv` (L673-706)
+### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, temp_dir)` `priv` (L658-691)
 - @brief Materialize three bracket TIFF files from one RAW handle.
 - @details Invokes `raw.postprocess` with `output_bps=16`, `use_camera_wb=True`, `no_auto_bright=True`, and configurable gamma pair for deterministic HDR-oriented bracket extraction before merge.
 - @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
@@ -762,7 +767,7 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - @return {list[Path]} Ordered temporary TIFF file paths.
 - @satisfies REQ-057
 
-### fn `def _order_bracket_paths(bracket_paths)` `priv` (L707-732)
+### fn `def _order_bracket_paths(bracket_paths)` `priv` (L692-717)
 - @brief Validate and reorder bracket TIFF paths for deterministic backend argv.
 - @details Enforces exact exposure order `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` required by luminance-hdr-cli command generation and raises on missing labels.
 - @param bracket_paths {list[Path]} Temporary bracket TIFF paths generated from RAW.
@@ -770,7 +775,7 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - @exception ValueError Raised when any expected bracket label is missing.
 - @satisfies REQ-062
 
-### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L733-753)
+### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L718-738)
 - @brief Merge bracket TIFF files into one HDR TIFF via `enfuse`.
 - @details Builds deterministic enfuse argv with LZW compression and executes subprocess in checked mode to propagate command failures.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
@@ -779,9 +784,9 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - @exception subprocess.CalledProcessError Raised when `enfuse` returns non-zero exit status.
 - @satisfies REQ-058
 
-### fn `def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_options)` `priv` (L754-793)
+### fn `def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_options)` `priv` (L739-778)
 - @brief Merge bracket TIFF files into one HDR TIFF via `luminance-hdr-cli`.
-- @details Builds deterministic luminance-hdr-cli argv using EV sequence, HDR model controls, tone-mapper controls, and ordered exposure inputs (`ev_minus`, `ev_zero`, `ev_plus`), then writes to TIFF output path used by shared postprocess conversion.
+- @details Builds deterministic luminance-hdr-cli argv using EV sequence, HDR model controls, tone-mapper controls, mandatory `--ldrTiff 16b`, optional explicit `--tmo*` passthrough arguments, and ordered exposure inputs (`ev_minus`, `ev_zero`, `ev_plus`), then writes to TIFF output path used by shared postprocess conversion.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
 - @param output_hdr_tiff {Path} Output HDR TIFF target path.
 - @param ev_value {float} EV bracket delta used to generate exposure files.
@@ -790,14 +795,14 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
 - @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068
 
-### fn `def _convert_compression_to_quality(jpg_compression)` `priv` (L794-806)
+### fn `def _convert_compression_to_quality(jpg_compression)` `priv` (L779-791)
 - @brief Convert JPEG compression level to Pillow quality value.
 - @details Maps inclusive compression range `[0, 100]` to inclusive quality range `[100, 1]` preserving deterministic inverse relation.
 - @param jpg_compression {int} JPEG compression level.
 - @return {int} Pillow quality value in `[1, 100]`.
 - @satisfies REQ-065, REQ-066
 
-### fn `def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tiff, output_jpg, postprocess_options)` `priv` (L807-874)
+### fn `def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tiff, output_jpg, postprocess_options)` `priv` (L792-859)
 - @brief Encode merged HDR TIFF payload into final JPG output.
 - @details Loads merged image payload, down-converts to `uint8` when source dynamic range exceeds JPEG-native depth, applies shared gamma/brightness contrast/saturation postprocessing, and writes JPEG with configured compression level for both HDR backends.
 - @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
@@ -809,20 +814,20 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - @return {None} Side effects only.
 - @satisfies REQ-058, REQ-066, REQ-069
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L875-903)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L860-888)
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L904-923)
+### fn `def _is_supported_runtime_os()` `priv` (L889-908)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L924-1042)
+### fn `def run(args)` (L909-1028)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes default `enfuse` flow or optional luminance-hdr-cli flow, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -845,29 +850,28 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 |`DEFAULT_LUMINANCE_HDR_WEIGHT`|var|pub|35||
 |`DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE`|var|pub|36||
 |`DEFAULT_LUMINANCE_TMO`|var|pub|37||
-|`DEFAULT_LUMINANCE_M08_COLOR_SATURATION`|var|pub|38||
-|`DEFAULT_LUMINANCE_M08_CONTRAST_ENH`|var|pub|39||
-|`SUPPORTED_EV_VALUES`|var|pub|40||
-|`PostprocessOptions`|class|pub|48-68|class PostprocessOptions|
-|`LuminanceOptions`|class|pub|70-92|class LuminanceOptions|
-|`print_help`|fn|pub|93-151|def print_help(version)|
-|`_parse_ev_option`|fn|priv|152-176|def _parse_ev_option(ev_raw)|
-|`_parse_luminance_text_option`|fn|priv|177-197|def _parse_luminance_text_option(option_name, option_raw)|
-|`_parse_gamma_option`|fn|priv|198-234|def _parse_gamma_option(gamma_raw)|
-|`_parse_positive_float_option`|fn|priv|235-258|def _parse_positive_float_option(option_name, option_raw)|
-|`_parse_jpg_compression_option`|fn|priv|259-281|def _parse_jpg_compression_option(compression_raw)|
-|`_parse_run_options`|fn|priv|282-481|def _parse_run_options(args)|
-|`_load_image_dependencies`|fn|priv|623-659|def _load_image_dependencies()|
-|`_build_exposure_multipliers`|fn|priv|660-672|def _build_exposure_multipliers(ev_value)|
-|`_write_bracket_images`|fn|priv|673-706|def _write_bracket_images(raw_handle, imageio_module, mul...|
-|`_order_bracket_paths`|fn|priv|707-732|def _order_bracket_paths(bracket_paths)|
-|`_run_enfuse`|fn|priv|733-753|def _run_enfuse(bracket_paths, merged_tiff)|
-|`_run_luminance_hdr_cli`|fn|priv|754-793|def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff...|
-|`_convert_compression_to_quality`|fn|priv|794-806|def _convert_compression_to_quality(jpg_compression)|
-|`_encode_jpg`|fn|priv|807-874|def _encode_jpg(imageio_module, pil_image_module, pil_enh...|
-|`_collect_processing_errors`|fn|priv|875-903|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|904-923|def _is_supported_runtime_os()|
-|`run`|fn|pub|924-1042|def run(args)|
+|`SUPPORTED_EV_VALUES`|var|pub|38||
+|`PostprocessOptions`|class|pub|46-66|class PostprocessOptions|
+|`LuminanceOptions`|class|pub|68-88|class LuminanceOptions|
+|`print_help`|fn|pub|89-138|def print_help(version)|
+|`_parse_ev_option`|fn|priv|139-163|def _parse_ev_option(ev_raw)|
+|`_parse_luminance_text_option`|fn|priv|164-184|def _parse_luminance_text_option(option_name, option_raw)|
+|`_parse_gamma_option`|fn|priv|185-221|def _parse_gamma_option(gamma_raw)|
+|`_parse_positive_float_option`|fn|priv|222-245|def _parse_positive_float_option(option_name, option_raw)|
+|`_parse_tmo_passthrough_value`|fn|priv|246-262|def _parse_tmo_passthrough_value(option_name, option_raw)|
+|`_parse_jpg_compression_option`|fn|priv|263-285|def _parse_jpg_compression_option(compression_raw)|
+|`_parse_run_options`|fn|priv|286-485|def _parse_run_options(args)|
+|`_load_image_dependencies`|fn|priv|608-644|def _load_image_dependencies()|
+|`_build_exposure_multipliers`|fn|priv|645-657|def _build_exposure_multipliers(ev_value)|
+|`_write_bracket_images`|fn|priv|658-691|def _write_bracket_images(raw_handle, imageio_module, mul...|
+|`_order_bracket_paths`|fn|priv|692-717|def _order_bracket_paths(bracket_paths)|
+|`_run_enfuse`|fn|priv|718-738|def _run_enfuse(bracket_paths, merged_tiff)|
+|`_run_luminance_hdr_cli`|fn|priv|739-778|def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff...|
+|`_convert_compression_to_quality`|fn|priv|779-791|def _convert_compression_to_quality(jpg_compression)|
+|`_encode_jpg`|fn|priv|792-859|def _encode_jpg(imageio_module, pil_image_module, pil_enh...|
+|`_collect_processing_errors`|fn|priv|860-888|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|889-908|def _is_supported_runtime_os()|
+|`run`|fn|pub|909-1028|def run(args)|
 
 
 ---
