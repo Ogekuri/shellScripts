@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow, then writes final JPG to user-selected output path.
 Temporary artifacts are isolated in a temporary directory and removed
 automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064
 """
 
 import shutil
@@ -24,6 +24,7 @@ from shell_scripts.utils import (
 PROGRAM = "shellscripts"
 DESCRIPTION = "Convert DNG to HDR-merged JPG with optional luminance-hdr-cli backend."
 DEFAULT_EV = 2.0
+DEFAULT_GAMMA = (2.222, 4.5)
 DEFAULT_LUMINANCE_OPERATOR = "mantiuk06"
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 LUMINANCE_MAP_ALIASES = {
@@ -68,6 +69,8 @@ def print_help(version):
     print("  <input.dng>      - Input DNG file (required).")
     print("  <output.jpg>     - Output JPG file (required).")
     print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
+    print(f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]}).")
+    print("                     Example: --gamma=1,1 for linear extraction.")
     print("  --enable-luminance")
     print("                   - Enable luminance-hdr-cli backend (default backend: enfuse).")
     print("                     Uses alignment engine MTB and applies selected tone mapper.")
@@ -144,19 +147,58 @@ def _parse_luminance_map_flag(map_flag):
     return LUMINANCE_MAP_ALIASES.get(map_name, map_name)
 
 
+def _parse_gamma_option(gamma_raw):
+    """@brief Parse and validate one gamma option value pair.
+
+    @details Accepts comma-separated positive float pair in `a,b` format with
+    optional surrounding parentheses, normalizes to `(a, b)` tuple, and rejects
+    malformed, non-numeric, or non-positive values.
+    @param gamma_raw {str} Raw gamma token extracted from CLI args.
+    @return {tuple[float, float]|None} Parsed gamma tuple when valid; `None` otherwise.
+    @satisfies REQ-064
+    """
+
+    gamma_text = gamma_raw.strip()
+    if gamma_text.startswith("(") and gamma_text.endswith(")"):
+        gamma_text = gamma_text[1:-1].strip()
+
+    gamma_parts = [part.strip() for part in gamma_text.split(",")]
+    if len(gamma_parts) != 2 or not gamma_parts[0] or not gamma_parts[1]:
+        print_error(f"Invalid --gamma value: {gamma_raw}")
+        print_error("Expected format: --gamma=<a,b> with positive numeric values.")
+        return None
+
+    try:
+        gamma_a = float(gamma_parts[0])
+        gamma_b = float(gamma_parts[1])
+    except ValueError:
+        print_error(f"Invalid --gamma value: {gamma_raw}")
+        print_error("Expected format: --gamma=<a,b> with positive numeric values.")
+        return None
+
+    if gamma_a <= 0.0 or gamma_b <= 0.0:
+        print_error(f"Invalid --gamma value: {gamma_raw}")
+        print_error("Gamma values must be greater than zero.")
+        return None
+
+    return (gamma_a, gamma_b)
+
+
 def _parse_run_options(args):
     """@brief Parse CLI args into input, output, and EV parameters.
 
     @details Supports positional file arguments, optional `--ev=<value>` or
-    `--ev <value>`, optional `--enable-luminance`, and luminance operator
-    selectors; rejects unknown options and invalid arity.
+    `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
+    `--enable-luminance`, and luminance operator selectors; rejects unknown
+    options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @return {tuple[Path, Path, float, bool, str]|None} Parsed `(input, output, ev, enable_luminance, luminance_operator)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061
+    @return {tuple[Path, Path, float, tuple[float, float], bool, str]|None} Parsed `(input, output, ev, gamma, enable_luminance, luminance_operator)` tuple; `None` on parse failure.
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064
     """
 
     positional = []
     ev_value = DEFAULT_EV
+    gamma_value = DEFAULT_GAMMA
     enable_luminance = False
     luminance_operator = DEFAULT_LUMINANCE_OPERATOR
     luminance_option_specified = False
@@ -218,6 +260,25 @@ def _parse_run_options(args):
             idx += 1
             continue
 
+        if token == "--gamma":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --gamma")
+                return None
+            parsed_gamma = _parse_gamma_option(args[idx + 1])
+            if parsed_gamma is None:
+                return None
+            gamma_value = parsed_gamma
+            idx += 2
+            continue
+
+        if token.startswith("--gamma="):
+            parsed_gamma = _parse_gamma_option(token.split("=", 1)[1])
+            if parsed_gamma is None:
+                return None
+            gamma_value = parsed_gamma
+            idx += 1
+            continue
+
         if token.startswith("-"):
             print_error(f"Unknown option: {token}")
             return None
@@ -226,7 +287,7 @@ def _parse_run_options(args):
         idx += 1
 
     if len(positional) != 2:
-        print_error("Usage: dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>]")
+        print_error("Usage: dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>] [--gamma=<a,b>]")
         return None
 
     if luminance_option_specified and not enable_luminance:
@@ -237,6 +298,7 @@ def _parse_run_options(args):
         Path(positional[0]),
         Path(positional[1]),
         ev_value,
+        gamma_value,
         enable_luminance,
         luminance_operator,
     )
@@ -284,15 +346,16 @@ def _build_exposure_multipliers(ev_value):
     return (2 ** (-ev_value), 1.0, 2 ** ev_value)
 
 
-def _write_bracket_images(raw_handle, imageio_module, multipliers, temp_dir):
+def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, temp_dir):
     """@brief Materialize three bracket TIFF files from one RAW handle.
 
     @details Invokes `raw.postprocess` with `output_bps=16`,
-    `use_camera_wb=True`, and `no_auto_bright=False` for camera white-balance
-    aware bracket extraction before HDR merge.
+    `use_camera_wb=True`, `no_auto_bright=True`, and configurable gamma pair
+    for deterministic HDR-oriented bracket extraction before merge.
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
     @param imageio_module {ModuleType} Imported imageio module with `imwrite`.
     @param multipliers {tuple[float, float, float]} Ordered exposure multipliers.
+    @param gamma_value {tuple[float, float]} Gamma pair forwarded to RAW postprocess.
     @param temp_dir {Path} Directory for intermediate TIFF artifacts.
     @return {list[Path]} Ordered temporary TIFF file paths.
     @satisfies REQ-057
@@ -308,7 +371,8 @@ def _write_bracket_images(raw_handle, imageio_module, multipliers, temp_dir):
             bright=multiplier,
             output_bps=16,
             use_camera_wb=True,
-            no_auto_bright=False,
+            no_auto_bright=True,
+            gamma=gamma_value,
         )
         imageio_module.imwrite(str(temp_path), rgb_data)
         bracket_paths.append(temp_path)
@@ -460,7 +524,7 @@ def run(args):
     temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064
     """
 
     if not _is_supported_runtime_os():
@@ -470,7 +534,7 @@ def run(args):
     if parsed is None:
         return 1
 
-    input_dng, output_jpg, ev_value, enable_luminance, luminance_operator = parsed
+    input_dng, output_jpg, ev_value, gamma_value, enable_luminance, luminance_operator = parsed
 
     if input_dng.suffix.lower() != ".dng":
         print_error(f"Input file must have .dng extension: {input_dng}")
@@ -504,6 +568,7 @@ def run(args):
 
     print_info(f"Reading DNG input: {input_dng}")
     print_info(f"Using EV bracket: {ev_value}")
+    print_info(f"Using gamma pair: {gamma_value[0]:g},{gamma_value[1]:g}")
     if enable_luminance:
         print_info(f"HDR backend: luminance-hdr-cli (operator={luminance_operator})")
     else:
@@ -519,6 +584,7 @@ def run(args):
                     raw_handle=raw_handle,
                     imageio_module=imageio_module,
                     multipliers=multipliers,
+                    gamma_value=gamma_value,
                     temp_dir=temp_dir,
                 )
             if enable_luminance:
