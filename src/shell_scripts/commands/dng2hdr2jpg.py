@@ -44,9 +44,8 @@ _LUMINANCE_OPERATOR_TABLE_HEADERS = (
     "Operator",
     "Family / idea",
     "Character / typical result",
-    "Neutrality",
-    "When to use",
 )
+_LUMINANCE_OPERATOR_TABLE_SECONDARY_HEADER = ("", "Neutrality", "When to use")
 _LUMINANCE_OPERATOR_TABLE_ENTRIES = (
     (
         "`ashikhmin`",
@@ -221,18 +220,22 @@ class LuminanceOptions:
     tmo_extra_args: tuple[str, ...]
 
 
-def _print_box_table(headers, rows):
+def _print_box_table(headers, rows, header_rows=()):
     """@brief Print one Unicode box-drawing table.
 
     @details Computes deterministic column widths from headers and rows, then
     prints aligned borders and cells using Unicode line-drawing glyphs.
     @param headers {tuple[str, ...]} Table header labels in fixed output order.
+    @param header_rows {tuple[tuple[str, ...], ...]} Additional physical header rows rendered before header/body separator.
     @param rows {tuple[tuple[str, ...], ...]} Table body rows with one value per column.
     @return {None} Writes formatted table to stdout.
     @satisfies REQ-070
     """
 
     widths = [len(header) for header in headers]
+    for header_row in header_rows:
+        for idx, value in enumerate(header_row):
+            widths[idx] = max(widths[idx], len(value))
     for row in rows:
         for idx, value in enumerate(row):
             widths[idx] = max(widths[idx], len(value))
@@ -246,6 +249,8 @@ def _print_box_table(headers, rows):
 
     print(_border("┌", "┬", "┐"))
     print(_line(headers))
+    for header_row in header_rows:
+        print(_line(header_row))
     print(_border("├", "┼", "┤"))
     for row in rows:
         print(_line(row))
@@ -256,16 +261,16 @@ def _build_two_line_operator_rows(operator_entries):
     """@brief Build two-line physical rows for luminance operator table.
 
     @details Expands each logical operator entry into two physical rows while
-    preserving the existing five-column bordered layout used by help rendering.
+    preserving the bordered three-column layout used by help rendering.
     @param operator_entries {tuple[tuple[str, str, str, str, str], ...]} Logical operator rows in `(operator, family, character, neutrality, when_to_use)` format.
-    @return {tuple[tuple[str, str, str, str, str], ...]} Expanded physical rows for `_print_box_table`.
+    @return {tuple[tuple[str, str, str], ...]} Expanded physical rows for `_print_box_table`.
     @satisfies REQ-070
     """
 
     rows = []
     for operator, family, character, neutrality, when_to_use in operator_entries:
-        rows.append((operator, family, character, "", ""))
-        rows.append(("", "", "", neutrality, when_to_use))
+        rows.append((operator, family, character))
+        rows.append(("", neutrality, when_to_use))
     return tuple(rows)
 
 
@@ -316,7 +321,11 @@ def print_help(version):
     print()
     print("  Luminance operators:")
     operator_rows = _build_two_line_operator_rows(_LUMINANCE_OPERATOR_TABLE_ENTRIES)
-    _print_box_table(_LUMINANCE_OPERATOR_TABLE_HEADERS, operator_rows)
+    _print_box_table(
+        _LUMINANCE_OPERATOR_TABLE_HEADERS,
+        operator_rows,
+        header_rows=(_LUMINANCE_OPERATOR_TABLE_SECONDARY_HEADER,),
+    )
     print()
     print("  Luminance operator main CLI controls:")
     _print_box_table(_LUMINANCE_CONTROL_TABLE_HEADERS, _LUMINANCE_CONTROL_TABLE_ROWS)
