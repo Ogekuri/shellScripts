@@ -311,7 +311,8 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     """
     @brief Validate luminance-hdr-cli backend execution with default operator.
     @details Enables luminance mode and verifies command argv shape uses
-      `luminance-hdr-cli -a mantiuk06 -o <output.jpg>` and three bracket TIFFs.
+      `luminance-hdr-cli -a MTB --tmo mantiuk06 -o <output.jpg>` and three
+      bracket TIFFs.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -380,9 +381,9 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     assert observed["output_bps"] == [16, 16, 16]
     assert observed["no_auto_bright"] == [True, True, True]
     assert observed["luminance_cmd"][0] == "luminance-hdr-cli"
-    assert observed["luminance_cmd"][1:4] == ["-a", "mantiuk06", "-o"]
-    assert observed["luminance_cmd"][4] == str(output_jpg)
-    assert [Path(value).name for value in observed["luminance_cmd"][5:]] == [
+    assert observed["luminance_cmd"][1:6] == ["-a", "MTB", "--tmo", "mantiuk06", "-o"]
+    assert observed["luminance_cmd"][6] == str(output_jpg)
+    assert [Path(value).name for value in observed["luminance_cmd"][7:]] == [
         "ev_minus.tif",
         "ev_zero.tif",
         "ev_plus.tif",
@@ -459,7 +460,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_map_alias(monkeypatch, tmp_path
     assert result == 0
     assert observed["command"] is not None
     assert observed["command"][0] == "luminance-hdr-cli"
-    assert observed["command"][1:3] == ["-a", "reinhard02"]
+    assert observed["command"][1:5] == ["-a", "MTB", "--tmo", "reinhard02"]
 
 
 def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch, tmp_path):

@@ -70,8 +70,9 @@ def print_help(version):
     print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
     print("  --enable-luminance")
     print("                   - Enable luminance-hdr-cli backend (default backend: enfuse).")
+    print("                     Uses alignment engine MTB and applies selected tone mapper.")
     print("  --luminance-operator=<name>")
-    print(f"                   - Select luminance-hdr-cli operator (default: {DEFAULT_LUMINANCE_OPERATOR}).")
+    print(f"                   - Select luminance-hdr-cli tone mapper (default: {DEFAULT_LUMINANCE_OPERATOR}).")
     print("  --luminance-map-<name>")
     print("                   - Shortcut aliases for common operators:")
     for alias_name, operator_name in LUMINANCE_MAP_ALIASES.items():
@@ -337,8 +338,9 @@ def _run_enfuse(bracket_paths, merged_tiff):
 def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator):
     """@brief Merge bracket TIFF files into final JPG via `luminance-hdr-cli`.
 
-    @details Builds deterministic luminance-hdr-cli argv using `-a <operator>`
-    and writes directly to requested JPG output path.
+    @details Builds deterministic luminance-hdr-cli argv using alignment engine
+    `-a MTB`, tone mapper `--tmo <operator>`, and writes directly to requested
+    JPG output path.
     @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
     @param output_jpg {Path} Final JPG output target path.
     @param luminance_operator {str} Selected luminance-hdr-cli tone-mapping operator.
@@ -350,6 +352,8 @@ def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator):
     command = [
         "luminance-hdr-cli",
         "-a",
+        "MTB",
+        "--tmo",
         luminance_operator,
         "-o",
         str(output_jpg),
