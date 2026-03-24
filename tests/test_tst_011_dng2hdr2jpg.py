@@ -1192,6 +1192,9 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     dng2hdr2jpg.print_help("0.0.0")
     captured = capsys.readouterr()
     output = captured.out
+    operators_section = output.split("  Luminance operators:", 1)[1].split(
+        "  Luminance operator main CLI controls:", 1
+    )[0]
 
     assert "--enable-luminance" in output
     assert "--gamma=<a,b>" in output
@@ -1210,7 +1213,10 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "┌" in output and "┬" in output and "┐" in output
     assert "├" in output and "┼" in output and "┤" in output
     assert "└" in output and "┴" in output and "┘" in output
+    assert "┬──┬" not in operators_section
+    assert "┼──┼" not in operators_section
     assert "│ Operator" in output
+    assert operators_section.count("│ Operator") == 1
     assert "│ Neutrality" in output and "│ When to use" in output
     assert "`reinhard02`" in output
     assert "`mantiuk08`" in output
