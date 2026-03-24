@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.8"
-date: "2026-03-20"
+version: "0.1.9"
+date: "2026-03-24"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -168,6 +168,11 @@ No explicit performance optimizations identified.
 - **REQ-052**: MUST make `req --dirs` target only first-level child directories and MUST exclude the current directory.
 - **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
+- **REQ-055**: MUST expose a `dng2jpg` command that accepts `dng2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
+- **REQ-056**: MUST parse optional `--ev=<value>` in `dng2jpg`, default to `2.0` when omitted, and reject unsupported or non-numeric values with return code `1`.
+- **REQ-057**: MUST generate exactly three exposure images from one DNG input using brightness multipliers `2^(-ev)`, `1.0`, and `2^(ev)` before HDR merge.
+- **REQ-058**: MUST execute HDR merge via `enfuse` over the three generated exposure files and then encode the merged result as the requested JPG output path.
+- **REQ-059**: MUST delete all command-generated temporary files in `dng2jpg` on both success and failure paths and MUST return non-zero when dependencies or subprocesses fail.
 
 ## 4. Test Requirements
 
@@ -187,6 +192,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
+- **TST-011**: MUST verify REQ-055 through REQ-059 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if EV parsing, bracketing multipliers, and cleanup behavior match requirements.
 
 ## 5. Evidence
 
