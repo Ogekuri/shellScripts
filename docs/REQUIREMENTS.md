@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.1.9"
+version: "0.2.0"
 date: "2026-03-24"
 author: "Auto-generated from repository evidence"
 scope:
@@ -168,11 +168,11 @@ No explicit performance optimizations identified.
 - **REQ-052**: MUST make `req --dirs` target only first-level child directories and MUST exclude the current directory.
 - **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
-- **REQ-055**: MUST expose a `dng2jpg` command that accepts `dng2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
-- **REQ-056**: MUST parse optional `--ev=<value>` in `dng2jpg`, default to `2.0` when omitted, and reject unsupported or non-numeric values with return code `1`.
+- **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
+- **REQ-056**: MUST parse optional `--ev=<value>` in `dng2hdr2jpg`, default to `2.0` when omitted, and reject unsupported or non-numeric values with return code `1`.
 - **REQ-057**: MUST generate exactly three exposure images from one DNG input using brightness multipliers `2^(-ev)`, `1.0`, and `2^(ev)` before HDR merge.
 - **REQ-058**: MUST execute HDR merge via `enfuse` over the three generated exposure files and then encode the merged result as the requested JPG output path.
-- **REQ-059**: MUST delete all command-generated temporary files in `dng2jpg` on both success and failure paths and MUST return non-zero when dependencies or subprocesses fail.
+- **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving temporary-file cleanup and dependency-failure behavior on Linux.
 
 ## 4. Test Requirements
 

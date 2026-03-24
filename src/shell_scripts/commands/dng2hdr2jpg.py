@@ -13,16 +13,25 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from shell_scripts.utils import print_error, print_info, print_success
+from shell_scripts.utils import (
+    get_runtime_os,
+    print_error,
+    print_info,
+    print_success,
+)
 
 PROGRAM = "shellscripts"
-DESCRIPTION = "Convert DNG to JPG by 3-exposure HDR merge with optional --ev."
+DESCRIPTION = "Convert DNG to HDR-merged JPG by 3-exposure HDR merge with optional --ev."
 DEFAULT_EV = 2.0
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
+_RUNTIME_OS_LABELS = {
+    "windows": "Windows",
+    "darwin": "MacOS",
+}
 
 
 def print_help(version):
-    """@brief Print help text for the `dng2jpg` command.
+    """@brief Print help text for the `dng2hdr2jpg` command.
 
     @details Documents required positional arguments and optional `--ev` value
     contract used by the exposure bracket generator.
@@ -31,12 +40,13 @@ def print_help(version):
     @satisfies DES-008
     """
 
-    print(f"Usage: {PROGRAM} dng2jpg <input.dng> <output.jpg> [--ev=<value>] ({version})")
+    print(f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>] ({version})")
     print()
-    print("dng2jpg options:")
+    print("dng2hdr2jpg options:")
     print("  <input.dng>      - Input DNG file (required).")
     print("  <output.jpg>     - Output JPG file (required).")
     print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
+    print("  [platform]       - Command is available on Linux only.")
     print("  --help           - Show this help message.")
 
 
@@ -108,14 +118,14 @@ def _parse_run_options(args):
         idx += 1
 
     if len(positional) != 2:
-        print_error("Usage: dng2jpg <input.dng> <output.jpg> [--ev=<value>]")
+        print_error("Usage: dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>]")
         return None
 
     return Path(positional[0]), Path(positional[1]), ev_value
 
 
 def _load_image_dependencies():
-    """@brief Load optional Python dependencies required by `dng2jpg`.
+    """@brief Load optional Python dependencies required by `dng2hdr2jpg`.
 
     @details Imports `rawpy` for RAW decoding and `imageio` for image IO using
     `imageio.v3` when available with fallback to top-level `imageio` module.
@@ -262,8 +272,28 @@ def _collect_processing_errors(rawpy_module):
     return tuple(deduplicated)
 
 
+def _is_supported_runtime_os():
+    """@brief Validate runtime platform support for `dng2hdr2jpg`.
+
+    @details Accepts Linux runtime only; emits explicit non-Linux unsupported
+    message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
+    @return {bool} `True` when runtime OS is Linux; `False` otherwise.
+    @satisfies REQ-055, REQ-059
+    """
+
+    runtime_os = get_runtime_os()
+    if runtime_os == "linux":
+        return True
+
+    runtime_label = _RUNTIME_OS_LABELS.get(runtime_os, runtime_os)
+    print_error(
+        f"dng2hdr2jpg is not available on {runtime_label}; this command is Linux-only."
+    )
+    return False
+
+
 def run(args):
-    """@brief Execute `dng2jpg` command pipeline.
+    """@brief Execute `dng2hdr2jpg` command pipeline.
 
     @details Parses command options, validates dependencies, extracts three RAW
     brackets, merges HDR with `enfuse`, writes JPG output, and guarantees
@@ -272,6 +302,9 @@ def run(args):
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
     @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059
     """
+
+    if not _is_supported_runtime_os():
+        return 1
 
     parsed = _parse_run_options(args)
     if parsed is None:
@@ -307,7 +340,7 @@ def run(args):
     print_info(f"Reading DNG input: {input_dng}")
     print_info(f"Using EV bracket: {ev_value}")
 
-    with tempfile.TemporaryDirectory(prefix="dng2jpg-") as temp_dir_raw:
+    with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-") as temp_dir_raw:
         temp_dir = Path(temp_dir_raw)
         merged_tiff = temp_dir / "merged_hdr.tif"
 
@@ -326,7 +359,7 @@ def run(args):
                 output_jpg=output_jpg,
             )
         except processing_errors as error:
-            print_error(f"dng2jpg processing failed: {error}")
+            print_error(f"dng2hdr2jpg processing failed: {error}")
             return 1
 
     print_success(f"HDR JPG created: {output_jpg}")

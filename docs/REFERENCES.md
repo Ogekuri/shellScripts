@@ -22,6 +22,7 @@
         │   ├── dicom2jpg.py
         │   ├── dicomviewer.py
         │   ├── diff_cmd.py
+        │   ├── dng2hdr2jpg.py
         │   ├── dng2jpg.py
         │   ├── doxygen_cmd.py
         │   ├── edit_cmd.py
@@ -628,8 +629,8 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2jpg.py | Python | 333L | 14 symbols | 8 imports | 12 comments
-> Path: `src/shell_scripts/commands/dng2jpg.py`
+# dng2hdr2jpg.py | Python | 366L | 15 symbols | 8 imports | 13 comments
+> Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
 ```
@@ -637,7 +638,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from shell_scripts.utils import print_error, print_info, print_success
+from shell_scripts.utils import (
 import rawpy  # type: ignore
 import imageio.v3 as imageio  # type: ignore
 import imageio  # type: ignore
@@ -645,45 +646,45 @@ import imageio  # type: ignore
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L18)
-- var `DESCRIPTION = "Convert DNG to JPG by 3-exposure HDR merge with optional --ev."` (L19)
-- var `DEFAULT_EV = 2.0` (L20)
-- var `SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)` (L21)
-### fn `def print_help(version)` (L24-42)
-- @brief Print help text for the `dng2jpg` command.
+- var `PROGRAM = "shellscripts"` (L23)
+- var `DESCRIPTION = "Convert DNG to HDR-merged JPG by 3-exposure HDR merge with optional --ev."` (L24)
+- var `DEFAULT_EV = 2.0` (L25)
+- var `SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)` (L26)
+### fn `def print_help(version)` (L33-52)
+- @brief Print help text for the `dng2hdr2jpg` command.
 - @details Documents required positional arguments and optional `--ev` value contract used by the exposure bracket generator.
 - @param version {str} CLI version label to append in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _parse_ev_option(ev_raw)` `priv` (L43-67)
+### fn `def _parse_ev_option(ev_raw)` `priv` (L53-77)
 - @brief Parse and validate one EV option value.
 - @details Converts the raw token to `float` and validates membership against the supported EV value set used by bracket multiplier computation.
 - @param ev_raw {str} EV token extracted from command arguments.
 - @return {float|None} Parsed EV value when valid; `None` otherwise.
 - @satisfies REQ-056
 
-### fn `def _parse_run_options(args)` `priv` (L68-116)
+### fn `def _parse_run_options(args)` `priv` (L78-126)
 - @brief Parse CLI args into input, output, and EV parameters.
 - @details Supports positional file arguments and optional `--ev=<value>` or `--ev <value>` syntax; rejects unknown options and invalid arity.
 - @param args {list[str]} Raw command argument vector.
 - @return {tuple[Path, Path, float]|None} Parsed `(input, output, ev)` tuple; `None` on parse failure.
 - @satisfies REQ-055, REQ-056
 
-### fn `def _load_image_dependencies()` `priv` (L117-145)
-- @brief Load optional Python dependencies required by `dng2jpg`.
+### fn `def _load_image_dependencies()` `priv` (L127-155)
+- @brief Load optional Python dependencies required by `dng2hdr2jpg`.
 - @details Imports `rawpy` for RAW decoding and `imageio` for image IO using `imageio.v3` when available with fallback to top-level `imageio` module.
 - @return {tuple[ModuleType, ModuleType]|None} `(rawpy_module, imageio_module)` on success; `None` on missing dependency.
 - @satisfies REQ-059
 
-### fn `def _build_exposure_multipliers(ev_value)` `priv` (L146-158)
+### fn `def _build_exposure_multipliers(ev_value)` `priv` (L156-168)
 - @brief Compute bracketing brightness multipliers from EV value.
 - @details Produces exactly three multipliers mapped to exposure stops `[-ev, 0, +ev]` as powers of two for RAW postprocess brightness control.
 - @param ev_value {float} Exposure bracket EV delta.
 - @return {tuple[float, float, float]} Multipliers in order `(under, base, over)`.
 - @satisfies REQ-057
 
-### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, temp_dir)` `priv` (L159-188)
+### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, temp_dir)` `priv` (L169-198)
 - @brief Materialize three bracket TIFF files from one RAW handle.
 - @details Invokes `raw.postprocess` with `output_bps=16` and `no_auto_bright=True` to preserve deterministic bracket math for HDR merge.
 - @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
@@ -693,7 +694,7 @@ import imageio  # type: ignore
 - @return {list[Path]} Ordered temporary TIFF file paths.
 - @satisfies REQ-057
 
-### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L189-209)
+### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L199-219)
 - @brief Merge bracket TIFF files into one HDR TIFF via `enfuse`.
 - @details Builds deterministic enfuse argv with LZW compression and executes subprocess in checked mode to propagate command failures.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
@@ -702,7 +703,7 @@ import imageio  # type: ignore
 - @exception subprocess.CalledProcessError Raised when `enfuse` returns non-zero exit status.
 - @satisfies REQ-058
 
-### fn `def _encode_jpg(imageio_module, merged_tiff, output_jpg)` `priv` (L210-235)
+### fn `def _encode_jpg(imageio_module, merged_tiff, output_jpg)` `priv` (L220-245)
 - @brief Encode merged HDR TIFF payload into final JPG output.
 - @details Loads merged image payload and down-converts to `uint8` when source dynamic range exceeds JPEG-native depth.
 - @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
@@ -711,15 +712,21 @@ import imageio  # type: ignore
 - @return {None} Side effects only.
 - @satisfies REQ-058
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L236-264)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L246-274)
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @satisfies REQ-059
 
-### fn `def run(args)` (L265-333)
-- @brief Execute `dng2jpg` command pipeline.
+### fn `def _is_supported_runtime_os()` `priv` (L275-294)
+- @brief Validate runtime platform support for `dng2hdr2jpg`.
+- @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
+- @return {bool} `True` when runtime OS is Linux; `False` otherwise.
+- @satisfies REQ-055, REQ-059
+
+### fn `def run(args)` (L295-366)
+- @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, merges HDR with `enfuse`, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
 - @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
@@ -728,20 +735,21 @@ import imageio  # type: ignore
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|18||
-|`DESCRIPTION`|var|pub|19||
-|`DEFAULT_EV`|var|pub|20||
-|`SUPPORTED_EV_VALUES`|var|pub|21||
-|`print_help`|fn|pub|24-42|def print_help(version)|
-|`_parse_ev_option`|fn|priv|43-67|def _parse_ev_option(ev_raw)|
-|`_parse_run_options`|fn|priv|68-116|def _parse_run_options(args)|
-|`_load_image_dependencies`|fn|priv|117-145|def _load_image_dependencies()|
-|`_build_exposure_multipliers`|fn|priv|146-158|def _build_exposure_multipliers(ev_value)|
-|`_write_bracket_images`|fn|priv|159-188|def _write_bracket_images(raw_handle, imageio_module, mul...|
-|`_run_enfuse`|fn|priv|189-209|def _run_enfuse(bracket_paths, merged_tiff)|
-|`_encode_jpg`|fn|priv|210-235|def _encode_jpg(imageio_module, merged_tiff, output_jpg)|
-|`_collect_processing_errors`|fn|priv|236-264|def _collect_processing_errors(rawpy_module)|
-|`run`|fn|pub|265-333|def run(args)|
+|`PROGRAM`|var|pub|23||
+|`DESCRIPTION`|var|pub|24||
+|`DEFAULT_EV`|var|pub|25||
+|`SUPPORTED_EV_VALUES`|var|pub|26||
+|`print_help`|fn|pub|33-52|def print_help(version)|
+|`_parse_ev_option`|fn|priv|53-77|def _parse_ev_option(ev_raw)|
+|`_parse_run_options`|fn|priv|78-126|def _parse_run_options(args)|
+|`_load_image_dependencies`|fn|priv|127-155|def _load_image_dependencies()|
+|`_build_exposure_multipliers`|fn|priv|156-168|def _build_exposure_multipliers(ev_value)|
+|`_write_bracket_images`|fn|priv|169-198|def _write_bracket_images(raw_handle, imageio_module, mul...|
+|`_run_enfuse`|fn|priv|199-219|def _run_enfuse(bracket_paths, merged_tiff)|
+|`_encode_jpg`|fn|priv|220-245|def _encode_jpg(imageio_module, merged_tiff, output_jpg)|
+|`_collect_processing_errors`|fn|priv|246-274|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|275-294|def _is_supported_runtime_os()|
+|`run`|fn|pub|295-366|def run(args)|
 
 
 ---
