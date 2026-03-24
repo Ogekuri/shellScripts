@@ -12,6 +12,7 @@ automatically on success and failure.
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from shell_scripts.utils import (
@@ -25,6 +26,11 @@ PROGRAM = "shellscripts"
 DESCRIPTION = "Convert DNG to HDR-merged JPG with optional luminance-hdr-cli backend."
 DEFAULT_EV = 2.0
 DEFAULT_GAMMA = (2.222, 4.5)
+DEFAULT_POST_GAMMA = 1.0
+DEFAULT_BRIGHTNESS = 1.0
+DEFAULT_CONTRAST = 1.0
+DEFAULT_SATURATION = 1.0
+DEFAULT_JPG_COMPRESSION = 15
 DEFAULT_LUMINANCE_OPERATOR = "mantiuk06"
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 LUMINANCE_MAP_ALIASES = {
@@ -49,11 +55,34 @@ _RUNTIME_OS_LABELS = {
 }
 
 
+@dataclass(frozen=True)
+class PostprocessOptions:
+    """@brief Hold deterministic postprocessing option values.
+
+    @details Encapsulates correction factors and JPEG compression level used by
+    shared TIFF-to-JPG postprocessing for both HDR backends.
+    @param post_gamma {float} Gamma correction factor for postprocessing stage.
+    @param brightness {float} Brightness enhancement factor.
+    @param contrast {float} Contrast enhancement factor.
+    @param saturation {float} Saturation enhancement factor.
+    @param jpg_compression {int} JPEG compression level in range `[0, 100]`.
+    @return {None} Immutable dataclass container.
+    @satisfies REQ-065, REQ-066
+    """
+
+    post_gamma: float
+    brightness: float
+    contrast: float
+    saturation: float
+    jpg_compression: int
+
+
 def print_help(version):
     """@brief Print help text for the `dng2hdr2jpg` command.
 
-    @details Documents required positional arguments, optional EV control,
-    backend selection, and luminance-hdr-cli tone-mapping options.
+    @details Documents required positional arguments, optional EV/RAW gamma
+    controls, shared postprocessing controls, backend selection, and
+    luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
     @satisfies DES-008, REQ-063
@@ -61,7 +90,9 @@ def print_help(version):
 
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
-        f"[--ev=<value>] [--enable-luminance] "
+        f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
+        f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
+        f"[--jpg-compression=<0..100>] [--enable-luminance] "
         f"[--luminance-operator=<name>] [--luminance-map-<name>] ({version})"
     )
     print()
@@ -71,6 +102,11 @@ def print_help(version):
     print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
     print(f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]}).")
     print("                     Example: --gamma=1,1 for linear extraction.")
+    print(f"  --post-gamma=<value> - Postprocess gamma correction factor (default: {DEFAULT_POST_GAMMA}).")
+    print(f"  --brightness=<value> - Postprocess brightness factor (default: {DEFAULT_BRIGHTNESS}).")
+    print(f"  --contrast=<value>   - Postprocess contrast factor (default: {DEFAULT_CONTRAST}).")
+    print(f"  --saturation=<value> - Postprocess saturation factor (default: {DEFAULT_SATURATION}).")
+    print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
     print("  --enable-luminance")
     print("                   - Enable luminance-hdr-cli backend (default backend: enfuse).")
     print("                     Uses alignment engine MTB and applies selected tone mapper.")
@@ -184,21 +220,73 @@ def _parse_gamma_option(gamma_raw):
     return (gamma_a, gamma_b)
 
 
+def _parse_positive_float_option(option_name, option_raw):
+    """@brief Parse and validate one positive float option value.
+
+    @details Converts option token to `float`, requires value greater than zero,
+    and emits deterministic parse errors on malformed values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @return {float|None} Parsed positive float value when valid; `None` otherwise.
+    @satisfies REQ-065
+    """
+
+    try:
+        option_value = float(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+
+    if option_value <= 0.0:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error(f"{option_name} must be greater than zero.")
+        return None
+    return option_value
+
+
+def _parse_jpg_compression_option(compression_raw):
+    """@brief Parse and validate JPEG compression option value.
+
+    @details Converts option token to `int`, requires inclusive range
+    `[0, 100]`, and emits deterministic parse errors on malformed values.
+    @param compression_raw {str} Raw compression token value from CLI args.
+    @return {int|None} Parsed JPEG compression level when valid; `None` otherwise.
+    @satisfies REQ-065
+    """
+
+    try:
+        compression_value = int(compression_raw)
+    except ValueError:
+        print_error(f"Invalid --jpg-compression value: {compression_raw}")
+        return None
+
+    if compression_value < 0 or compression_value > 100:
+        print_error(f"Invalid --jpg-compression value: {compression_raw}")
+        print_error("Allowed range: 0..100")
+        return None
+    return compression_value
+
+
 def _parse_run_options(args):
     """@brief Parse CLI args into input, output, and EV parameters.
 
     @details Supports positional file arguments, optional `--ev=<value>` or
     `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
-    `--enable-luminance`, and luminance operator selectors; rejects unknown
-    options and invalid arity.
+    postprocess controls, optional `--enable-luminance`, and luminance operator
+    selectors; rejects unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @return {tuple[Path, Path, float, tuple[float, float], bool, str]|None} Parsed `(input, output, ev, gamma, enable_luminance, luminance_operator)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064
+    @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, str]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_operator)` tuple; `None` on parse failure.
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065
     """
 
     positional = []
     ev_value = DEFAULT_EV
     gamma_value = DEFAULT_GAMMA
+    post_gamma = DEFAULT_POST_GAMMA
+    brightness = DEFAULT_BRIGHTNESS
+    contrast = DEFAULT_CONTRAST
+    saturation = DEFAULT_SATURATION
+    jpg_compression = DEFAULT_JPG_COMPRESSION
     enable_luminance = False
     luminance_operator = DEFAULT_LUMINANCE_OPERATOR
     luminance_option_specified = False
@@ -279,6 +367,101 @@ def _parse_run_options(args):
             idx += 1
             continue
 
+        if token == "--post-gamma":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --post-gamma")
+                return None
+            parsed_post_gamma = _parse_positive_float_option("--post-gamma", args[idx + 1])
+            if parsed_post_gamma is None:
+                return None
+            post_gamma = parsed_post_gamma
+            idx += 2
+            continue
+
+        if token.startswith("--post-gamma="):
+            parsed_post_gamma = _parse_positive_float_option("--post-gamma", token.split("=", 1)[1])
+            if parsed_post_gamma is None:
+                return None
+            post_gamma = parsed_post_gamma
+            idx += 1
+            continue
+
+        if token == "--brightness":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --brightness")
+                return None
+            parsed_brightness = _parse_positive_float_option("--brightness", args[idx + 1])
+            if parsed_brightness is None:
+                return None
+            brightness = parsed_brightness
+            idx += 2
+            continue
+
+        if token.startswith("--brightness="):
+            parsed_brightness = _parse_positive_float_option("--brightness", token.split("=", 1)[1])
+            if parsed_brightness is None:
+                return None
+            brightness = parsed_brightness
+            idx += 1
+            continue
+
+        if token == "--contrast":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --contrast")
+                return None
+            parsed_contrast = _parse_positive_float_option("--contrast", args[idx + 1])
+            if parsed_contrast is None:
+                return None
+            contrast = parsed_contrast
+            idx += 2
+            continue
+
+        if token.startswith("--contrast="):
+            parsed_contrast = _parse_positive_float_option("--contrast", token.split("=", 1)[1])
+            if parsed_contrast is None:
+                return None
+            contrast = parsed_contrast
+            idx += 1
+            continue
+
+        if token == "--saturation":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --saturation")
+                return None
+            parsed_saturation = _parse_positive_float_option("--saturation", args[idx + 1])
+            if parsed_saturation is None:
+                return None
+            saturation = parsed_saturation
+            idx += 2
+            continue
+
+        if token.startswith("--saturation="):
+            parsed_saturation = _parse_positive_float_option("--saturation", token.split("=", 1)[1])
+            if parsed_saturation is None:
+                return None
+            saturation = parsed_saturation
+            idx += 1
+            continue
+
+        if token == "--jpg-compression":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --jpg-compression")
+                return None
+            parsed_compression = _parse_jpg_compression_option(args[idx + 1])
+            if parsed_compression is None:
+                return None
+            jpg_compression = parsed_compression
+            idx += 2
+            continue
+
+        if token.startswith("--jpg-compression="):
+            parsed_compression = _parse_jpg_compression_option(token.split("=", 1)[1])
+            if parsed_compression is None:
+                return None
+            jpg_compression = parsed_compression
+            idx += 1
+            continue
+
         if token.startswith("-"):
             print_error(f"Unknown option: {token}")
             return None
@@ -299,6 +482,13 @@ def _parse_run_options(args):
         Path(positional[1]),
         ev_value,
         gamma_value,
+        PostprocessOptions(
+            post_gamma=post_gamma,
+            brightness=brightness,
+            contrast=contrast,
+            saturation=saturation,
+            jpg_compression=jpg_compression,
+        ),
         enable_luminance,
         luminance_operator,
     )
@@ -309,7 +499,7 @@ def _load_image_dependencies():
 
     @details Imports `rawpy` for RAW decoding and `imageio` for image IO using
     `imageio.v3` when available with fallback to top-level `imageio` module.
-    @return {tuple[ModuleType, ModuleType]|None} `(rawpy_module, imageio_module)` on success; `None` on missing dependency.
+    @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module)` on success; `None` on missing dependency.
     @satisfies REQ-059
     """
 
@@ -317,7 +507,7 @@ def _load_image_dependencies():
         import rawpy  # type: ignore
     except ModuleNotFoundError:
         print_error("Python dependency missing: rawpy")
-        print_error("Install dependencies with: uv pip install rawpy imageio")
+        print_error("Install dependencies with: uv pip install rawpy imageio pillow")
         return None
 
     try:
@@ -327,10 +517,18 @@ def _load_image_dependencies():
             import imageio  # type: ignore
         except ModuleNotFoundError:
             print_error("Python dependency missing: imageio")
-            print_error("Install dependencies with: uv pip install rawpy imageio")
+            print_error("Install dependencies with: uv pip install rawpy imageio pillow")
             return None
 
-    return rawpy, imageio
+    try:
+        from PIL import Image as pil_image  # type: ignore
+        from PIL import ImageEnhance as pil_enhance  # type: ignore
+    except ModuleNotFoundError:
+        print_error("Python dependency missing: pillow")
+        print_error("Install dependencies with: uv pip install rawpy imageio pillow")
+        return None
+
+    return rawpy, imageio, pil_image, pil_enhance
 
 
 def _build_exposure_multipliers(ev_value):
@@ -401,14 +599,14 @@ def _run_enfuse(bracket_paths, merged_tiff):
     subprocess.run(command, check=True)
 
 
-def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator, ev_value):
-    """@brief Merge bracket TIFF files into final JPG via `luminance-hdr-cli`.
+def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, luminance_operator, ev_value):
+    """@brief Merge bracket TIFF files into one HDR TIFF via `luminance-hdr-cli`.
 
     @details Builds deterministic luminance-hdr-cli argv using alignment engine
     `-a MTB`, tone mapper `--tmo <operator>`, and writes directly to requested
-    JPG output path.
+    TIFF output path.
     @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
-    @param output_jpg {Path} Final JPG output target path.
+    @param output_hdr_tiff {Path} Output HDR TIFF target path.
     @param luminance_operator {str} Selected luminance-hdr-cli tone-mapping operator.
     @param ev_value {float} EV bracket delta used to generate exposure files.
     @return {None} Side effects only.
@@ -425,23 +623,40 @@ def _run_luminance_hdr_cli(bracket_paths, output_jpg, luminance_operator, ev_val
         "-e",
         f"{-ev_value:g},0,{ev_value:g}",
         "-o",
-        str(output_jpg),
+        str(output_hdr_tiff),
         *[str(path) for path in bracket_paths],
     ]
     subprocess.run(command, check=True)
 
 
-def _encode_jpg(imageio_module, merged_tiff, output_jpg):
+def _convert_compression_to_quality(jpg_compression):
+    """@brief Convert JPEG compression level to Pillow quality value.
+
+    @details Maps inclusive compression range `[0, 100]` to inclusive quality
+    range `[100, 1]` preserving deterministic inverse relation.
+    @param jpg_compression {int} JPEG compression level.
+    @return {int} Pillow quality value in `[1, 100]`.
+    @satisfies REQ-065, REQ-066
+    """
+
+    return max(1, min(100, 100 - jpg_compression))
+
+
+def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tiff, output_jpg, postprocess_options):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
     @details Loads merged image payload, down-converts to `uint8` when source
-    dynamic range exceeds JPEG-native depth, and strips alpha channel payload
-    (`RGBA` -> `RGB`) before JPEG write for both Pillow-mode and array payloads.
+    dynamic range exceeds JPEG-native depth, applies shared gamma/brightness/
+    contrast/saturation postprocessing, and writes JPEG with configured
+    compression level for both HDR backends.
     @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
+    @param pil_image_module {ModuleType} Imported Pillow image module.
+    @param pil_enhance_module {ModuleType} Imported Pillow ImageEnhance module.
     @param merged_tiff {Path} Merged TIFF source path produced by `enfuse`.
     @param output_jpg {Path} Final JPG output path.
+    @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
     @return {None} Side effects only.
-    @satisfies REQ-058
+    @satisfies REQ-058, REQ-066
     """
 
     merged_data = imageio_module.imread(str(merged_tiff))
@@ -455,15 +670,44 @@ def _encode_jpg(imageio_module, merged_tiff, output_jpg):
         else:
             merged_data = scaled
 
-    mode = getattr(merged_data, "mode", "")
-    if mode == "RGBA" and hasattr(merged_data, "convert"):
-        merged_data = merged_data.convert("RGB")
+    if hasattr(merged_data, "save") and hasattr(merged_data, "convert"):
+        pil_image = merged_data
     else:
-        shape = getattr(merged_data, "shape", ())
-        if len(shape) >= 3 and shape[-1] == 4:
-            merged_data = merged_data[..., :3]
+        pil_image = pil_image_module.fromarray(merged_data)
 
-    imageio_module.imwrite(str(output_jpg), merged_data)
+    if getattr(pil_image, "mode", "") == "RGBA":
+        pil_image = pil_image.convert("RGB")
+
+    if postprocess_options.post_gamma != 1.0:
+        lut = [
+            max(
+                0,
+                min(
+                    255,
+                    int(round(((value / 255.0) ** (1.0 / postprocess_options.post_gamma)) * 255.0)),
+                ),
+            )
+            for value in range(256)
+        ]
+        band_count = len(getattr(pil_image, "getbands", lambda: ("R", "G", "B"))())
+        pil_image = pil_image.point(lut * max(1, band_count))
+
+    if postprocess_options.brightness != 1.0:
+        pil_image = pil_enhance_module.Brightness(pil_image).enhance(postprocess_options.brightness)
+    if postprocess_options.contrast != 1.0:
+        pil_image = pil_enhance_module.Contrast(pil_image).enhance(postprocess_options.contrast)
+    if postprocess_options.saturation != 1.0:
+        pil_image = pil_enhance_module.Color(pil_image).enhance(postprocess_options.saturation)
+
+    if getattr(pil_image, "mode", "") != "RGB":
+        pil_image = pil_image.convert("RGB")
+
+    pil_image.save(
+        str(output_jpg),
+        format="JPEG",
+        quality=_convert_compression_to_quality(postprocess_options.jpg_compression),
+        optimize=True,
+    )
 
 
 def _collect_processing_errors(rawpy_module):
@@ -524,7 +768,7 @@ def run(args):
     temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066
     """
 
     if not _is_supported_runtime_os():
@@ -534,7 +778,15 @@ def run(args):
     if parsed is None:
         return 1
 
-    input_dng, output_jpg, ev_value, gamma_value, enable_luminance, luminance_operator = parsed
+    (
+        input_dng,
+        output_jpg,
+        ev_value,
+        gamma_value,
+        postprocess_options,
+        enable_luminance,
+        luminance_operator,
+    ) = parsed
 
     if input_dng.suffix.lower() != ".dng":
         print_error(f"Input file must have .dng extension: {input_dng}")
@@ -562,13 +814,21 @@ def run(args):
     if dependencies is None:
         return 1
 
-    rawpy_module, imageio_module = dependencies
+    rawpy_module, imageio_module, pil_image_module, pil_enhance_module = dependencies
     processing_errors = _collect_processing_errors(rawpy_module)
     multipliers = _build_exposure_multipliers(ev_value)
 
     print_info(f"Reading DNG input: {input_dng}")
     print_info(f"Using EV bracket: {ev_value}")
     print_info(f"Using gamma pair: {gamma_value[0]:g},{gamma_value[1]:g}")
+    print_info(
+        "Postprocess factors: "
+        f"gamma={postprocess_options.post_gamma:g}, "
+        f"brightness={postprocess_options.brightness:g}, "
+        f"contrast={postprocess_options.contrast:g}, "
+        f"saturation={postprocess_options.saturation:g}, "
+        f"jpg-compression={postprocess_options.jpg_compression}"
+    )
     if enable_luminance:
         print_info(f"HDR backend: luminance-hdr-cli (operator={luminance_operator})")
     else:
@@ -590,17 +850,20 @@ def run(args):
             if enable_luminance:
                 _run_luminance_hdr_cli(
                     bracket_paths=bracket_paths,
-                    output_jpg=output_jpg,
+                    output_hdr_tiff=merged_tiff,
                     luminance_operator=luminance_operator,
                     ev_value=ev_value,
                 )
             else:
                 _run_enfuse(bracket_paths=bracket_paths, merged_tiff=merged_tiff)
-                _encode_jpg(
-                    imageio_module=imageio_module,
-                    merged_tiff=merged_tiff,
-                    output_jpg=output_jpg,
-                )
+            _encode_jpg(
+                imageio_module=imageio_module,
+                pil_image_module=pil_image_module,
+                pil_enhance_module=pil_enhance_module,
+                merged_tiff=merged_tiff,
+                output_jpg=output_jpg,
+                postprocess_options=postprocess_options,
+            )
         except processing_errors as error:
             print_error(f"dng2hdr2jpg processing failed: {error}")
             return 1

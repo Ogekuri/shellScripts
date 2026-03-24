@@ -1,20 +1,26 @@
 """
 @brief Validate `dng2hdr2jpg` command EV parsing and HDR merge contract.
 @details Verifies argument validation, EV parsing/default behavior, three-
-  bracket extraction multipliers, enfuse merge invocation, and temporary
-  artifact cleanup for success/failure execution paths.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059
+  bracket extraction multipliers, dual-backend HDR merge behavior, shared
+  postprocessing options, and temporary artifact cleanup semantics.
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066
 @return {None} Pytest module scope.
 """
 
 from pathlib import Path
+from importlib import import_module
+import sys
 import subprocess
 import tempfile as std_tempfile
 import tomllib
 
 import pytest
 
-import shell_scripts.commands.dng2hdr2jpg as dng2hdr2jpg
+PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
+if str(PROJECT_SRC) not in sys.path:
+    sys.path.insert(0, str(PROJECT_SRC))
+
+dng2hdr2jpg = import_module("shell_scripts.commands.dng2hdr2jpg")
 
 _ORIGINAL_TEMPORARY_DIRECTORY = std_tempfile.TemporaryDirectory
 
@@ -165,6 +171,117 @@ class _TrackingTemporaryDirectory:
         return self._wrapped.__exit__(exc_type, exc, tb)
 
 
+def _build_fake_pillow_modules(observed):
+    """@brief Build fake Pillow modules for deterministic postprocess testing.
+
+    @details Creates `Image.fromarray` and `ImageEnhance` replacements that
+      preserve production call-shape while recording transformation effects.
+    @param observed {dict[str, object]} Shared mutable assertion map.
+    @return {tuple[type, type]} Fake `(Image, ImageEnhance)` module pair.
+    """
+
+    class _FakePilImage:
+        """@brief Fake Pillow image object with conversion/save surface."""
+
+        def __init__(self, payload):
+            """@brief Store payload-derived mode for conversion assertions."""
+
+            self.mode = getattr(payload, "mode", "RGB")
+
+        def getbands(self):
+            """@brief Return channels matching current mode."""
+
+            if self.mode == "RGBA":
+                return ("R", "G", "B", "A")
+            return ("R", "G", "B")
+
+        def point(self, _lut):
+            """@brief Record LUT application and return self."""
+
+            observed.setdefault("postprocess_ops", []).append("gamma")
+            return self
+
+        def convert(self, target_mode):
+            """@brief Switch mode and record conversion."""
+
+            observed.setdefault("pil_conversions", []).append((self.mode, target_mode))
+            self.mode = target_mode
+            return self
+
+        def save(self, path, format, quality, optimize):
+            """@brief Persist deterministic JPEG artifact and record encode args."""
+
+            observed["jpg_save"] = {
+                "format": format,
+                "quality": quality,
+                "optimize": optimize,
+                "mode": self.mode,
+            }
+            Path(path).write_text("jpg", encoding="utf-8")
+
+    class _FakeEnhancer:
+        """@brief Fake Pillow enhancer object with factor capture."""
+
+        def __init__(self, image, op_name):
+            """@brief Initialize enhancer with operation name."""
+
+            self._image = image
+            self._op_name = op_name
+
+        def enhance(self, value):
+            """@brief Record enhancement factor and return original image."""
+
+            observed.setdefault("postprocess_ops", []).append((self._op_name, value))
+            return self._image
+
+    class _FakePilImageModule:
+        """@brief Fake Pillow Image module exposing `fromarray`."""
+
+        @staticmethod
+        def fromarray(payload):
+            """@brief Build fake image from array-like payload."""
+
+            return _FakePilImage(payload)
+
+    class _FakePilEnhanceModule:
+        """@brief Fake Pillow ImageEnhance module."""
+
+        @staticmethod
+        def Brightness(image):
+            """@brief Return brightness enhancer."""
+
+            return _FakeEnhancer(image, "brightness")
+
+        @staticmethod
+        def Contrast(image):
+            """@brief Return contrast enhancer."""
+
+            return _FakeEnhancer(image, "contrast")
+
+        @staticmethod
+        def Color(image):
+            """@brief Return saturation enhancer."""
+
+            return _FakeEnhancer(image, "saturation")
+
+    return _FakePilImageModule, _FakePilEnhanceModule
+
+
+def _build_fake_dependencies(raw_module, imageio_module, observed):
+    """@brief Build runtime dependency tuple for `_load_image_dependencies`.
+
+    @details Extends fake rawpy/imageio modules with fake Pillow modules so test
+      doubles match production dependency-loading contract.
+    @param raw_module {type} Fake rawpy module.
+    @param imageio_module {type} Fake imageio module.
+    @param observed {dict[str, object]} Shared mutable assertion map.
+    @return {tuple[type, type, type, type]} Fake dependency tuple.
+    """
+
+    pil_image_module, pil_enhance_module = _build_fake_pillow_modules(observed)
+    return raw_module, imageio_module, pil_image_module, pil_enhance_module
+
+
 def test_dng2hdr2jpg_rejects_missing_required_positionals(tmp_path):
     """
     @brief Validate missing positional-argument guard.
@@ -287,7 +404,11 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
         merged_path.write_text("merged", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(dng2hdr2jpg, "_load_image_dependencies", lambda: (_FakeRawPyModule, _FakeImageIoModule))
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+    )
     monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(
@@ -319,8 +440,8 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     """
     @brief Validate luminance-hdr-cli backend execution with default operator.
     @details Enables luminance mode and verifies command argv shape uses
-      `luminance-hdr-cli -a MTB --tmo mantiuk06 -e <ev-list> -o <output.jpg>`
-      and three bracket TIFFs.
+      `luminance-hdr-cli -a MTB --tmo mantiuk06 -e <ev-list> -o <merged_hdr.tif>`
+      plus three bracket TIFF inputs.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -358,6 +479,13 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
 
             Path(path).write_text("payload", encoding="utf-8")
 
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for shared JPG encode stage."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
     def _fake_subprocess_run(command, check):
         """@brief Capture luminance-hdr-cli invocation and materialize output JPG."""
 
@@ -367,7 +495,11 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
         Path(command[output_index]).write_text("jpg", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(dng2hdr2jpg, "_load_image_dependencies", lambda: (_FakeRawPyModule, _FakeImageIoModule))
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+    )
     monkeypatch.setattr(
         dng2hdr2jpg.shutil,
         "which",
@@ -394,7 +526,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     assert observed["gamma"] == [(2.222, 4.5), (2.222, 4.5), (2.222, 4.5)]
     assert observed["luminance_cmd"][0] == "luminance-hdr-cli"
     assert observed["luminance_cmd"][1:8] == ["-a", "MTB", "--tmo", "mantiuk06", "-e", "-1,0,1", "-o"]
-    assert observed["luminance_cmd"][8] == str(output_jpg)
+    assert Path(observed["luminance_cmd"][8]).name == "merged_hdr.tif"
     assert [Path(value).name for value in observed["luminance_cmd"][9:]] == [
         "ev_minus.tif",
         "ev_zero.tif",
@@ -409,7 +541,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_map_alias(monkeypatch, tmp_path
     """
     @brief Validate luminance map alias option resolves to canonical operator.
     @details Uses `--luminance-map-reinhard` and asserts generated backend argv
-      uses canonical operator value `reinhard02`.
+      uses canonical operator value `reinhard02` with merged TIFF output.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -441,6 +573,13 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_map_alias(monkeypatch, tmp_path
 
             Path(path).write_text("payload", encoding="utf-8")
 
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for shared JPG encode stage."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
     def _fake_subprocess_run(command, check):
         """@brief Capture command and materialize luminance output."""
 
@@ -450,7 +589,11 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_map_alias(monkeypatch, tmp_path
         Path(command[output_index]).write_text("jpg", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(dng2hdr2jpg, "_load_image_dependencies", lambda: (_FakeRawPyModule, _FakeImageIoModule))
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+    )
     monkeypatch.setattr(
         dng2hdr2jpg.shutil,
         "which",
@@ -544,7 +687,11 @@ def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch
         assert check is True
         raise subprocess.CalledProcessError(2, command)
 
-    monkeypatch.setattr(dng2hdr2jpg, "_load_image_dependencies", lambda: (_FakeRawPyModule, _FakeImageIoModule))
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+    )
     monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(
@@ -581,6 +728,28 @@ def test_dng2hdr2jpg_rejects_invalid_gamma_value(tmp_path):
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--gamma=1"]) == 1
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--gamma=a,b"]) == 1
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--gamma=0,1"]) == 1
+
+
+def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
+    """
+    @brief Validate postprocess and JPEG-compression parser rejections.
+    @details Provides malformed or out-of-range values for postprocess options
+      and asserts deterministic parse failure.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-065
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--post-gamma=0"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--brightness=foo"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--contrast=-1"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--saturation=0"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--jpg-compression=200"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--jpg-compression=bad"]) == 1
 
 
 def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
@@ -644,7 +813,11 @@ def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
         merged_path.write_text("merged", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(dng2hdr2jpg, "_load_image_dependencies", lambda: (_FakeRawPyModule, _FakeImageIoModule))
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+    )
     monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(
@@ -802,6 +975,7 @@ def test_dng2hdr2jpg_runtime_dependencies_are_declared_in_pyproject():
 
     assert any(dep.startswith("rawpy") for dep in dependencies)
     assert any(dep.startswith("imageio") for dep in dependencies)
+    assert any(dep.startswith("pillow") for dep in dependencies)
 
 
 def test_dng2hdr2jpg_handles_rgba_merged_image_for_jpeg_output(tmp_path):
@@ -814,34 +988,15 @@ def test_dng2hdr2jpg_handles_rgba_merged_image_for_jpeg_output(tmp_path):
     @satisfies TST-011, REQ-058, REQ-059
     """
 
-    observed = {"jpg_payload": None}
+    observed = {"jpg_save": None}
 
     class _FakeRgbaPayload:
-        """@brief Minimal RGBA payload with PIL-style conversion surface."""
+        """@brief Minimal RGBA payload object consumed by fake Pillow."""
 
         mode = "RGBA"
 
-        def convert(self, target_mode):
-            """@brief Return RGB payload marker when alpha channel is converted."""
-
-            assert target_mode == "RGB"
-            return "rgb-no-alpha"
-
     class _FakeImageIoModule:
         """@brief Provide fake `imageio` module for RGBA encode reproducer."""
-
-        @staticmethod
-        def imwrite(path, data):
-            """@brief Persist intermediate artifacts and validate JPG payload mode."""
-
-            destination = Path(path)
-            if destination.suffix.lower() == ".jpg":
-                observed["jpg_payload"] = data
-                if data == "rgb-no-alpha":
-                    destination.write_text("jpg", encoding="utf-8")
-                    return
-                raise ValueError("cannot write mode RGBA as JPEG")
-            destination.write_text("tif", encoding="utf-8")
 
         @staticmethod
         def imread(path):
@@ -853,14 +1008,26 @@ def test_dng2hdr2jpg_handles_rgba_merged_image_for_jpeg_output(tmp_path):
     merged_tiff = tmp_path / "merged_hdr.tif"
     merged_tiff.write_text("merged", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
+    pil_image_module, pil_enhance_module = _build_fake_pillow_modules(observed)
 
     dng2hdr2jpg._encode_jpg(
         imageio_module=_FakeImageIoModule,
+        pil_image_module=pil_image_module,
+        pil_enhance_module=pil_enhance_module,
         merged_tiff=merged_tiff,
         output_jpg=output_jpg,
+        postprocess_options=dng2hdr2jpg.PostprocessOptions(
+            post_gamma=1.0,
+            brightness=1.0,
+            contrast=1.0,
+            saturation=1.0,
+            jpg_compression=10,
+        ),
     )
 
-    assert observed["jpg_payload"] == "rgb-no-alpha"
+    assert observed["jpg_save"] is not None
+    assert observed["jpg_save"]["format"] == "JPEG"
+    assert observed["jpg_save"]["mode"] == "RGB"
     assert output_jpg.exists()
 
 
@@ -880,6 +1047,61 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
 
     assert "--enable-luminance" in output
     assert "--gamma=<a,b>" in output
+    assert "--post-gamma=<value>" in output
+    assert "--brightness=<value>" in output
+    assert "--contrast=<value>" in output
+    assert "--saturation=<value>" in output
+    assert "--jpg-compression=<0..100>" in output
     assert "--luminance-operator=<name>" in output
     assert "--luminance-map-<name>" in output
     assert "any installed operator name" in output
+
+
+def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
+    """
+    @brief Validate shared postprocess controls and JPEG quality mapping.
+    @details Executes encode path with non-default gamma/brightness/contrast/
+      saturation factors and verifies fake Pillow operations and quality value.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-065, REQ-066
+    """
+
+    observed = {}
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for postprocess assertions."""
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for conversion and postprocess."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    merged_tiff = tmp_path / "merged_hdr.tif"
+    merged_tiff.write_text("merged", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+    pil_image_module, pil_enhance_module = _build_fake_pillow_modules(observed)
+
+    dng2hdr2jpg._encode_jpg(
+        imageio_module=_FakeImageIoModule,
+        pil_image_module=pil_image_module,
+        pil_enhance_module=pil_enhance_module,
+        merged_tiff=merged_tiff,
+        output_jpg=output_jpg,
+        postprocess_options=dng2hdr2jpg.PostprocessOptions(
+            post_gamma=2.2,
+            brightness=1.1,
+            contrast=0.9,
+            saturation=1.3,
+            jpg_compression=80,
+        ),
+    )
+
+    assert "gamma" in observed["postprocess_ops"]
+    assert ("brightness", 1.1) in observed["postprocess_ops"]
+    assert ("contrast", 0.9) in observed["postprocess_ops"]
+    assert ("saturation", 1.3) in observed["postprocess_ops"]
+    assert observed["jpg_save"]["quality"] == 20
+    assert output_jpg.exists()

@@ -188,6 +188,7 @@ version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "imageio", marker = "sys_platform == 'linux'" },
+    { name = "pillow", marker = "sys_platform == 'linux'" },
     { name = "rawpy", marker = "sys_platform == 'linux'" },
 ]
 
@@ -199,6 +200,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "imageio", marker = "sys_platform == 'linux'" },
+    { name = "pillow", marker = "sys_platform == 'linux'" },
     { name = "rawpy", marker = "sys_platform == 'linux'" },
 ]
 
