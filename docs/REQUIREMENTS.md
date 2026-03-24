@@ -171,15 +171,18 @@ No explicit performance optimizations identified.
 - **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
 - **REQ-056**: MUST parse optional `--ev=<value>` and `--ev <value>` in `dng2hdr2jpg`, default EV to `2.0`, and reject unsupported or non-numeric EV values with return code `1`.
 - **REQ-057**: MUST generate exactly three exposure images from one DNG input using `raw.postprocess(bright=<2^(-ev)|1.0|2^(ev)>, output_bps=16, use_camera_wb=True, no_auto_bright=True, gamma=<selected_gamma>)` before HDR merge.
-- **REQ-058**: MUST execute HDR merge via `enfuse` over the three generated exposure files by default and MUST persist the merge result as an intermediate 16-bit TIFF before JPG conversion.
+- **REQ-058**: MUST execute HDR merge via `enfuse` over three generated exposure files by default, MUST persist an intermediate 16-bit TIFF, and MUST use lossless TIFF compression before JPG conversion.
 - **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving Linux temporary-file cleanup and dependency-failure behavior.
 - **REQ-060**: MUST parse `--enable-luminance` to switch HDR merge backend from default `enfuse` flow to `luminance-hdr-cli` flow in `dng2hdr2jpg`.
-- **REQ-061**: MUST parse `--luminance-operator=<name>`, `--luminance-operator <name>`, and `--luminance-map-<name>`, default luminance operator to `mantiuk06`, and return `1` for malformed luminance operator options.
-- **REQ-062**: MUST execute `luminance-hdr-cli -a MTB --tmo <operator> -e <minus,zero,plus> -o <merged_hdr.tif> <ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` when luminance backend is enabled.
-- **REQ-063**: MUST document `--enable-luminance`, `--luminance-operator`, `--luminance-map-<name>`, `--gamma`, `--post-gamma`, `--brightness`, `--contrast`, `--saturation`, and `--jpg-compression` in command help.
+- **REQ-061**: MUST parse `--luminance-hdr-model`, `--luminance-hdr-weight`, `--luminance-hdr-response-curve`, and `--luminance-tmo` in assignment or split form, apply deterministic defaults, and return `1` for malformed values.
+- **REQ-062**: MUST execute `luminance-hdr-cli` with `-e <-ev,0,+ev>` and ordered inputs `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>`, writing intermediate `<merged_hdr.tif>` when luminance backend is enabled.
+- **REQ-063**: MUST document `--enable-luminance`, `--luminance-hdr-model`, `--luminance-hdr-weight`, `--luminance-hdr-response-curve`, `--luminance-tmo`, `--luminance-m08-color-saturation`, `--luminance-m08-contrast-enh`, `--gamma`, and shared postprocess options in command help.
 - **REQ-064**: MUST parse optional `--gamma=<a,b>` and `--gamma <a,b>` in `dng2hdr2jpg`, default gamma to `(2.222,4.5)`, and reject malformed, non-numeric, or non-positive gamma values with return code `1`.
 - **REQ-065**: MUST parse optional `--post-gamma=<value>`, `--brightness=<value>`, `--contrast=<value>`, `--saturation=<value>`, and `--jpg-compression=<0..100>`, defaulting to `1.0` for image factors and `15` for compression.
 - **REQ-066**: MUST apply one shared postprocessing stage on merged HDR TIFF from both backends, performing gamma, brightness, contrast, and saturation corrections, then encode JPG using configured compression level.
+- **REQ-067**: MUST parse `--luminance-m08-color-saturation` and `--luminance-m08-contrast-enh` as positive floats in assignment or split form, defaulting to `1.0` and `0.25`, and return `1` for malformed values.
+- **REQ-068**: MUST include luminance parameters `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, `--tmoM08ColorSaturation`, and `--tmoM08ConstrastEnh` in luminance backend command generation.
+- **REQ-069**: MUST preserve neutral default postprocess factors (`post-gamma=1.0`, `brightness=1.0`, `contrast=1.0`, `saturation=1.0`) so luminance backend conversion avoids implicit double correction when no explicit postprocess overrides are provided.
 
 ## 4. Test Requirements
 
@@ -199,7 +202,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-066 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if backend selection, parsing, postprocessing controls, TIFF merge flow, and cleanup behavior match requirements.
+- **TST-011**: MUST verify REQ-055 through REQ-069 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if backend selection, parsing, postprocessing controls, TIFF merge flow, and cleanup behavior match requirements.
 
 ## 5. Evidence
 
