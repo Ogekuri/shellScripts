@@ -658,7 +658,7 @@ from PIL import ImageEnhance as pil_enhance  # type: ignore
 - var `DEFAULT_SATURATION = 1.0` (L32)
 - var `DEFAULT_JPG_COMPRESSION = 15` (L33)
 - var `DEFAULT_LUMINANCE_HDR_MODEL = "debevec"` (L34)
-- var `DEFAULT_LUMINANCE_HDR_WEIGHT = "triangular"` (L35)
+- var `DEFAULT_LUMINANCE_HDR_WEIGHT = "flat"` (L35)
 - var `DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"` (L36)
 - var `DEFAULT_LUMINANCE_TMO = "reinhard02"` (L37)
 - var `SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)` (L38)

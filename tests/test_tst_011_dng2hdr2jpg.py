@@ -442,7 +442,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     """
     @brief Validate luminance-hdr-cli backend execution with default parameters.
     @details Enables luminance mode and verifies command argv shape uses
-      `luminance-hdr-cli -e <ev-list> --hdrModel debevec --hdrWeight triangular`
+      `luminance-hdr-cli -e <ev-list> --hdrModel debevec --hdrWeight flat`
       `--hdrResponseCurve srgb --tmo reinhard02 --ldrTiff 16b -o <merged_hdr.tif>`
       plus three ordered bracket TIFF inputs.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
@@ -534,7 +534,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
         "--hdrModel",
         "debevec",
         "--hdrWeight",
-        "triangular",
+        "flat",
         "--hdrResponseCurve",
         "srgb",
         "--tmo",
