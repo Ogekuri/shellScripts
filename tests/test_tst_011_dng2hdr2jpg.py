@@ -1676,3 +1676,19 @@ def test_dng2hdr2jpg_magic_retouch_does_not_collapse_luminance():
 
     assert ratio >= 0.70
     assert ratio <= 1.30
+
+
+def test_dng2hdr2jpg_magic_retouch_defaults_are_noise_conservative():
+    """
+    @brief Validate default magic-retouch parameters are tuned to reduce noise amplification.
+    @details Asserts default denoise values are strengthened and detail-enhancement
+      values are moderately reduced for a more noise-conservative baseline profile.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-073, REQ-075
+    """
+
+    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_SIGMA_COLOR == pytest.approx(0.06)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_SIGMA_SPACE == pytest.approx(4.0)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_MICROCONTRAST_AMOUNT == pytest.approx(0.14)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH == pytest.approx(0.09)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_AMOUNT == pytest.approx(0.28)
