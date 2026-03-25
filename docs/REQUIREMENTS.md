@@ -186,11 +186,12 @@ No explicit performance optimizations identified.
 - **REQ-069**: MUST default luminance-mode postprocess factors to `post-gamma=1.0`, `brightness=1.25`, `contrast=0.85`, and `saturation=0.55` when `--luminance-tmo` is `reinhard02` and no explicit postprocess overrides are provided.
 - **REQ-071**: MUST default luminance-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when `--luminance-tmo` is not `reinhard02` and no explicit postprocess overrides are provided.
 - **REQ-072**: MUST default enfuse-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when no explicit postprocess overrides are provided.
-- **REQ-073**: MUST parse `--magic-retouch` and optional configuration options in assignment or split form, and MUST reject malformed values and unknown magic options with return code `1`.
+- **REQ-073**: MUST parse `--magic-retouch` and new `--magic-filter`, `--magic-kernel-size`, `--magic-bilateral-d`, `--magic-bilateral-sigma-color`, `--magic-bilateral-sigma-space`, and `--magic-sharpen-strength` options in assignment or split form.
 - **REQ-074**: MUST execute `magic_retouch` only when `--magic-retouch` is enabled, positioned after 16-bit postprocess and before JPG encoding, and MUST bypass it when the flag is omitted.
-- **REQ-075**: MUST implement `magic_retouch` as a deterministic pipeline including mild color balance, denoise, edge-aware micro-contrast, mild vibrance, luminance-only sharpening, and extremes protection, with defaults tuned to suppress noise clumping by favoring denoise over enhancement.
+- **REQ-075**: MUST implement `magic_retouch` as a deterministic OpenCV filter stage supporting `box`, `boxfilter`, `gaussian`, `median`, `bilateral`, and `sharpen` operations, each executed in-memory on RGB float payloads and blended with the original image.
 - **REQ-076**: MUST execute `magic_retouch` in-memory on lossless 16-bit-per-channel image data and forward its output directly to the JPG conversion/compression stage.
 - **REQ-077**: MUST declare Linux runtime dependencies `opencv-python` and `numpy` in package metadata so Astral `uv` installations include required `magic_retouch` runtime modules.
+- **REQ-078**: MUST default `magic_retouch` to neutral behavior (`bilateral` filter with conservative kernel and sigma values plus zero sharpen strength), and MUST reject legacy pre-refactor magic options with return code `1`.
 
 ## 4. Test Requirements
 

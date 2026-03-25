@@ -8,7 +8,7 @@ in-memory 16-bit postprocess, optionally executes in-memory 16-bit
 `magic_retouch`, then writes final JPG to user-selected output path.
 Temporary artifacts are isolated in a temporary directory and removed
 automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
 """
 
 import shutil
@@ -40,16 +40,13 @@ DEFAULT_LUMINANCE_TMO = "reinhard02"
 DEFAULT_REINHARD02_BRIGHTNESS = 1.25
 DEFAULT_REINHARD02_CONTRAST = 0.85
 DEFAULT_REINHARD02_SATURATION = 0.55
-DEFAULT_MAGIC_COLOR_BALANCE_STRENGTH = 0.18
-DEFAULT_MAGIC_DENOISE_SIGMA_COLOR = 0.08
-DEFAULT_MAGIC_DENOISE_SIGMA_SPACE = 5.0
-DEFAULT_MAGIC_MICROCONTRAST_RADIUS = 10
-DEFAULT_MAGIC_MICROCONTRAST_EPS = 1e-3
-DEFAULT_MAGIC_MICROCONTRAST_AMOUNT = 0.12
-DEFAULT_MAGIC_VIBRANCE_STRENGTH = 0.07
-DEFAULT_MAGIC_SHARPEN_SIGMA = 1.0
-DEFAULT_MAGIC_SHARPEN_AMOUNT = 0.24
-DEFAULT_MAGIC_PROTECT_BLEND = 0.85
+DEFAULT_MAGIC_FILTER = "bilateral"
+DEFAULT_MAGIC_KERNEL_SIZE = 3
+DEFAULT_MAGIC_BILATERAL_D = 5
+DEFAULT_MAGIC_BILATERAL_SIGMA_COLOR = 0.06
+DEFAULT_MAGIC_BILATERAL_SIGMA_SPACE = 4.0
+DEFAULT_MAGIC_SHARPEN_STRENGTH = 0.0
+_SUPPORTED_MAGIC_FILTERS = ("box", "boxfilter", "gaussian", "median", "bilateral", "sharpen")
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
@@ -237,34 +234,26 @@ class LuminanceOptions:
 class MagicRetouchOptions:
     """@brief Hold deterministic `magic_retouch` option values.
 
-    @details Encapsulates all configurable parameters for the in-memory 16-bit
-    magic-retouch pipeline activated by `--magic-retouch`.
+    @details Encapsulates configurable parameters for in-memory 16-bit
+    OpenCV-based filter pipeline activated by `--magic-retouch`.
     @param enabled {bool} Pipeline enable flag.
-    @param color_balance_strength {float} LAB color-balance correction factor.
-    @param denoise_sigma_color {float} Bilateral denoise color sigma in normalized domain.
-    @param denoise_sigma_space {float} Bilateral denoise spatial sigma.
-    @param microcontrast_radius {int} Box-filter window radius for guided micro-contrast.
-    @param microcontrast_eps {float} Guided filter regularization epsilon.
-    @param microcontrast_amount {float} Guided-detail amplification factor.
-    @param vibrance_strength {float} Saturation gain for low-saturation pixels.
-    @param sharpen_sigma {float} Gaussian sigma for luminance unsharp mask.
-    @param sharpen_amount {float} Luminance unsharp blend amount.
-    @param protect_blend {float} Extremes-protection blend factor in `[0, 1]`.
+    @param filter_name {str} Selected filter in `{box, boxfilter, gaussian, median, bilateral, sharpen}`.
+    @param kernel_size {int} Odd filter kernel size for spatial filters.
+    @param bilateral_d {int} Bilateral neighborhood diameter.
+    @param bilateral_sigma_color {float} Bilateral color sigma in normalized domain.
+    @param bilateral_sigma_space {float} Bilateral spatial sigma in normalized domain.
+    @param sharpen_strength {float} Sharpen blend strength in `[0, 1]`.
     @return {None} Immutable dataclass container.
-    @satisfies REQ-073, REQ-075
+    @satisfies REQ-073, REQ-075, REQ-078
     """
 
     enabled: bool
-    color_balance_strength: float
-    denoise_sigma_color: float
-    denoise_sigma_space: float
-    microcontrast_radius: int
-    microcontrast_eps: float
-    microcontrast_amount: float
-    vibrance_strength: float
-    sharpen_sigma: float
-    sharpen_amount: float
-    protect_blend: float
+    filter_name: str
+    kernel_size: int
+    bilateral_d: int
+    bilateral_sigma_color: float
+    bilateral_sigma_space: float
+    sharpen_strength: float
 
 
 def _print_box_table(headers, rows, header_rows=()):
@@ -326,10 +315,11 @@ def print_help(version):
 
     @details Documents required positional arguments, optional EV/RAW gamma
     controls, shared postprocessing controls, backend selection, optional
-    `magic_retouch` controls, and luminance-hdr-cli tone-mapping options.
+    OpenCV-based `magic_retouch` controls, and luminance-hdr-cli tone-mapping
+    options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075
+    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-078
     """
 
     print(
@@ -337,12 +327,9 @@ def print_help(version):
         f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
         f"[--jpg-compression=<0..100>] (--enable-enfuse | --enable-luminance) "
-        f"[--magic-retouch] [--magic-color-balance-strength=<0..1>] "
-        f"[--magic-denoise-sigma-color=<value>] [--magic-denoise-sigma-space=<value>] "
-        f"[--magic-microcontrast-radius=<value>] [--magic-microcontrast-eps=<value>] "
-        f"[--magic-microcontrast-amount=<value>] [--magic-vibrance-strength=<value>] "
-        f"[--magic-sharpen-sigma=<value>] [--magic-sharpen-amount=<value>] "
-        f"[--magic-protect-blend=<0..1>] "
+        f"[--magic-retouch] [--magic-filter=<name>] [--magic-kernel-size=<value>] "
+        f"[--magic-bilateral-d=<value>] [--magic-bilateral-sigma-color=<value>] "
+        f"[--magic-bilateral-sigma-space=<value>] [--magic-sharpen-strength=<0..1>] "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
         f"[--tmo*=<value>] ({version})"
@@ -359,46 +346,30 @@ def print_help(version):
     print("  --contrast=<value>   - Postprocess contrast factor (backend-default when omitted).")
     print("  --saturation=<value> - Postprocess saturation factor (backend-default when omitted).")
     print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
-    print("  --magic-retouch            - Enable in-memory 16-bit magic-retouch stage.")
+    print("  --magic-retouch            - Enable in-memory 16-bit OpenCV magic-retouch stage.")
     print(
-        "  --magic-color-balance-strength=<0..1>"
-        f" - LAB chroma color-balance strength (default: {DEFAULT_MAGIC_COLOR_BALANCE_STRENGTH})."
+        "  --magic-filter=<name>"
+        f" - Magic filter selector ({', '.join(_SUPPORTED_MAGIC_FILTERS)}), default: {DEFAULT_MAGIC_FILTER}."
     )
     print(
-        "  --magic-denoise-sigma-color=<value>"
-        f" - Bilateral denoise color sigma (default: {DEFAULT_MAGIC_DENOISE_SIGMA_COLOR})."
+        "  --magic-kernel-size=<value>"
+        f" - Odd spatial kernel size for box/gaussian/median filters (default: {DEFAULT_MAGIC_KERNEL_SIZE})."
     )
     print(
-        "  --magic-denoise-sigma-space=<value>"
-        f" - Bilateral denoise spatial sigma (default: {DEFAULT_MAGIC_DENOISE_SIGMA_SPACE})."
+        "  --magic-bilateral-d=<value>"
+        f" - Bilateral neighborhood diameter (default: {DEFAULT_MAGIC_BILATERAL_D})."
     )
     print(
-        "  --magic-microcontrast-radius=<value>"
-        f" - Guided filter radius (default: {DEFAULT_MAGIC_MICROCONTRAST_RADIUS})."
+        "  --magic-bilateral-sigma-color=<value>"
+        f" - Bilateral color sigma in float domain (default: {DEFAULT_MAGIC_BILATERAL_SIGMA_COLOR})."
     )
     print(
-        "  --magic-microcontrast-eps=<value>"
-        f" - Guided filter epsilon (default: {DEFAULT_MAGIC_MICROCONTRAST_EPS})."
+        "  --magic-bilateral-sigma-space=<value>"
+        f" - Bilateral spatial sigma in float domain (default: {DEFAULT_MAGIC_BILATERAL_SIGMA_SPACE})."
     )
     print(
-        "  --magic-microcontrast-amount=<value>"
-        f" - Micro-contrast boost factor (default: {DEFAULT_MAGIC_MICROCONTRAST_AMOUNT})."
-    )
-    print(
-        "  --magic-vibrance-strength=<value>"
-        f" - Vibrance gain for low saturation pixels (default: {DEFAULT_MAGIC_VIBRANCE_STRENGTH})."
-    )
-    print(
-        "  --magic-sharpen-sigma=<value>"
-        f" - Luma sharpen Gaussian sigma (default: {DEFAULT_MAGIC_SHARPEN_SIGMA})."
-    )
-    print(
-        "  --magic-sharpen-amount=<value>"
-        f" - Luma sharpen amount (default: {DEFAULT_MAGIC_SHARPEN_AMOUNT})."
-    )
-    print(
-        "  --magic-protect-blend=<0..1>"
-        f" - Extremes-protection blend factor (default: {DEFAULT_MAGIC_PROTECT_BLEND})."
+        "  --magic-sharpen-strength=<0..1>"
+        f" - Sharpen blend amount for `sharpen` filter (default: {DEFAULT_MAGIC_SHARPEN_STRENGTH})."
     )
     print("  --enable-enfuse")
     print("                   - Select enfuse backend (required, mutually exclusive with --enable-luminance).")
@@ -666,6 +637,45 @@ def _parse_positive_int_option(option_name, option_raw):
     return option_value
 
 
+def _parse_magic_filter_option(option_raw):
+    """@brief Parse and validate `--magic-filter` option.
+
+    @details Normalizes input token to lowercase and validates membership in the
+    supported filter set for magic-retouch processing.
+    @param option_raw {str} Raw `--magic-filter` option value.
+    @return {str|None} Parsed filter value when valid; `None` otherwise.
+    @satisfies REQ-073, REQ-075
+    """
+
+    value = option_raw.strip().lower()
+    if value not in _SUPPORTED_MAGIC_FILTERS:
+        print_error(
+            "Invalid value for --magic-filter: "
+            f"'{option_raw}' (supported: {', '.join(_SUPPORTED_MAGIC_FILTERS)})"
+        )
+        return None
+    return value
+
+
+def _parse_magic_kernel_size_option(option_raw):
+    """@brief Parse and validate odd positive `--magic-kernel-size`.
+
+    @details Reuses positive-integer parser and enforces odd kernel size to
+    ensure deterministic compatibility with median and gaussian operations.
+    @param option_raw {str} Raw `--magic-kernel-size` option value.
+    @return {int|None} Parsed odd positive kernel size when valid; `None` otherwise.
+    @satisfies REQ-073
+    """
+
+    parsed_value = _parse_positive_int_option("--magic-kernel-size", option_raw)
+    if parsed_value is None:
+        return None
+    if parsed_value % 2 == 0:
+        print_error(f"Invalid value for --magic-kernel-size: '{option_raw}' (must be odd)")
+        return None
+    return parsed_value
+
+
 def _resolve_default_postprocess(enable_luminance, luminance_tmo):
     """@brief Resolve backend-specific postprocess defaults.
 
@@ -707,12 +717,12 @@ def _parse_run_options(args):
     @details Supports positional file arguments, optional `--ev=<value>` or
     `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
     postprocess controls, required backend selector (`--enable-enfuse` or
-    `--enable-luminance`), and luminance backend
+    `--enable-luminance`), OpenCV magic-retouch controls, and luminance backend
     controls including explicit `--tmo*` passthrough options; rejects unknown
     options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, MagicRetouchOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options, magic_retouch_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-078
     """
 
     positional = []
@@ -736,16 +746,12 @@ def _parse_run_options(args):
     luminance_tmo_extra_args = []
     luminance_option_specified = False
     magic_retouch_enabled = False
-    magic_color_balance_strength = DEFAULT_MAGIC_COLOR_BALANCE_STRENGTH
-    magic_denoise_sigma_color = DEFAULT_MAGIC_DENOISE_SIGMA_COLOR
-    magic_denoise_sigma_space = DEFAULT_MAGIC_DENOISE_SIGMA_SPACE
-    magic_microcontrast_radius = DEFAULT_MAGIC_MICROCONTRAST_RADIUS
-    magic_microcontrast_eps = DEFAULT_MAGIC_MICROCONTRAST_EPS
-    magic_microcontrast_amount = DEFAULT_MAGIC_MICROCONTRAST_AMOUNT
-    magic_vibrance_strength = DEFAULT_MAGIC_VIBRANCE_STRENGTH
-    magic_sharpen_sigma = DEFAULT_MAGIC_SHARPEN_SIGMA
-    magic_sharpen_amount = DEFAULT_MAGIC_SHARPEN_AMOUNT
-    magic_protect_blend = DEFAULT_MAGIC_PROTECT_BLEND
+    magic_filter_name = DEFAULT_MAGIC_FILTER
+    magic_kernel_size = DEFAULT_MAGIC_KERNEL_SIZE
+    magic_bilateral_d = DEFAULT_MAGIC_BILATERAL_D
+    magic_bilateral_sigma_color = DEFAULT_MAGIC_BILATERAL_SIGMA_COLOR
+    magic_bilateral_sigma_space = DEFAULT_MAGIC_BILATERAL_SIGMA_SPACE
+    magic_sharpen_strength = DEFAULT_MAGIC_SHARPEN_STRENGTH
     idx = 0
 
     while idx < len(args):
@@ -755,211 +761,151 @@ def _parse_run_options(args):
             idx += 1
             continue
 
-        if token == "--magic-color-balance-strength":
+        if token in (
+            "--magic-color-balance-strength",
+            "--magic-denoise-sigma-color",
+            "--magic-denoise-sigma-space",
+            "--magic-microcontrast-radius",
+            "--magic-microcontrast-eps",
+            "--magic-microcontrast-amount",
+            "--magic-vibrance-strength",
+            "--magic-sharpen-sigma",
+            "--magic-sharpen-amount",
+            "--magic-protect-blend",
+        ) or token.startswith(
+            (
+                "--magic-color-balance-strength=",
+                "--magic-denoise-sigma-color=",
+                "--magic-denoise-sigma-space=",
+                "--magic-microcontrast-radius=",
+                "--magic-microcontrast-eps=",
+                "--magic-microcontrast-amount=",
+                "--magic-vibrance-strength=",
+                "--magic-sharpen-sigma=",
+                "--magic-sharpen-amount=",
+                "--magic-protect-blend=",
+            )
+        ):
+            print_error(f"Unknown option: {token}")
+            return None
+
+        if token == "--magic-filter":
             if idx + 1 >= len(args):
-                print_error("Missing value for --magic-color-balance-strength")
+                print_error("Missing value for --magic-filter")
                 return None
-            parsed_value = _parse_unit_float_option("--magic-color-balance-strength", args[idx + 1])
+            parsed_value = _parse_magic_filter_option(args[idx + 1])
             if parsed_value is None:
                 return None
-            magic_color_balance_strength = parsed_value
+            magic_filter_name = parsed_value
             idx += 2
             continue
 
-        if token.startswith("--magic-color-balance-strength="):
-            parsed_value = _parse_unit_float_option(
-                "--magic-color-balance-strength", token.split("=", 1)[1]
-            )
+        if token.startswith("--magic-filter="):
+            parsed_value = _parse_magic_filter_option(token.split("=", 1)[1])
             if parsed_value is None:
                 return None
-            magic_color_balance_strength = parsed_value
+            magic_filter_name = parsed_value
             idx += 1
             continue
 
-        if token == "--magic-denoise-sigma-color":
+        if token == "--magic-kernel-size":
             if idx + 1 >= len(args):
-                print_error("Missing value for --magic-denoise-sigma-color")
+                print_error("Missing value for --magic-kernel-size")
                 return None
-            parsed_value = _parse_non_negative_float_option("--magic-denoise-sigma-color", args[idx + 1])
+            parsed_value = _parse_magic_kernel_size_option(args[idx + 1])
             if parsed_value is None:
                 return None
-            magic_denoise_sigma_color = parsed_value
+            magic_kernel_size = parsed_value
             idx += 2
             continue
 
-        if token.startswith("--magic-denoise-sigma-color="):
+        if token.startswith("--magic-kernel-size="):
+            parsed_value = _parse_magic_kernel_size_option(token.split("=", 1)[1])
+            if parsed_value is None:
+                return None
+            magic_kernel_size = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-bilateral-d":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-bilateral-d")
+                return None
+            parsed_value = _parse_positive_int_option("--magic-bilateral-d", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_bilateral_d = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-bilateral-d="):
+            parsed_value = _parse_positive_int_option("--magic-bilateral-d", token.split("=", 1)[1])
+            if parsed_value is None:
+                return None
+            magic_bilateral_d = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-bilateral-sigma-color":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-bilateral-sigma-color")
+                return None
+            parsed_value = _parse_non_negative_float_option("--magic-bilateral-sigma-color", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_bilateral_sigma_color = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-bilateral-sigma-color="):
             parsed_value = _parse_non_negative_float_option(
-                "--magic-denoise-sigma-color", token.split("=", 1)[1]
+                "--magic-bilateral-sigma-color",
+                token.split("=", 1)[1],
             )
             if parsed_value is None:
                 return None
-            magic_denoise_sigma_color = parsed_value
+            magic_bilateral_sigma_color = parsed_value
             idx += 1
             continue
 
-        if token == "--magic-denoise-sigma-space":
+        if token == "--magic-bilateral-sigma-space":
             if idx + 1 >= len(args):
-                print_error("Missing value for --magic-denoise-sigma-space")
+                print_error("Missing value for --magic-bilateral-sigma-space")
                 return None
-            parsed_value = _parse_non_negative_float_option("--magic-denoise-sigma-space", args[idx + 1])
+            parsed_value = _parse_non_negative_float_option("--magic-bilateral-sigma-space", args[idx + 1])
             if parsed_value is None:
                 return None
-            magic_denoise_sigma_space = parsed_value
+            magic_bilateral_sigma_space = parsed_value
             idx += 2
             continue
 
-        if token.startswith("--magic-denoise-sigma-space="):
+        if token.startswith("--magic-bilateral-sigma-space="):
             parsed_value = _parse_non_negative_float_option(
-                "--magic-denoise-sigma-space", token.split("=", 1)[1]
+                "--magic-bilateral-sigma-space",
+                token.split("=", 1)[1],
             )
             if parsed_value is None:
                 return None
-            magic_denoise_sigma_space = parsed_value
+            magic_bilateral_sigma_space = parsed_value
             idx += 1
             continue
 
-        if token == "--magic-microcontrast-radius":
+        if token == "--magic-sharpen-strength":
             if idx + 1 >= len(args):
-                print_error("Missing value for --magic-microcontrast-radius")
+                print_error("Missing value for --magic-sharpen-strength")
                 return None
-            parsed_value = _parse_positive_int_option("--magic-microcontrast-radius", args[idx + 1])
+            parsed_value = _parse_unit_float_option("--magic-sharpen-strength", args[idx + 1])
             if parsed_value is None:
                 return None
-            magic_microcontrast_radius = parsed_value
+            magic_sharpen_strength = parsed_value
             idx += 2
             continue
 
-        if token.startswith("--magic-microcontrast-radius="):
-            parsed_value = _parse_positive_int_option(
-                "--magic-microcontrast-radius", token.split("=", 1)[1]
-            )
+        if token.startswith("--magic-sharpen-strength="):
+            parsed_value = _parse_unit_float_option("--magic-sharpen-strength", token.split("=", 1)[1])
             if parsed_value is None:
                 return None
-            magic_microcontrast_radius = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-microcontrast-eps":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-microcontrast-eps")
-                return None
-            parsed_value = _parse_non_negative_float_option("--magic-microcontrast-eps", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_microcontrast_eps = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-microcontrast-eps="):
-            parsed_value = _parse_non_negative_float_option(
-                "--magic-microcontrast-eps", token.split("=", 1)[1]
-            )
-            if parsed_value is None:
-                return None
-            magic_microcontrast_eps = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-microcontrast-amount":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-microcontrast-amount")
-                return None
-            parsed_value = _parse_non_negative_float_option("--magic-microcontrast-amount", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_microcontrast_amount = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-microcontrast-amount="):
-            parsed_value = _parse_non_negative_float_option(
-                "--magic-microcontrast-amount", token.split("=", 1)[1]
-            )
-            if parsed_value is None:
-                return None
-            magic_microcontrast_amount = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-vibrance-strength":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-vibrance-strength")
-                return None
-            parsed_value = _parse_non_negative_float_option("--magic-vibrance-strength", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_vibrance_strength = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-vibrance-strength="):
-            parsed_value = _parse_non_negative_float_option(
-                "--magic-vibrance-strength", token.split("=", 1)[1]
-            )
-            if parsed_value is None:
-                return None
-            magic_vibrance_strength = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-sharpen-sigma":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-sharpen-sigma")
-                return None
-            parsed_value = _parse_non_negative_float_option("--magic-sharpen-sigma", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_sharpen_sigma = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-sharpen-sigma="):
-            parsed_value = _parse_non_negative_float_option(
-                "--magic-sharpen-sigma", token.split("=", 1)[1]
-            )
-            if parsed_value is None:
-                return None
-            magic_sharpen_sigma = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-sharpen-amount":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-sharpen-amount")
-                return None
-            parsed_value = _parse_non_negative_float_option("--magic-sharpen-amount", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_sharpen_amount = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-sharpen-amount="):
-            parsed_value = _parse_non_negative_float_option(
-                "--magic-sharpen-amount", token.split("=", 1)[1]
-            )
-            if parsed_value is None:
-                return None
-            magic_sharpen_amount = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-protect-blend":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-protect-blend")
-                return None
-            parsed_value = _parse_unit_float_option("--magic-protect-blend", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_protect_blend = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-protect-blend="):
-            parsed_value = _parse_unit_float_option("--magic-protect-blend", token.split("=", 1)[1])
-            if parsed_value is None:
-                return None
-            magic_protect_blend = parsed_value
+            magic_sharpen_strength = parsed_value
             idx += 1
             continue
         if token == "--enable-enfuse":
@@ -1283,16 +1229,12 @@ def _parse_run_options(args):
         ),
         MagicRetouchOptions(
             enabled=magic_retouch_enabled,
-            color_balance_strength=magic_color_balance_strength,
-            denoise_sigma_color=magic_denoise_sigma_color,
-            denoise_sigma_space=magic_denoise_sigma_space,
-            microcontrast_radius=magic_microcontrast_radius,
-            microcontrast_eps=magic_microcontrast_eps,
-            microcontrast_amount=magic_microcontrast_amount,
-            vibrance_strength=magic_vibrance_strength,
-            sharpen_sigma=magic_sharpen_sigma,
-            sharpen_amount=magic_sharpen_amount,
-            protect_blend=magic_protect_blend,
+            filter_name=magic_filter_name,
+            kernel_size=magic_kernel_size,
+            bilateral_d=magic_bilateral_d,
+            bilateral_sigma_color=magic_bilateral_sigma_color,
+            bilateral_sigma_space=magic_bilateral_sigma_space,
+            sharpen_strength=magic_sharpen_strength,
         ),
     )
 
@@ -1558,131 +1500,61 @@ def _apply_postprocess_16bit(np_module, cv2_module, image_u16, postprocess_optio
     return _to_u16_from_float01(np_module, image_float)
 
 
-def _guided_filter(np_module, cv2_module, guide, src, radius, eps):
-    """@brief Apply mono-channel guided filter for edge-aware smoothing.
-
-    @details Builds local mean statistics via box-filter and computes guided
-    linear coefficients for deterministic edge-aware base extraction.
-    @param np_module {ModuleType} Imported numpy module.
-    @param cv2_module {ModuleType} Imported OpenCV module.
-    @param guide {np.ndarray} Guide mono channel in `[0, 1]`.
-    @param src {np.ndarray} Source mono channel in `[0, 1]`.
-    @param radius {int} Box-filter radius.
-    @param eps {float} Regularization epsilon.
-    @return {np.ndarray} Filtered mono channel in `[0, 1]`.
-    @satisfies REQ-075
-    """
-
-    ksize = (2 * radius + 1, 2 * radius + 1)
-    mean_i = cv2_module.boxFilter(guide, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
-    mean_p = cv2_module.boxFilter(src, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
-    mean_ip = cv2_module.boxFilter(guide * src, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
-    cov_ip = mean_ip - mean_i * mean_p
-    mean_ii = cv2_module.boxFilter(guide * guide, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
-    var_i = mean_ii - mean_i * mean_i
-    a = cov_ip / (var_i + eps)
-    b = mean_p - a * mean_i
-    mean_a = cv2_module.boxFilter(a, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
-    mean_b = cv2_module.boxFilter(b, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
-    return np_module.clip((mean_a * guide) + mean_b, 0.0, 1.0)
-
-
 def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
-    """@brief Execute in-memory 16-bit deterministic magic-retouch pipeline.
+    """@brief Execute in-memory 16-bit deterministic OpenCV magic-retouch pipeline.
 
-    @details Applies mild color balance, light denoise, edge-aware
-    micro-contrast, mild vibrance, luminance-only sharpen, and extremes
-    protection on normalized float data, then returns uint16 payload.
+    @details Applies selected OpenCV filter (`box`, `boxfilter`, `gaussian`,
+    `median`, `bilateral`, `sharpen`) to normalized RGB float payload and
+    returns uint16 output. `sharpen` uses fixed 3x3 kernel with configurable
+    blend strength.
     @param np_module {ModuleType} Imported numpy module.
     @param cv2_module {ModuleType} Imported OpenCV module.
     @param image_u16 {np.ndarray} Input uint16 image payload.
     @param magic_options {MagicRetouchOptions} Magic-retouch option values.
     @return {np.ndarray} Magic-retouched uint16 image payload.
-    @satisfies REQ-074, REQ-075, REQ-076
+    @satisfies REQ-074, REQ-075, REQ-076, REQ-078
     """
 
-    original = _to_float01_from_u16(np_module, image_u16)
-    out = original.copy()
+    working = _to_float01_from_u16(np_module, image_u16).astype(np_module.float32)
+    kernel = magic_options.kernel_size
+    kernel_tuple = (kernel, kernel)
+    filter_name = magic_options.filter_name
 
-    # 1) Mild color balance in LAB chroma channels.
-    # OpenCV LAB float conversion uses L in [0, 100] and a/b around 0 with range near [-127, 127].
-    out_lab = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2LAB)
-    channel_l, channel_a, channel_b = cv2_module.split(out_lab)
-    a_mean = float(np_module.mean(channel_a))
-    b_mean = float(np_module.mean(channel_b))
-    channel_a = channel_a - (a_mean * magic_options.color_balance_strength)
-    channel_b = channel_b - (b_mean * magic_options.color_balance_strength)
-    channel_l = np_module.clip(channel_l, 0.0, 100.0)
-    channel_a = np_module.clip(channel_a, -127.0, 127.0)
-    channel_b = np_module.clip(channel_b, -127.0, 127.0)
-    out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
+    if filter_name == "box":
+        filtered = cv2_module.blur(working, kernel_tuple)
+    elif filter_name == "boxfilter":
+        filtered = cv2_module.boxFilter(working, ddepth=-1, ksize=kernel_tuple, normalize=True)
+    elif filter_name == "gaussian":
+        filtered = cv2_module.GaussianBlur(working, kernel_tuple, 0)
+    elif filter_name == "median":
+        filtered = np_module.stack(
+            [
+                cv2_module.medianBlur(working[:, :, channel_idx], kernel)
+                for channel_idx in range(working.shape[2])
+            ],
+            axis=2,
+        )
+    elif filter_name == "bilateral":
+        filtered = cv2_module.bilateralFilter(
+            working,
+            d=magic_options.bilateral_d,
+            sigmaColor=max(1e-6, magic_options.bilateral_sigma_color),
+            sigmaSpace=max(1e-6, magic_options.bilateral_sigma_space),
+            borderType=cv2_module.BORDER_REFLECT,
+        )
+    elif filter_name == "sharpen":
+        kernel_sharpen = np_module.array(
+            [[0.0, -1.0, 0.0], [-1.0, 5.0, -1.0], [0.0, -1.0, 0.0]],
+            dtype=np_module.float32,
+        )
+        sharpened = cv2_module.filter2D(working, ddepth=-1, kernel=kernel_sharpen)
+        strength = float(np_module.clip(magic_options.sharpen_strength, 0.0, 1.0))
+        filtered = cv2_module.addWeighted(working, 1.0 - strength, sharpened, strength, 0.0)
+    else:
+        filtered = working
 
-    # 2) Very light denoise.
-    denoise_d = 5
-    out = cv2_module.bilateralFilter(
-        out.astype(np_module.float32),
-        d=denoise_d,
-        sigmaColor=max(1e-6, magic_options.denoise_sigma_color),
-        sigmaSpace=max(1e-6, magic_options.denoise_sigma_space),
-        borderType=cv2_module.BORDER_REFLECT,
-    )
-    out = np_module.clip(out, 0.0, 1.0)
-
-    # 3) Edge-aware micro-contrast on luminance.
-    out_lab = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2LAB)
-    channel_l, channel_a, channel_b = cv2_module.split(out_lab)
-    channel_l_norm = np_module.clip(channel_l / 100.0, 0.0, 1.0)
-    gray = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2GRAY)
-    base = _guided_filter(
-        np_module=np_module,
-        cv2_module=cv2_module,
-        guide=gray,
-        src=channel_l_norm,
-        radius=magic_options.microcontrast_radius,
-        eps=magic_options.microcontrast_eps,
-    )
-    detail = channel_l_norm - base
-    channel_l_norm = np_module.clip(base + ((1.0 + magic_options.microcontrast_amount) * detail), 0.0, 1.0)
-    channel_l = np_module.clip(channel_l_norm * 100.0, 0.0, 100.0)
-    out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
-
-    # 4) Mild vibrance.
-    out_hsv = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2HSV)
-    channel_h, channel_s, channel_v = cv2_module.split(out_hsv)
-    channel_s = np_module.clip(channel_s, 0.0, 1.0)
-    gain = 1.0 + (magic_options.vibrance_strength * (1.0 - channel_s))
-    channel_s = np_module.clip(channel_s * gain, 0.0, 1.0)
-    out = cv2_module.cvtColor(cv2_module.merge([channel_h, channel_s, channel_v]), cv2_module.COLOR_HSV2RGB)
-
-    # 5) Luminance-only sharpen.
-    out_lab = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2LAB)
-    channel_l, channel_a, channel_b = cv2_module.split(out_lab)
-    blur_l = cv2_module.GaussianBlur(
-        channel_l,
-        (0, 0),
-        sigmaX=magic_options.sharpen_sigma,
-        sigmaY=magic_options.sharpen_sigma,
-    )
-    channel_l = np_module.clip(
-        cv2_module.addWeighted(
-            channel_l,
-            1.0 + magic_options.sharpen_amount,
-            blur_l,
-            -magic_options.sharpen_amount,
-            0.0,
-        ),
-        0.0,
-        100.0,
-    )
-    out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
-
-    # 6) Extremes protection blend.
-    gray_original = cv2_module.cvtColor(original, cv2_module.COLOR_RGB2GRAY)
-    protection = np_module.clip(np_module.abs(gray_original - 0.5) * 2.0, 0.0, 1.0)
-    alpha = 1.0 - ((1.0 - magic_options.protect_blend) * protection)
-    out = (alpha[:, :, None] * out) + ((1.0 - alpha[:, :, None]) * original)
-
-    return _to_u16_from_float01(np_module, out)
+    filtered = np_module.clip(filtered, 0.0, 1.0)
+    return _to_u16_from_float01(np_module, filtered)
 
 
 def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression):
@@ -1809,11 +1681,11 @@ def run(args):
     @details Parses command options, validates dependencies, extracts three RAW
     brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow,
     applies in-memory uint16 postprocess controls, optionally applies in-memory
-    uint16 `magic_retouch`, writes JPG output, and guarantees temporary artifact
-    cleanup through isolated temporary directory lifecycle.
+    uint16 OpenCV-filter `magic_retouch`, writes JPG output, and guarantees
+    temporary artifact cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
     """
 
     if not _is_supported_runtime_os():
