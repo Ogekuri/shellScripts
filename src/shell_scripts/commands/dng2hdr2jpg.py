@@ -2,11 +2,11 @@
 """@brief Convert one DNG file into one HDR-merged JPG output.
 
 @details Implements bracketed RAW extraction with three synthetic exposures
-(`-ev`, `0`, `+ev`), merges them through default `enfuse` flow or optional
+(`-ev`, `0`, `+ev`), merges them through selected `enfuse` or selected
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072
 """
 
 import shutil
@@ -35,6 +35,9 @@ DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "flat"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
 DEFAULT_LUMINANCE_TMO = "reinhard02"
+DEFAULT_REINHARD02_BRIGHTNESS = 1.25
+DEFAULT_REINHARD02_CONTRAST = 0.85
+DEFAULT_REINHARD02_SATURATION = 0.55
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
@@ -186,7 +189,7 @@ class PostprocessOptions:
     @param saturation {float} Saturation enhancement factor.
     @param jpg_compression {int} JPEG compression level in range `[0, 100]`.
     @return {None} Immutable dataclass container.
-    @satisfies REQ-065, REQ-066
+    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072
     """
 
     post_gamma: float
@@ -280,14 +283,14 @@ def print_help(version):
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-070
+    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072
     """
 
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
         f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
-        f"[--jpg-compression=<0..100>] [--enable-luminance] "
+        f"[--jpg-compression=<0..100>] (--enable-enfuse | --enable-luminance) "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
         f"[--tmo*=<value>] ({version})"
@@ -299,13 +302,30 @@ def print_help(version):
     print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
     print(f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]}).")
     print("                     Example: --gamma=1,1 for linear extraction.")
-    print(f"  --post-gamma=<value> - Postprocess gamma correction factor (default: {DEFAULT_POST_GAMMA}).")
-    print(f"  --brightness=<value> - Postprocess brightness factor (default: {DEFAULT_BRIGHTNESS}).")
-    print(f"  --contrast=<value>   - Postprocess contrast factor (default: {DEFAULT_CONTRAST}).")
-    print(f"  --saturation=<value> - Postprocess saturation factor (default: {DEFAULT_SATURATION}).")
+    print("  --post-gamma=<value> - Postprocess gamma correction factor (backend-default when omitted).")
+    print("  --brightness=<value> - Postprocess brightness factor (backend-default when omitted).")
+    print("  --contrast=<value>   - Postprocess contrast factor (backend-default when omitted).")
+    print("  --saturation=<value> - Postprocess saturation factor (backend-default when omitted).")
     print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
+    print("  --enable-enfuse")
+    print("                   - Select enfuse backend (required, mutually exclusive with --enable-luminance).")
     print("  --enable-luminance")
-    print("                   - Enable luminance-hdr-cli backend (default backend: enfuse).")
+    print("                   - Select luminance-hdr-cli backend (required, mutually exclusive with --enable-enfuse).")
+    print(
+        "  [postprocess defaults]"
+        f" - --enable-enfuse: post-gamma={DEFAULT_POST_GAMMA}, brightness={DEFAULT_BRIGHTNESS},"
+        f" contrast={DEFAULT_CONTRAST}, saturation={DEFAULT_SATURATION}."
+    )
+    print(
+        "                   - --enable-luminance + --luminance-tmo=reinhard02: "
+        f"post-gamma={DEFAULT_POST_GAMMA}, brightness={DEFAULT_REINHARD02_BRIGHTNESS}, "
+        f"contrast={DEFAULT_REINHARD02_CONTRAST}, saturation={DEFAULT_REINHARD02_SATURATION}."
+    )
+    print(
+        "                   - --enable-luminance + other --luminance-tmo: "
+        f"post-gamma={DEFAULT_POST_GAMMA}, brightness={DEFAULT_BRIGHTNESS}, "
+        f"contrast={DEFAULT_CONTRAST}, saturation={DEFAULT_SATURATION}."
+    )
     print("  --luminance-hdr-model=<name>")
     print(f"                   - Luminance HDR model (default: {DEFAULT_LUMINANCE_HDR_MODEL}).")
     print("  --luminance-hdr-weight=<name>")
@@ -481,17 +501,53 @@ def _parse_jpg_compression_option(compression_raw):
     return compression_value
 
 
+def _resolve_default_postprocess(enable_luminance, luminance_tmo):
+    """@brief Resolve backend-specific postprocess defaults.
+
+    @details Selects neutral defaults for enfuse and non-`reinhard02` luminance
+    operators, and selects tuned defaults for luminance `reinhard02`.
+    @param enable_luminance {bool} Backend selector state.
+    @param luminance_tmo {str} Selected luminance tone-mapping operator.
+    @return {tuple[float, float, float, float]} Defaults in `(post_gamma, brightness, contrast, saturation)` order.
+    @satisfies REQ-069, REQ-071, REQ-072
+    """
+
+    if not enable_luminance:
+        return (
+            DEFAULT_POST_GAMMA,
+            DEFAULT_BRIGHTNESS,
+            DEFAULT_CONTRAST,
+            DEFAULT_SATURATION,
+        )
+
+    if luminance_tmo == "reinhard02":
+        return (
+            DEFAULT_POST_GAMMA,
+            DEFAULT_REINHARD02_BRIGHTNESS,
+            DEFAULT_REINHARD02_CONTRAST,
+            DEFAULT_REINHARD02_SATURATION,
+        )
+
+    return (
+        DEFAULT_POST_GAMMA,
+        DEFAULT_BRIGHTNESS,
+        DEFAULT_CONTRAST,
+        DEFAULT_SATURATION,
+    )
+
+
 def _parse_run_options(args):
     """@brief Parse CLI args into input, output, and EV parameters.
 
     @details Supports positional file arguments, optional `--ev=<value>` or
     `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
-    postprocess controls, optional `--enable-luminance`, and luminance backend
+    postprocess controls, required backend selector (`--enable-enfuse` or
+    `--enable-luminance`), and luminance backend
     controls including explicit `--tmo*` passthrough options; rejects unknown
     options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072
     """
 
     positional = []
@@ -502,6 +558,11 @@ def _parse_run_options(args):
     contrast = DEFAULT_CONTRAST
     saturation = DEFAULT_SATURATION
     jpg_compression = DEFAULT_JPG_COMPRESSION
+    post_gamma_set = False
+    brightness_set = False
+    contrast_set = False
+    saturation_set = False
+    enable_enfuse = False
     enable_luminance = False
     luminance_hdr_model = DEFAULT_LUMINANCE_HDR_MODEL
     luminance_hdr_weight = DEFAULT_LUMINANCE_HDR_WEIGHT
@@ -513,6 +574,11 @@ def _parse_run_options(args):
 
     while idx < len(args):
         token = args[idx]
+        if token == "--enable-enfuse":
+            enable_enfuse = True
+            idx += 1
+            continue
+
         if token == "--enable-luminance":
             enable_luminance = True
             idx += 1
@@ -678,6 +744,7 @@ def _parse_run_options(args):
             if parsed_post_gamma is None:
                 return None
             post_gamma = parsed_post_gamma
+            post_gamma_set = True
             idx += 2
             continue
 
@@ -686,6 +753,7 @@ def _parse_run_options(args):
             if parsed_post_gamma is None:
                 return None
             post_gamma = parsed_post_gamma
+            post_gamma_set = True
             idx += 1
             continue
 
@@ -697,6 +765,7 @@ def _parse_run_options(args):
             if parsed_brightness is None:
                 return None
             brightness = parsed_brightness
+            brightness_set = True
             idx += 2
             continue
 
@@ -705,6 +774,7 @@ def _parse_run_options(args):
             if parsed_brightness is None:
                 return None
             brightness = parsed_brightness
+            brightness_set = True
             idx += 1
             continue
 
@@ -716,6 +786,7 @@ def _parse_run_options(args):
             if parsed_contrast is None:
                 return None
             contrast = parsed_contrast
+            contrast_set = True
             idx += 2
             continue
 
@@ -724,6 +795,7 @@ def _parse_run_options(args):
             if parsed_contrast is None:
                 return None
             contrast = parsed_contrast
+            contrast_set = True
             idx += 1
             continue
 
@@ -735,6 +807,7 @@ def _parse_run_options(args):
             if parsed_saturation is None:
                 return None
             saturation = parsed_saturation
+            saturation_set = True
             idx += 2
             continue
 
@@ -743,6 +816,7 @@ def _parse_run_options(args):
             if parsed_saturation is None:
                 return None
             saturation = parsed_saturation
+            saturation_set = True
             idx += 1
             continue
 
@@ -776,9 +850,28 @@ def _parse_run_options(args):
         print_error("Usage: dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>] [--gamma=<a,b>]")
         return None
 
+    if enable_enfuse == enable_luminance:
+        print_error("Exactly one backend selector is required: --enable-enfuse or --enable-luminance")
+        return None
+
     if luminance_option_specified and not enable_luminance:
         print_error("Luminance options require --enable-luminance")
         return None
+
+    (
+        backend_post_gamma,
+        backend_brightness,
+        backend_contrast,
+        backend_saturation,
+    ) = _resolve_default_postprocess(enable_luminance, luminance_tmo)
+    if not post_gamma_set:
+        post_gamma = backend_post_gamma
+    if not brightness_set:
+        brightness = backend_brightness
+    if not contrast_set:
+        contrast = backend_contrast
+    if not saturation_set:
+        saturation = backend_saturation
 
     return (
         Path(positional[0]),
@@ -1108,12 +1201,12 @@ def run(args):
     """@brief Execute `dng2hdr2jpg` command pipeline.
 
     @details Parses command options, validates dependencies, extracts three RAW
-    brackets, executes default `enfuse` flow or optional luminance-hdr-cli flow,
+    brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow,
     writes JPG output, and guarantees temporary artifact cleanup through isolated
     temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072
     """
 
     if not _is_supported_runtime_os():

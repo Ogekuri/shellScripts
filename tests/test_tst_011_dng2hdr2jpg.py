@@ -3,7 +3,7 @@
 @details Verifies argument validation, EV parsing/default behavior, three-
   bracket extraction multipliers, dual-backend HDR merge behavior, shared
   postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072
 @return {None} Pytest module scope.
 """
 
@@ -306,15 +306,36 @@ def test_dng2hdr2jpg_rejects_invalid_ev_value(tmp_path):
       arguments and asserts deterministic parse failure.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-056
+    @satisfies TST-011, REQ-056, REQ-060
     """
 
     input_dng = tmp_path / "scene.dng"
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--ev=3"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--ev", "bad"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=3"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--ev", "bad"]) == 1
+
+
+def test_dng2hdr2jpg_rejects_missing_or_duplicated_backend_selector(tmp_path):
+    """
+    @brief Validate backend selector exclusivity and requiredness.
+    @details Verifies parser rejects calls without selector and calls with both
+      selectors together.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-060
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg)]) == 1
+    assert (
+        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--enable-luminance"])
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path):
@@ -423,7 +444,7 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg)])
+    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"])
 
     assert result == 0
     assert observed["brights"] == pytest.approx([0.25, 1.0, 4.0])
@@ -433,6 +454,7 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     assert observed["gamma"] == [(2.222, 4.5), (2.222, 4.5), (2.222, 4.5)]
     assert observed["enfuse_cmd"][0] == "enfuse"
     assert len(observed["enfuse_cmd"]) == 6
+    assert "postprocess_ops" not in observed
     assert output_jpg.exists()
     assert observed["tmp_dir"] is not None
     assert not observed["tmp_dir"].exists()
@@ -448,7 +470,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-057, REQ-060, REQ-061, REQ-062, REQ-068
+    @satisfies TST-011, REQ-057, REQ-060, REQ-061, REQ-062, REQ-068, REQ-069
     """
 
     observed = {
@@ -549,6 +571,9 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
         "ev_zero.tif",
         "ev_plus.tif",
     ]
+    assert ("brightness", 1.25) in observed["postprocess_ops"]
+    assert ("contrast", 0.85) in observed["postprocess_ops"]
+    assert ("saturation", 0.55) in observed["postprocess_ops"]
     assert output_jpg.exists()
     assert observed["tmp_dir"] is not None
     assert not observed["tmp_dir"].exists()
@@ -669,6 +694,85 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
     assert [Path(value).name for value in command[21:]] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
 
 
+def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(monkeypatch, tmp_path):
+    """
+    @brief Validate neutral postprocess defaults for non-`reinhard02` luminance TMO.
+    @details Selects luminance backend with `--luminance-tmo=drago` and asserts
+      no implicit postprocess enhancements are applied.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-060, REQ-061, REQ-071
+    """
+
+    observed = {"command": []}
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake rawpy module for neutral luminance defaults test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            """@brief Return fake RAW handle."""
+
+            return _FakeRawHandle(
+                {"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": [], "gamma": []}
+            )
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for neutral luminance defaults test."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            """@brief Materialize deterministic placeholder files."""
+
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for shared JPG encode stage."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    def _fake_subprocess_run(command, check):
+        """@brief Capture command and materialize luminance output."""
+
+        assert check is True
+        observed["command"] = command
+        output_index = command.index("-o") + 1
+        Path(command[output_index]).write_text("jpg", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None,
+    )
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-tmo=drago"]
+    )
+
+    assert result == 0
+    assert "--tmo" in observed["command"]
+    tmo_index = observed["command"].index("--tmo")
+    assert observed["command"][tmo_index + 1] == "drago"
+    assert "postprocess_ops" not in observed
+
+
 def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch, tmp_path):
     """
     @brief Validate merge failure path returns non-zero and cleans artifacts.
@@ -753,7 +857,7 @@ def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--ev=1.5"])
+    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=1.5"])
 
     assert result == 1
     assert observed["tmp_dir"] is not None
@@ -767,16 +871,16 @@ def test_dng2hdr2jpg_rejects_invalid_gamma_value(tmp_path):
       asserts deterministic parse failure.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-064
+    @satisfies TST-011, REQ-060, REQ-064
     """
 
     input_dng = tmp_path / "scene.dng"
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--gamma=1"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--gamma=a,b"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--gamma=0,1"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--gamma=1"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--gamma=a,b"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--gamma=0,1"]) == 1
 
 
 def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
@@ -786,19 +890,19 @@ def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
       and asserts deterministic parse failure.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-065
+    @satisfies TST-011, REQ-060, REQ-065
     """
 
     input_dng = tmp_path / "scene.dng"
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--post-gamma=0"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--brightness=foo"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--contrast=-1"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--saturation=0"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--jpg-compression=200"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--jpg-compression=bad"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--post-gamma=0"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--brightness=foo"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--contrast=-1"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--saturation=0"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--jpg-compression=200"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--jpg-compression=bad"]) == 1
 
 
 def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
@@ -809,7 +913,7 @@ def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-057, REQ-064
+    @satisfies TST-011, REQ-057, REQ-060, REQ-064
     """
 
     observed = {
@@ -879,7 +983,7 @@ def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--gamma=1,1"])
+    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--gamma=1,1"])
 
     assert result == 0
     assert observed["gamma"] == [(1.0, 1.0), (1.0, 1.0), (1.0, 1.0)]
@@ -981,7 +1085,7 @@ def test_dng2hdr2jpg_fails_when_enfuse_dependency_is_missing(monkeypatch, tmp_pa
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-059
+    @satisfies TST-011, REQ-059, REQ-060
     """
 
     input_dng = tmp_path / "scene.dng"
@@ -991,7 +1095,7 @@ def test_dng2hdr2jpg_fails_when_enfuse_dependency_is_missing(monkeypatch, tmp_pa
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
     monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda _cmd: None)
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg)]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"]) == 1
 
 
 def test_dng2hdr2jpg_fails_when_luminance_dependency_is_missing(monkeypatch, tmp_path):
@@ -1026,16 +1130,16 @@ def test_dng2hdr2jpg_rejects_luminance_options_without_enable(tmp_path):
       asserts deterministic parse failure.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-061, REQ-067
+    @satisfies TST-011, REQ-060, REQ-061, REQ-067
     """
 
     input_dng = tmp_path / "scene.dng"
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--luminance-tmo=fattal"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--luminance-hdr-model=robertson"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--tmoR05Brightness=0"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--luminance-tmo=fattal"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--luminance-hdr-model=robertson"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--tmoR05Brightness=0"]) == 1
 
 
 def test_dng2hdr2jpg_rejects_malformed_luminance_options(monkeypatch, tmp_path):
@@ -1186,7 +1290,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063, REQ-070
+    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -1197,6 +1301,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     )[0]
 
     assert "--enable-luminance" in output
+    assert "--enable-enfuse" in output
     assert "--gamma=<a,b>" in output
     assert "--post-gamma=<value>" in output
     assert "--brightness=<value>" in output
@@ -1225,6 +1330,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "`--tmoR02Key`" in output
     assert "`--tmoM08ColorSaturation`" in output
     assert "--tmo* <value> | --tmo*=<value>" in output
+    assert "mutually exclusive with --enable-luminance" in output
 
 
 def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):

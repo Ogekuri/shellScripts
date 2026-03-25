@@ -171,19 +171,21 @@ No explicit performance optimizations identified.
 - **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
 - **REQ-056**: MUST parse optional `--ev=<value>` and `--ev <value>` in `dng2hdr2jpg`, default EV to `2.0`, and reject unsupported or non-numeric EV values with return code `1`.
 - **REQ-057**: MUST generate exactly three exposure images from one DNG input using `raw.postprocess(bright=<2^(-ev)|1.0|2^(ev)>, output_bps=16, use_camera_wb=True, no_auto_bright=True, gamma=<selected_gamma>)` before HDR merge.
-- **REQ-058**: MUST execute HDR merge via `enfuse` over three generated exposure files by default, MUST persist an intermediate 16-bit TIFF, and MUST use lossless TIFF compression before JPG conversion.
+- **REQ-058**: MUST execute HDR merge via `enfuse` over three generated exposure files when `--enable-enfuse` is selected, MUST persist an intermediate 16-bit TIFF, and MUST use lossless TIFF compression before JPG conversion.
 - **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving Linux temporary-file cleanup and dependency-failure behavior.
-- **REQ-060**: MUST parse `--enable-luminance` to switch HDR merge backend from default `enfuse` flow to `luminance-hdr-cli` flow in `dng2hdr2jpg`.
+- **REQ-060**: MUST require exactly one backend selector in `dng2hdr2jpg` (`--enable-enfuse` or `--enable-luminance`) and MUST return `1` when neither or both selectors are provided.
 - **REQ-061**: MUST parse `--luminance-hdr-model`, `--luminance-hdr-weight`, `--luminance-hdr-response-curve`, and `--luminance-tmo` in assignment or split form, default `--luminance-hdr-weight` to `flat` and `--luminance-tmo` to `reinhard02`, and return `1` for malformed values.
 - **REQ-062**: MUST execute `luminance-hdr-cli` with `-e <-ev,0,+ev>`, `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, `--ldrTiff 16b`, and ordered inputs `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` writing `<merged_hdr.tif>`.
-- **REQ-063**: MUST document `--enable-luminance`, `--luminance-hdr-model`, `--luminance-hdr-weight`, `--luminance-hdr-response-curve`, `--luminance-tmo`, generic passthrough `--tmo*` options, `--gamma`, shared postprocess options, and control-table rows only for operators with exposed CLI controls.
+- **REQ-063**: MUST document required mutually exclusive backend selectors (`--enable-enfuse`, `--enable-luminance`), luminance controls, generic passthrough `--tmo*` options, `--gamma`, shared postprocess options, and control-table rows only for operators with exposed CLI controls.
 - **REQ-070**: MUST render in `dng2hdr2jpg` help two aligned Unicode box-drawing tables where the operators table uses three columns, two-line headers, and two physical lines per operator row.
 - **REQ-064**: MUST parse optional `--gamma=<a,b>` and `--gamma <a,b>` in `dng2hdr2jpg`, default gamma to `(2.222,4.5)`, and reject malformed, non-numeric, or non-positive gamma values with return code `1`.
-- **REQ-065**: MUST parse optional `--post-gamma=<value>`, `--brightness=<value>`, `--contrast=<value>`, `--saturation=<value>`, and `--jpg-compression=<0..100>`, defaulting to `1.0` for image factors and `15` for compression.
+- **REQ-065**: MUST parse optional `--post-gamma=<value>`, `--brightness=<value>`, `--contrast=<value>`, `--saturation=<value>`, and `--jpg-compression=<0..100>`, and MUST default `--jpg-compression` to `15`.
 - **REQ-066**: MUST apply one shared postprocessing stage on merged HDR TIFF from both backends, performing gamma, brightness, contrast, and saturation corrections, then encode JPG using configured compression level.
 - **REQ-067**: MUST parse explicit CLI options starting with `--tmo` in assignment or split form when `--enable-luminance` is set, preserve CLI order, and return `1` for missing or empty values.
 - **REQ-068**: MUST pass only `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, and `--ldrTiff 16b` by default, forwarding additional `--tmo*` options only when explicitly provided on CLI.
-- **REQ-069**: MUST preserve neutral default postprocess factors (`post-gamma=1.0`, `brightness=1.0`, `contrast=1.0`, `saturation=1.0`) so luminance backend conversion avoids implicit double correction when no explicit postprocess overrides are provided.
+- **REQ-069**: MUST default luminance-mode postprocess factors to `post-gamma=1.0`, `brightness=1.25`, `contrast=0.85`, and `saturation=0.55` when `--luminance-tmo` is `reinhard02` and no explicit postprocess overrides are provided.
+- **REQ-071**: MUST default luminance-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when `--luminance-tmo` is not `reinhard02` and no explicit postprocess overrides are provided.
+- **REQ-072**: MUST default enfuse-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when no explicit postprocess overrides are provided.
 
 ## 4. Test Requirements
 
