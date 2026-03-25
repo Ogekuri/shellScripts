@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.3.1"
-date: "2026-03-25"
+version: "0.3.0"
+date: "2026-03-24"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -168,34 +168,24 @@ No explicit performance optimizations identified.
 - **REQ-052**: MUST make `req --dirs` target only first-level child directories and MUST exclude the current directory.
 - **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
-- **REQ-055**: MUST expose Linux-only `dng2hdr2jpg` and `dng2hdr2tiff` commands that accept `<input.dng> <output.*>` and return non-zero when required positional arguments are missing.
+- **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
 - **REQ-056**: MUST parse optional `--ev=<value>` and `--ev <value>` in `dng2hdr2jpg`, default EV to `2.0`, and reject unsupported or non-numeric EV values with return code `1`.
 - **REQ-057**: MUST generate exactly three exposure images from one DNG input using `raw.postprocess(bright=<2^(-ev)|1.0|2^(ev)>, output_bps=16, use_camera_wb=True, no_auto_bright=True, gamma=<selected_gamma>)` before HDR merge.
-- **REQ-058**: MUST execute HDR merge via `enfuse` over three generated exposure files when `--enable-enfuse` is selected, MUST persist an intermediate 16-bit TIFF, and MUST use lossless TIFF compression before final output encoding.
-- **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg` and `dng2hdr2tiff`, and MUST return non-zero while preserving Linux cleanup and dependency-failure behavior.
+- **REQ-058**: MUST execute HDR merge via `enfuse` over three generated exposure files when `--enable-enfuse` is selected, MUST persist an intermediate 16-bit TIFF, and MUST use lossless TIFF compression before JPG conversion.
+- **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving Linux temporary-file cleanup and dependency-failure behavior.
 - **REQ-060**: MUST require exactly one backend selector in `dng2hdr2jpg` (`--enable-enfuse` or `--enable-luminance`) and MUST return `1` when neither or both selectors are provided.
 - **REQ-061**: MUST parse `--luminance-hdr-model`, `--luminance-hdr-weight`, `--luminance-hdr-response-curve`, and `--luminance-tmo` in assignment or split form, default `--luminance-hdr-weight` to `flat` and `--luminance-tmo` to `reinhard02`, and return `1` for malformed values.
 - **REQ-062**: MUST execute `luminance-hdr-cli` with `-e <-ev,0,+ev>`, `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, `--ldrTiff 16b`, and ordered inputs `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` writing `<merged_hdr.tif>`.
-- **REQ-063**: MUST document required backend selectors, luminance controls, `--gamma`, postprocess controls, `--magic-retouch` controls, generic passthrough `--tmo*` options, and control-table rows only for operators with exposed CLI controls in both command helps.
-- **REQ-070**: MUST render in `dng2hdr2jpg` and `dng2hdr2tiff` help two aligned Unicode box-drawing tables where the operators table uses three columns, two-line headers, and two physical lines per operator row.
+- **REQ-063**: MUST document required mutually exclusive backend selectors (`--enable-enfuse`, `--enable-luminance`), luminance controls, generic passthrough `--tmo*` options, `--gamma`, shared postprocess options, and control-table rows only for operators with exposed CLI controls.
+- **REQ-070**: MUST render in `dng2hdr2jpg` help two aligned Unicode box-drawing tables where the operators table uses three columns, two-line headers, and two physical lines per operator row.
 - **REQ-064**: MUST parse optional `--gamma=<a,b>` and `--gamma <a,b>` in `dng2hdr2jpg`, default gamma to `(2.222,4.5)`, and reject malformed, non-numeric, or non-positive gamma values with return code `1`.
 - **REQ-065**: MUST parse optional `--post-gamma=<value>`, `--brightness=<value>`, `--contrast=<value>`, `--saturation=<value>`, and `--jpg-compression=<0..100>`, and MUST default `--jpg-compression` to `15`.
-- **REQ-066**: MUST execute `--post-gamma`, `--brightness`, `--contrast`, and `--saturation` before JPG conversion as an in-memory 16-bit-per-channel lossless postprocess stage, and MUST convert output to uint8 using deterministic rounded ordered dithering.
+- **REQ-066**: MUST apply one shared postprocessing stage on merged HDR TIFF from both backends, performing gamma, brightness, contrast, and saturation corrections, then encode JPG using configured compression level.
 - **REQ-067**: MUST parse explicit CLI options starting with `--tmo` in assignment or split form when `--enable-luminance` is set, preserve CLI order, and return `1` for missing or empty values.
 - **REQ-068**: MUST pass only `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, and `--ldrTiff 16b` by default, forwarding additional `--tmo*` options only when explicitly provided on CLI.
 - **REQ-069**: MUST default luminance-mode postprocess factors to `post-gamma=1.0`, `brightness=1.25`, `contrast=0.85`, and `saturation=0.55` when `--luminance-tmo` is `reinhard02` and no explicit postprocess overrides are provided.
 - **REQ-071**: MUST default luminance-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when `--luminance-tmo` is not `reinhard02` and no explicit postprocess overrides are provided.
 - **REQ-072**: MUST default enfuse-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when no explicit postprocess overrides are provided.
-- **REQ-073**: MUST parse `--magic-retouch`, `--magic-denoise-strength`, `--magic-gamma-bias`, `--magic-clahe-clip-limit`, `--magic-vibrance-strength`, `--magic-sharpen-strength`, and `--magic-sharpen-threshold` options in assignment or split form.
-- **REQ-074**: MUST execute `magic_retouch` only when `--magic-retouch` is enabled, positioned after 16-bit postprocess and before command-specific final encoding, and MUST bypass it when the flag is omitted.
-- **REQ-075**: MUST implement `magic_retouch` as deterministic adaptive OpenCV processing on RGB float payloads with ordered stages: parameterized denoise, luminance-aware gamma, optional local contrast enhancement, conditional vibrance, and conditional edge-masked sharpening; denoise MUST always be computed when `--magic-denoise-strength>0` and MUST be bypassed when `--magic-denoise-strength=0`.
-- **REQ-076**: MUST execute `magic_retouch` in-memory on lossless 16-bit-per-channel image data and forward its output directly to the selected command-specific final encoding stage.
-- **REQ-077**: MUST declare Linux runtime dependencies `opencv-python` and `numpy` in package metadata so Astral `uv` installations include required `magic_retouch` runtime modules.
-- **REQ-078**: MUST default `magic_retouch` options to neutral values and MUST reject removed legacy magic options (pre-refactor and filter-based controls) with return code `1`.
-- **REQ-079**: MUST encode final JPEG with `optimize=True`, `progressive=True`, and `subsampling=0` (`4:4:4`) while preserving `--jpg-compression` quality mapping to minimize visible compression artifacts.
-- **REQ-080**: MUST execute `dng2hdr2tiff` using the same pre-save processing pipeline and option model as `dng2hdr2jpg`, including backend selection, luminance controls, postprocess controls, and optional `magic_retouch`.
-- **REQ-081**: MUST save `dng2hdr2tiff` output as lossless 16-bit-per-channel TIFF and MUST NOT apply uint16-to-uint8 quantization before final write.
-- **REQ-082**: MUST build `dng2hdr2jpg` and `dng2hdr2tiff` help from shared common sections, and MUST place `--jpg-compression` help entry at the end of `dng2hdr2jpg` options.
 
 ## 4. Test Requirements
 
@@ -215,7 +205,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-082 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if backend selection, parsing, help formatting, shared pre-save flow, final encoding behavior, and cleanup behavior match requirements.
+- **TST-011**: MUST verify REQ-055 through REQ-070 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if backend selection, parsing, help formatting, postprocessing controls, TIFF merge flow, and cleanup behavior match requirements.
 
 ## 5. Evidence
 

@@ -225,24 +225,3 @@ def test_main_help_lists_req_command(monkeypatch, capsys):
 
     assert result == 0
     assert "req" in output
-
-
-def test_main_help_lists_dng2hdr2tiff_command(monkeypatch, capsys):
-    """
-    @brief Validate global help command index includes `dng2hdr2tiff`.
-    @details Forces empty-args global-help path and asserts command list
-      contains `dng2hdr2tiff` entry.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
-    @return {None} Assertions only.
-    @satisfies TST-001, REQ-055, REQ-080
-    """
-
-    monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
-    monkeypatch.setattr(core.sys, "argv", ["shellscripts"])
-
-    result = core.main()
-    output = capsys.readouterr().out
-
-    assert result == 0
-    assert "dng2hdr2tiff" in output

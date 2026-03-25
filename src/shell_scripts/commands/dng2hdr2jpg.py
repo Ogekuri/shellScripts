@@ -3,12 +3,10 @@
 
 @details Implements bracketed RAW extraction with three synthetic exposures
 (`-ev`, `0`, `+ev`), merges them through selected `enfuse` or selected
-`luminance-hdr-cli` flow with deterministic HDR model parameters, applies
-in-memory 16-bit postprocess, optionally executes in-memory 16-bit
-`magic_retouch`, then writes final JPG to user-selected output path.
-Temporary artifacts are isolated in a temporary directory and removed
-automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079
+`luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
+final JPG to user-selected output path. Temporary artifacts are isolated in a
+temporary directory and removed automatically on success and failure.
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072
 """
 
 import shutil
@@ -40,12 +38,6 @@ DEFAULT_LUMINANCE_TMO = "reinhard02"
 DEFAULT_REINHARD02_BRIGHTNESS = 1.25
 DEFAULT_REINHARD02_CONTRAST = 0.85
 DEFAULT_REINHARD02_SATURATION = 0.55
-DEFAULT_MAGIC_DENOISE_STRENGTH = 0.0
-DEFAULT_MAGIC_GAMMA_BIAS = 0.0
-DEFAULT_MAGIC_CLAHE_CLIP_LIMIT = 0.0
-DEFAULT_MAGIC_VIBRANCE_STRENGTH = 0.0
-DEFAULT_MAGIC_SHARPEN_STRENGTH = 0.0
-DEFAULT_MAGIC_SHARPEN_THRESHOLD = 0.02
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
@@ -229,32 +221,6 @@ class LuminanceOptions:
     tmo_extra_args: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class MagicRetouchOptions:
-    """@brief Hold deterministic `magic_retouch` option values.
-
-    @details Encapsulates configurable parameters for in-memory adaptive
-    OpenCV processing pipeline activated by `--magic-retouch`.
-    @param enabled {bool} Pipeline enable flag.
-    @param denoise_strength {float} Denoise strength in `[0, 1]`; stage executes only when value is greater than zero.
-    @param gamma_bias {float} Additive gamma bias in range `[-0.5, 0.5]` applied after luminance analysis.
-    @param clahe_clip_limit {float} CLAHE clip limit for local contrast stage; `0.0` disables CLAHE.
-    @param vibrance_strength {float} Adaptive vibrance strength in `[0, 1]`.
-    @param sharpen_strength {float} Edge-masked unsharp strength in `[0, 1]`.
-    @param sharpen_threshold {float} Edge-mask threshold that suppresses flat/noisy-area sharpening.
-    @return {None} Immutable dataclass container.
-    @satisfies REQ-073, REQ-075, REQ-078
-    """
-
-    enabled: bool
-    denoise_strength: float
-    gamma_bias: float
-    clahe_clip_limit: float
-    vibrance_strength: float
-    sharpen_strength: float
-    sharpen_threshold: float
-
-
 def _print_box_table(headers, rows, header_rows=()):
     """@brief Print one Unicode box-drawing table.
 
@@ -309,41 +275,30 @@ def _build_two_line_operator_rows(operator_entries):
     return tuple(rows)
 
 
-def _print_help_common(version, command_name, output_placeholder, include_jpg_compression):
-    """@brief Print shared help body for DNG-to-HDR output commands.
+def print_help(version):
+    """@brief Print help text for the `dng2hdr2jpg` command.
 
-    @details Renders shared command usage and common options for both JPG and
-    TIFF outputs, including backend selection, postprocess controls, magic
-    retouch controls, luminance options, and aligned luminance tables; appends
-    JPG-compression option only for JPG command flavor.
+    @details Documents required positional arguments, optional EV/RAW gamma
+    controls, shared postprocessing controls, backend selection, and
+    luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
-    @param command_name {str} Command token (`dng2hdr2jpg` or `dng2hdr2tiff`).
-    @param output_placeholder {str} Help placeholder for command output file.
-    @param include_jpg_compression {bool} Whether to append JPG compression option.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-070, REQ-082
+    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072
     """
 
-    usage = (
-        f"Usage: {PROGRAM} {command_name} <input.dng> {output_placeholder} "
+    print(
+        f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
         f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
-        f"(--enable-enfuse | --enable-luminance) "
-        f"[--magic-retouch] [--magic-denoise-strength=<0..1>] [--magic-gamma-bias=<value>] "
-        f"[--magic-clahe-clip-limit=<value>] [--magic-vibrance-strength=<0..1>] "
-        f"[--magic-sharpen-strength=<0..1>] [--magic-sharpen-threshold=<value>] "
+        f"[--jpg-compression=<0..100>] (--enable-enfuse | --enable-luminance) "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
-        f"[--tmo*=<value>]"
+        f"[--tmo*=<value>] ({version})"
     )
-    if include_jpg_compression:
-        usage += " [--jpg-compression=<0..100>]"
-    usage += f" ({version})"
-    print(usage)
     print()
-    print(f"{command_name} options:")
+    print("dng2hdr2jpg options:")
     print("  <input.dng>      - Input DNG file (required).")
-    print(f"  {output_placeholder}     - Output file (required).")
+    print("  <output.jpg>     - Output JPG file (required).")
     print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
     print(f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]}).")
     print("                     Example: --gamma=1,1 for linear extraction.")
@@ -351,31 +306,7 @@ def _print_help_common(version, command_name, output_placeholder, include_jpg_co
     print("  --brightness=<value> - Postprocess brightness factor (backend-default when omitted).")
     print("  --contrast=<value>   - Postprocess contrast factor (backend-default when omitted).")
     print("  --saturation=<value> - Postprocess saturation factor (backend-default when omitted).")
-    print("  --magic-retouch            - Enable in-memory 16-bit OpenCV magic-retouch stage.")
-    print(
-        "  --magic-denoise-strength=<0..1>"
-        f" - Denoise strength; stage executes only when > 0 (default: {DEFAULT_MAGIC_DENOISE_STRENGTH})."
-    )
-    print(
-        "  --magic-gamma-bias=<value>"
-        f" - Additive gamma bias in [-0.5, 0.5] after luminance analysis (default: {DEFAULT_MAGIC_GAMMA_BIAS})."
-    )
-    print(
-        "  --magic-clahe-clip-limit=<value>"
-        f" - Local contrast clip limit; 0 disables CLAHE (default: {DEFAULT_MAGIC_CLAHE_CLIP_LIMIT})."
-    )
-    print(
-        "  --magic-vibrance-strength=<0..1>"
-        f" - Adaptive vibrance boost for low-saturation areas (default: {DEFAULT_MAGIC_VIBRANCE_STRENGTH})."
-    )
-    print(
-        "  --magic-sharpen-threshold=<value>"
-        f" - Edge threshold for noise-safe sharpening mask (default: {DEFAULT_MAGIC_SHARPEN_THRESHOLD})."
-    )
-    print(
-        "  --magic-sharpen-strength=<0..1>"
-        f" - Edge-masked unsharp strength (default: {DEFAULT_MAGIC_SHARPEN_STRENGTH})."
-    )
+    print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
     print("  --enable-enfuse")
     print("                   - Select enfuse backend (required, mutually exclusive with --enable-luminance).")
     print("  --enable-luminance")
@@ -421,21 +352,6 @@ def _print_help_common(version, command_name, output_placeholder, include_jpg_co
     print("                   - Forward explicit luminance-hdr-cli --tmo* parameters as-is.")
     print("  [platform]       - Command is available on Linux only.")
     print("  --help           - Show this help message.")
-    if include_jpg_compression:
-        print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
-
-
-def print_help(version):
-    """@brief Print help text for the `dng2hdr2jpg` command.
-
-    @details Delegates to shared DNG-to-HDR help renderer and appends
-    JPG-specific compression option at the tail.
-    @param version {str} CLI version label to append in usage output.
-    @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-078, REQ-082
-    """
-
-    _print_help_common(version, "dng2hdr2jpg", "<output.jpg>", include_jpg_compression=True)
 
 
 def _parse_ev_option(ev_raw):
@@ -585,100 +501,6 @@ def _parse_jpg_compression_option(compression_raw):
     return compression_value
 
 
-def _parse_non_negative_float_option(option_name, option_raw):
-    """@brief Parse and validate one non-negative float option value.
-
-    @details Converts option token to `float`, requires value greater than or
-    equal to zero, and emits deterministic parse errors on malformed values.
-    @param option_name {str} Long-option identifier used in error messages.
-    @param option_raw {str} Raw option token value from CLI args.
-    @return {float|None} Parsed non-negative float value when valid; `None` otherwise.
-    @satisfies REQ-073
-    """
-
-    try:
-        option_value = float(option_raw)
-    except ValueError:
-        print_error(f"Invalid {option_name} value: {option_raw}")
-        return None
-
-    if option_value < 0.0:
-        print_error(f"Invalid {option_name} value: {option_raw}")
-        print_error(f"{option_name} must be greater than or equal to zero.")
-        return None
-    return option_value
-
-
-def _parse_unit_float_option(option_name, option_raw):
-    """@brief Parse and validate one unit-interval float option value.
-
-    @details Converts option token to `float`, requires inclusive range
-    `[0.0, 1.0]`, and emits deterministic parse errors on malformed values.
-    @param option_name {str} Long-option identifier used in error messages.
-    @param option_raw {str} Raw option token value from CLI args.
-    @return {float|None} Parsed unit-interval float value when valid; `None` otherwise.
-    @satisfies REQ-073
-    """
-
-    try:
-        option_value = float(option_raw)
-    except ValueError:
-        print_error(f"Invalid {option_name} value: {option_raw}")
-        return None
-
-    if option_value < 0.0 or option_value > 1.0:
-        print_error(f"Invalid {option_name} value: {option_raw}")
-        print_error(f"{option_name} must be in range [0.0, 1.0].")
-        return None
-    return option_value
-
-
-def _parse_positive_int_option(option_name, option_raw):
-    """@brief Parse and validate one positive integer option value.
-
-    @details Converts option token to `int`, requires value greater than zero,
-    and emits deterministic parse errors on malformed values.
-    @param option_name {str} Long-option identifier used in error messages.
-    @param option_raw {str} Raw option token value from CLI args.
-    @return {int|None} Parsed positive integer value when valid; `None` otherwise.
-    @satisfies REQ-073
-    """
-
-    try:
-        option_value = int(option_raw)
-    except ValueError:
-        print_error(f"Invalid {option_name} value: {option_raw}")
-        return None
-
-    if option_value <= 0:
-        print_error(f"Invalid {option_name} value: {option_raw}")
-        print_error(f"{option_name} must be greater than zero.")
-        return None
-    return option_value
-
-
-def _parse_magic_gamma_bias_option(option_raw):
-    """@brief Parse and validate one `--magic-gamma-bias` option value.
-
-    @details Converts raw token to float and validates inclusive range
-    `[-0.5, 0.5]` for luminance-driven gamma offset.
-    @param option_raw {str} Raw `--magic-gamma-bias` option value.
-    @return {float|None} Parsed gamma-bias value when valid; `None` otherwise.
-    @satisfies REQ-073
-    """
-
-    try:
-        parsed_value = float(option_raw)
-    except ValueError:
-        print_error(f"Invalid --magic-gamma-bias value: {option_raw}")
-        return None
-    if parsed_value < -0.5 or parsed_value > 0.5:
-        print_error(f"Invalid --magic-gamma-bias value: {option_raw}")
-        print_error("--magic-gamma-bias must be in range [-0.5, 0.5].")
-        return None
-    return parsed_value
-
-
 def _resolve_default_postprocess(enable_luminance, luminance_tmo):
     """@brief Resolve backend-specific postprocess defaults.
 
@@ -714,27 +536,18 @@ def _resolve_default_postprocess(enable_luminance, luminance_tmo):
     )
 
 
-def _parse_run_options(
-    args,
-    *,
-    include_jpg_compression=True,
-    command_name="dng2hdr2jpg",
-    output_hint="<output.jpg>",
-):
-    """@brief Parse CLI args into input/output paths and HDR processing options.
+def _parse_run_options(args):
+    """@brief Parse CLI args into input, output, and EV parameters.
 
     @details Supports positional file arguments, optional `--ev=<value>` or
     `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
     postprocess controls, required backend selector (`--enable-enfuse` or
-    `--enable-luminance`), adaptive OpenCV magic-retouch controls, and luminance
-    backend controls including explicit `--tmo*` passthrough options; rejects
-    unknown options and invalid arity.
+    `--enable-luminance`), and luminance backend
+    controls including explicit `--tmo*` passthrough options; rejects unknown
+    options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @param include_jpg_compression {bool} Enables `--jpg-compression` parsing for JPG flow only.
-    @param command_name {str} Command token used in usage errors.
-    @param output_hint {str} Output placeholder used in usage errors.
-    @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, MagicRetouchOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options, magic_retouch_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-078, REQ-080, REQ-082
+    @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072
     """
 
     positional = []
@@ -757,170 +570,10 @@ def _parse_run_options(
     luminance_tmo = DEFAULT_LUMINANCE_TMO
     luminance_tmo_extra_args = []
     luminance_option_specified = False
-    magic_retouch_enabled = False
-    magic_denoise_strength = DEFAULT_MAGIC_DENOISE_STRENGTH
-    magic_gamma_bias = DEFAULT_MAGIC_GAMMA_BIAS
-    magic_clahe_clip_limit = DEFAULT_MAGIC_CLAHE_CLIP_LIMIT
-    magic_vibrance_strength = DEFAULT_MAGIC_VIBRANCE_STRENGTH
-    magic_sharpen_strength = DEFAULT_MAGIC_SHARPEN_STRENGTH
-    magic_sharpen_threshold = DEFAULT_MAGIC_SHARPEN_THRESHOLD
     idx = 0
 
     while idx < len(args):
         token = args[idx]
-        if token == "--magic-retouch":
-            magic_retouch_enabled = True
-            idx += 1
-            continue
-
-        if token in (
-            "--magic-color-balance-strength",
-            "--magic-denoise-sigma-color",
-            "--magic-denoise-sigma-space",
-            "--magic-microcontrast-radius",
-            "--magic-microcontrast-eps",
-            "--magic-microcontrast-amount",
-            "--magic-sharpen-sigma",
-            "--magic-sharpen-amount",
-            "--magic-protect-blend",
-            "--magic-filter",
-            "--magic-kernel-size",
-            "--magic-bilateral-d",
-            "--magic-bilateral-sigma-color",
-            "--magic-bilateral-sigma-space",
-        ) or token.startswith(
-            (
-                "--magic-color-balance-strength=",
-                "--magic-denoise-sigma-color=",
-                "--magic-denoise-sigma-space=",
-                "--magic-microcontrast-radius=",
-                "--magic-microcontrast-eps=",
-                "--magic-microcontrast-amount=",
-                "--magic-sharpen-sigma=",
-                "--magic-sharpen-amount=",
-                "--magic-protect-blend=",
-                "--magic-filter=",
-                "--magic-kernel-size=",
-                "--magic-bilateral-d=",
-                "--magic-bilateral-sigma-color=",
-                "--magic-bilateral-sigma-space=",
-            )
-        ):
-            print_error(f"Unknown option: {token}")
-            return None
-
-        if token == "--magic-denoise-strength":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-denoise-strength")
-                return None
-            parsed_value = _parse_unit_float_option("--magic-denoise-strength", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_denoise_strength = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-denoise-strength="):
-            parsed_value = _parse_unit_float_option("--magic-denoise-strength", token.split("=", 1)[1])
-            if parsed_value is None:
-                return None
-            magic_denoise_strength = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-gamma-bias":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-gamma-bias")
-                return None
-            parsed_value = _parse_magic_gamma_bias_option(args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_gamma_bias = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-gamma-bias="):
-            parsed_value = _parse_magic_gamma_bias_option(token.split("=", 1)[1])
-            if parsed_value is None:
-                return None
-            magic_gamma_bias = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-clahe-clip-limit":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-clahe-clip-limit")
-                return None
-            parsed_value = _parse_non_negative_float_option("--magic-clahe-clip-limit", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_clahe_clip_limit = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-clahe-clip-limit="):
-            parsed_value = _parse_non_negative_float_option("--magic-clahe-clip-limit", token.split("=", 1)[1])
-            if parsed_value is None:
-                return None
-            magic_clahe_clip_limit = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-vibrance-strength":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-vibrance-strength")
-                return None
-            parsed_value = _parse_unit_float_option("--magic-vibrance-strength", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_vibrance_strength = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-vibrance-strength="):
-            parsed_value = _parse_unit_float_option("--magic-vibrance-strength", token.split("=", 1)[1])
-            if parsed_value is None:
-                return None
-            magic_vibrance_strength = parsed_value
-            idx += 1
-            continue
-
-        if token == "--magic-sharpen-strength":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-sharpen-strength")
-                return None
-            parsed_value = _parse_unit_float_option("--magic-sharpen-strength", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_sharpen_strength = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-sharpen-strength="):
-            parsed_value = _parse_unit_float_option("--magic-sharpen-strength", token.split("=", 1)[1])
-            if parsed_value is None:
-                return None
-            magic_sharpen_strength = parsed_value
-            idx += 1
-            continue
-        if token == "--magic-sharpen-threshold":
-            if idx + 1 >= len(args):
-                print_error("Missing value for --magic-sharpen-threshold")
-                return None
-            parsed_value = _parse_non_negative_float_option("--magic-sharpen-threshold", args[idx + 1])
-            if parsed_value is None:
-                return None
-            magic_sharpen_threshold = parsed_value
-            idx += 2
-            continue
-
-        if token.startswith("--magic-sharpen-threshold="):
-            parsed_value = _parse_non_negative_float_option("--magic-sharpen-threshold", token.split("=", 1)[1])
-            if parsed_value is None:
-                return None
-            magic_sharpen_threshold = parsed_value
-            idx += 1
-            continue
         if token == "--enable-enfuse":
             enable_enfuse = True
             idx += 1
@@ -1167,7 +820,7 @@ def _parse_run_options(
             idx += 1
             continue
 
-        if include_jpg_compression and token == "--jpg-compression":
+        if token == "--jpg-compression":
             if idx + 1 >= len(args):
                 print_error("Missing value for --jpg-compression")
                 return None
@@ -1178,7 +831,7 @@ def _parse_run_options(
             idx += 2
             continue
 
-        if include_jpg_compression and token.startswith("--jpg-compression="):
+        if token.startswith("--jpg-compression="):
             parsed_compression = _parse_jpg_compression_option(token.split("=", 1)[1])
             if parsed_compression is None:
                 return None
@@ -1194,7 +847,7 @@ def _parse_run_options(
         idx += 1
 
     if len(positional) != 2:
-        print_error(f"Usage: {command_name} <input.dng> {output_hint} [--ev=<value>] [--gamma=<a,b>]")
+        print_error("Usage: dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>] [--gamma=<a,b>]")
         return None
 
     if enable_enfuse == enable_luminance:
@@ -1240,15 +893,6 @@ def _parse_run_options(
             tmo=luminance_tmo,
             tmo_extra_args=tuple(luminance_tmo_extra_args),
         ),
-        MagicRetouchOptions(
-            enabled=magic_retouch_enabled,
-            denoise_strength=magic_denoise_strength,
-            gamma_bias=magic_gamma_bias,
-            clahe_clip_limit=magic_clahe_clip_limit,
-            vibrance_strength=magic_vibrance_strength,
-            sharpen_strength=magic_sharpen_strength,
-            sharpen_threshold=magic_sharpen_threshold,
-        ),
     )
 
 
@@ -1257,15 +901,15 @@ def _load_image_dependencies():
 
     @details Imports `rawpy` for RAW decoding and `imageio` for image IO using
     `imageio.v3` when available with fallback to top-level `imageio` module.
-    @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module, cv2_module, np_module)` on success; `None` on missing dependency.
-    @satisfies REQ-059, REQ-066, REQ-077
+    @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module)` on success; `None` on missing dependency.
+    @satisfies REQ-059, REQ-066
     """
 
     try:
         import rawpy  # type: ignore
     except ModuleNotFoundError:
         print_error("Python dependency missing: rawpy")
-        print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
+        print_error("Install dependencies with: uv pip install rawpy imageio pillow")
         return None
 
     try:
@@ -1275,7 +919,7 @@ def _load_image_dependencies():
             import imageio  # type: ignore
         except ModuleNotFoundError:
             print_error("Python dependency missing: imageio")
-            print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
+            print_error("Install dependencies with: uv pip install rawpy imageio pillow")
             return None
 
     try:
@@ -1283,24 +927,10 @@ def _load_image_dependencies():
         from PIL import ImageEnhance as pil_enhance  # type: ignore
     except ModuleNotFoundError:
         print_error("Python dependency missing: pillow")
-        print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
+        print_error("Install dependencies with: uv pip install rawpy imageio pillow")
         return None
 
-    try:
-        import cv2  # type: ignore
-    except ModuleNotFoundError:
-        print_error("Python dependency missing: opencv-python")
-        print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
-        return None
-
-    try:
-        import numpy as np  # type: ignore
-    except ModuleNotFoundError:
-        print_error("Python dependency missing: numpy")
-        print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
-        return None
-
-    return rawpy, imageio, pil_image, pil_enhance, cv2, np
+    return rawpy, imageio, pil_image, pil_enhance
 
 
 def _build_exposure_multipliers(ev_value):
@@ -1450,211 +1080,62 @@ def _convert_compression_to_quality(jpg_compression):
     return max(1, min(100, 100 - jpg_compression))
 
 
-def _u16_to_u8_ordered_dither(image_u16):
-    """@brief Convert uint16 payload to uint8 using deterministic ordered dithering.
+def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tiff, output_jpg, postprocess_options):
+    """@brief Encode merged HDR TIFF payload into final JPG output.
 
-    @details Applies Bayer-4x4 ordered dithering over the low 8 bits while
-    preserving high-byte intensity so quantization error is spatially
-    distributed and visible banding after 16-bit to 8-bit conversion is reduced.
-    Falls back to legacy scalar conversion for non-numpy test doubles.
-    @param image_u16 {np.ndarray|object} Input uint16 payload or test double.
-    @return {np.ndarray|object} Uint8 payload for JPEG encoding.
-    @satisfies REQ-066
-    """
-
-    try:
-        import numpy as _np  # type: ignore
-    except ModuleNotFoundError:
-        scaled = image_u16 / 257.0
-        if hasattr(scaled, "clip"):
-            scaled = scaled.clip(0, 255)
-        if hasattr(scaled, "astype"):
-            return scaled.astype("uint8")
-        return scaled
-
-    if not isinstance(image_u16, _np.ndarray):
-        scaled = image_u16 / 257.0
-        if hasattr(scaled, "clip"):
-            scaled = scaled.clip(0, 255)
-        if hasattr(scaled, "astype"):
-            return scaled.astype("uint8")
-        return scaled
-
-    src = _np.asarray(image_u16, dtype=_np.uint16)
-    source_ndim = src.ndim
-    if src.ndim == 2:
-        src = src[:, :, _np.newaxis]
-
-    height, width = src.shape[:2]
-    bayer_4x4 = _np.array(
-        [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],
-        dtype=_np.uint16,
-    )
-    threshold = (bayer_4x4 * 16) + 8
-    tiled_threshold = _np.tile(threshold, (height // 4 + 1, width // 4 + 1))[:height, :width]
-    tiled_threshold = tiled_threshold[:, :, _np.newaxis]
-
-    high_byte = (src >> 8).astype(_np.uint16)
-    low_byte = (src & 0x00FF).astype(_np.uint16)
-    increment = (low_byte >= tiled_threshold).astype(_np.uint16)
-    quantized = _np.clip(high_byte + increment, 0, 255).astype(_np.uint8)
-
-    if source_ndim == 2:
-        return quantized[:, :, 0]
-    return quantized
-
-
-def _to_float01_from_u16(np_module, image_u16):
-    """@brief Convert one uint16 image payload to normalized float image.
-
-    @details Casts uint16 image payload to float32 and normalizes pixel domain
-    from `[0, 65535]` to `[0.0, 1.0]`.
-    @param np_module {ModuleType} Imported numpy module.
-    @param image_u16 {np.ndarray} 16-bit image payload.
-    @return {np.ndarray} Float32 normalized image payload.
-    @satisfies REQ-066, REQ-076
-    """
-
-    return image_u16.astype(np_module.float32) / 65535.0
-
-
-def _to_u16_from_float01(np_module, image_float):
-    """@brief Convert one normalized float image payload to uint16 image.
-
-    @details Clips pixel domain to `[0.0, 1.0]`, scales to `[0, 65535]`, and
-    casts to uint16 to preserve 16-bit-per-channel lossless stage continuity.
-    @param np_module {ModuleType} Imported numpy module.
-    @param image_float {np.ndarray} Float image payload in normalized domain.
-    @return {np.ndarray} Uint16 image payload.
-    @satisfies REQ-066, REQ-076
-    """
-
-    clipped = np_module.clip(image_float, 0.0, 1.0)
-    return np_module.rint(clipped * 65535.0).astype(np_module.uint16)
-
-
-def _apply_postprocess_16bit(np_module, cv2_module, image_u16, postprocess_options):
-    """@brief Apply gamma/brightness/contrast/saturation in-memory on uint16 image.
-
-    @details Executes all postprocess controls on normalized float payload and
-    converts back to uint16 without lossy 8-bit conversion.
-    @param np_module {ModuleType} Imported numpy module.
-    @param cv2_module {ModuleType} Imported OpenCV module.
-    @param image_u16 {np.ndarray} Input uint16 image payload.
-    @param postprocess_options {PostprocessOptions} Postprocess option values.
-    @return {np.ndarray} Postprocessed uint16 image payload.
-    @satisfies REQ-066, REQ-076
-    """
-
-    image_float = _to_float01_from_u16(np_module, image_u16)
-    if postprocess_options.post_gamma != 1.0:
-        gamma_power = 1.0 / postprocess_options.post_gamma
-        image_float = np_module.power(np_module.maximum(image_float, 0.0), gamma_power)
-
-    if postprocess_options.brightness != 1.0:
-        image_float = image_float * postprocess_options.brightness
-        image_float = np_module.clip(image_float, 0.0, 1.0)
-
-    if postprocess_options.contrast != 1.0:
-        image_float = ((image_float - 0.5) * postprocess_options.contrast) + 0.5
-        image_float = np_module.clip(image_float, 0.0, 1.0)
-
-    if postprocess_options.saturation != 1.0:
-        hsv = cv2_module.cvtColor(image_float, cv2_module.COLOR_RGB2HSV)
-        hsv[:, :, 1] = np_module.clip(hsv[:, :, 1] * postprocess_options.saturation, 0.0, 1.0)
-        image_float = cv2_module.cvtColor(hsv, cv2_module.COLOR_HSV2RGB)
-
-    return _to_u16_from_float01(np_module, image_float)
-
-
-def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
-    """@brief Execute in-memory 16-bit deterministic OpenCV magic-retouch pipeline.
-
-    @details Converts uint16 input to normalized RGB float payload and applies
-    ordered adaptive stages: parameterized denoise driven by `denoise_strength`,
-    conditional luminance-aware gamma correction controlled by gamma-bias,
-    optional CLAHE local-contrast enhancement, conditional adaptive vibrance,
-    and conditional edge-masked unsharp sharpening. Stages with zero-valued
-    controls are bypassed without executing their computation paths. Returns
-    uint16 output for downstream JPG conversion stage.
-    @param np_module {ModuleType} Imported numpy module.
-    @param cv2_module {ModuleType} Imported OpenCV module.
-    @param image_u16 {np.ndarray} Input uint16 image payload.
-    @param magic_options {MagicRetouchOptions} Magic-retouch option values.
-    @return {np.ndarray} Magic-retouched uint16 image payload.
-    @satisfies REQ-074, REQ-075, REQ-076, REQ-078
-    """
-
-    working = _to_float01_from_u16(np_module, image_u16).astype(np_module.float32)
-    denoise_strength = float(np_module.clip(magic_options.denoise_strength, 0.0, 1.0))
-    if denoise_strength > 0.0:
-        sigma = (denoise_strength * 1.8) + 0.2
-        ksize = 3 if denoise_strength < 0.5 else 5
-        working = cv2_module.GaussianBlur(working, (ksize, ksize), sigma, sigma)
-
-    gamma_bias = float(magic_options.gamma_bias)
-    if abs(gamma_bias) > 1e-12:
-        gray = cv2_module.cvtColor(working, cv2_module.COLOR_RGB2GRAY)
-        mean_luma = float(np_module.mean(gray))
-        gamma_value = 1.0
-        if mean_luma < 0.35:
-            gamma_value = 0.92
-        elif mean_luma > 0.75:
-            gamma_value = 1.08
-        gamma_value = float(np_module.clip(gamma_value + gamma_bias, 0.65, 1.35))
-        if abs(gamma_value - 1.0) > 1e-6:
-            working = np_module.power(np_module.maximum(working, 0.0), 1.0 / gamma_value)
-
-    if magic_options.clahe_clip_limit > 0.0:
-        working_u8 = np_module.rint(np_module.clip(working, 0.0, 1.0) * 255.0).astype(np_module.uint8)
-        lab = cv2_module.cvtColor(working_u8, cv2_module.COLOR_RGB2LAB)
-        clahe = cv2_module.createCLAHE(clipLimit=float(magic_options.clahe_clip_limit), tileGridSize=(8, 8))
-        lab[:, :, 0] = clahe.apply(lab[:, :, 0])
-        working = cv2_module.cvtColor(lab, cv2_module.COLOR_LAB2RGB).astype(np_module.float32) / 255.0
-
-    vibrance_strength = float(np_module.clip(magic_options.vibrance_strength, 0.0, 1.0))
-    if vibrance_strength > 0.0:
-        hsv = cv2_module.cvtColor(working, cv2_module.COLOR_RGB2HSV)
-        saturation = hsv[:, :, 1]
-        hsv[:, :, 1] = np_module.clip(
-            saturation * (1.0 + vibrance_strength * (1.0 - saturation)),
-            0.0,
-            1.0,
-        )
-        working = cv2_module.cvtColor(hsv, cv2_module.COLOR_HSV2RGB)
-
-    sharpen_strength = float(np_module.clip(magic_options.sharpen_strength, 0.0, 1.0))
-    if sharpen_strength > 0.0:
-        blurred = cv2_module.GaussianBlur(working, (0, 0), 1.1)
-        detail = working - blurred
-        edge_metric = np_module.mean(np_module.abs(detail), axis=2)
-        edge_mask = (edge_metric >= float(max(0.0, magic_options.sharpen_threshold))).astype(np_module.float32)
-        edge_mask = edge_mask[:, :, np_module.newaxis]
-        sharpened = np_module.clip(working + (detail * sharpen_strength), 0.0, 1.0)
-        working = np_module.clip((edge_mask * sharpened) + ((1.0 - edge_mask) * working), 0.0, 1.0)
-
-    return _to_u16_from_float01(np_module, np_module.clip(working, 0.0, 1.0))
-
-
-def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression):
-    """@brief Encode one in-memory 16-bit image payload into final JPG output.
-
-    @details Converts in-memory uint16 payload to uint8 using deterministic
-    ordered dithering, normalizes channel-mode to RGB, and writes JPG with
-    configured compression level and artifact-reduction encode flags.
+    @details Loads merged image payload, down-converts to `uint8` when source
+    dynamic range exceeds JPEG-native depth, applies shared gamma/brightness/
+    contrast/saturation postprocessing, and writes JPEG with configured
+    compression level for both HDR backends.
+    @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
     @param pil_image_module {ModuleType} Imported Pillow image module.
-    @param image_u16 {np.ndarray} Input uint16 image payload.
+    @param pil_enhance_module {ModuleType} Imported Pillow ImageEnhance module.
+    @param merged_tiff {Path} Merged TIFF source path produced by `enfuse`.
     @param output_jpg {Path} Final JPG output path.
-    @param jpg_compression {int} JPEG compression level.
+    @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
     @return {None} Side effects only.
-    @satisfies REQ-058, REQ-066, REQ-074, REQ-076, REQ-079
+    @satisfies REQ-058, REQ-066, REQ-069
     """
 
-    image_u8 = _u16_to_u8_ordered_dither(image_u16)
-    pil_image = pil_image_module.fromarray(image_u8)
+    merged_data = imageio_module.imread(str(merged_tiff))
+    dtype_name = str(getattr(merged_data, "dtype", ""))
+    if dtype_name and dtype_name != "uint8":
+        scaled = merged_data / 257.0
+        if hasattr(scaled, "clip"):
+            scaled = scaled.clip(0, 255)
+        if hasattr(scaled, "astype"):
+            merged_data = scaled.astype("uint8")
+        else:
+            merged_data = scaled
+
+    if hasattr(merged_data, "save") and hasattr(merged_data, "convert"):
+        pil_image = merged_data
+    else:
+        pil_image = pil_image_module.fromarray(merged_data)
 
     if getattr(pil_image, "mode", "") == "RGBA":
         pil_image = pil_image.convert("RGB")
+
+    if postprocess_options.post_gamma != 1.0:
+        lut = [
+            max(
+                0,
+                min(
+                    255,
+                    int(round(((value / 255.0) ** (1.0 / postprocess_options.post_gamma)) * 255.0)),
+                ),
+            )
+            for value in range(256)
+        ]
+        band_count = len(getattr(pil_image, "getbands", lambda: ("R", "G", "B"))())
+        pil_image = pil_image.point(lut * max(1, band_count))
+
+    if postprocess_options.brightness != 1.0:
+        pil_image = pil_enhance_module.Brightness(pil_image).enhance(postprocess_options.brightness)
+    if postprocess_options.contrast != 1.0:
+        pil_image = pil_enhance_module.Contrast(pil_image).enhance(postprocess_options.contrast)
+    if postprocess_options.saturation != 1.0:
+        pil_image = pil_enhance_module.Color(pil_image).enhance(postprocess_options.saturation)
 
     if getattr(pil_image, "mode", "") != "RGB":
         pil_image = pil_image.convert("RGB")
@@ -1662,58 +1143,9 @@ def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression):
     pil_image.save(
         str(output_jpg),
         format="JPEG",
-        quality=_convert_compression_to_quality(jpg_compression),
+        quality=_convert_compression_to_quality(postprocess_options.jpg_compression),
         optimize=True,
-        progressive=True,
-        subsampling=0,
     )
-
-
-def _encode_tiff(imageio_module, image_u16, output_tiff):
-    """@brief Encode one in-memory 16-bit image payload into lossless TIFF output.
-
-    @details Persists uint16 RGB payload as TIFF without quantization to preserve
-    16-bit-per-channel lossless output contract for TIFF command flow.
-    @param imageio_module {ModuleType} Imported imageio module.
-    @param image_u16 {np.ndarray} Input uint16 image payload.
-    @param output_tiff {Path} Final TIFF output path.
-    @return {None} Side effects only.
-    @satisfies REQ-081
-    """
-
-    imageio_module.imwrite(str(output_tiff), image_u16)
-
-
-def _read_u16_image(imageio_module, np_module, merged_tiff):
-    """@brief Read merged TIFF and normalize payload to uint16 RGB image.
-
-    @details Reads merged TIFF payload, strips alpha channel when present, and
-    converts integer payloads to uint16 domain required by in-memory postprocess.
-    @param imageio_module {ModuleType} Imported imageio module.
-    @param np_module {ModuleType} Imported numpy module.
-    @param merged_tiff {Path} Merged HDR TIFF path.
-    @return {np.ndarray} Normalized uint16 RGB image payload.
-    @satisfies REQ-066, REQ-074, REQ-076
-    """
-
-    merged_data = imageio_module.imread(str(merged_tiff))
-    image_array = np_module.asarray(merged_data)
-    if image_array.ndim == 2:
-        image_array = np_module.stack([image_array, image_array, image_array], axis=-1)
-    if image_array.ndim == 3 and image_array.shape[2] > 3:
-        image_array = image_array[:, :, :3]
-    if image_array.dtype == np_module.uint16:
-        return image_array
-    if np_module.issubdtype(image_array.dtype, np_module.integer):
-        max_value = int(np_module.iinfo(image_array.dtype).max)
-        if max_value <= 255:
-            return (image_array.astype(np_module.uint16) * 257).astype(np_module.uint16)
-        scale = 65535.0 / max(1.0, float(max_value))
-        return np_module.clip(image_array.astype(np_module.float32) * scale, 0.0, 65535.0).astype(np_module.uint16)
-    image_float = np_module.asarray(image_array, dtype=np_module.float32)
-    if float(np_module.max(image_float)) <= 1.0:
-        image_float = image_float * 65535.0
-    return np_module.clip(image_float, 0.0, 65535.0).astype(np_module.uint16)
 
 
 def _collect_processing_errors(rawpy_module):
@@ -1745,12 +1177,11 @@ def _collect_processing_errors(rawpy_module):
     return tuple(deduplicated)
 
 
-def _is_supported_runtime_os(command_name="dng2hdr2jpg"):
-    """@brief Validate runtime platform support for one DNG-to-HDR command.
+def _is_supported_runtime_os():
+    """@brief Validate runtime platform support for `dng2hdr2jpg`.
 
     @details Accepts Linux runtime only; emits explicit non-Linux unsupported
     message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
-    @param command_name {str} Command token for platform error rendering.
     @return {bool} `True` when runtime OS is Linux; `False` otherwise.
     @satisfies REQ-055, REQ-059
     """
@@ -1761,101 +1192,38 @@ def _is_supported_runtime_os(command_name="dng2hdr2jpg"):
 
     runtime_label = _RUNTIME_OS_LABELS.get(runtime_os, runtime_os)
     print_error(
-        f"{command_name} is not available on {runtime_label}; this command is Linux-only."
+        f"dng2hdr2jpg is not available on {runtime_label}; this command is Linux-only."
     )
     return False
 
 
-def _encode_final_jpg(imageio_module, pil_image_module, image_u16, output_path, postprocess_options):
-    """@brief Encode shared pipeline payload to JPG output.
+def run(args):
+    """@brief Execute `dng2hdr2jpg` command pipeline.
 
-    @details Delegates final payload encoding to JPEG writer using parsed
-    compression level from postprocess options.
-    @param imageio_module {ModuleType} Imported imageio module.
-    @param pil_image_module {ModuleType} Imported Pillow image module.
-    @param image_u16 {np.ndarray} Input uint16 image payload.
-    @param output_path {Path} Final output path.
-    @param postprocess_options {PostprocessOptions} Parsed postprocess options.
-    @return {None} Side effects only.
-    @satisfies REQ-066, REQ-079
-    """
-
-    del imageio_module
-    _encode_jpg(
-        pil_image_module=pil_image_module,
-        image_u16=image_u16,
-        output_jpg=output_path,
-        jpg_compression=postprocess_options.jpg_compression,
-    )
-
-
-def _encode_final_tiff(imageio_module, pil_image_module, image_u16, output_path, postprocess_options):
-    """@brief Encode shared pipeline payload to lossless TIFF output.
-
-    @details Persists final uint16 payload directly as TIFF without JPG-specific
-    quantization or compression mapping.
-    @param imageio_module {ModuleType} Imported imageio module.
-    @param pil_image_module {ModuleType} Imported Pillow image module.
-    @param image_u16 {np.ndarray} Input uint16 image payload.
-    @param output_path {Path} Final output path.
-    @param postprocess_options {PostprocessOptions} Parsed postprocess options.
-    @return {None} Side effects only.
-    @satisfies REQ-080, REQ-081
-    """
-
-    del pil_image_module, postprocess_options
-    _encode_tiff(
-        imageio_module=imageio_module,
-        image_u16=image_u16,
-        output_tiff=output_path,
-    )
-
-
-def _run_shared_dng2hdr_command(
-    args,
-    *,
-    command_name,
-    output_hint,
-    include_jpg_compression,
-    success_label,
-    output_encoder,
-):
-    """@brief Execute shared DNG-to-HDR pipeline for JPG and TIFF commands.
-
-    @details Parses options, validates dependencies, extracts RAW brackets,
-    executes selected HDR backend, applies in-memory uint16 postprocess and
-    optional magic-retouch, then delegates command-specific final encoding.
+    @details Parses command options, validates dependencies, extracts three RAW
+    brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow,
+    writes JPG output, and guarantees temporary artifact cleanup through isolated
+    temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
-    @param command_name {str} Command token for deterministic logs/errors.
-    @param output_hint {str} Output placeholder for parser usage errors.
-    @param include_jpg_compression {bool} Enables JPG compression option parsing.
-    @param success_label {str} Success message prefix.
-    @param output_encoder {Callable[[ModuleType, ModuleType, object, Path, PostprocessOptions], None]} Final encoder callback.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-080, REQ-081, REQ-082
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072
     """
 
-    if not _is_supported_runtime_os(command_name):
+    if not _is_supported_runtime_os():
         return 1
 
-    parsed = _parse_run_options(
-        args,
-        include_jpg_compression=include_jpg_compression,
-        command_name=command_name,
-        output_hint=output_hint,
-    )
+    parsed = _parse_run_options(args)
     if parsed is None:
         return 1
 
     (
         input_dng,
-        output_path,
+        output_jpg,
         ev_value,
         gamma_value,
         postprocess_options,
         enable_luminance,
         luminance_options,
-        magic_retouch_options,
     ) = parsed
 
     if input_dng.suffix.lower() != ".dng":
@@ -1866,7 +1234,7 @@ def _run_shared_dng2hdr_command(
         print_error(f"Input DNG file not found: {input_dng}")
         return 1
 
-    output_parent = output_path.parent
+    output_parent = output_jpg.parent
     if output_parent and not output_parent.exists():
         print_error(f"Output directory does not exist: {output_parent}")
         return 1
@@ -1884,33 +1252,20 @@ def _run_shared_dng2hdr_command(
     if dependencies is None:
         return 1
 
-    rawpy_module, imageio_module, pil_image_module, _, cv2_module, np_module = dependencies
+    rawpy_module, imageio_module, pil_image_module, pil_enhance_module = dependencies
     processing_errors = _collect_processing_errors(rawpy_module)
     multipliers = _build_exposure_multipliers(ev_value)
 
     print_info(f"Reading DNG input: {input_dng}")
     print_info(f"Using EV bracket: {ev_value}")
     print_info(f"Using gamma pair: {gamma_value[0]:g},{gamma_value[1]:g}")
-    if include_jpg_compression:
-        print_info(
-            "Postprocess factors: "
-            f"gamma={postprocess_options.post_gamma:g}, "
-            f"brightness={postprocess_options.brightness:g}, "
-            f"contrast={postprocess_options.contrast:g}, "
-            f"saturation={postprocess_options.saturation:g}, "
-            f"jpg-compression={postprocess_options.jpg_compression}"
-        )
-    else:
-        print_info(
-            "Postprocess factors: "
-            f"gamma={postprocess_options.post_gamma:g}, "
-            f"brightness={postprocess_options.brightness:g}, "
-            f"contrast={postprocess_options.contrast:g}, "
-            f"saturation={postprocess_options.saturation:g}"
-        )
     print_info(
-        "Magic retouch: "
-        + ("enabled" if magic_retouch_options.enabled else "disabled")
+        "Postprocess factors: "
+        f"gamma={postprocess_options.post_gamma:g}, "
+        f"brightness={postprocess_options.brightness:g}, "
+        f"contrast={postprocess_options.contrast:g}, "
+        f"saturation={postprocess_options.saturation:g}, "
+        f"jpg-compression={postprocess_options.jpg_compression}"
     )
     if enable_luminance:
         extra_args_text = ""
@@ -1926,7 +1281,7 @@ def _run_shared_dng2hdr_command(
     else:
         print_info("HDR backend: enfuse")
 
-    with tempfile.TemporaryDirectory(prefix=f"{command_name}-") as temp_dir_raw:
+    with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-") as temp_dir_raw:
         temp_dir = Path(temp_dir_raw)
         merged_tiff = temp_dir / "merged_hdr.tif"
 
@@ -1948,88 +1303,17 @@ def _run_shared_dng2hdr_command(
                 )
             else:
                 _run_enfuse(bracket_paths=bracket_paths, merged_tiff=merged_tiff)
-            image_u16 = _read_u16_image(
-                imageio_module=imageio_module,
-                np_module=np_module,
-                merged_tiff=merged_tiff,
-            )
-            image_u16 = _apply_postprocess_16bit(
-                np_module=np_module,
-                cv2_module=cv2_module,
-                image_u16=image_u16,
-                postprocess_options=postprocess_options,
-            )
-            if magic_retouch_options.enabled:
-                image_u16 = _magic_retouch(
-                    np_module=np_module,
-                    cv2_module=cv2_module,
-                    image_u16=image_u16,
-                    magic_options=magic_retouch_options,
-                )
-            output_encoder(
+            _encode_jpg(
                 imageio_module=imageio_module,
                 pil_image_module=pil_image_module,
-                image_u16=image_u16,
-                output_path=output_path,
+                pil_enhance_module=pil_enhance_module,
+                merged_tiff=merged_tiff,
+                output_jpg=output_jpg,
                 postprocess_options=postprocess_options,
             )
         except processing_errors as error:
-            print_error(f"{command_name} processing failed: {error}")
+            print_error(f"dng2hdr2jpg processing failed: {error}")
             return 1
 
-    print_success(f"{success_label}: {output_path}")
-    return 0
-
-
-def run(args):
-    """@brief Execute `dng2hdr2jpg` command pipeline.
-
-    @details Executes shared DNG-to-HDR pipeline and applies JPG-specific final
-    encoding with ordered-dither uint16-to-uint8 conversion.
-    @param args {list[str]} Command argument vector excluding command token.
-    @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-082
-    """
-
-    return _run_shared_dng2hdr_command(
-        args,
-        command_name="dng2hdr2jpg",
-        output_hint="<output.jpg>",
-        include_jpg_compression=True,
-        success_label="HDR JPG created",
-        output_encoder=_encode_final_jpg,
-    )
-
-
-def run_tiff(args):
-    """@brief Execute shared DNG-to-HDR pipeline with TIFF final encoding.
-
-    @details Reuses same parsing and processing path as JPG command and writes
-    final output as lossless uint16 TIFF without 8-bit quantization.
-    @param args {list[str]} Command argument vector excluding command token.
-    @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-059, REQ-066, REQ-073, REQ-074, REQ-075, REQ-076, REQ-080, REQ-081
-    """
-
-    return _run_shared_dng2hdr_command(
-        args,
-        command_name="dng2hdr2tiff",
-        output_hint="<output.tiff>",
-        include_jpg_compression=False,
-        success_label="HDR TIFF created",
-        output_encoder=_encode_final_tiff,
-    )
-
-
-def print_help_tiff(version):
-    """@brief Print help text for the `dng2hdr2tiff` command.
-
-    @details Delegates to shared DNG-to-HDR help renderer with TIFF output
-    placeholders and without JPG-compression option.
-    @param version {str} CLI version label to append in usage output.
-    @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-070, REQ-080, REQ-082
-    """
-
-    _print_help_common(version, "dng2hdr2tiff", "<output.tiff>", include_jpg_compression=False)
+    print_success(f"HDR JPG created: {output_jpg}")
     return 0
