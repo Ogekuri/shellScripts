@@ -3,7 +3,7 @@
 @details Verifies argument validation, EV parsing/default behavior, three-
   bracket extraction multipliers, dual-backend HDR merge behavior, shared
   postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073
 @return {None} Pytest module scope.
 """
 
@@ -210,15 +210,20 @@ def _build_fake_pillow_modules(observed):
             self.mode = target_mode
             return self
 
-        def save(self, path, format, quality, optimize):
+        def save(self, path, format, quality=None, optimize=None, compress_level=None):
             """@brief Persist deterministic JPEG artifact and record encode args."""
 
             observed["jpg_save"] = {
                 "format": format,
                 "quality": quality,
                 "optimize": optimize,
+                "compress_level": compress_level,
                 "mode": self.mode,
             }
+            if format == "PNG":
+                observed.setdefault("png_save", []).append(Path(path).name)
+                Path(path).write_text("png", encoding="utf-8")
+                return
             Path(path).write_text("jpg", encoding="utf-8")
 
     class _FakeEnhancer:
@@ -422,6 +427,9 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
 
         assert check is True
         observed["enfuse_cmd"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
         output_flag = next(token for token in command if token.startswith("--output="))
         merged_path = Path(output_flag.split("=", 1)[1])
         merged_path.write_text("merged", encoding="utf-8")
@@ -516,6 +524,9 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
 
         assert check is True
         observed["luminance_cmd"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
         output_index = command.index("-o") + 1
         Path(command[output_index]).write_text("jpg", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
@@ -628,6 +639,9 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
 
         assert check is True
         observed["command"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
         output_index = command.index("-o") + 1
         Path(command[output_index]).write_text("jpg", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
@@ -742,6 +756,9 @@ def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(monkeypatch,
 
         assert check is True
         observed["command"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
         output_index = command.index("-o") + 1
         Path(command[output_index]).write_text("jpg", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
@@ -890,7 +907,7 @@ def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
       and asserts deterministic parse failure.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-060, REQ-065
+    @satisfies TST-011, REQ-060, REQ-065, REQ-073
     """
 
     input_dng = tmp_path / "scene.dng"
@@ -903,6 +920,7 @@ def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--saturation=0"]) == 1
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--jpg-compression=200"]) == 1
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--jpg-compression=bad"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow=1"]) == 1
 
 
 def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
@@ -961,6 +979,9 @@ def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
 
         assert check is True
         observed["enfuse_cmd"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
         output_flag = next(token for token in command if token.startswith("--output="))
         merged_path = Path(output_flag.split("=", 1)[1])
         merged_path.write_text("merged", encoding="utf-8")
@@ -1035,6 +1056,9 @@ def test_dng2hdr2jpg_reorders_luminance_brackets(monkeypatch, tmp_path):
 
         assert check is True
         observed["command"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
         output_index = command.index("-o") + 1
         Path(command[output_index]).write_text("merged", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
@@ -1290,7 +1314,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072
+    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -1308,6 +1332,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--contrast=<value>" in output
     assert "--saturation=<value>" in output
     assert "--jpg-compression=<0..100>" in output
+    assert "--wow" in output
     assert "--luminance-hdr-model=<name>" in output
     assert "--luminance-hdr-weight=<name>" in output
     assert "--luminance-hdr-response-curve=<name>" in output
@@ -1340,7 +1365,7 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
       saturation factors and verifies fake Pillow operations and quality value.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-065, REQ-066
+    @satisfies TST-011, REQ-065, REQ-066, REQ-073
     """
 
     observed = {}
@@ -1372,6 +1397,7 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
             contrast=0.9,
             saturation=1.3,
             jpg_compression=80,
+            wow_enabled=False,
         ),
     )
 
@@ -1380,4 +1406,74 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
     assert ("contrast", 0.9) in observed["postprocess_ops"]
     assert ("saturation", 1.3) in observed["postprocess_ops"]
     assert observed["jpg_save"]["quality"] == 20
+    assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_path):
+    """
+    @brief Validate wow-stage execution only when explicitly enabled.
+    @details Executes encode path with `wow_enabled=True`, captures ImageMagick
+      command vectors, and verifies two-step wow flow over temporary files
+      (`wow_input_16.tif` then `wow_output.tif`) before final JPEG save.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-065, REQ-066, REQ-073
+    """
+
+    observed = {"commands": [], "jpg_save": None}
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for wow encode assertions."""
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake payload for merged/wow TIFF paths."""
+
+            if Path(path).name == "wow_output.tif":
+                class _FakeWowPayload:
+                    mode = "RGB"
+
+                return _FakeWowPayload()
+            return _FakeImage16()
+
+    def _fake_subprocess_run(command, check):
+        """@brief Capture wow subprocess calls and materialize outputs."""
+
+        assert check is True
+        observed["commands"].append(command)
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("artifact", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+
+    merged_tiff = tmp_path / "merged_hdr.tif"
+    merged_tiff.write_text("merged", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+    pil_image_module, pil_enhance_module = _build_fake_pillow_modules(observed)
+
+    dng2hdr2jpg._encode_jpg(
+        imageio_module=_FakeImageIoModule,
+        pil_image_module=pil_image_module,
+        pil_enhance_module=pil_enhance_module,
+        merged_tiff=merged_tiff,
+        output_jpg=output_jpg,
+        postprocess_options=dng2hdr2jpg.PostprocessOptions(
+            post_gamma=1.0,
+            brightness=1.0,
+            contrast=1.0,
+            saturation=1.0,
+            jpg_compression=10,
+            wow_enabled=True,
+        ),
+    )
+
+    assert len(observed["commands"]) == 2
+    assert observed["commands"][0][0] == "magick"
+    assert observed["commands"][1][0] == "magick"
+    assert Path(observed["commands"][0][-1]).name == "wow_input_16.tif"
+    assert Path(observed["commands"][1][-1]).name == "wow_output.tif"
+    assert observed["jpg_save"] is not None
+    assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()

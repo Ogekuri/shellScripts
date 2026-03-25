@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073
 """
 
 import shutil
@@ -188,8 +188,9 @@ class PostprocessOptions:
     @param contrast {float} Contrast enhancement factor.
     @param saturation {float} Saturation enhancement factor.
     @param jpg_compression {int} JPEG compression level in range `[0, 100]`.
+    @param wow_enabled {bool} Enable wow pre-encode stage.
     @return {None} Immutable dataclass container.
-    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072
+    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073
     """
 
     post_gamma: float
@@ -197,6 +198,7 @@ class PostprocessOptions:
     contrast: float
     saturation: float
     jpg_compression: int
+    wow_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -283,14 +285,14 @@ def print_help(version):
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072
+    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073
     """
 
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
         f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
-        f"[--jpg-compression=<0..100>] (--enable-enfuse | --enable-luminance) "
+        f"[--jpg-compression=<0..100>] [--wow] (--enable-enfuse | --enable-luminance) "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
         f"[--tmo*=<value>] ({version})"
@@ -307,6 +309,7 @@ def print_help(version):
     print("  --contrast=<value>   - Postprocess contrast factor (backend-default when omitted).")
     print("  --saturation=<value> - Postprocess saturation factor (backend-default when omitted).")
     print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
+    print("  --wow            - Enable validated wow stage before JPEG conversion.")
     print("  --enable-enfuse")
     print("                   - Select enfuse backend (required, mutually exclusive with --enable-luminance).")
     print("  --enable-luminance")
@@ -547,7 +550,7 @@ def _parse_run_options(args):
     options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073
     """
 
     positional = []
@@ -562,6 +565,7 @@ def _parse_run_options(args):
     brightness_set = False
     contrast_set = False
     saturation_set = False
+    wow_enabled = False
     enable_enfuse = False
     enable_luminance = False
     luminance_hdr_model = DEFAULT_LUMINANCE_HDR_MODEL
@@ -581,6 +585,11 @@ def _parse_run_options(args):
 
         if token == "--enable-luminance":
             enable_luminance = True
+            idx += 1
+            continue
+
+        if token == "--wow":
+            wow_enabled = True
             idx += 1
             continue
 
@@ -884,6 +893,7 @@ def _parse_run_options(args):
             contrast=contrast,
             saturation=saturation,
             jpg_compression=jpg_compression,
+            wow_enabled=wow_enabled,
         ),
         enable_luminance,
         LuminanceOptions(
@@ -1080,13 +1090,91 @@ def _convert_compression_to_quality(jpg_compression):
     return max(1, min(100, 100 - jpg_compression))
 
 
+def _apply_validated_wow_pipeline(postprocessed_input, wow_output):
+    """@brief Execute validated wow pipeline over temporary lossless 16-bit TIFF files.
+
+    @details Uses ImageMagick to normalize source data to 16-bit-per-channel TIFF,
+    applies deterministic denoise/level/sigmoidal/vibrance/high-pass overlay
+    stages, and writes lossless wow output artifact consumed by JPG encoder.
+    @param postprocessed_input {Path} Temporary postprocess image input path.
+    @param wow_output {Path} Temporary wow output TIFF path.
+    @return {None} Side effects only.
+    @exception subprocess.CalledProcessError Raised when ImageMagick returns non-zero.
+    @satisfies REQ-073
+    """
+
+    wow_input_16 = wow_output.parent / "wow_input_16.tif"
+    to_16_bit_command = [
+        "magick",
+        str(postprocessed_input),
+        "-colorspace",
+        "sRGB",
+        "-depth",
+        "16",
+        "-compress",
+        "LZW",
+        str(wow_input_16),
+    ]
+    subprocess.run(to_16_bit_command, check=True)
+
+    wow_command = [
+        "magick",
+        str(wow_input_16),
+        "-depth",
+        "16",
+        "-selective-blur",
+        "0x2+10%",
+        "-channel",
+        "RGB",
+        "-level",
+        "0.1%,99.9%",
+        "+channel",
+        "-sigmoidal-contrast",
+        "3x50%",
+        "-colorspace",
+        "HSL",
+        "-channel",
+        "G",
+        "-gamma",
+        "0.8",
+        "+channel",
+        "-colorspace",
+        "sRGB",
+        "(",
+        "-clone",
+        "0",
+        "-clone",
+        "0",
+        "-blur",
+        "0x2.5",
+        "-compose",
+        "mathematics",
+        "-define",
+        "compose:args=0,1,-1,0.5",
+        "-composite",
+        "-colorspace",
+        "gray",
+        ")",
+        "-compose",
+        "Overlay",
+        "-composite",
+        "-depth",
+        "16",
+        "-compress",
+        "LZW",
+        str(wow_output),
+    ]
+    subprocess.run(wow_command, check=True)
+
+
 def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tiff, output_jpg, postprocess_options):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
     @details Loads merged image payload, down-converts to `uint8` when source
     dynamic range exceeds JPEG-native depth, applies shared gamma/brightness/
-    contrast/saturation postprocessing, and writes JPEG with configured
-    compression level for both HDR backends.
+    contrast/saturation postprocessing, optionally executes wow stage over
+    temporary lossless 16-bit TIFF intermediates, and writes JPEG with
+    configured compression level for both HDR backends.
     @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
     @param pil_image_module {ModuleType} Imported Pillow image module.
     @param pil_enhance_module {ModuleType} Imported Pillow ImageEnhance module.
@@ -1094,7 +1182,7 @@ def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tif
     @param output_jpg {Path} Final JPG output path.
     @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
     @return {None} Side effects only.
-    @satisfies REQ-058, REQ-066, REQ-069
+    @satisfies REQ-058, REQ-066, REQ-069, REQ-073
     """
 
     merged_data = imageio_module.imread(str(merged_tiff))
@@ -1136,6 +1224,22 @@ def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tif
         pil_image = pil_enhance_module.Contrast(pil_image).enhance(postprocess_options.contrast)
     if postprocess_options.saturation != 1.0:
         pil_image = pil_enhance_module.Color(pil_image).enhance(postprocess_options.saturation)
+
+    if postprocess_options.wow_enabled:
+        with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-wow-") as wow_temp_dir_raw:
+            wow_temp_dir = Path(wow_temp_dir_raw)
+            postprocessed_input = wow_temp_dir / "postprocessed_input.png"
+            wow_output = wow_temp_dir / "wow_output.tif"
+            pil_image.save(str(postprocessed_input), format="PNG", compress_level=0)
+            _apply_validated_wow_pipeline(
+                postprocessed_input=postprocessed_input,
+                wow_output=wow_output,
+            )
+            wow_data = imageio_module.imread(str(wow_output))
+            if hasattr(wow_data, "save") and hasattr(wow_data, "convert"):
+                pil_image = wow_data
+            else:
+                pil_image = pil_image_module.fromarray(wow_data)
 
     if getattr(pil_image, "mode", "") != "RGB":
         pil_image = pil_image.convert("RGB")
@@ -1206,7 +1310,7 @@ def run(args):
     temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073
     """
 
     if not _is_supported_runtime_os():
@@ -1247,6 +1351,9 @@ def run(args):
         if shutil.which("enfuse") is None:
             print_error("Missing required dependency: enfuse")
             return 1
+    if postprocess_options.wow_enabled and shutil.which("magick") is None:
+        print_error("Missing required dependency: magick")
+        return 1
 
     dependencies = _load_image_dependencies()
     if dependencies is None:
@@ -1265,7 +1372,8 @@ def run(args):
         f"brightness={postprocess_options.brightness:g}, "
         f"contrast={postprocess_options.contrast:g}, "
         f"saturation={postprocess_options.saturation:g}, "
-        f"jpg-compression={postprocess_options.jpg_compression}"
+        f"jpg-compression={postprocess_options.jpg_compression}, "
+        f"wow={postprocess_options.wow_enabled}"
     )
     if enable_luminance:
         extra_args_text = ""
