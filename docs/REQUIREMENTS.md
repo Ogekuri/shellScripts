@@ -180,7 +180,7 @@ No explicit performance optimizations identified.
 - **REQ-070**: MUST render in `dng2hdr2jpg` help two aligned Unicode box-drawing tables where the operators table uses three columns, two-line headers, and two physical lines per operator row.
 - **REQ-064**: MUST parse optional `--gamma=<a,b>` and `--gamma <a,b>` in `dng2hdr2jpg`, default gamma to `(2.222,4.5)`, and reject malformed, non-numeric, or non-positive gamma values with return code `1`.
 - **REQ-065**: MUST parse optional `--post-gamma=<value>`, `--brightness=<value>`, `--contrast=<value>`, `--saturation=<value>`, and `--jpg-compression=<0..100>`, and MUST default `--jpg-compression` to `15`.
-- **REQ-066**: MUST execute `--post-gamma`, `--brightness`, `--contrast`, and `--saturation` before JPG conversion as an in-memory 16-bit-per-channel lossless postprocess stage for both HDR backends.
+- **REQ-066**: MUST execute `--post-gamma`, `--brightness`, `--contrast`, and `--saturation` before JPG conversion as an in-memory 16-bit-per-channel lossless postprocess stage, and MUST convert output to uint8 using deterministic rounded ordered dithering.
 - **REQ-067**: MUST parse explicit CLI options starting with `--tmo` in assignment or split form when `--enable-luminance` is set, preserve CLI order, and return `1` for missing or empty values.
 - **REQ-068**: MUST pass only `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, and `--ldrTiff 16b` by default, forwarding additional `--tmo*` options only when explicitly provided on CLI.
 - **REQ-069**: MUST default luminance-mode postprocess factors to `post-gamma=1.0`, `brightness=1.25`, `contrast=0.85`, and `saturation=0.55` when `--luminance-tmo` is `reinhard02` and no explicit postprocess overrides are provided.
@@ -192,6 +192,7 @@ No explicit performance optimizations identified.
 - **REQ-076**: MUST execute `magic_retouch` in-memory on lossless 16-bit-per-channel image data and forward its output directly to the JPG conversion/compression stage.
 - **REQ-077**: MUST declare Linux runtime dependencies `opencv-python` and `numpy` in package metadata so Astral `uv` installations include required `magic_retouch` runtime modules.
 - **REQ-078**: MUST default `magic_retouch` options to neutral values and MUST reject removed legacy magic options (pre-refactor and filter-based controls) with return code `1`.
+- **REQ-079**: MUST encode final JPEG with `optimize=True`, `progressive=True`, and `subsampling=0` (`4:4:4`) while preserving `--jpg-compression` quality mapping to minimize visible compression artifacts.
 
 ## 4. Test Requirements
 

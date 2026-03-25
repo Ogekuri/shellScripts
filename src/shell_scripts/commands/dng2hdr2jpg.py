@@ -8,7 +8,7 @@ in-memory 16-bit postprocess, optionally executes in-memory 16-bit
 `magic_retouch`, then writes final JPG to user-selected output path.
 Temporary artifacts are isolated in a temporary directory and removed
 automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079
 """
 
 import shutil
@@ -1420,6 +1420,60 @@ def _convert_compression_to_quality(jpg_compression):
     return max(1, min(100, 100 - jpg_compression))
 
 
+def _u16_to_u8_ordered_dither(image_u16):
+    """@brief Convert uint16 payload to uint8 using deterministic ordered dithering.
+
+    @details Applies Bayer-4x4 ordered dithering over the low 8 bits while
+    preserving high-byte intensity so quantization error is spatially
+    distributed and visible banding after 16-bit to 8-bit conversion is reduced.
+    Falls back to legacy scalar conversion for non-numpy test doubles.
+    @param image_u16 {np.ndarray|object} Input uint16 payload or test double.
+    @return {np.ndarray|object} Uint8 payload for JPEG encoding.
+    @satisfies REQ-066
+    """
+
+    try:
+        import numpy as _np  # type: ignore
+    except ModuleNotFoundError:
+        scaled = image_u16 / 257.0
+        if hasattr(scaled, "clip"):
+            scaled = scaled.clip(0, 255)
+        if hasattr(scaled, "astype"):
+            return scaled.astype("uint8")
+        return scaled
+
+    if not isinstance(image_u16, _np.ndarray):
+        scaled = image_u16 / 257.0
+        if hasattr(scaled, "clip"):
+            scaled = scaled.clip(0, 255)
+        if hasattr(scaled, "astype"):
+            return scaled.astype("uint8")
+        return scaled
+
+    src = _np.asarray(image_u16, dtype=_np.uint16)
+    source_ndim = src.ndim
+    if src.ndim == 2:
+        src = src[:, :, _np.newaxis]
+
+    height, width = src.shape[:2]
+    bayer_4x4 = _np.array(
+        [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],
+        dtype=_np.uint16,
+    )
+    threshold = (bayer_4x4 * 16) + 8
+    tiled_threshold = _np.tile(threshold, (height // 4 + 1, width // 4 + 1))[:height, :width]
+    tiled_threshold = tiled_threshold[:, :, _np.newaxis]
+
+    high_byte = (src >> 8).astype(_np.uint16)
+    low_byte = (src & 0x00FF).astype(_np.uint16)
+    increment = (low_byte >= tiled_threshold).astype(_np.uint16)
+    quantized = _np.clip(high_byte + increment, 0, 255).astype(_np.uint8)
+
+    if source_ndim == 2:
+        return quantized[:, :, 0]
+    return quantized
+
+
 def _to_float01_from_u16(np_module, image_u16):
     """@brief Convert one uint16 image payload to normalized float image.
 
@@ -1555,24 +1609,18 @@ def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
 def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression):
     """@brief Encode one in-memory 16-bit image payload into final JPG output.
 
-    @details Converts in-memory uint16 payload to uint8 for JPEG-compatible
-    encoding, normalizes channel-mode to RGB, and writes JPG with configured
-    compression level.
+    @details Converts in-memory uint16 payload to uint8 using deterministic
+    ordered dithering, normalizes channel-mode to RGB, and writes JPG with
+    configured compression level and artifact-reduction encode flags.
     @param pil_image_module {ModuleType} Imported Pillow image module.
     @param image_u16 {np.ndarray} Input uint16 image payload.
     @param output_jpg {Path} Final JPG output path.
     @param jpg_compression {int} JPEG compression level.
     @return {None} Side effects only.
-    @satisfies REQ-058, REQ-066, REQ-074, REQ-076
+    @satisfies REQ-058, REQ-066, REQ-074, REQ-076, REQ-079
     """
 
-    scaled = image_u16 / 257.0
-    if hasattr(scaled, "clip"):
-        scaled = scaled.clip(0, 255)
-    if hasattr(scaled, "astype"):
-        image_u8 = scaled.astype("uint8")
-    else:
-        image_u8 = scaled
+    image_u8 = _u16_to_u8_ordered_dither(image_u16)
     pil_image = pil_image_module.fromarray(image_u8)
 
     if getattr(pil_image, "mode", "") == "RGBA":
@@ -1586,6 +1634,8 @@ def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression):
         format="JPEG",
         quality=_convert_compression_to_quality(jpg_compression),
         optimize=True,
+        progressive=True,
+        subsampling=0,
     )
 
 

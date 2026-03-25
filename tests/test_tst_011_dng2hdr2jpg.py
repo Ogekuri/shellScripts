@@ -210,13 +210,15 @@ def _build_fake_pillow_modules(observed):
             self.mode = target_mode
             return self
 
-        def save(self, path, format, quality, optimize):
+        def save(self, path, format, quality, optimize, progressive=False, subsampling=None):
             """@brief Persist deterministic JPEG artifact and record encode args."""
 
             observed["jpg_save"] = {
                 "format": format,
                 "quality": quality,
                 "optimize": optimize,
+                "progressive": progressive,
+                "subsampling": subsampling,
                 "mode": self.mode,
             }
             Path(path).write_text("jpg", encoding="utf-8")
@@ -1664,7 +1666,29 @@ def test_dng2hdr2jpg_encode_jpg_uses_jpg_compression_quality_mapping(tmp_path):
 
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["quality"] == 20
+    assert observed["jpg_save"]["optimize"] is True
+    assert observed["jpg_save"]["progressive"] is True
+    assert observed["jpg_save"]["subsampling"] == 0
     assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_u16_to_u8_ordered_dither_preserves_shape_and_dtype():
+    """
+    @brief Validate ordered-dither conversion preserves output contract.
+    @details Converts deterministic uint16 payload through ordered dither and
+      verifies uint8 dtype, identical shape, and bounded range.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066
+    """
+
+    np_module = pytest.importorskip("numpy")
+    payload = np_module.arange(0, 16 * 16 * 3, dtype=np_module.uint16).reshape(16, 16, 3) * 137
+    output = dng2hdr2jpg._u16_to_u8_ordered_dither(payload)
+
+    assert output.shape == payload.shape
+    assert output.dtype == np_module.uint8
+    assert int(output.min()) >= 0
+    assert int(output.max()) <= 255
 
 
 def test_dng2hdr2jpg_magic_retouch_does_not_collapse_luminance():

@@ -179,7 +179,7 @@
         - `dng2hdr2jpg._magic_retouch(...)`: Execute optional deterministic adaptive OpenCV stage (parameterized denoise by `denoise_strength`, luminance-aware gamma, optional CLAHE, adaptive vibrance, edge-masked unsharp sharpening) after postprocess and before JPG conversion, using neutral defaults [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._to_float01_from_u16(...)`: Normalize uint16 payload to float working domain [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._to_u16_from_float01(...)`: Convert normalized float payload back to uint16 [`src/shell_scripts/commands/dng2hdr2jpg.py`]
-        - `dng2hdr2jpg._encode_jpg(...)`: Convert in-memory uint16 RGB payload into final JPG output and apply configured JPEG compression [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+        - `dng2hdr2jpg._encode_jpg(...)`: Convert in-memory uint16 RGB payload into final JPG output using ordered-dither uint16->uint8 quantization and artifact-reduction JPEG flags (`optimize`, `progressive`, `subsampling=0`) with configured compression mapping [`src/shell_scripts/commands/dng2hdr2jpg.py`]
       - `dicomviewer.run(...)`: Open DICOM viewer via Java class invocation [`src/shell_scripts/commands/dicomviewer.py`]
         - `dicomviewer._find_java(...)`: Resolve Java executable path [`src/shell_scripts/commands/dicomviewer.py`]
         - `dicomviewer._find_jars(...)`: Resolve required JAR paths from standard directories [`src/shell_scripts/commands/dicomviewer.py`]
