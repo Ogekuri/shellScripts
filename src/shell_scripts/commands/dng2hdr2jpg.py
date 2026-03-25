@@ -1487,11 +1487,12 @@ def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
     """@brief Execute in-memory 16-bit deterministic OpenCV magic-retouch pipeline.
 
     @details Converts uint16 input to normalized RGB float payload and applies
-    ordered adaptive stages: luminance noise estimation with denoise gate,
-    luminance-aware gamma correction with configurable bias, optional CLAHE
-    local-contrast enhancement, adaptive vibrance boost, and edge-masked
-    unsharp sharpening to avoid amplifying noise in flat regions. Returns uint16
-    output for downstream JPG conversion stage.
+    ordered adaptive stages: conditional noise estimation plus denoise,
+    conditional luminance-aware gamma correction controlled by gamma-bias,
+    optional CLAHE local-contrast enhancement, conditional adaptive vibrance,
+    and conditional edge-masked unsharp sharpening. Stages with zero-valued
+    controls are bypassed without executing their computation paths. Returns
+    uint16 output for downstream JPG conversion stage.
     @param np_module {ModuleType} Imported numpy module.
     @param cv2_module {ModuleType} Imported OpenCV module.
     @param image_u16 {np.ndarray} Input uint16 image payload.
@@ -1501,25 +1502,28 @@ def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
     """
 
     working = _to_float01_from_u16(np_module, image_u16).astype(np_module.float32)
-    gray = cv2_module.cvtColor(working, cv2_module.COLOR_RGB2GRAY)
-    noise_score = float(np_module.mean(np_module.abs(gray - cv2_module.GaussianBlur(gray, (3, 3), 0))))
     denoise_threshold = float(max(0.0, magic_options.denoise_threshold))
-    if noise_score > denoise_threshold * 1.8:
-        denoised = cv2_module.medianBlur(_to_u16_from_float01(np_module, working), 3)
-        working = _to_float01_from_u16(np_module, denoised).astype(np_module.float32)
-    elif noise_score > denoise_threshold:
-        working = cv2_module.GaussianBlur(working, (3, 3), 0)
+    if denoise_threshold > 0.0:
+        gray = cv2_module.cvtColor(working, cv2_module.COLOR_RGB2GRAY)
+        noise_score = float(np_module.mean(np_module.abs(gray - cv2_module.GaussianBlur(gray, (3, 3), 0))))
+        if noise_score > denoise_threshold * 1.8:
+            denoised = cv2_module.medianBlur(_to_u16_from_float01(np_module, working), 3)
+            working = _to_float01_from_u16(np_module, denoised).astype(np_module.float32)
+        elif noise_score > denoise_threshold:
+            working = cv2_module.GaussianBlur(working, (3, 3), 0)
 
-    gray = cv2_module.cvtColor(working, cv2_module.COLOR_RGB2GRAY)
-    mean_luma = float(np_module.mean(gray))
-    gamma_value = 1.0
-    if mean_luma < 0.35:
-        gamma_value = 0.92
-    elif mean_luma > 0.75:
-        gamma_value = 1.08
-    gamma_value = float(np_module.clip(gamma_value + magic_options.gamma_bias, 0.65, 1.35))
-    if abs(gamma_value - 1.0) > 1e-6:
-        working = np_module.power(np_module.maximum(working, 0.0), 1.0 / gamma_value)
+    gamma_bias = float(magic_options.gamma_bias)
+    if abs(gamma_bias) > 1e-12:
+        gray = cv2_module.cvtColor(working, cv2_module.COLOR_RGB2GRAY)
+        mean_luma = float(np_module.mean(gray))
+        gamma_value = 1.0
+        if mean_luma < 0.35:
+            gamma_value = 0.92
+        elif mean_luma > 0.75:
+            gamma_value = 1.08
+        gamma_value = float(np_module.clip(gamma_value + gamma_bias, 0.65, 1.35))
+        if abs(gamma_value - 1.0) > 1e-6:
+            working = np_module.power(np_module.maximum(working, 0.0), 1.0 / gamma_value)
 
     if magic_options.clahe_clip_limit > 0.0:
         working_u8 = np_module.rint(np_module.clip(working, 0.0, 1.0) * 255.0).astype(np_module.uint8)

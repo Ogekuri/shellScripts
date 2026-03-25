@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 1814L | 59 symbols | 13 imports | 36 comments
+# dng2hdr2jpg.py | Python | 1818L | 59 symbols | 13 imports | 36 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -919,9 +919,9 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Postprocessed uint16 image payload.
 - @satisfies REQ-066, REQ-076
 
-### fn `def _magic_retouch(np_module, cv2_module, image_u16, magic_options)` `priv` (L1486-1554)
+### fn `def _magic_retouch(np_module, cv2_module, image_u16, magic_options)` `priv` (L1486-1558)
 - @brief Execute in-memory 16-bit deterministic OpenCV magic-retouch pipeline.
-- @details Converts uint16 input to normalized RGB float payload and applies ordered adaptive stages: luminance noise estimation with denoise gate, luminance-aware gamma correction with configurable bias, optional CLAHE local-contrast enhancement, adaptive vibrance boost, and edge-masked unsharp sharpening to avoid amplifying noise in flat regions. Returns uint16 output for downstream JPG conversion stage.
+- @details Converts uint16 input to normalized RGB float payload and applies ordered adaptive stages: conditional noise estimation plus denoise, conditional luminance-aware gamma correction controlled by gamma-bias, optional CLAHE local-contrast enhancement, conditional adaptive vibrance, and conditional edge-masked unsharp sharpening. Stages with zero-valued controls are bypassed without executing their computation paths. Returns uint16 output for downstream JPG conversion stage.
 - @param np_module {ModuleType} Imported numpy module.
 - @param cv2_module {ModuleType} Imported OpenCV module.
 - @param image_u16 {np.ndarray} Input uint16 image payload.
@@ -929,7 +929,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Magic-retouched uint16 image payload.
 - @satisfies REQ-074, REQ-075, REQ-076, REQ-078
 
-### fn `def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression)` `priv` (L1555-1591)
+### fn `def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression)` `priv` (L1559-1595)
 - @brief Encode one in-memory 16-bit image payload into final JPG output.
 - @details Converts in-memory uint16 payload to uint8 for JPEG-compatible encoding, normalizes channel-mode to RGB, and writes JPG with configured compression level.
 - @param pil_image_module {ModuleType} Imported Pillow image module.
@@ -939,7 +939,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {None} Side effects only.
 - @satisfies REQ-058, REQ-066, REQ-074, REQ-076
 
-### fn `def _read_u16_image(imageio_module, np_module, merged_tiff)` `priv` (L1592-1623)
+### fn `def _read_u16_image(imageio_module, np_module, merged_tiff)` `priv` (L1596-1627)
 - @brief Read merged TIFF and normalize payload to uint16 RGB image.
 - @details Reads merged TIFF payload, strips alpha channel when present, and converts integer payloads to uint16 domain required by in-memory postprocess.
 - @param imageio_module {ModuleType} Imported imageio module.
@@ -948,20 +948,20 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Normalized uint16 RGB image payload.
 - @satisfies REQ-066, REQ-074, REQ-076
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1624-1652)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1628-1656)
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L1653-1672)
+### fn `def _is_supported_runtime_os()` `priv` (L1657-1676)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L1673-1814)
+### fn `def run(args)` (L1677-1818)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow, applies in-memory uint16 postprocess controls, optionally applies in-memory uint16 OpenCV-filter `magic_retouch`, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -1024,12 +1024,12 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 |`_to_float01_from_u16`|fn|priv|1423-1436|def _to_float01_from_u16(np_module, image_u16)|
 |`_to_u16_from_float01`|fn|priv|1437-1451|def _to_u16_from_float01(np_module, image_float)|
 |`_apply_postprocess_16bit`|fn|priv|1452-1485|def _apply_postprocess_16bit(np_module, cv2_module, image...|
-|`_magic_retouch`|fn|priv|1486-1554|def _magic_retouch(np_module, cv2_module, image_u16, magi...|
-|`_encode_jpg`|fn|priv|1555-1591|def _encode_jpg(pil_image_module, image_u16, output_jpg, ...|
-|`_read_u16_image`|fn|priv|1592-1623|def _read_u16_image(imageio_module, np_module, merged_tiff)|
-|`_collect_processing_errors`|fn|priv|1624-1652|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|1653-1672|def _is_supported_runtime_os()|
-|`run`|fn|pub|1673-1814|def run(args)|
+|`_magic_retouch`|fn|priv|1486-1558|def _magic_retouch(np_module, cv2_module, image_u16, magi...|
+|`_encode_jpg`|fn|priv|1559-1595|def _encode_jpg(pil_image_module, image_u16, output_jpg, ...|
+|`_read_u16_image`|fn|priv|1596-1627|def _read_u16_image(imageio_module, np_module, merged_tiff)|
+|`_collect_processing_errors`|fn|priv|1628-1656|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|1657-1676|def _is_supported_runtime_os()|
+|`run`|fn|pub|1677-1818|def run(args)|
 
 
 ---

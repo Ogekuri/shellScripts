@@ -1829,3 +1829,86 @@ def test_dng2hdr2jpg_magic_retouch_defaults_are_noise_conservative():
     assert dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH == pytest.approx(0.0)
     assert dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_STRENGTH == pytest.approx(0.0)
     assert dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_THRESHOLD == pytest.approx(0.02)
+
+
+def test_dng2hdr2jpg_magic_retouch_bypasses_zero_controlled_stages(monkeypatch):
+    """
+    @brief Validate zero-valued controls bypass adaptive stage computations.
+    @details Injects strict fakes and verifies denoise, gamma-bias, vibrance,
+      and sharpen computations are not executed when their controls are `0`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-075
+    """
+
+    np_module = pytest.importorskip("numpy")
+    cv2_module = pytest.importorskip("cv2")
+    image_u16 = np_module.full((16, 16, 3), 30000, dtype=np_module.uint16)
+    options = dng2hdr2jpg.MagicRetouchOptions(
+        enabled=True,
+        denoise_threshold=0.0,
+        gamma_bias=0.0,
+        clahe_clip_limit=0.0,
+        vibrance_strength=0.0,
+        sharpen_strength=0.0,
+        sharpen_threshold=0.02,
+    )
+    observed = {
+        "gray_calls": 0,
+        "gaussian_gray_calls": 0,
+        "gaussian_sharp_calls": 0,
+        "median_calls": 0,
+        "hsv_calls": 0,
+        "power_calls": 0,
+    }
+    original_cvt_color = cv2_module.cvtColor
+    original_gaussian = cv2_module.GaussianBlur
+    original_median = cv2_module.medianBlur
+    original_power = np_module.power
+
+    def _guard_cvt_color(image, code):
+        """@brief Track color conversions used by adaptive stages."""
+
+        if code == cv2_module.COLOR_RGB2GRAY:
+            observed["gray_calls"] += 1
+            return original_cvt_color(image, code)
+        if code == cv2_module.COLOR_RGB2HSV:
+            observed["hsv_calls"] += 1
+        return original_cvt_color(image, code)
+
+    def _guard_gaussian(image, ksize, sigma, *args, **kwargs):
+        """@brief Track Gaussian calls by payload dimensionality."""
+
+        if getattr(image, "ndim", 0) == 2:
+            observed["gaussian_gray_calls"] += 1
+        else:
+            observed["gaussian_sharp_calls"] += 1
+        return original_gaussian(image, ksize, sigma, *args, **kwargs)
+
+    def _guard_median(image, ksize):
+        """@brief Track median calls used by denoise stage."""
+
+        observed["median_calls"] += 1
+        return original_median(image, ksize)
+
+    def _guard_power(base, exponent, *args, **kwargs):
+        """@brief Track gamma correction power calls."""
+
+        observed["power_calls"] += 1
+        return original_power(base, exponent, *args, **kwargs)
+
+    monkeypatch.setattr(cv2_module, "cvtColor", _guard_cvt_color)
+    monkeypatch.setattr(cv2_module, "GaussianBlur", _guard_gaussian)
+    monkeypatch.setattr(cv2_module, "medianBlur", _guard_median)
+    monkeypatch.setattr(np_module, "power", _guard_power)
+
+    output_u16 = dng2hdr2jpg._magic_retouch(np_module, cv2_module, image_u16, options)
+
+    assert output_u16.shape == image_u16.shape
+    assert output_u16.dtype == np_module.uint16
+    assert observed["gray_calls"] == 0
+    assert observed["gaussian_gray_calls"] == 0
+    assert observed["gaussian_sharp_calls"] == 0
+    assert observed["median_calls"] == 0
+    assert observed["hsv_calls"] == 0
+    assert observed["power_calls"] == 0
