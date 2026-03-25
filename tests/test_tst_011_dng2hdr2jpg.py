@@ -1640,3 +1640,39 @@ def test_dng2hdr2jpg_encode_jpg_uses_jpg_compression_quality_mapping(tmp_path):
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["quality"] == 20
     assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_magic_retouch_does_not_collapse_luminance():
+    """
+    @brief Reproduce magic-retouch exposure-collapse defect on well-exposed input.
+    @details Uses a constant well-exposed uint16 image and verifies magic-retouch
+      output mean luminance remains in a bounded ratio against input mean.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-075, REQ-076
+    """
+
+    np_module = pytest.importorskip("numpy")
+    cv2_module = pytest.importorskip("cv2")
+
+    image_u16 = np_module.full((32, 32, 3), 40000, dtype=np_module.uint16)
+    options = dng2hdr2jpg.MagicRetouchOptions(
+        enabled=True,
+        color_balance_strength=dng2hdr2jpg.DEFAULT_MAGIC_COLOR_BALANCE_STRENGTH,
+        denoise_sigma_color=dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_SIGMA_COLOR,
+        denoise_sigma_space=dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_SIGMA_SPACE,
+        microcontrast_radius=dng2hdr2jpg.DEFAULT_MAGIC_MICROCONTRAST_RADIUS,
+        microcontrast_eps=dng2hdr2jpg.DEFAULT_MAGIC_MICROCONTRAST_EPS,
+        microcontrast_amount=dng2hdr2jpg.DEFAULT_MAGIC_MICROCONTRAST_AMOUNT,
+        vibrance_strength=dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH,
+        sharpen_sigma=dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_SIGMA,
+        sharpen_amount=dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_AMOUNT,
+        protect_blend=dng2hdr2jpg.DEFAULT_MAGIC_PROTECT_BLEND,
+    )
+
+    output_u16 = dng2hdr2jpg._magic_retouch(np_module, cv2_module, image_u16, options)
+    input_mean = float(image_u16.mean())
+    output_mean = float(output_u16.mean())
+    ratio = output_mean / input_mean
+
+    assert ratio >= 0.70
+    assert ratio <= 1.30

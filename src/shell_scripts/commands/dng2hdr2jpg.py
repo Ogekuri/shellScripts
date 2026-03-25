@@ -1605,12 +1605,16 @@ def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
     out = original.copy()
 
     # 1) Mild color balance in LAB chroma channels.
+    # OpenCV LAB float conversion uses L in [0, 100] and a/b around 0 with range near [-127, 127].
     out_lab = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2LAB)
     channel_l, channel_a, channel_b = cv2_module.split(out_lab)
     a_mean = float(np_module.mean(channel_a))
     b_mean = float(np_module.mean(channel_b))
-    channel_a = np_module.clip(channel_a - ((a_mean - 0.5) * magic_options.color_balance_strength), 0.0, 1.0)
-    channel_b = np_module.clip(channel_b - ((b_mean - 0.5) * magic_options.color_balance_strength), 0.0, 1.0)
+    channel_a = channel_a - (a_mean * magic_options.color_balance_strength)
+    channel_b = channel_b - (b_mean * magic_options.color_balance_strength)
+    channel_l = np_module.clip(channel_l, 0.0, 100.0)
+    channel_a = np_module.clip(channel_a, -127.0, 127.0)
+    channel_b = np_module.clip(channel_b, -127.0, 127.0)
     out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
 
     # 2) Very light denoise.
@@ -1627,22 +1631,25 @@ def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
     # 3) Edge-aware micro-contrast on luminance.
     out_lab = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2LAB)
     channel_l, channel_a, channel_b = cv2_module.split(out_lab)
+    channel_l_norm = np_module.clip(channel_l / 100.0, 0.0, 1.0)
     gray = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2GRAY)
     base = _guided_filter(
         np_module=np_module,
         cv2_module=cv2_module,
         guide=gray,
-        src=channel_l,
+        src=channel_l_norm,
         radius=magic_options.microcontrast_radius,
         eps=magic_options.microcontrast_eps,
     )
-    detail = channel_l - base
-    channel_l = np_module.clip(base + ((1.0 + magic_options.microcontrast_amount) * detail), 0.0, 1.0)
+    detail = channel_l_norm - base
+    channel_l_norm = np_module.clip(base + ((1.0 + magic_options.microcontrast_amount) * detail), 0.0, 1.0)
+    channel_l = np_module.clip(channel_l_norm * 100.0, 0.0, 100.0)
     out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
 
     # 4) Mild vibrance.
     out_hsv = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2HSV)
     channel_h, channel_s, channel_v = cv2_module.split(out_hsv)
+    channel_s = np_module.clip(channel_s, 0.0, 1.0)
     gain = 1.0 + (magic_options.vibrance_strength * (1.0 - channel_s))
     channel_s = np_module.clip(channel_s * gain, 0.0, 1.0)
     out = cv2_module.cvtColor(cv2_module.merge([channel_h, channel_s, channel_v]), cv2_module.COLOR_HSV2RGB)
@@ -1665,7 +1672,7 @@ def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
             0.0,
         ),
         0.0,
-        1.0,
+        100.0,
     )
     out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
 

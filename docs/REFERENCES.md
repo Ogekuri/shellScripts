@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 1940L | 63 symbols | 13 imports | 42 comments
+# dng2hdr2jpg.py | Python | 1947L | 63 symbols | 13 imports | 43 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -932,7 +932,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Filtered mono channel in `[0, 1]`.
 - @satisfies REQ-075
 
-### fn `def _magic_retouch(np_module, cv2_module, image_u16, magic_options)` `priv` (L1590-1680)
+### fn `def _magic_retouch(np_module, cv2_module, image_u16, magic_options)` `priv` (L1590-1687)
 - @brief Execute in-memory 16-bit deterministic magic-retouch pipeline.
 - @details Applies mild color balance, light denoise, edge-aware micro-contrast, mild vibrance, luminance-only sharpen, and extremes protection on normalized float data, then returns uint16 payload.
 - @param np_module {ModuleType} Imported numpy module.
@@ -942,7 +942,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Magic-retouched uint16 image payload.
 - @satisfies REQ-074, REQ-075, REQ-076
 
-### fn `def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression)` `priv` (L1681-1717)
+### fn `def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression)` `priv` (L1688-1724)
 - @brief Encode one in-memory 16-bit image payload into final JPG output.
 - @details Converts in-memory uint16 payload to uint8 for JPEG-compatible encoding, normalizes channel-mode to RGB, and writes JPG with configured compression level.
 - @param pil_image_module {ModuleType} Imported Pillow image module.
@@ -952,7 +952,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {None} Side effects only.
 - @satisfies REQ-058, REQ-066, REQ-074, REQ-076
 
-### fn `def _read_u16_image(imageio_module, np_module, merged_tiff)` `priv` (L1718-1749)
+### fn `def _read_u16_image(imageio_module, np_module, merged_tiff)` `priv` (L1725-1756)
 - @brief Read merged TIFF and normalize payload to uint16 RGB image.
 - @details Reads merged TIFF payload, strips alpha channel when present, and converts integer payloads to uint16 domain required by in-memory postprocess.
 - @param imageio_module {ModuleType} Imported imageio module.
@@ -961,20 +961,20 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Normalized uint16 RGB image payload.
 - @satisfies REQ-066, REQ-074, REQ-076
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1750-1778)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1757-1785)
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L1779-1798)
+### fn `def _is_supported_runtime_os()` `priv` (L1786-1805)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L1799-1940)
+### fn `def run(args)` (L1806-1947)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow, applies in-memory uint16 postprocess controls, optionally applies in-memory uint16 `magic_retouch`, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -1041,12 +1041,12 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 |`_to_u16_from_float01`|fn|priv|1512-1526|def _to_u16_from_float01(np_module, image_float)|
 |`_apply_postprocess_16bit`|fn|priv|1527-1560|def _apply_postprocess_16bit(np_module, cv2_module, image...|
 |`_guided_filter`|fn|priv|1561-1589|def _guided_filter(np_module, cv2_module, guide, src, rad...|
-|`_magic_retouch`|fn|priv|1590-1680|def _magic_retouch(np_module, cv2_module, image_u16, magi...|
-|`_encode_jpg`|fn|priv|1681-1717|def _encode_jpg(pil_image_module, image_u16, output_jpg, ...|
-|`_read_u16_image`|fn|priv|1718-1749|def _read_u16_image(imageio_module, np_module, merged_tiff)|
-|`_collect_processing_errors`|fn|priv|1750-1778|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|1779-1798|def _is_supported_runtime_os()|
-|`run`|fn|pub|1799-1940|def run(args)|
+|`_magic_retouch`|fn|priv|1590-1687|def _magic_retouch(np_module, cv2_module, image_u16, magi...|
+|`_encode_jpg`|fn|priv|1688-1724|def _encode_jpg(pil_image_module, image_u16, output_jpg, ...|
+|`_read_u16_image`|fn|priv|1725-1756|def _read_u16_image(imageio_module, np_module, merged_tiff)|
+|`_collect_processing_errors`|fn|priv|1757-1785|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|1786-1805|def _is_supported_runtime_os()|
+|`run`|fn|pub|1806-1947|def run(args)|
 
 
 ---
