@@ -1090,7 +1090,25 @@ def _convert_compression_to_quality(jpg_compression):
     return max(1, min(100, 100 - jpg_compression))
 
 
-def _apply_validated_wow_pipeline(postprocessed_input, wow_output):
+def _resolve_imagemagick_command():
+    """@brief Resolve ImageMagick executable name for current runtime.
+
+    @details Probes `magick` first (ImageMagick 7+ preferred CLI), then
+    `convert` (legacy-compatible CLI alias) to preserve wow-stage compatibility
+    across distributions that package ImageMagick under different executable
+    names.
+    @return {str|None} Resolved executable token (`magick` or `convert`) or
+      `None` when no supported executable is available.
+    @satisfies REQ-059, REQ-073
+    """
+
+    for executable in ("magick", "convert"):
+        if shutil.which(executable) is not None:
+            return executable
+    return None
+
+
+def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_command):
     """@brief Execute validated wow pipeline over temporary lossless 16-bit TIFF files.
 
     @details Uses ImageMagick to normalize source data to 16-bit-per-channel TIFF,
@@ -1098,6 +1116,7 @@ def _apply_validated_wow_pipeline(postprocessed_input, wow_output):
     stages, and writes lossless wow output artifact consumed by JPG encoder.
     @param postprocessed_input {Path} Temporary postprocess image input path.
     @param wow_output {Path} Temporary wow output TIFF path.
+    @param imagemagick_command {str} Resolved ImageMagick executable token.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when ImageMagick returns non-zero.
     @satisfies REQ-073
@@ -1105,7 +1124,7 @@ def _apply_validated_wow_pipeline(postprocessed_input, wow_output):
 
     wow_input_16 = wow_output.parent / "wow_input_16.tif"
     to_16_bit_command = [
-        "magick",
+        imagemagick_command,
         str(postprocessed_input),
         "-colorspace",
         "sRGB",
@@ -1118,7 +1137,7 @@ def _apply_validated_wow_pipeline(postprocessed_input, wow_output):
     subprocess.run(to_16_bit_command, check=True)
 
     wow_command = [
-        "magick",
+        imagemagick_command,
         str(wow_input_16),
         "-depth",
         "16",
@@ -1167,7 +1186,15 @@ def _apply_validated_wow_pipeline(postprocessed_input, wow_output):
     subprocess.run(wow_command, check=True)
 
 
-def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tiff, output_jpg, postprocess_options):
+def _encode_jpg(
+    imageio_module,
+    pil_image_module,
+    pil_enhance_module,
+    merged_tiff,
+    output_jpg,
+    postprocess_options,
+    imagemagick_command=None,
+):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
     @details Loads merged image payload, down-converts to `uint8` when source
@@ -1181,7 +1208,9 @@ def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tif
     @param merged_tiff {Path} Merged TIFF source path produced by `enfuse`.
     @param output_jpg {Path} Final JPG output path.
     @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
+    @param imagemagick_command {str|None} Optional pre-resolved ImageMagick executable.
     @return {None} Side effects only.
+    @exception RuntimeError Raised when wow is enabled and no supported ImageMagick executable is available.
     @satisfies REQ-058, REQ-066, REQ-069, REQ-073
     """
 
@@ -1226,6 +1255,10 @@ def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tif
         pil_image = pil_enhance_module.Color(pil_image).enhance(postprocess_options.saturation)
 
     if postprocess_options.wow_enabled:
+        if imagemagick_command is None:
+            imagemagick_command = _resolve_imagemagick_command()
+        if imagemagick_command is None:
+            raise RuntimeError("Missing required dependency: ImageMagick executable (magick or convert)")
         with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-wow-") as wow_temp_dir_raw:
             wow_temp_dir = Path(wow_temp_dir_raw)
             postprocessed_input = wow_temp_dir / "postprocessed_input.png"
@@ -1234,6 +1267,7 @@ def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tif
             _apply_validated_wow_pipeline(
                 postprocessed_input=postprocessed_input,
                 wow_output=wow_output,
+                imagemagick_command=imagemagick_command,
             )
             wow_data = imageio_module.imread(str(wow_output))
             if hasattr(wow_data, "save") and hasattr(wow_data, "convert"):
@@ -1351,9 +1385,12 @@ def run(args):
         if shutil.which("enfuse") is None:
             print_error("Missing required dependency: enfuse")
             return 1
-    if postprocess_options.wow_enabled and shutil.which("magick") is None:
-        print_error("Missing required dependency: magick")
-        return 1
+    imagemagick_command = None
+    if postprocess_options.wow_enabled:
+        imagemagick_command = _resolve_imagemagick_command()
+        if imagemagick_command is None:
+            print_error("Missing required dependency: ImageMagick executable (magick or convert)")
+            return 1
 
     dependencies = _load_image_dependencies()
     if dependencies is None:
@@ -1418,6 +1455,7 @@ def run(args):
                 merged_tiff=merged_tiff,
                 output_jpg=output_jpg,
                 postprocess_options=postprocess_options,
+                imagemagick_command=imagemagick_command,
             )
         except processing_errors as error:
             print_error(f"dng2hdr2jpg processing failed: {error}")

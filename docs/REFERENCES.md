@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 1427L | 44 symbols | 11 imports | 27 comments
+# dng2hdr2jpg.py | Python | 1465L | 45 symbols | 11 imports | 28 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -842,41 +842,54 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {int} Pillow quality value in `[1, 100]`.
 - @satisfies REQ-065, REQ-066
 
-### fn `def _apply_validated_wow_pipeline(postprocessed_input, wow_output)` `priv` (L1093-1169)
+### fn `def _resolve_imagemagick_command()` `priv` (L1093-1110)
+- @brief Resolve ImageMagick executable name for current runtime.
+- @details Probes `magick` first (ImageMagick 7+ preferred CLI), then `convert` (legacy-compatible CLI alias) to preserve wow-stage compatibility across distributions that package ImageMagick under different executable names.
+- @return {str|None} Resolved executable token (`magick` or `convert`) or `None` when no supported executable is available.
+- @satisfies REQ-059, REQ-073
+
+### fn `def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_command)` `priv` (L1111-1188)
 - @brief Execute validated wow pipeline over temporary lossless 16-bit TIFF files.
 - @details Uses ImageMagick to normalize source data to 16-bit-per-channel TIFF, applies deterministic denoise/level/sigmoidal/vibrance/high-pass overlay stages, and writes lossless wow output artifact consumed by JPG encoder.
 - @param postprocessed_input {Path} Temporary postprocess image input path.
 - @param wow_output {Path} Temporary wow output TIFF path.
+- @param imagemagick_command {str} Resolved ImageMagick executable token.
 - @return {None} Side effects only.
 - @exception subprocess.CalledProcessError Raised when ImageMagick returns non-zero.
 - @satisfies REQ-073
 
-### fn `def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tiff, output_jpg, postprocess_options)` `priv` (L1170-1254)
+### fn `def _encode_jpg(` `priv` (L1189-1196)
+
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1289-1317)
 - @brief Encode merged HDR TIFF payload into final JPG output.
-- @details Loads merged image payload, down-converts to `uint8` when source dynamic range exceeds JPEG-native depth, applies shared gamma/brightness contrast/saturation postprocessing, optionally executes wow stage over temporary lossless 16-bit TIFF intermediates, and writes JPEG with configured compression level for both HDR backends.
+- @brief Build deterministic tuple of recoverable processing exceptions.
+- @details Loads merged image payload, down-converts to `uint8` when source
+dynamic range exceeds JPEG-native depth, applies shared gamma/brightness/
+contrast/saturation postprocessing, optionally executes wow stage over
+temporary lossless 16-bit TIFF intermediates, and writes JPEG with
+configured compression level for both HDR backends.
+- @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
 - @param pil_image_module {ModuleType} Imported Pillow image module.
 - @param pil_enhance_module {ModuleType} Imported Pillow ImageEnhance module.
 - @param merged_tiff {Path} Merged TIFF source path produced by `enfuse`.
 - @param output_jpg {Path} Final JPG output path.
 - @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
-- @return {None} Side effects only.
-- @satisfies REQ-058, REQ-066, REQ-069, REQ-073
-
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1255-1283)
-- @brief Build deterministic tuple of recoverable processing exceptions.
-- @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
+- @param imagemagick_command {str|None} Optional pre-resolved ImageMagick executable.
 - @param rawpy_module {ModuleType} Imported rawpy module.
+- @return {None} Side effects only.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
+- @exception RuntimeError Raised when wow is enabled and no supported ImageMagick executable is available.
+- @satisfies REQ-058, REQ-066, REQ-069, REQ-073
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L1284-1303)
+### fn `def _is_supported_runtime_os()` `priv` (L1318-1337)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L1304-1427)
+### fn `def run(args)` (L1338-1465)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -925,11 +938,12 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 |`_run_enfuse`|fn|priv|1019-1039|def _run_enfuse(bracket_paths, merged_tiff)|
 |`_run_luminance_hdr_cli`|fn|priv|1040-1079|def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff...|
 |`_convert_compression_to_quality`|fn|priv|1080-1092|def _convert_compression_to_quality(jpg_compression)|
-|`_apply_validated_wow_pipeline`|fn|priv|1093-1169|def _apply_validated_wow_pipeline(postprocessed_input, wo...|
-|`_encode_jpg`|fn|priv|1170-1254|def _encode_jpg(imageio_module, pil_image_module, pil_enh...|
-|`_collect_processing_errors`|fn|priv|1255-1283|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|1284-1303|def _is_supported_runtime_os()|
-|`run`|fn|pub|1304-1427|def run(args)|
+|`_resolve_imagemagick_command`|fn|priv|1093-1110|def _resolve_imagemagick_command()|
+|`_apply_validated_wow_pipeline`|fn|priv|1111-1188|def _apply_validated_wow_pipeline(postprocessed_input, wo...|
+|`_encode_jpg`|fn|priv|1189-1196|def _encode_jpg(|
+|`_collect_processing_errors`|fn|priv|1289-1317|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|1318-1337|def _is_supported_runtime_os()|
+|`run`|fn|pub|1338-1465|def run(args)|
 
 
 ---

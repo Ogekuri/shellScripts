@@ -169,6 +169,7 @@
         - `dng2hdr2jpg._run_luminance_hdr_cli(...)`: Merge bracket TIFF images into intermediate HDR TIFF through luminance-hdr-cli using explicit EV list (`-e`), base hdrModel/hdrWeight/hdrResponseCurve/tmo controls, mandatory `--ldrTiff 16b`, and explicit `--tmo*` passthrough parameters [`src/shell_scripts/commands/dng2hdr2jpg.py`]
         - `dng2hdr2jpg._convert_compression_to_quality(...)`: Map user JPEG compression level to Pillow JPEG quality value [`src/shell_scripts/commands/dng2hdr2jpg.py`]
         - `dng2hdr2jpg._encode_jpg(...)`: Convert merged HDR TIFF payload into final JPG output with shared gamma/brightness/contrast/saturation processing, optional wow-stage dispatch, and RGBA-to-RGB normalization [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+          - `dng2hdr2jpg._resolve_imagemagick_command(...)`: Resolve ImageMagick executable token with compatibility fallback (`magick` then `convert`) for wow-stage execution [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._apply_validated_wow_pipeline(...)`: Execute validated ImageMagick wow sequence over temporary lossless 16-bit artifacts before final JPG encoding [`src/shell_scripts/commands/dng2hdr2jpg.py`]
       - `dicomviewer.run(...)`: Open DICOM viewer via Java class invocation [`src/shell_scripts/commands/dicomviewer.py`]
         - `dicomviewer._find_java(...)`: Resolve Java executable path [`src/shell_scripts/commands/dicomviewer.py`]

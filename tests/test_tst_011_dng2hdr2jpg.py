@@ -1147,6 +1147,91 @@ def test_dng2hdr2jpg_fails_when_luminance_dependency_is_missing(monkeypatch, tmp
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance"]) == 1
 
 
+def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_path):
+    """
+    @brief Reproduce wow dependency bug when only `convert` binary is available.
+    @details Configures dependency lookup so `magick` is missing but `convert`
+      exists; expected behavior is successful wow execution path for backward-
+      compatible ImageMagick CLI naming.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-059, REQ-073
+    """
+
+    observed = {"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": [], "gamma": []}
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module for wow dependency fallback test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            """@brief Return fake RAW context manager."""
+
+            return _FakeRawHandle(observed)
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for wow dependency fallback test."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            """@brief Materialize deterministic placeholder files."""
+
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            """@brief Return merged/wow payload compatible with encode path."""
+
+            name = Path(path).name
+            if name in {"merged_hdr.tif", "wow_output.tif"}:
+                return _FakeImage16()
+            return _FakeImage16()
+
+    def _fake_subprocess_run(command, check):
+        """@brief Emulate successful backend and wow subprocess executions."""
+
+        assert check is True
+        if command and command[0] == "enfuse":
+            output_flag = next(token for token in command if token.startswith("--output="))
+            Path(output_flag.split("=", 1)[1]).write_text("merged", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        if command and command[0] == "convert":
+            Path(command[-1]).write_text("wow", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+    )
+
+    def _fake_which(cmd):
+        """@brief Provide selective executable discovery for fallback reproducer."""
+
+        if cmd == "enfuse":
+            return "/usr/bin/enfuse"
+        if cmd == "convert":
+            return "/usr/bin/convert"
+        return None
+
+    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", _fake_which)
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow"])
+
+    assert result == 0
+    assert output_jpg.exists()
+
+
 def test_dng2hdr2jpg_rejects_luminance_options_without_enable(tmp_path):
     """
     @brief Validate luminance options require enable flag.
@@ -1447,6 +1532,7 @@ def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_pat
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr(dng2hdr2jpg, "_resolve_imagemagick_command", lambda: "magick")
 
     merged_tiff = tmp_path / "merged_hdr.tif"
     merged_tiff.write_text("merged", encoding="utf-8")
