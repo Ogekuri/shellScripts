@@ -959,8 +959,8 @@ def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
 def test_dng2hdr2jpg_rejects_invalid_magic_options(tmp_path):
     """
     @brief Validate magic-retouch option parser rejects malformed values.
-    @details Provides malformed values for new magic filter controls and legacy
-      magic options and asserts deterministic parse failure.
+    @details Provides malformed values for adaptive magic-retouch controls and
+      removed legacy options and asserts deterministic parse failure.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-073
@@ -970,11 +970,26 @@ def test_dng2hdr2jpg_rejects_invalid_magic_options(tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-filter=legacy"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-kernel-size=4"]) == 1
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-denoise-threshold=-0.1"]
+        )
+        == 1
+    )
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-gamma-bias=0.8"]) == 1
+    assert (
+        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-vibrance-strength=1.5"])
+        == 1
+    )
     assert dng2hdr2jpg.run(
         [str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-sharpen-strength=2"]
     ) == 1
+    assert (
+        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-filter=legacy"]) == 1
+    )
+    assert (
+        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-kernel-size=4"]) == 1
+    )
     assert dng2hdr2jpg.run(
         [str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-color-balance-strength=-0.1"]
     ) == 1
@@ -1383,12 +1398,12 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--saturation=<value>" in output
     assert "--jpg-compression=<0..100>" in output
     assert "--magic-retouch" in output
-    assert "--magic-filter=<name>" in output
-    assert "--magic-kernel-size=<value>" in output
-    assert "--magic-bilateral-d=<value>" in output
-    assert "--magic-bilateral-sigma-color=<value>" in output
-    assert "--magic-bilateral-sigma-space=<value>" in output
+    assert "--magic-denoise-threshold=<value>" in output
+    assert "--magic-gamma-bias=<value>" in output
+    assert "--magic-clahe-clip-limit=<value>" in output
+    assert "--magic-vibrance-strength=<0..1>" in output
     assert "--magic-sharpen-strength=<0..1>" in output
+    assert "--magic-sharpen-threshold=<value>" in output
     assert "--luminance-hdr-model=<name>" in output
     assert "--luminance-hdr-weight=<name>" in output
     assert "--luminance-hdr-response-curve=<name>" in output
@@ -1661,12 +1676,12 @@ def test_dng2hdr2jpg_magic_retouch_does_not_collapse_luminance():
     image_u16 = np_module.full((32, 32, 3), 40000, dtype=np_module.uint16)
     options = dng2hdr2jpg.MagicRetouchOptions(
         enabled=True,
-        filter_name=dng2hdr2jpg.DEFAULT_MAGIC_FILTER,
-        kernel_size=dng2hdr2jpg.DEFAULT_MAGIC_KERNEL_SIZE,
-        bilateral_d=dng2hdr2jpg.DEFAULT_MAGIC_BILATERAL_D,
-        bilateral_sigma_color=dng2hdr2jpg.DEFAULT_MAGIC_BILATERAL_SIGMA_COLOR,
-        bilateral_sigma_space=dng2hdr2jpg.DEFAULT_MAGIC_BILATERAL_SIGMA_SPACE,
+        denoise_threshold=dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_THRESHOLD,
+        gamma_bias=dng2hdr2jpg.DEFAULT_MAGIC_GAMMA_BIAS,
+        clahe_clip_limit=dng2hdr2jpg.DEFAULT_MAGIC_CLAHE_CLIP_LIMIT,
+        vibrance_strength=dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH,
         sharpen_strength=dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_STRENGTH,
+        sharpen_threshold=dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_THRESHOLD,
     )
 
     output_u16 = dng2hdr2jpg._magic_retouch(np_module, cv2_module, image_u16, options)
@@ -1678,11 +1693,11 @@ def test_dng2hdr2jpg_magic_retouch_does_not_collapse_luminance():
     assert ratio <= 1.30
 
 
-def test_dng2hdr2jpg_magic_retouch_supports_all_filters():
+def test_dng2hdr2jpg_magic_retouch_preserves_shape_and_dtype_with_adaptive_flow():
     """
-    @brief Validate magic-retouch executes all supported OpenCV filter variants.
-    @details Runs `_magic_retouch` over deterministic uint16 payload for each
-      supported filter and validates shape/dtype stability.
+    @brief Validate adaptive magic-retouch preserves shape and uint16 domain.
+    @details Runs `_magic_retouch` over deterministic uint16 payload with
+      non-neutral adaptive controls and validates shape/dtype stability.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-075
     """
@@ -1691,26 +1706,25 @@ def test_dng2hdr2jpg_magic_retouch_supports_all_filters():
     cv2_module = pytest.importorskip("cv2")
 
     image_u16 = np_module.full((24, 24, 3), 32000, dtype=np_module.uint16)
-    for filter_name in ("box", "boxfilter", "gaussian", "median", "bilateral", "sharpen"):
-        options = dng2hdr2jpg.MagicRetouchOptions(
-            enabled=True,
-            filter_name=filter_name,
-            kernel_size=3,
-            bilateral_d=5,
-            bilateral_sigma_color=0.06,
-            bilateral_sigma_space=4.0,
-            sharpen_strength=0.3 if filter_name == "sharpen" else 0.0,
-        )
-        output_u16 = dng2hdr2jpg._magic_retouch(np_module, cv2_module, image_u16, options)
-        assert output_u16.shape == image_u16.shape
-        assert output_u16.dtype == np_module.uint16
+    options = dng2hdr2jpg.MagicRetouchOptions(
+        enabled=True,
+        denoise_threshold=0.01,
+        gamma_bias=0.08,
+        clahe_clip_limit=1.2,
+        vibrance_strength=0.2,
+        sharpen_strength=0.25,
+        sharpen_threshold=0.01,
+    )
+    output_u16 = dng2hdr2jpg._magic_retouch(np_module, cv2_module, image_u16, options)
+    assert output_u16.shape == image_u16.shape
+    assert output_u16.dtype == np_module.uint16
 
 
 def test_dng2hdr2jpg_parses_new_magic_options_assignment_and_split(monkeypatch, tmp_path):
     """
     @brief Validate parser accepts new magic options in assignment and split forms.
     @details Executes full run with mixed assignment/split syntax and asserts
-      parsed magic options are propagated to `_magic_retouch`.
+      parsed adaptive magic options are propagated to `_magic_retouch`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -1776,41 +1790,42 @@ def test_dng2hdr2jpg_parses_new_magic_options_assignment_and_split(monkeypatch, 
             str(output_jpg),
             "--enable-enfuse",
             "--magic-retouch",
-            "--magic-filter=gaussian",
-            "--magic-kernel-size",
-            "5",
-            "--magic-bilateral-d=7",
-            "--magic-bilateral-sigma-color",
+            "--magic-denoise-threshold=0.08",
+            "--magic-gamma-bias",
+            "0.1",
+            "--magic-clahe-clip-limit=1.5",
+            "--magic-vibrance-strength",
             "0.2",
-            "--magic-bilateral-sigma-space=6.0",
             "--magic-sharpen-strength",
             "0.4",
+            "--magic-sharpen-threshold",
+            "0.015",
         ]
     )
     assert result == 0
     assert captured_magic_options
     magic_options = captured_magic_options[0]
     assert isinstance(magic_options, dng2hdr2jpg.MagicRetouchOptions)
-    assert magic_options.filter_name == "gaussian"
-    assert magic_options.kernel_size == 5
-    assert magic_options.bilateral_d == 7
-    assert magic_options.bilateral_sigma_color == pytest.approx(0.2)
-    assert magic_options.bilateral_sigma_space == pytest.approx(6.0)
+    assert magic_options.denoise_threshold == pytest.approx(0.08)
+    assert magic_options.gamma_bias == pytest.approx(0.1)
+    assert magic_options.clahe_clip_limit == pytest.approx(1.5)
+    assert magic_options.vibrance_strength == pytest.approx(0.2)
     assert magic_options.sharpen_strength == pytest.approx(0.4)
+    assert magic_options.sharpen_threshold == pytest.approx(0.015)
 
 
 def test_dng2hdr2jpg_magic_retouch_defaults_are_noise_conservative():
     """
     @brief Validate default magic-retouch parameters are configured for neutral output.
-    @details Asserts defaults target a low-impact baseline profile with bilateral
-      filtering and zero sharpen blend.
+    @details Asserts defaults target a low-impact baseline profile with neutral
+      adaptive controls and zero sharpen blend.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-073, REQ-075
     """
 
-    assert dng2hdr2jpg.DEFAULT_MAGIC_FILTER == "bilateral"
-    assert dng2hdr2jpg.DEFAULT_MAGIC_KERNEL_SIZE == 3
-    assert dng2hdr2jpg.DEFAULT_MAGIC_BILATERAL_D == 5
-    assert dng2hdr2jpg.DEFAULT_MAGIC_BILATERAL_SIGMA_COLOR == pytest.approx(0.06)
-    assert dng2hdr2jpg.DEFAULT_MAGIC_BILATERAL_SIGMA_SPACE == pytest.approx(4.0)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_THRESHOLD == pytest.approx(0.045)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_GAMMA_BIAS == pytest.approx(0.0)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_CLAHE_CLIP_LIMIT == pytest.approx(0.0)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH == pytest.approx(0.0)
     assert dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_STRENGTH == pytest.approx(0.0)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_THRESHOLD == pytest.approx(0.02)
