@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 1465L | 45 symbols | 11 imports | 28 comments
+# dng2hdr2jpg.py | Python | 1474L | 45 symbols | 11 imports | 28 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -860,7 +860,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 
 ### fn `def _encode_jpg(` `priv` (L1189-1196)
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1289-1317)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1298-1326)
 - @brief Encode merged HDR TIFF payload into final JPG output.
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Loads merged image payload, down-converts to `uint8` when source
@@ -883,13 +883,13 @@ configured compression level for both HDR backends.
 - @satisfies REQ-058, REQ-066, REQ-069, REQ-073
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L1318-1337)
+### fn `def _is_supported_runtime_os()` `priv` (L1327-1346)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L1338-1465)
+### fn `def run(args)` (L1347-1474)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -941,9 +941,9 @@ configured compression level for both HDR backends.
 |`_resolve_imagemagick_command`|fn|priv|1093-1110|def _resolve_imagemagick_command()|
 |`_apply_validated_wow_pipeline`|fn|priv|1111-1188|def _apply_validated_wow_pipeline(postprocessed_input, wo...|
 |`_encode_jpg`|fn|priv|1189-1196|def _encode_jpg(|
-|`_collect_processing_errors`|fn|priv|1289-1317|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|1318-1337|def _is_supported_runtime_os()|
-|`run`|fn|pub|1338-1465|def run(args)|
+|`_collect_processing_errors`|fn|priv|1298-1326|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|1327-1346|def _is_supported_runtime_os()|
+|`run`|fn|pub|1347-1474|def run(args)|
 
 
 ---

@@ -1270,6 +1270,15 @@ def _encode_jpg(
                 imagemagick_command=imagemagick_command,
             )
             wow_data = imageio_module.imread(str(wow_output))
+            wow_dtype_name = str(getattr(wow_data, "dtype", ""))
+            if wow_dtype_name and wow_dtype_name != "uint8":
+                wow_scaled = wow_data / 257.0
+                if hasattr(wow_scaled, "clip"):
+                    wow_scaled = wow_scaled.clip(0, 255)
+                if hasattr(wow_scaled, "astype"):
+                    wow_data = wow_scaled.astype("uint8")
+                else:
+                    wow_data = wow_scaled
             if hasattr(wow_data, "save") and hasattr(wow_data, "convert"):
                 pil_image = wow_data
             else:

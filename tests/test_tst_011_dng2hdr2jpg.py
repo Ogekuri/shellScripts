@@ -1563,3 +1563,167 @@ def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_pat
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatch, tmp_path):
+    """
+    @brief Reproduce wow-path crash when ImageMagick output is uint16 RGB payload.
+    @details Simulates wow output decode as `uint16` data and enforces a strict
+      fake `Image.fromarray` contract that rejects non-`uint8` payload, matching
+      observed Pillow failure; expected behavior is successful normalization before
+      `fromarray`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-058, REQ-066, REQ-073
+    """
+
+    observed = {"jpg_save": None, "commands": []}
+
+    class _FakeWowScaled:
+        """@brief Provide clip/astype chain for wow uint16 normalization."""
+
+        def clip(self, _low, _high):
+            """@brief Return self for deterministic clipping chain."""
+
+            return self
+
+        def astype(self, dtype):
+            """@brief Return uint8 payload marker after normalization."""
+
+            assert dtype == "uint8"
+
+            class _FakeWowUint8Payload:
+                mode = "RGB"
+                dtype = "uint8"
+
+            return _FakeWowUint8Payload()
+
+    class _FakeWowU16Payload:
+        """@brief Emulate wow output payload with uint16 dtype."""
+
+        dtype = "uint16"
+
+        def __truediv__(self, value):
+            """@brief Emulate normalization division branch."""
+
+            assert value == 257.0
+            return _FakeWowScaled()
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for wow uint16 reproducer."""
+
+        @staticmethod
+        def imread(path):
+            """@brief Return base and wow payloads for encode path."""
+
+            if Path(path).name == "merged_hdr.tif":
+                class _BasePilPayload:
+                    mode = "RGB"
+
+                    def getbands(self):
+                        return ("R", "G", "B")
+
+                    def point(self, _lut):
+                        return self
+
+                    def convert(self, _mode):
+                        return self
+
+                    def save(self, save_path, format, quality=None, optimize=None, compress_level=None):
+                        del quality, optimize, compress_level
+                        Path(save_path).write_text(format.lower(), encoding="utf-8")
+
+                return _BasePilPayload()
+            if Path(path).name == "wow_output.tif":
+                return _FakeWowU16Payload()
+            return _FakeImage16()
+
+    class _StrictPilImageModule:
+        """@brief Fake PIL module that fails on non-uint8 fromarray payload."""
+
+        @staticmethod
+        def fromarray(payload):
+            """@brief Enforce uint8-only conversion to reproduce original crash."""
+
+            if getattr(payload, "dtype", None) != "uint8":
+                raise TypeError(f"Cannot handle this data type: {getattr(payload, 'dtype', None)}")
+            class _FakePilImage:
+                mode = "RGB"
+
+                def getbands(self):
+                    return ("R", "G", "B")
+
+                def point(self, _lut):
+                    return self
+
+                def convert(self, _mode):
+                    return self
+
+                def save(self, path, format, quality=None, optimize=None, compress_level=None):
+                    del quality, optimize, compress_level
+                    observed["jpg_save"] = {"format": format}
+                    Path(path).write_text("jpg", encoding="utf-8")
+
+            return _FakePilImage()
+
+    class _FakePilEnhanceModule:
+        """@brief No-op ImageEnhance replacement."""
+
+        @staticmethod
+        def Brightness(image):
+            class _E:
+                def enhance(self, _v):
+                    return image
+            return _E()
+
+        @staticmethod
+        def Contrast(image):
+            class _E:
+                def enhance(self, _v):
+                    return image
+            return _E()
+
+        @staticmethod
+        def Color(image):
+            class _E:
+                def enhance(self, _v):
+                    return image
+            return _E()
+
+    def _fake_subprocess_run(command, check):
+        """@brief Emulate successful wow subprocess output materialization."""
+
+        assert check is True
+        observed["commands"].append(command)
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("artifact", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr(dng2hdr2jpg, "_resolve_imagemagick_command", lambda: "magick")
+
+    merged_tiff = tmp_path / "merged_hdr.tif"
+    merged_tiff.write_text("merged", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    dng2hdr2jpg._encode_jpg(
+        imageio_module=_FakeImageIoModule,
+        pil_image_module=_StrictPilImageModule,
+        pil_enhance_module=_FakePilEnhanceModule,
+        merged_tiff=merged_tiff,
+        output_jpg=output_jpg,
+        postprocess_options=dng2hdr2jpg.PostprocessOptions(
+            post_gamma=1.0,
+            brightness=1.0,
+            contrast=1.0,
+            saturation=1.0,
+            jpg_compression=10,
+            wow_enabled=True,
+        ),
+    )
+
+    assert observed["jpg_save"] is not None
+    assert observed["jpg_save"]["format"] == "JPEG"
+    assert output_jpg.exists()
