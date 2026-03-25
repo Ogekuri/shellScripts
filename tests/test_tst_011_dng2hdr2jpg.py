@@ -972,7 +972,13 @@ def test_dng2hdr2jpg_rejects_invalid_magic_options(tmp_path):
 
     assert (
         dng2hdr2jpg.run(
-            [str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-denoise-threshold=-0.1"]
+            [str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-denoise-strength=-0.1"]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--enable-enfuse", "--magic-denoise-strength=1.5"]
         )
         == 1
     )
@@ -1398,7 +1404,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--saturation=<value>" in output
     assert "--jpg-compression=<0..100>" in output
     assert "--magic-retouch" in output
-    assert "--magic-denoise-threshold=<value>" in output
+    assert "--magic-denoise-strength=<0..1>" in output
     assert "--magic-gamma-bias=<value>" in output
     assert "--magic-clahe-clip-limit=<value>" in output
     assert "--magic-vibrance-strength=<0..1>" in output
@@ -1676,7 +1682,7 @@ def test_dng2hdr2jpg_magic_retouch_does_not_collapse_luminance():
     image_u16 = np_module.full((32, 32, 3), 40000, dtype=np_module.uint16)
     options = dng2hdr2jpg.MagicRetouchOptions(
         enabled=True,
-        denoise_threshold=dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_THRESHOLD,
+        denoise_strength=dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_STRENGTH,
         gamma_bias=dng2hdr2jpg.DEFAULT_MAGIC_GAMMA_BIAS,
         clahe_clip_limit=dng2hdr2jpg.DEFAULT_MAGIC_CLAHE_CLIP_LIMIT,
         vibrance_strength=dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH,
@@ -1708,7 +1714,7 @@ def test_dng2hdr2jpg_magic_retouch_preserves_shape_and_dtype_with_adaptive_flow(
     image_u16 = np_module.full((24, 24, 3), 32000, dtype=np_module.uint16)
     options = dng2hdr2jpg.MagicRetouchOptions(
         enabled=True,
-        denoise_threshold=0.01,
+        denoise_strength=0.01,
         gamma_bias=0.08,
         clahe_clip_limit=1.2,
         vibrance_strength=0.2,
@@ -1790,7 +1796,7 @@ def test_dng2hdr2jpg_parses_new_magic_options_assignment_and_split(monkeypatch, 
             str(output_jpg),
             "--enable-enfuse",
             "--magic-retouch",
-            "--magic-denoise-threshold=0.08",
+            "--magic-denoise-strength=0.08",
             "--magic-gamma-bias",
             "0.1",
             "--magic-clahe-clip-limit=1.5",
@@ -1806,7 +1812,7 @@ def test_dng2hdr2jpg_parses_new_magic_options_assignment_and_split(monkeypatch, 
     assert captured_magic_options
     magic_options = captured_magic_options[0]
     assert isinstance(magic_options, dng2hdr2jpg.MagicRetouchOptions)
-    assert magic_options.denoise_threshold == pytest.approx(0.08)
+    assert magic_options.denoise_strength == pytest.approx(0.08)
     assert magic_options.gamma_bias == pytest.approx(0.1)
     assert magic_options.clahe_clip_limit == pytest.approx(1.5)
     assert magic_options.vibrance_strength == pytest.approx(0.2)
@@ -1823,7 +1829,7 @@ def test_dng2hdr2jpg_magic_retouch_defaults_are_noise_conservative():
     @satisfies TST-011, REQ-073, REQ-075
     """
 
-    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_THRESHOLD == pytest.approx(0.045)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_STRENGTH == pytest.approx(0.0)
     assert dng2hdr2jpg.DEFAULT_MAGIC_GAMMA_BIAS == pytest.approx(0.0)
     assert dng2hdr2jpg.DEFAULT_MAGIC_CLAHE_CLIP_LIMIT == pytest.approx(0.0)
     assert dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH == pytest.approx(0.0)
@@ -1846,7 +1852,7 @@ def test_dng2hdr2jpg_magic_retouch_bypasses_zero_controlled_stages(monkeypatch):
     image_u16 = np_module.full((16, 16, 3), 30000, dtype=np_module.uint16)
     options = dng2hdr2jpg.MagicRetouchOptions(
         enabled=True,
-        denoise_threshold=0.0,
+        denoise_strength=0.0,
         gamma_bias=0.0,
         clahe_clip_limit=0.0,
         vibrance_strength=0.0,
@@ -1912,3 +1918,42 @@ def test_dng2hdr2jpg_magic_retouch_bypasses_zero_controlled_stages(monkeypatch):
     assert observed["median_calls"] == 0
     assert observed["hsv_calls"] == 0
     assert observed["power_calls"] == 0
+
+
+def test_dng2hdr2jpg_magic_retouch_applies_denoise_when_strength_is_positive(monkeypatch):
+    """
+    @brief Validate denoise stage executes deterministically when strength is positive.
+    @details Tracks Gaussian calls and verifies denoise stage is executed when
+      `denoise_strength>0` even on low-noise constant payloads.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-075
+    """
+
+    np_module = pytest.importorskip("numpy")
+    cv2_module = pytest.importorskip("cv2")
+    image_u16 = np_module.full((16, 16, 3), 30000, dtype=np_module.uint16)
+    options = dng2hdr2jpg.MagicRetouchOptions(
+        enabled=True,
+        denoise_strength=0.25,
+        gamma_bias=0.0,
+        clahe_clip_limit=0.0,
+        vibrance_strength=0.0,
+        sharpen_strength=0.0,
+        sharpen_threshold=0.02,
+    )
+    observed = {"gaussian_calls": 0}
+    original_gaussian = cv2_module.GaussianBlur
+
+    def _guard_gaussian(image, ksize, sigma_x=0, sigma_y=0, *args, **kwargs):
+        """@brief Track Gaussian calls used by deterministic denoise stage."""
+
+        observed["gaussian_calls"] += 1
+        return original_gaussian(image, ksize, sigma_x, sigma_y, *args, **kwargs)
+
+    monkeypatch.setattr(cv2_module, "GaussianBlur", _guard_gaussian)
+    output_u16 = dng2hdr2jpg._magic_retouch(np_module, cv2_module, image_u16, options)
+
+    assert output_u16.shape == image_u16.shape
+    assert output_u16.dtype == np_module.uint16
+    assert observed["gaussian_calls"] == 1

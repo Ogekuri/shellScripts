@@ -40,7 +40,7 @@ DEFAULT_LUMINANCE_TMO = "reinhard02"
 DEFAULT_REINHARD02_BRIGHTNESS = 1.25
 DEFAULT_REINHARD02_CONTRAST = 0.85
 DEFAULT_REINHARD02_SATURATION = 0.55
-DEFAULT_MAGIC_DENOISE_THRESHOLD = 0.045
+DEFAULT_MAGIC_DENOISE_STRENGTH = 0.0
 DEFAULT_MAGIC_GAMMA_BIAS = 0.0
 DEFAULT_MAGIC_CLAHE_CLIP_LIMIT = 0.0
 DEFAULT_MAGIC_VIBRANCE_STRENGTH = 0.0
@@ -236,7 +236,7 @@ class MagicRetouchOptions:
     @details Encapsulates configurable parameters for in-memory adaptive
     OpenCV processing pipeline activated by `--magic-retouch`.
     @param enabled {bool} Pipeline enable flag.
-    @param denoise_threshold {float} Noise-score threshold that activates denoise stages.
+    @param denoise_strength {float} Denoise strength in `[0, 1]`; stage executes only when value is greater than zero.
     @param gamma_bias {float} Additive gamma bias in range `[-0.5, 0.5]` applied after luminance analysis.
     @param clahe_clip_limit {float} CLAHE clip limit for local contrast stage; `0.0` disables CLAHE.
     @param vibrance_strength {float} Adaptive vibrance strength in `[0, 1]`.
@@ -247,7 +247,7 @@ class MagicRetouchOptions:
     """
 
     enabled: bool
-    denoise_threshold: float
+    denoise_strength: float
     gamma_bias: float
     clahe_clip_limit: float
     vibrance_strength: float
@@ -326,7 +326,7 @@ def print_help(version):
         f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
         f"[--jpg-compression=<0..100>] (--enable-enfuse | --enable-luminance) "
-        f"[--magic-retouch] [--magic-denoise-threshold=<value>] [--magic-gamma-bias=<value>] "
+        f"[--magic-retouch] [--magic-denoise-strength=<0..1>] [--magic-gamma-bias=<value>] "
         f"[--magic-clahe-clip-limit=<value>] [--magic-vibrance-strength=<0..1>] "
         f"[--magic-sharpen-strength=<0..1>] [--magic-sharpen-threshold=<value>] "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
@@ -347,8 +347,8 @@ def print_help(version):
     print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
     print("  --magic-retouch            - Enable in-memory 16-bit OpenCV magic-retouch stage.")
     print(
-        "  --magic-denoise-threshold=<value>"
-        f" - Noise gate for denoise auto-stage (default: {DEFAULT_MAGIC_DENOISE_THRESHOLD})."
+        "  --magic-denoise-strength=<0..1>"
+        f" - Denoise strength; stage executes only when > 0 (default: {DEFAULT_MAGIC_DENOISE_STRENGTH})."
     )
     print(
         "  --magic-gamma-bias=<value>"
@@ -728,7 +728,7 @@ def _parse_run_options(args):
     luminance_tmo_extra_args = []
     luminance_option_specified = False
     magic_retouch_enabled = False
-    magic_denoise_threshold = DEFAULT_MAGIC_DENOISE_THRESHOLD
+    magic_denoise_strength = DEFAULT_MAGIC_DENOISE_STRENGTH
     magic_gamma_bias = DEFAULT_MAGIC_GAMMA_BIAS
     magic_clahe_clip_limit = DEFAULT_MAGIC_CLAHE_CLIP_LIMIT
     magic_vibrance_strength = DEFAULT_MAGIC_VIBRANCE_STRENGTH
@@ -779,22 +779,22 @@ def _parse_run_options(args):
             print_error(f"Unknown option: {token}")
             return None
 
-        if token == "--magic-denoise-threshold":
+        if token == "--magic-denoise-strength":
             if idx + 1 >= len(args):
-                print_error("Missing value for --magic-denoise-threshold")
+                print_error("Missing value for --magic-denoise-strength")
                 return None
-            parsed_value = _parse_non_negative_float_option("--magic-denoise-threshold", args[idx + 1])
+            parsed_value = _parse_unit_float_option("--magic-denoise-strength", args[idx + 1])
             if parsed_value is None:
                 return None
-            magic_denoise_threshold = parsed_value
+            magic_denoise_strength = parsed_value
             idx += 2
             continue
 
-        if token.startswith("--magic-denoise-threshold="):
-            parsed_value = _parse_non_negative_float_option("--magic-denoise-threshold", token.split("=", 1)[1])
+        if token.startswith("--magic-denoise-strength="):
+            parsed_value = _parse_unit_float_option("--magic-denoise-strength", token.split("=", 1)[1])
             if parsed_value is None:
                 return None
-            magic_denoise_threshold = parsed_value
+            magic_denoise_strength = parsed_value
             idx += 1
             continue
 
@@ -1212,7 +1212,7 @@ def _parse_run_options(args):
         ),
         MagicRetouchOptions(
             enabled=magic_retouch_enabled,
-            denoise_threshold=magic_denoise_threshold,
+            denoise_strength=magic_denoise_strength,
             gamma_bias=magic_gamma_bias,
             clahe_clip_limit=magic_clahe_clip_limit,
             vibrance_strength=magic_vibrance_strength,
@@ -1487,7 +1487,7 @@ def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
     """@brief Execute in-memory 16-bit deterministic OpenCV magic-retouch pipeline.
 
     @details Converts uint16 input to normalized RGB float payload and applies
-    ordered adaptive stages: conditional noise estimation plus denoise,
+    ordered adaptive stages: parameterized denoise driven by `denoise_strength`,
     conditional luminance-aware gamma correction controlled by gamma-bias,
     optional CLAHE local-contrast enhancement, conditional adaptive vibrance,
     and conditional edge-masked unsharp sharpening. Stages with zero-valued
@@ -1502,15 +1502,11 @@ def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
     """
 
     working = _to_float01_from_u16(np_module, image_u16).astype(np_module.float32)
-    denoise_threshold = float(max(0.0, magic_options.denoise_threshold))
-    if denoise_threshold > 0.0:
-        gray = cv2_module.cvtColor(working, cv2_module.COLOR_RGB2GRAY)
-        noise_score = float(np_module.mean(np_module.abs(gray - cv2_module.GaussianBlur(gray, (3, 3), 0))))
-        if noise_score > denoise_threshold * 1.8:
-            denoised = cv2_module.medianBlur(_to_u16_from_float01(np_module, working), 3)
-            working = _to_float01_from_u16(np_module, denoised).astype(np_module.float32)
-        elif noise_score > denoise_threshold:
-            working = cv2_module.GaussianBlur(working, (3, 3), 0)
+    denoise_strength = float(np_module.clip(magic_options.denoise_strength, 0.0, 1.0))
+    if denoise_strength > 0.0:
+        sigma = (denoise_strength * 1.8) + 0.2
+        ksize = 3 if denoise_strength < 0.5 else 5
+        working = cv2_module.GaussianBlur(working, (ksize, ksize), sigma, sigma)
 
     gamma_bias = float(magic_options.gamma_bias)
     if abs(gamma_bias) > 1e-12:
