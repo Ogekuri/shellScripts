@@ -309,34 +309,41 @@ def _build_two_line_operator_rows(operator_entries):
     return tuple(rows)
 
 
-def print_help(version):
-    """@brief Print help text for the `dng2hdr2jpg` command.
+def _print_help_common(version, command_name, output_placeholder, include_jpg_compression):
+    """@brief Print shared help body for DNG-to-HDR output commands.
 
-    @details Documents required positional arguments, optional EV/RAW gamma
-    controls, shared postprocessing controls, backend selection, optional
-    OpenCV-based `magic_retouch` controls, and luminance-hdr-cli tone-mapping
-    options.
+    @details Renders shared command usage and common options for both JPG and
+    TIFF outputs, including backend selection, postprocess controls, magic
+    retouch controls, luminance options, and aligned luminance tables; appends
+    JPG-compression option only for JPG command flavor.
     @param version {str} CLI version label to append in usage output.
+    @param command_name {str} Command token (`dng2hdr2jpg` or `dng2hdr2tiff`).
+    @param output_placeholder {str} Help placeholder for command output file.
+    @param include_jpg_compression {bool} Whether to append JPG compression option.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-078
+    @satisfies DES-008, REQ-063, REQ-070, REQ-082
     """
 
-    print(
-        f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
+    usage = (
+        f"Usage: {PROGRAM} {command_name} <input.dng> {output_placeholder} "
         f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
-        f"[--jpg-compression=<0..100>] (--enable-enfuse | --enable-luminance) "
+        f"(--enable-enfuse | --enable-luminance) "
         f"[--magic-retouch] [--magic-denoise-strength=<0..1>] [--magic-gamma-bias=<value>] "
         f"[--magic-clahe-clip-limit=<value>] [--magic-vibrance-strength=<0..1>] "
         f"[--magic-sharpen-strength=<0..1>] [--magic-sharpen-threshold=<value>] "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
-        f"[--tmo*=<value>] ({version})"
+        f"[--tmo*=<value>]"
     )
+    if include_jpg_compression:
+        usage += " [--jpg-compression=<0..100>]"
+    usage += f" ({version})"
+    print(usage)
     print()
-    print("dng2hdr2jpg options:")
+    print(f"{command_name} options:")
     print("  <input.dng>      - Input DNG file (required).")
-    print("  <output.jpg>     - Output JPG file (required).")
+    print(f"  {output_placeholder}     - Output file (required).")
     print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
     print(f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]}).")
     print("                     Example: --gamma=1,1 for linear extraction.")
@@ -344,7 +351,6 @@ def print_help(version):
     print("  --brightness=<value> - Postprocess brightness factor (backend-default when omitted).")
     print("  --contrast=<value>   - Postprocess contrast factor (backend-default when omitted).")
     print("  --saturation=<value> - Postprocess saturation factor (backend-default when omitted).")
-    print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
     print("  --magic-retouch            - Enable in-memory 16-bit OpenCV magic-retouch stage.")
     print(
         "  --magic-denoise-strength=<0..1>"
@@ -415,6 +421,21 @@ def print_help(version):
     print("                   - Forward explicit luminance-hdr-cli --tmo* parameters as-is.")
     print("  [platform]       - Command is available on Linux only.")
     print("  --help           - Show this help message.")
+    if include_jpg_compression:
+        print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
+
+
+def print_help(version):
+    """@brief Print help text for the `dng2hdr2jpg` command.
+
+    @details Delegates to shared DNG-to-HDR help renderer and appends
+    JPG-specific compression option at the tail.
+    @param version {str} CLI version label to append in usage output.
+    @return {None} Writes help text to stdout.
+    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-078, REQ-082
+    """
+
+    _print_help_common(version, "dng2hdr2jpg", "<output.jpg>", include_jpg_compression=True)
 
 
 def _parse_ev_option(ev_raw):
@@ -693,8 +714,14 @@ def _resolve_default_postprocess(enable_luminance, luminance_tmo):
     )
 
 
-def _parse_run_options(args):
-    """@brief Parse CLI args into input, output, and EV parameters.
+def _parse_run_options(
+    args,
+    *,
+    include_jpg_compression=True,
+    command_name="dng2hdr2jpg",
+    output_hint="<output.jpg>",
+):
+    """@brief Parse CLI args into input/output paths and HDR processing options.
 
     @details Supports positional file arguments, optional `--ev=<value>` or
     `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
@@ -703,8 +730,11 @@ def _parse_run_options(args):
     backend controls including explicit `--tmo*` passthrough options; rejects
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
+    @param include_jpg_compression {bool} Enables `--jpg-compression` parsing for JPG flow only.
+    @param command_name {str} Command token used in usage errors.
+    @param output_hint {str} Output placeholder used in usage errors.
     @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, MagicRetouchOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options, magic_retouch_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-078
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-078, REQ-080, REQ-082
     """
 
     positional = []
@@ -1137,7 +1167,7 @@ def _parse_run_options(args):
             idx += 1
             continue
 
-        if token == "--jpg-compression":
+        if include_jpg_compression and token == "--jpg-compression":
             if idx + 1 >= len(args):
                 print_error("Missing value for --jpg-compression")
                 return None
@@ -1148,7 +1178,7 @@ def _parse_run_options(args):
             idx += 2
             continue
 
-        if token.startswith("--jpg-compression="):
+        if include_jpg_compression and token.startswith("--jpg-compression="):
             parsed_compression = _parse_jpg_compression_option(token.split("=", 1)[1])
             if parsed_compression is None:
                 return None
@@ -1164,7 +1194,7 @@ def _parse_run_options(args):
         idx += 1
 
     if len(positional) != 2:
-        print_error("Usage: dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>] [--gamma=<a,b>]")
+        print_error(f"Usage: {command_name} <input.dng> {output_hint} [--ev=<value>] [--gamma=<a,b>]")
         return None
 
     if enable_enfuse == enable_luminance:
@@ -1639,6 +1669,21 @@ def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression):
     )
 
 
+def _encode_tiff(imageio_module, image_u16, output_tiff):
+    """@brief Encode one in-memory 16-bit image payload into lossless TIFF output.
+
+    @details Persists uint16 RGB payload as TIFF without quantization to preserve
+    16-bit-per-channel lossless output contract for TIFF command flow.
+    @param imageio_module {ModuleType} Imported imageio module.
+    @param image_u16 {np.ndarray} Input uint16 image payload.
+    @param output_tiff {Path} Final TIFF output path.
+    @return {None} Side effects only.
+    @satisfies REQ-081
+    """
+
+    imageio_module.imwrite(str(output_tiff), image_u16)
+
+
 def _read_u16_image(imageio_module, np_module, merged_tiff):
     """@brief Read merged TIFF and normalize payload to uint16 RGB image.
 
@@ -1700,11 +1745,12 @@ def _collect_processing_errors(rawpy_module):
     return tuple(deduplicated)
 
 
-def _is_supported_runtime_os():
-    """@brief Validate runtime platform support for `dng2hdr2jpg`.
+def _is_supported_runtime_os(command_name="dng2hdr2jpg"):
+    """@brief Validate runtime platform support for one DNG-to-HDR command.
 
     @details Accepts Linux runtime only; emits explicit non-Linux unsupported
     message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
+    @param command_name {str} Command token for platform error rendering.
     @return {bool} `True` when runtime OS is Linux; `False` otherwise.
     @satisfies REQ-055, REQ-059
     """
@@ -1715,34 +1761,95 @@ def _is_supported_runtime_os():
 
     runtime_label = _RUNTIME_OS_LABELS.get(runtime_os, runtime_os)
     print_error(
-        f"dng2hdr2jpg is not available on {runtime_label}; this command is Linux-only."
+        f"{command_name} is not available on {runtime_label}; this command is Linux-only."
     )
     return False
 
 
-def run(args):
-    """@brief Execute `dng2hdr2jpg` command pipeline.
+def _encode_final_jpg(imageio_module, pil_image_module, image_u16, output_path, postprocess_options):
+    """@brief Encode shared pipeline payload to JPG output.
 
-    @details Parses command options, validates dependencies, extracts three RAW
-    brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow,
-    applies in-memory uint16 postprocess controls, optionally applies in-memory
-    uint16 OpenCV-filter `magic_retouch`, writes JPG output, and guarantees
-    temporary artifact cleanup through isolated temporary directory lifecycle.
-    @param args {list[str]} Command argument vector excluding command token.
-    @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
+    @details Delegates final payload encoding to JPEG writer using parsed
+    compression level from postprocess options.
+    @param imageio_module {ModuleType} Imported imageio module.
+    @param pil_image_module {ModuleType} Imported Pillow image module.
+    @param image_u16 {np.ndarray} Input uint16 image payload.
+    @param output_path {Path} Final output path.
+    @param postprocess_options {PostprocessOptions} Parsed postprocess options.
+    @return {None} Side effects only.
+    @satisfies REQ-066, REQ-079
     """
 
-    if not _is_supported_runtime_os():
+    del imageio_module
+    _encode_jpg(
+        pil_image_module=pil_image_module,
+        image_u16=image_u16,
+        output_jpg=output_path,
+        jpg_compression=postprocess_options.jpg_compression,
+    )
+
+
+def _encode_final_tiff(imageio_module, pil_image_module, image_u16, output_path, postprocess_options):
+    """@brief Encode shared pipeline payload to lossless TIFF output.
+
+    @details Persists final uint16 payload directly as TIFF without JPG-specific
+    quantization or compression mapping.
+    @param imageio_module {ModuleType} Imported imageio module.
+    @param pil_image_module {ModuleType} Imported Pillow image module.
+    @param image_u16 {np.ndarray} Input uint16 image payload.
+    @param output_path {Path} Final output path.
+    @param postprocess_options {PostprocessOptions} Parsed postprocess options.
+    @return {None} Side effects only.
+    @satisfies REQ-080, REQ-081
+    """
+
+    del pil_image_module, postprocess_options
+    _encode_tiff(
+        imageio_module=imageio_module,
+        image_u16=image_u16,
+        output_tiff=output_path,
+    )
+
+
+def _run_shared_dng2hdr_command(
+    args,
+    *,
+    command_name,
+    output_hint,
+    include_jpg_compression,
+    success_label,
+    output_encoder,
+):
+    """@brief Execute shared DNG-to-HDR pipeline for JPG and TIFF commands.
+
+    @details Parses options, validates dependencies, extracts RAW brackets,
+    executes selected HDR backend, applies in-memory uint16 postprocess and
+    optional magic-retouch, then delegates command-specific final encoding.
+    @param args {list[str]} Command argument vector excluding command token.
+    @param command_name {str} Command token for deterministic logs/errors.
+    @param output_hint {str} Output placeholder for parser usage errors.
+    @param include_jpg_compression {bool} Enables JPG compression option parsing.
+    @param success_label {str} Success message prefix.
+    @param output_encoder {Callable[[ModuleType, ModuleType, object, Path, PostprocessOptions], None]} Final encoder callback.
+    @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-080, REQ-081, REQ-082
+    """
+
+    if not _is_supported_runtime_os(command_name):
         return 1
 
-    parsed = _parse_run_options(args)
+    parsed = _parse_run_options(
+        args,
+        include_jpg_compression=include_jpg_compression,
+        command_name=command_name,
+        output_hint=output_hint,
+    )
     if parsed is None:
         return 1
 
     (
         input_dng,
-        output_jpg,
+        output_path,
         ev_value,
         gamma_value,
         postprocess_options,
@@ -1759,7 +1866,7 @@ def run(args):
         print_error(f"Input DNG file not found: {input_dng}")
         return 1
 
-    output_parent = output_jpg.parent
+    output_parent = output_path.parent
     if output_parent and not output_parent.exists():
         print_error(f"Output directory does not exist: {output_parent}")
         return 1
@@ -1784,14 +1891,23 @@ def run(args):
     print_info(f"Reading DNG input: {input_dng}")
     print_info(f"Using EV bracket: {ev_value}")
     print_info(f"Using gamma pair: {gamma_value[0]:g},{gamma_value[1]:g}")
-    print_info(
-        "Postprocess factors: "
-        f"gamma={postprocess_options.post_gamma:g}, "
-        f"brightness={postprocess_options.brightness:g}, "
-        f"contrast={postprocess_options.contrast:g}, "
-        f"saturation={postprocess_options.saturation:g}, "
-        f"jpg-compression={postprocess_options.jpg_compression}"
-    )
+    if include_jpg_compression:
+        print_info(
+            "Postprocess factors: "
+            f"gamma={postprocess_options.post_gamma:g}, "
+            f"brightness={postprocess_options.brightness:g}, "
+            f"contrast={postprocess_options.contrast:g}, "
+            f"saturation={postprocess_options.saturation:g}, "
+            f"jpg-compression={postprocess_options.jpg_compression}"
+        )
+    else:
+        print_info(
+            "Postprocess factors: "
+            f"gamma={postprocess_options.post_gamma:g}, "
+            f"brightness={postprocess_options.brightness:g}, "
+            f"contrast={postprocess_options.contrast:g}, "
+            f"saturation={postprocess_options.saturation:g}"
+        )
     print_info(
         "Magic retouch: "
         + ("enabled" if magic_retouch_options.enabled else "disabled")
@@ -1810,7 +1926,7 @@ def run(args):
     else:
         print_info("HDR backend: enfuse")
 
-    with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-") as temp_dir_raw:
+    with tempfile.TemporaryDirectory(prefix=f"{command_name}-") as temp_dir_raw:
         temp_dir = Path(temp_dir_raw)
         merged_tiff = temp_dir / "merged_hdr.tif"
 
@@ -1850,15 +1966,70 @@ def run(args):
                     image_u16=image_u16,
                     magic_options=magic_retouch_options,
                 )
-            _encode_jpg(
+            output_encoder(
+                imageio_module=imageio_module,
                 pil_image_module=pil_image_module,
                 image_u16=image_u16,
-                output_jpg=output_jpg,
-                jpg_compression=postprocess_options.jpg_compression,
+                output_path=output_path,
+                postprocess_options=postprocess_options,
             )
         except processing_errors as error:
-            print_error(f"dng2hdr2jpg processing failed: {error}")
+            print_error(f"{command_name} processing failed: {error}")
             return 1
 
-    print_success(f"HDR JPG created: {output_jpg}")
+    print_success(f"{success_label}: {output_path}")
+    return 0
+
+
+def run(args):
+    """@brief Execute `dng2hdr2jpg` command pipeline.
+
+    @details Executes shared DNG-to-HDR pipeline and applies JPG-specific final
+    encoding with ordered-dither uint16-to-uint8 conversion.
+    @param args {list[str]} Command argument vector excluding command token.
+    @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-082
+    """
+
+    return _run_shared_dng2hdr_command(
+        args,
+        command_name="dng2hdr2jpg",
+        output_hint="<output.jpg>",
+        include_jpg_compression=True,
+        success_label="HDR JPG created",
+        output_encoder=_encode_final_jpg,
+    )
+
+
+def run_tiff(args):
+    """@brief Execute shared DNG-to-HDR pipeline with TIFF final encoding.
+
+    @details Reuses same parsing and processing path as JPG command and writes
+    final output as lossless uint16 TIFF without 8-bit quantization.
+    @param args {list[str]} Command argument vector excluding command token.
+    @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
+    @satisfies REQ-055, REQ-059, REQ-066, REQ-073, REQ-074, REQ-075, REQ-076, REQ-080, REQ-081
+    """
+
+    return _run_shared_dng2hdr_command(
+        args,
+        command_name="dng2hdr2tiff",
+        output_hint="<output.tiff>",
+        include_jpg_compression=False,
+        success_label="HDR TIFF created",
+        output_encoder=_encode_final_tiff,
+    )
+
+
+def print_help_tiff(version):
+    """@brief Print help text for the `dng2hdr2tiff` command.
+
+    @details Delegates to shared DNG-to-HDR help renderer with TIFF output
+    placeholders and without JPG-compression option.
+    @param version {str} CLI version label to append in usage output.
+    @return {None} Writes help text to stdout.
+    @satisfies DES-008, REQ-063, REQ-070, REQ-080, REQ-082
+    """
+
+    _print_help_common(version, "dng2hdr2tiff", "<output.tiff>", include_jpg_compression=False)
     return 0

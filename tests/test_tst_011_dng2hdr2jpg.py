@@ -20,9 +20,15 @@ PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
 if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
-for module_name in ("shell_scripts.commands.dng2hdr2jpg", "shell_scripts.commands", "shell_scripts"):
+for module_name in (
+    "shell_scripts.commands.dng2hdr2tiff",
+    "shell_scripts.commands.dng2hdr2jpg",
+    "shell_scripts.commands",
+    "shell_scripts",
+):
     sys.modules.pop(module_name, None)
 dng2hdr2jpg = import_module("shell_scripts.commands.dng2hdr2jpg")
+dng2hdr2tiff = import_module("shell_scripts.commands.dng2hdr2tiff")
 
 _ORIGINAL_TEMPORARY_DIRECTORY = std_tempfile.TemporaryDirectory
 
@@ -958,6 +964,25 @@ def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--jpg-compression=bad"]) == 1
 
 
+def test_dng2hdr2tiff_rejects_jpg_compression_option(tmp_path):
+    """
+    @brief Validate TIFF command rejects JPG-only compression option.
+    @details Invokes TIFF command with `--jpg-compression` and asserts parser
+      returns deterministic non-zero status.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-082
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_tiff = tmp_path / "result.tiff"
+    assert (
+        dng2hdr2tiff.run([str(input_dng), str(output_tiff), "--enable-enfuse", "--jpg-compression=10"])
+        == 1
+    )
+
+
 def test_dng2hdr2jpg_rejects_invalid_magic_options(tmp_path):
     """
     @brief Validate magic-retouch option parser rejects malformed values.
@@ -1435,6 +1460,47 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "`--tmoM08ColorSaturation`" in output
     assert "--tmo* <value> | --tmo*=<value>" in output
     assert "mutually exclusive with --enable-luminance" in output
+    assert output.rfind("--jpg-compression=<0..100>") > output.rfind("--help           - Show this help message.")
+
+
+def test_dng2hdr2tiff_help_excludes_jpg_compression_and_keeps_shared_sections(capsys):
+    """
+    @brief Validate TIFF help shares common sections and excludes JPG compression option.
+    @details Calls TIFF help renderer and verifies shared luminance/postprocess/magic
+      sections are present while `--jpg-compression` is absent.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-063, REQ-070, REQ-082
+    """
+
+    dng2hdr2tiff.print_help("0.0.0")
+    captured = capsys.readouterr()
+    output = captured.out
+    operators_section = output.split("  Luminance operators:", 1)[1].split(
+        "  Luminance operator main CLI controls:", 1
+    )[0]
+
+    assert "Usage: shellscripts dng2hdr2tiff <input.dng> <output.tiff>" in output
+    assert "--enable-luminance" in output
+    assert "--enable-enfuse" in output
+    assert "--gamma=<a,b>" in output
+    assert "--post-gamma=<value>" in output
+    assert "--brightness=<value>" in output
+    assert "--contrast=<value>" in output
+    assert "--saturation=<value>" in output
+    assert "--magic-retouch" in output
+    assert "--luminance-hdr-model=<name>" in output
+    assert "--luminance-hdr-weight=<name>" in output
+    assert "--luminance-hdr-response-curve=<name>" in output
+    assert "--luminance-tmo=<name>" in output
+    assert "Luminance operators:" in output
+    assert "Luminance operator main CLI controls:" in output
+    assert "┌" in output and "┬" in output and "┐" in output
+    assert "├" in output and "┼" in output and "┤" in output
+    assert "└" in output and "┴" in output and "┘" in output
+    assert "┬──┬" not in operators_section
+    assert "┼──┼" not in operators_section
+    assert "--jpg-compression=<0..100>" not in output
 
 
 def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
@@ -1641,6 +1707,90 @@ def test_dng2hdr2jpg_runs_magic_retouch_stage_when_enabled(monkeypatch, tmp_path
     assert pipeline[1][0] == "postprocess"
     assert pipeline[2][0] == "magic"
     assert pipeline[3][0] == "encode"
+
+
+def test_dng2hdr2tiff_runs_shared_pipeline_and_writes_tiff(monkeypatch, tmp_path):
+    """
+    @brief Validate TIFF command reuses shared pipeline and writes lossless TIFF.
+    @details Executes TIFF run with faked dependencies and verifies stage order
+      and that final encoder calls `imageio.imwrite` with uint16 payload.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-080, REQ-081
+    """
+
+    observed = {
+        "brights": [],
+        "output_bps": [],
+        "use_camera_wb": [],
+        "no_auto_bright": [],
+        "gamma": [],
+        "pipeline": [],
+        "tiff_writes": [],
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake rawpy module for TIFF shared-pipeline test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            """@brief Return fake RAW handle."""
+
+            return _FakeRawHandle(observed)
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for TIFF command test."""
+
+        @staticmethod
+        def imwrite(path, data):
+            """@brief Materialize deterministic files and capture final TIFF write."""
+
+            if Path(path).name == "merged_hdr.tif":
+                Path(path).write_text("merged", encoding="utf-8")
+                return
+            observed["tiff_writes"].append((Path(path).name, data))
+            Path(path).write_text("tiff", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for shared postprocess path."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    def _fake_subprocess_run(command, check):
+        """@brief Materialize merged tiff output for backend call."""
+
+        assert check is True
+        output_flag = next(token for token in command if token.startswith("--output="))
+        Path(output_flag.split("=", 1)[1]).write_text("merged", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+    )
+    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+    _patch_processing_pipeline(monkeypatch, observed)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_tiff = tmp_path / "scene.tiff"
+
+    result = dng2hdr2tiff.run([str(input_dng), str(output_tiff), "--enable-enfuse", "--magic-retouch"])
+    assert result == 0
+    assert ("read_u16", "merged_hdr.tif") in observed["pipeline"]
+    assert any(stage[0] == "postprocess" for stage in observed["pipeline"])
+    assert any(stage[0] == "magic" for stage in observed["pipeline"])
+    assert observed["tiff_writes"]
+    assert observed["tiff_writes"][-1][0] == "scene.tiff"
+    assert output_tiff.exists()
 
 
 def test_dng2hdr2jpg_encode_jpg_uses_jpg_compression_quality_mapping(tmp_path):

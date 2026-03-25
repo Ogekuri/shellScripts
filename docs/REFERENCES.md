@@ -23,6 +23,7 @@
         │   ├── dicomviewer.py
         │   ├── diff_cmd.py
         │   ├── dng2hdr2jpg.py
+        │   ├── dng2hdr2tiff.py
         │   ├── doxygen_cmd.py
         │   ├── edit_cmd.py
         │   ├── pdf_crop.py
@@ -88,7 +89,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 79L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 80L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -99,7 +100,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L49-64)
+### fn `def get_command(name: str) -> ModuleType | None` (L50-65)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -111,7 +112,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @satisfies PRJ-003, DES-001
 - @satisfies PRJ-001, DES-001, DES-008
 
-### fn `def get_all_commands() -> dict[str, str]` (L65-79)
+### fn `def get_all_commands() -> dict[str, str]` (L66-80)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
@@ -121,8 +122,8 @@ Removing an entry removes command discoverability and dispatch reachability.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|49-64|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|65-79|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|50-65|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|66-80|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -628,7 +629,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 1864L | 60 symbols | 14 imports | 37 comments
+# dng2hdr2jpg.py | Python | 2035L | 67 symbols | 14 imports | 44 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -737,21 +738,31 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {tuple[tuple[str, str, str], ...]} Expanded physical rows for `_print_box_table`.
 - @satisfies REQ-070
 
-### fn `def print_help(version)` (L312-419)
+### fn `def _print_help_common(version, command_name, output_placeholder, include_jpg_compression)` `priv` (L312-427)
+- @brief Print shared help body for DNG-to-HDR output commands.
+- @details Renders shared command usage and common options for both JPG and TIFF outputs, including backend selection, postprocess controls, magic retouch controls, luminance options, and aligned luminance tables; appends JPG-compression option only for JPG command flavor.
+- @param version {str} CLI version label to append in usage output.
+- @param command_name {str} Command token (`dng2hdr2jpg` or `dng2hdr2tiff`).
+- @param output_placeholder {str} Help placeholder for command output file.
+- @param include_jpg_compression {bool} Whether to append JPG compression option.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-063, REQ-070, REQ-082
+
+### fn `def print_help(version)` (L428-440)
 - @brief Print help text for the `dng2hdr2jpg` command.
-- @details Documents required positional arguments, optional EV/RAW gamma controls, shared postprocessing controls, backend selection, optional OpenCV-based `magic_retouch` controls, and luminance-hdr-cli tone-mapping options.
+- @details Delegates to shared DNG-to-HDR help renderer and appends JPG-specific compression option at the tail.
 - @param version {str} CLI version label to append in usage output.
 - @return {None} Writes help text to stdout.
-- @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-078
+- @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-078, REQ-082
 
-### fn `def _parse_ev_option(ev_raw)` `priv` (L420-444)
+### fn `def _parse_ev_option(ev_raw)` `priv` (L441-465)
 - @brief Parse and validate one EV option value.
 - @details Converts the raw token to `float` and validates membership against the supported EV value set used by bracket multiplier computation.
 - @param ev_raw {str} EV token extracted from command arguments.
 - @return {float|None} Parsed EV value when valid; `None` otherwise.
 - @satisfies REQ-056
 
-### fn `def _parse_luminance_text_option(option_name, option_raw)` `priv` (L445-465)
+### fn `def _parse_luminance_text_option(option_name, option_raw)` `priv` (L466-486)
 - @brief Parse and validate non-empty luminance string option value.
 - @details Normalizes surrounding spaces, lowercases token, rejects empty values, and rejects ambiguous values that start with option prefix marker.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -759,14 +770,14 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {str|None} Parsed normalized option token when valid; `None` otherwise.
 - @satisfies REQ-061
 
-### fn `def _parse_gamma_option(gamma_raw)` `priv` (L466-502)
+### fn `def _parse_gamma_option(gamma_raw)` `priv` (L487-523)
 - @brief Parse and validate one gamma option value pair.
 - @details Accepts comma-separated positive float pair in `a,b` format with optional surrounding parentheses, normalizes to `(a, b)` tuple, and rejects malformed, non-numeric, or non-positive values.
 - @param gamma_raw {str} Raw gamma token extracted from CLI args.
 - @return {tuple[float, float]|None} Parsed gamma tuple when valid; `None` otherwise.
 - @satisfies REQ-064
 
-### fn `def _parse_positive_float_option(option_name, option_raw)` `priv` (L503-526)
+### fn `def _parse_positive_float_option(option_name, option_raw)` `priv` (L524-547)
 - @brief Parse and validate one positive float option value.
 - @details Converts option token to `float`, requires value greater than zero, and emits deterministic parse errors on malformed values.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -774,7 +785,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {float|None} Parsed positive float value when valid; `None` otherwise.
 - @satisfies REQ-065
 
-### fn `def _parse_tmo_passthrough_value(option_name, option_raw)` `priv` (L527-543)
+### fn `def _parse_tmo_passthrough_value(option_name, option_raw)` `priv` (L548-564)
 - @brief Parse and validate one luminance `--tmo*` passthrough value.
 - @details Rejects empty values and preserves original payload for transparent forwarding to `luminance-hdr-cli`.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -782,14 +793,14 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {str|None} Original value when valid; `None` otherwise.
 - @satisfies REQ-067
 
-### fn `def _parse_jpg_compression_option(compression_raw)` `priv` (L544-566)
+### fn `def _parse_jpg_compression_option(compression_raw)` `priv` (L565-587)
 - @brief Parse and validate JPEG compression option value.
 - @details Converts option token to `int`, requires inclusive range `[0, 100]`, and emits deterministic parse errors on malformed values.
 - @param compression_raw {str} Raw compression token value from CLI args.
 - @return {int|None} Parsed JPEG compression level when valid; `None` otherwise.
 - @satisfies REQ-065
 
-### fn `def _parse_non_negative_float_option(option_name, option_raw)` `priv` (L567-590)
+### fn `def _parse_non_negative_float_option(option_name, option_raw)` `priv` (L588-611)
 - @brief Parse and validate one non-negative float option value.
 - @details Converts option token to `float`, requires value greater than or equal to zero, and emits deterministic parse errors on malformed values.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -797,7 +808,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {float|None} Parsed non-negative float value when valid; `None` otherwise.
 - @satisfies REQ-073
 
-### fn `def _parse_unit_float_option(option_name, option_raw)` `priv` (L591-614)
+### fn `def _parse_unit_float_option(option_name, option_raw)` `priv` (L612-635)
 - @brief Parse and validate one unit-interval float option value.
 - @details Converts option token to `float`, requires inclusive range `[0.0, 1.0]`, and emits deterministic parse errors on malformed values.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -805,7 +816,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {float|None} Parsed unit-interval float value when valid; `None` otherwise.
 - @satisfies REQ-073
 
-### fn `def _parse_positive_int_option(option_name, option_raw)` `priv` (L615-638)
+### fn `def _parse_positive_int_option(option_name, option_raw)` `priv` (L636-659)
 - @brief Parse and validate one positive integer option value.
 - @details Converts option token to `int`, requires value greater than zero, and emits deterministic parse errors on malformed values.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -813,14 +824,14 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {int|None} Parsed positive integer value when valid; `None` otherwise.
 - @satisfies REQ-073
 
-### fn `def _parse_magic_gamma_bias_option(option_raw)` `priv` (L639-660)
+### fn `def _parse_magic_gamma_bias_option(option_raw)` `priv` (L660-681)
 - @brief Parse and validate one `--magic-gamma-bias` option value.
 - @details Converts raw token to float and validates inclusive range `[-0.5, 0.5]` for luminance-driven gamma offset.
 - @param option_raw {str} Raw `--magic-gamma-bias` option value.
 - @return {float|None} Parsed gamma-bias value when valid; `None` otherwise.
 - @satisfies REQ-073
 
-### fn `def _resolve_default_postprocess(enable_luminance, luminance_tmo)` `priv` (L661-695)
+### fn `def _resolve_default_postprocess(enable_luminance, luminance_tmo)` `priv` (L682-716)
 - @brief Resolve backend-specific postprocess defaults.
 - @details Selects neutral defaults for enfuse and non-`reinhard02` luminance operators, and selects tuned defaults for luminance `reinhard02`.
 - @param enable_luminance {bool} Backend selector state.
@@ -828,27 +839,35 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {tuple[float, float, float, float]} Defaults in `(post_gamma, brightness, contrast, saturation)` order.
 - @satisfies REQ-069, REQ-071, REQ-072
 
-### fn `def _parse_run_options(args)` `priv` (L696-895)
-- @brief Parse CLI args into input, output, and EV parameters.
-- @details Supports positional file arguments, optional `--ev=<value>` or `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional postprocess controls, required backend selector (`--enable-enfuse` or `--enable-luminance`), adaptive OpenCV magic-retouch controls, and luminance backend controls including explicit `--tmo*` passthrough options; rejects unknown options and invalid arity.
-- @param args {list[str]} Raw command argument vector.
-- @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, MagicRetouchOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options, magic_retouch_options)` tuple; `None` on parse failure.
-- @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-078
+### fn `def _parse_run_options(` `priv` (L717-722)
 
-### fn `def _load_image_dependencies()` `priv` (L1225-1275)
+### fn `def _load_image_dependencies()` `priv` (L1255-1305)
+- @brief Parse CLI args into input/output paths and HDR processing options.
 - @brief Load optional Python dependencies required by `dng2hdr2jpg`.
+- @details Supports positional file arguments, optional `--ev=<value>` or
+`--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
+postprocess controls, required backend selector (`--enable-enfuse` or
+`--enable-luminance`), adaptive OpenCV magic-retouch controls, and luminance
+backend controls including explicit `--tmo*` passthrough options; rejects
+unknown options and invalid arity.
 - @details Imports `rawpy` for RAW decoding and `imageio` for image IO using `imageio.v3` when available with fallback to top-level `imageio` module.
+- @param args {list[str]} Raw command argument vector.
+- @param include_jpg_compression {bool} Enables `--jpg-compression` parsing for JPG flow only.
+- @param command_name {str} Command token used in usage errors.
+- @param output_hint {str} Output placeholder used in usage errors.
+- @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, MagicRetouchOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options, magic_retouch_options)` tuple; `None` on parse failure.
 - @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module, cv2_module, np_module)` on success; `None` on missing dependency.
+- @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-078, REQ-080, REQ-082
 - @satisfies REQ-059, REQ-066, REQ-077
 
-### fn `def _build_exposure_multipliers(ev_value)` `priv` (L1276-1288)
+### fn `def _build_exposure_multipliers(ev_value)` `priv` (L1306-1318)
 - @brief Compute bracketing brightness multipliers from EV value.
 - @details Produces exactly three multipliers mapped to exposure stops `[-ev, 0, +ev]` as powers of two for RAW postprocess brightness control.
 - @param ev_value {float} Exposure bracket EV delta.
 - @return {tuple[float, float, float]} Multipliers in order `(under, base, over)`.
 - @satisfies REQ-057
 
-### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, temp_dir)` `priv` (L1289-1322)
+### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, temp_dir)` `priv` (L1319-1352)
 - @brief Materialize three bracket TIFF files from one RAW handle.
 - @details Invokes `raw.postprocess` with `output_bps=16`, `use_camera_wb=True`, `no_auto_bright=True`, and configurable gamma pair for deterministic HDR-oriented bracket extraction before merge.
 - @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
@@ -859,7 +878,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {list[Path]} Ordered temporary TIFF file paths.
 - @satisfies REQ-057
 
-### fn `def _order_bracket_paths(bracket_paths)` `priv` (L1323-1348)
+### fn `def _order_bracket_paths(bracket_paths)` `priv` (L1353-1378)
 - @brief Validate and reorder bracket TIFF paths for deterministic backend argv.
 - @details Enforces exact exposure order `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` required by luminance-hdr-cli command generation and raises on missing labels.
 - @param bracket_paths {list[Path]} Temporary bracket TIFF paths generated from RAW.
@@ -867,7 +886,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @exception ValueError Raised when any expected bracket label is missing.
 - @satisfies REQ-062
 
-### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L1349-1369)
+### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L1379-1399)
 - @brief Merge bracket TIFF files into one HDR TIFF via `enfuse`.
 - @details Builds deterministic enfuse argv with LZW compression and executes subprocess in checked mode to propagate command failures.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
@@ -876,7 +895,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @exception subprocess.CalledProcessError Raised when `enfuse` returns non-zero exit status.
 - @satisfies REQ-058
 
-### fn `def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_options)` `priv` (L1370-1409)
+### fn `def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_options)` `priv` (L1400-1439)
 - @brief Merge bracket TIFF files into one HDR TIFF via `luminance-hdr-cli`.
 - @details Builds deterministic luminance-hdr-cli argv using EV sequence, HDR model controls, tone-mapper controls, mandatory `--ldrTiff 16b`, optional explicit `--tmo*` passthrough arguments, and ordered exposure inputs (`ev_minus`, `ev_zero`, `ev_plus`), then writes to TIFF output path used by shared postprocess conversion.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
@@ -887,21 +906,21 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
 - @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068
 
-### fn `def _convert_compression_to_quality(jpg_compression)` `priv` (L1410-1422)
+### fn `def _convert_compression_to_quality(jpg_compression)` `priv` (L1440-1452)
 - @brief Convert JPEG compression level to Pillow quality value.
 - @details Maps inclusive compression range `[0, 100]` to inclusive quality range `[100, 1]` preserving deterministic inverse relation.
 - @param jpg_compression {int} JPEG compression level.
 - @return {int} Pillow quality value in `[1, 100]`.
 - @satisfies REQ-065, REQ-066
 
-### fn `def _u16_to_u8_ordered_dither(image_u16)` `priv` (L1423-1476)
+### fn `def _u16_to_u8_ordered_dither(image_u16)` `priv` (L1453-1506)
 - @brief Convert uint16 payload to uint8 using deterministic ordered dithering.
 - @details Applies Bayer-4x4 ordered dithering over the low 8 bits while preserving high-byte intensity so quantization error is spatially distributed and visible banding after 16-bit to 8-bit conversion is reduced. Falls back to legacy scalar conversion for non-numpy test doubles.
 - @param image_u16 {np.ndarray|object} Input uint16 payload or test double.
 - @return {np.ndarray|object} Uint8 payload for JPEG encoding.
 - @satisfies REQ-066
 
-### fn `def _to_float01_from_u16(np_module, image_u16)` `priv` (L1477-1490)
+### fn `def _to_float01_from_u16(np_module, image_u16)` `priv` (L1507-1520)
 - @brief Convert one uint16 image payload to normalized float image.
 - @details Casts uint16 image payload to float32 and normalizes pixel domain from `[0, 65535]` to `[0.0, 1.0]`.
 - @param np_module {ModuleType} Imported numpy module.
@@ -909,7 +928,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Float32 normalized image payload.
 - @satisfies REQ-066, REQ-076
 
-### fn `def _to_u16_from_float01(np_module, image_float)` `priv` (L1491-1505)
+### fn `def _to_u16_from_float01(np_module, image_float)` `priv` (L1521-1535)
 - @brief Convert one normalized float image payload to uint16 image.
 - @details Clips pixel domain to `[0.0, 1.0]`, scales to `[0, 65535]`, and casts to uint16 to preserve 16-bit-per-channel lossless stage continuity.
 - @param np_module {ModuleType} Imported numpy module.
@@ -917,7 +936,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Uint16 image payload.
 - @satisfies REQ-066, REQ-076
 
-### fn `def _apply_postprocess_16bit(np_module, cv2_module, image_u16, postprocess_options)` `priv` (L1506-1539)
+### fn `def _apply_postprocess_16bit(np_module, cv2_module, image_u16, postprocess_options)` `priv` (L1536-1569)
 - @brief Apply gamma/brightness/contrast/saturation in-memory on uint16 image.
 - @details Executes all postprocess controls on normalized float payload and converts back to uint16 without lossy 8-bit conversion.
 - @param np_module {ModuleType} Imported numpy module.
@@ -927,7 +946,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Postprocessed uint16 image payload.
 - @satisfies REQ-066, REQ-076
 
-### fn `def _magic_retouch(np_module, cv2_module, image_u16, magic_options)` `priv` (L1540-1608)
+### fn `def _magic_retouch(np_module, cv2_module, image_u16, magic_options)` `priv` (L1570-1638)
 - @brief Execute in-memory 16-bit deterministic OpenCV magic-retouch pipeline.
 - @details Converts uint16 input to normalized RGB float payload and applies ordered adaptive stages: parameterized denoise driven by `denoise_strength`, conditional luminance-aware gamma correction controlled by gamma-bias, optional CLAHE local-contrast enhancement, conditional adaptive vibrance, and conditional edge-masked unsharp sharpening. Stages with zero-valued controls are bypassed without executing their computation paths. Returns uint16 output for downstream JPG conversion stage.
 - @param np_module {ModuleType} Imported numpy module.
@@ -937,7 +956,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Magic-retouched uint16 image payload.
 - @satisfies REQ-074, REQ-075, REQ-076, REQ-078
 
-### fn `def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression)` `priv` (L1609-1641)
+### fn `def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression)` `priv` (L1639-1671)
 - @brief Encode one in-memory 16-bit image payload into final JPG output.
 - @details Converts in-memory uint16 payload to uint8 using deterministic ordered dithering, normalizes channel-mode to RGB, and writes JPG with configured compression level and artifact-reduction encode flags.
 - @param pil_image_module {ModuleType} Imported Pillow image module.
@@ -947,7 +966,16 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {None} Side effects only.
 - @satisfies REQ-058, REQ-066, REQ-074, REQ-076, REQ-079
 
-### fn `def _read_u16_image(imageio_module, np_module, merged_tiff)` `priv` (L1642-1673)
+### fn `def _encode_tiff(imageio_module, image_u16, output_tiff)` `priv` (L1672-1686)
+- @brief Encode one in-memory 16-bit image payload into lossless TIFF output.
+- @details Persists uint16 RGB payload as TIFF without quantization to preserve 16-bit-per-channel lossless output contract for TIFF command flow.
+- @param imageio_module {ModuleType} Imported imageio module.
+- @param image_u16 {np.ndarray} Input uint16 image payload.
+- @param output_tiff {Path} Final TIFF output path.
+- @return {None} Side effects only.
+- @satisfies REQ-081
+
+### fn `def _read_u16_image(imageio_module, np_module, merged_tiff)` `priv` (L1687-1718)
 - @brief Read merged TIFF and normalize payload to uint16 RGB image.
 - @details Reads merged TIFF payload, strips alpha channel when present, and converts integer payloads to uint16 domain required by in-memory postprocess.
 - @param imageio_module {ModuleType} Imported imageio module.
@@ -956,25 +984,76 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {np.ndarray} Normalized uint16 RGB image payload.
 - @satisfies REQ-066, REQ-074, REQ-076
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1674-1702)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1719-1747)
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Combines common IO/value/subprocess errors with rawpy-specific decoding error classes when present in runtime module version.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L1703-1722)
-- @brief Validate runtime platform support for `dng2hdr2jpg`.
+### fn `def _is_supported_runtime_os(command_name="dng2hdr2jpg")` `priv` (L1748-1768)
+- @brief Validate runtime platform support for one DNG-to-HDR command.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
+- @param command_name {str} Command token for platform error rendering.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L1723-1864)
+### fn `def _encode_final_jpg(imageio_module, pil_image_module, image_u16, output_path, postprocess_options)` `priv` (L1769-1791)
+- @brief Encode shared pipeline payload to JPG output.
+- @details Delegates final payload encoding to JPEG writer using parsed compression level from postprocess options.
+- @param imageio_module {ModuleType} Imported imageio module.
+- @param pil_image_module {ModuleType} Imported Pillow image module.
+- @param image_u16 {np.ndarray} Input uint16 image payload.
+- @param output_path {Path} Final output path.
+- @param postprocess_options {PostprocessOptions} Parsed postprocess options.
+- @return {None} Side effects only.
+- @satisfies REQ-066, REQ-079
+
+### fn `def _encode_final_tiff(imageio_module, pil_image_module, image_u16, output_path, postprocess_options)` `priv` (L1792-1813)
+- @brief Encode shared pipeline payload to lossless TIFF output.
+- @details Persists final uint16 payload directly as TIFF without JPG-specific quantization or compression mapping.
+- @param imageio_module {ModuleType} Imported imageio module.
+- @param pil_image_module {ModuleType} Imported Pillow image module.
+- @param image_u16 {np.ndarray} Input uint16 image payload.
+- @param output_path {Path} Final output path.
+- @param postprocess_options {PostprocessOptions} Parsed postprocess options.
+- @return {None} Side effects only.
+- @satisfies REQ-080, REQ-081
+
+### fn `def _run_shared_dng2hdr_command(` `priv` (L1814-1821)
+
+### fn `def run(args)` (L1984-2003)
+- @brief Execute shared DNG-to-HDR pipeline for JPG and TIFF commands.
 - @brief Execute `dng2hdr2jpg` command pipeline.
-- @details Parses command options, validates dependencies, extracts three RAW brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow, applies in-memory uint16 postprocess controls, optionally applies in-memory uint16 OpenCV-filter `magic_retouch`, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
+- @details Parses options, validates dependencies, extracts RAW brackets,
+executes selected HDR backend, applies in-memory uint16 postprocess and
+optional magic-retouch, then delegates command-specific final encoding.
+- @details Executes shared DNG-to-HDR pipeline and applies JPG-specific final encoding with ordered-dither uint16-to-uint8 conversion.
+- @param args {list[str]} Command argument vector excluding command token.
+- @param command_name {str} Command token for deterministic logs/errors.
+- @param output_hint {str} Output placeholder for parser usage errors.
+- @param include_jpg_compression {bool} Enables JPG compression option parsing.
+- @param success_label {str} Success message prefix.
+- @param output_encoder {Callable[[ModuleType, ModuleType, object, Path, PostprocessOptions], None]} Final encoder callback.
 - @param args {list[str]} Command argument vector excluding command token.
 - @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-- @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
+- @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
+- @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-080, REQ-081, REQ-082
+- @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-082
+
+### fn `def run_tiff(args)` (L2004-2023)
+- @brief Execute shared DNG-to-HDR pipeline with TIFF final encoding.
+- @details Reuses same parsing and processing path as JPG command and writes final output as lossless uint16 TIFF without 8-bit quantization.
+- @param args {list[str]} Command argument vector excluding command token.
+- @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
+- @satisfies REQ-055, REQ-059, REQ-066, REQ-073, REQ-074, REQ-075, REQ-076, REQ-080, REQ-081
+
+### fn `def print_help_tiff(version)` (L2024-2035)
+- @brief Print help text for the `dng2hdr2tiff` command.
+- @details Delegates to shared DNG-to-HDR help renderer with TIFF output placeholders and without JPG-compression option.
+- @param version {str} CLI version label to append in usage output.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-063, REQ-070, REQ-080, REQ-082
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1009,36 +1088,80 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 |`_border`|fn|priv|278-280|def _border(left, middle, right)|
 |`_line`|fn|priv|281-284|def _line(values)|
 |`_build_two_line_operator_rows`|fn|priv|295-311|def _build_two_line_operator_rows(operator_entries)|
-|`print_help`|fn|pub|312-419|def print_help(version)|
-|`_parse_ev_option`|fn|priv|420-444|def _parse_ev_option(ev_raw)|
-|`_parse_luminance_text_option`|fn|priv|445-465|def _parse_luminance_text_option(option_name, option_raw)|
-|`_parse_gamma_option`|fn|priv|466-502|def _parse_gamma_option(gamma_raw)|
-|`_parse_positive_float_option`|fn|priv|503-526|def _parse_positive_float_option(option_name, option_raw)|
-|`_parse_tmo_passthrough_value`|fn|priv|527-543|def _parse_tmo_passthrough_value(option_name, option_raw)|
-|`_parse_jpg_compression_option`|fn|priv|544-566|def _parse_jpg_compression_option(compression_raw)|
-|`_parse_non_negative_float_option`|fn|priv|567-590|def _parse_non_negative_float_option(option_name, option_...|
-|`_parse_unit_float_option`|fn|priv|591-614|def _parse_unit_float_option(option_name, option_raw)|
-|`_parse_positive_int_option`|fn|priv|615-638|def _parse_positive_int_option(option_name, option_raw)|
-|`_parse_magic_gamma_bias_option`|fn|priv|639-660|def _parse_magic_gamma_bias_option(option_raw)|
-|`_resolve_default_postprocess`|fn|priv|661-695|def _resolve_default_postprocess(enable_luminance, lumina...|
-|`_parse_run_options`|fn|priv|696-895|def _parse_run_options(args)|
-|`_load_image_dependencies`|fn|priv|1225-1275|def _load_image_dependencies()|
-|`_build_exposure_multipliers`|fn|priv|1276-1288|def _build_exposure_multipliers(ev_value)|
-|`_write_bracket_images`|fn|priv|1289-1322|def _write_bracket_images(raw_handle, imageio_module, mul...|
-|`_order_bracket_paths`|fn|priv|1323-1348|def _order_bracket_paths(bracket_paths)|
-|`_run_enfuse`|fn|priv|1349-1369|def _run_enfuse(bracket_paths, merged_tiff)|
-|`_run_luminance_hdr_cli`|fn|priv|1370-1409|def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff...|
-|`_convert_compression_to_quality`|fn|priv|1410-1422|def _convert_compression_to_quality(jpg_compression)|
-|`_u16_to_u8_ordered_dither`|fn|priv|1423-1476|def _u16_to_u8_ordered_dither(image_u16)|
-|`_to_float01_from_u16`|fn|priv|1477-1490|def _to_float01_from_u16(np_module, image_u16)|
-|`_to_u16_from_float01`|fn|priv|1491-1505|def _to_u16_from_float01(np_module, image_float)|
-|`_apply_postprocess_16bit`|fn|priv|1506-1539|def _apply_postprocess_16bit(np_module, cv2_module, image...|
-|`_magic_retouch`|fn|priv|1540-1608|def _magic_retouch(np_module, cv2_module, image_u16, magi...|
-|`_encode_jpg`|fn|priv|1609-1641|def _encode_jpg(pil_image_module, image_u16, output_jpg, ...|
-|`_read_u16_image`|fn|priv|1642-1673|def _read_u16_image(imageio_module, np_module, merged_tiff)|
-|`_collect_processing_errors`|fn|priv|1674-1702|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|1703-1722|def _is_supported_runtime_os()|
-|`run`|fn|pub|1723-1864|def run(args)|
+|`_print_help_common`|fn|priv|312-427|def _print_help_common(version, command_name, output_plac...|
+|`print_help`|fn|pub|428-440|def print_help(version)|
+|`_parse_ev_option`|fn|priv|441-465|def _parse_ev_option(ev_raw)|
+|`_parse_luminance_text_option`|fn|priv|466-486|def _parse_luminance_text_option(option_name, option_raw)|
+|`_parse_gamma_option`|fn|priv|487-523|def _parse_gamma_option(gamma_raw)|
+|`_parse_positive_float_option`|fn|priv|524-547|def _parse_positive_float_option(option_name, option_raw)|
+|`_parse_tmo_passthrough_value`|fn|priv|548-564|def _parse_tmo_passthrough_value(option_name, option_raw)|
+|`_parse_jpg_compression_option`|fn|priv|565-587|def _parse_jpg_compression_option(compression_raw)|
+|`_parse_non_negative_float_option`|fn|priv|588-611|def _parse_non_negative_float_option(option_name, option_...|
+|`_parse_unit_float_option`|fn|priv|612-635|def _parse_unit_float_option(option_name, option_raw)|
+|`_parse_positive_int_option`|fn|priv|636-659|def _parse_positive_int_option(option_name, option_raw)|
+|`_parse_magic_gamma_bias_option`|fn|priv|660-681|def _parse_magic_gamma_bias_option(option_raw)|
+|`_resolve_default_postprocess`|fn|priv|682-716|def _resolve_default_postprocess(enable_luminance, lumina...|
+|`_parse_run_options`|fn|priv|717-722|def _parse_run_options(|
+|`_load_image_dependencies`|fn|priv|1255-1305|def _load_image_dependencies()|
+|`_build_exposure_multipliers`|fn|priv|1306-1318|def _build_exposure_multipliers(ev_value)|
+|`_write_bracket_images`|fn|priv|1319-1352|def _write_bracket_images(raw_handle, imageio_module, mul...|
+|`_order_bracket_paths`|fn|priv|1353-1378|def _order_bracket_paths(bracket_paths)|
+|`_run_enfuse`|fn|priv|1379-1399|def _run_enfuse(bracket_paths, merged_tiff)|
+|`_run_luminance_hdr_cli`|fn|priv|1400-1439|def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff...|
+|`_convert_compression_to_quality`|fn|priv|1440-1452|def _convert_compression_to_quality(jpg_compression)|
+|`_u16_to_u8_ordered_dither`|fn|priv|1453-1506|def _u16_to_u8_ordered_dither(image_u16)|
+|`_to_float01_from_u16`|fn|priv|1507-1520|def _to_float01_from_u16(np_module, image_u16)|
+|`_to_u16_from_float01`|fn|priv|1521-1535|def _to_u16_from_float01(np_module, image_float)|
+|`_apply_postprocess_16bit`|fn|priv|1536-1569|def _apply_postprocess_16bit(np_module, cv2_module, image...|
+|`_magic_retouch`|fn|priv|1570-1638|def _magic_retouch(np_module, cv2_module, image_u16, magi...|
+|`_encode_jpg`|fn|priv|1639-1671|def _encode_jpg(pil_image_module, image_u16, output_jpg, ...|
+|`_encode_tiff`|fn|priv|1672-1686|def _encode_tiff(imageio_module, image_u16, output_tiff)|
+|`_read_u16_image`|fn|priv|1687-1718|def _read_u16_image(imageio_module, np_module, merged_tiff)|
+|`_collect_processing_errors`|fn|priv|1719-1747|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|1748-1768|def _is_supported_runtime_os(command_name="dng2hdr2jpg")|
+|`_encode_final_jpg`|fn|priv|1769-1791|def _encode_final_jpg(imageio_module, pil_image_module, i...|
+|`_encode_final_tiff`|fn|priv|1792-1813|def _encode_final_tiff(imageio_module, pil_image_module, ...|
+|`_run_shared_dng2hdr_command`|fn|priv|1814-1821|def _run_shared_dng2hdr_command(|
+|`run`|fn|pub|1984-2003|def run(args)|
+|`run_tiff`|fn|pub|2004-2023|def run_tiff(args)|
+|`print_help_tiff`|fn|pub|2024-2035|def print_help_tiff(version)|
+
+
+---
+
+# dng2hdr2tiff.py | Python | 39L | 4 symbols | 1 imports | 4 comments
+> Path: `src/shell_scripts/commands/dng2hdr2tiff.py`
+
+## Imports
+```
+from shell_scripts.commands import dng2hdr2jpg
+```
+
+## Definitions
+
+- var `PROGRAM = dng2hdr2jpg.PROGRAM` (L12)
+- var `DESCRIPTION = "Convert DNG to HDR-merged lossless 16-bit TIFF with optional luminance-hdr-cli backend."` (L13)
+### fn `def print_help(version)` (L16-28)
+- @brief Print help text for the `dng2hdr2tiff` command.
+- @details Delegates to shared TIFF help renderer defined in shared DNG/HDR implementation module.
+- @param version {str} CLI version label.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-063, REQ-070, REQ-082
+
+### fn `def run(args)` (L29-39)
+- @brief Execute `dng2hdr2tiff` command pipeline.
+- @details Delegates to shared TIFF pipeline runner with lossless uint16 final encoding and shared option/backend semantics.
+- @param args {list[str]} Command argument vector excluding command token.
+- @return {int} `0` on success; `1` on failure.
+- @satisfies REQ-055, REQ-059, REQ-066, REQ-073, REQ-074, REQ-075, REQ-076, REQ-080, REQ-081
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|12||
+|`DESCRIPTION`|var|pub|13||
+|`print_help`|fn|pub|16-28|def print_help(version)|
+|`run`|fn|pub|29-39|def run(args)|
 
 
 ---
