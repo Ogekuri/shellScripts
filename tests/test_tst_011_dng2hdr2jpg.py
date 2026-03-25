@@ -1687,8 +1687,8 @@ def test_dng2hdr2jpg_magic_retouch_defaults_are_noise_conservative():
     @satisfies TST-011, REQ-073, REQ-075
     """
 
-    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_SIGMA_COLOR == pytest.approx(0.06)
-    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_SIGMA_SPACE == pytest.approx(4.0)
-    assert dng2hdr2jpg.DEFAULT_MAGIC_MICROCONTRAST_AMOUNT == pytest.approx(0.14)
-    assert dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH == pytest.approx(0.09)
-    assert dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_AMOUNT == pytest.approx(0.28)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_SIGMA_COLOR == pytest.approx(0.08)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_DENOISE_SIGMA_SPACE == pytest.approx(5.0)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_MICROCONTRAST_AMOUNT == pytest.approx(0.12)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_VIBRANCE_STRENGTH == pytest.approx(0.07)
+    assert dng2hdr2jpg.DEFAULT_MAGIC_SHARPEN_AMOUNT == pytest.approx(0.24)

@@ -175,7 +175,7 @@
         - `dng2hdr2jpg._apply_postprocess_16bit(...)`: Apply in-memory 16-bit `post-gamma`, `brightness`, `contrast`, and `saturation` before JPG conversion [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._to_float01_from_u16(...)`: Normalize uint16 payload to float working domain [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._to_u16_from_float01(...)`: Convert normalized float payload back to uint16 [`src/shell_scripts/commands/dng2hdr2jpg.py`]
-        - `dng2hdr2jpg._magic_retouch(...)`: Execute optional deterministic `magic_retouch` stage after postprocess and before JPG conversion [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+        - `dng2hdr2jpg._magic_retouch(...)`: Execute optional deterministic `magic_retouch` stage after postprocess and before JPG conversion, with defaults tuned to reduce visible noise clumping [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._guided_filter(...)`: Compute guided-filter base layer used by magic-retouch micro-contrast enhancement [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._to_float01_from_u16(...)`: Normalize uint16 payload to float working domain [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._to_u16_from_float01(...)`: Convert normalized float payload back to uint16 [`src/shell_scripts/commands/dng2hdr2jpg.py`]

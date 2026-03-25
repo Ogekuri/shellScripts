@@ -188,7 +188,7 @@ No explicit performance optimizations identified.
 - **REQ-072**: MUST default enfuse-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when no explicit postprocess overrides are provided.
 - **REQ-073**: MUST parse `--magic-retouch` and optional configuration options in assignment or split form, and MUST reject malformed values and unknown magic options with return code `1`.
 - **REQ-074**: MUST execute `magic_retouch` only when `--magic-retouch` is enabled, positioned after 16-bit postprocess and before JPG encoding, and MUST bypass it when the flag is omitted.
-- **REQ-075**: MUST implement `magic_retouch` as a deterministic pipeline including mild color balance, denoise, edge-aware micro-contrast, mild vibrance, luminance-only sharpening, and extremes protection, with user-configurable parameters and noise-conservative default values.
+- **REQ-075**: MUST implement `magic_retouch` as a deterministic pipeline including mild color balance, denoise, edge-aware micro-contrast, mild vibrance, luminance-only sharpening, and extremes protection, with defaults tuned to suppress noise clumping by favoring denoise over enhancement.
 - **REQ-076**: MUST execute `magic_retouch` in-memory on lossless 16-bit-per-channel image data and forward its output directly to the JPG conversion/compression stage.
 - **REQ-077**: MUST declare Linux runtime dependencies `opencv-python` and `numpy` in package metadata so Astral `uv` installations include required `magic_retouch` runtime modules.
 
