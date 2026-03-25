@@ -27,6 +27,8 @@ dependencies = [
   "rawpy; platform_system == 'Linux'",
   "imageio; platform_system == 'Linux'",
   "pillow; platform_system == 'Linux'",
+  "opencv-python; platform_system == 'Linux'",
+  "numpy; platform_system == 'Linux'",
 ]
 
 [dependency-groups]

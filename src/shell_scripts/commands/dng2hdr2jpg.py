@@ -3,10 +3,12 @@
 
 @details Implements bracketed RAW extraction with three synthetic exposures
 (`-ev`, `0`, `+ev`), merges them through selected `enfuse` or selected
-`luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
-final JPG to user-selected output path. Temporary artifacts are isolated in a
-temporary directory and removed automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072
+`luminance-hdr-cli` flow with deterministic HDR model parameters, applies
+in-memory 16-bit postprocess, optionally executes in-memory 16-bit
+`magic_retouch`, then writes final JPG to user-selected output path.
+Temporary artifacts are isolated in a temporary directory and removed
+automatically on success and failure.
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077
 """
 
 import shutil
@@ -38,6 +40,16 @@ DEFAULT_LUMINANCE_TMO = "reinhard02"
 DEFAULT_REINHARD02_BRIGHTNESS = 1.25
 DEFAULT_REINHARD02_CONTRAST = 0.85
 DEFAULT_REINHARD02_SATURATION = 0.55
+DEFAULT_MAGIC_COLOR_BALANCE_STRENGTH = 0.18
+DEFAULT_MAGIC_DENOISE_SIGMA_COLOR = 0.04
+DEFAULT_MAGIC_DENOISE_SIGMA_SPACE = 3.0
+DEFAULT_MAGIC_MICROCONTRAST_RADIUS = 10
+DEFAULT_MAGIC_MICROCONTRAST_EPS = 1e-3
+DEFAULT_MAGIC_MICROCONTRAST_AMOUNT = 0.20
+DEFAULT_MAGIC_VIBRANCE_STRENGTH = 0.12
+DEFAULT_MAGIC_SHARPEN_SIGMA = 1.0
+DEFAULT_MAGIC_SHARPEN_AMOUNT = 0.35
+DEFAULT_MAGIC_PROTECT_BLEND = 0.85
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
@@ -221,6 +233,40 @@ class LuminanceOptions:
     tmo_extra_args: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class MagicRetouchOptions:
+    """@brief Hold deterministic `magic_retouch` option values.
+
+    @details Encapsulates all configurable parameters for the in-memory 16-bit
+    magic-retouch pipeline activated by `--magic-retouch`.
+    @param enabled {bool} Pipeline enable flag.
+    @param color_balance_strength {float} LAB color-balance correction factor.
+    @param denoise_sigma_color {float} Bilateral denoise color sigma in normalized domain.
+    @param denoise_sigma_space {float} Bilateral denoise spatial sigma.
+    @param microcontrast_radius {int} Box-filter window radius for guided micro-contrast.
+    @param microcontrast_eps {float} Guided filter regularization epsilon.
+    @param microcontrast_amount {float} Guided-detail amplification factor.
+    @param vibrance_strength {float} Saturation gain for low-saturation pixels.
+    @param sharpen_sigma {float} Gaussian sigma for luminance unsharp mask.
+    @param sharpen_amount {float} Luminance unsharp blend amount.
+    @param protect_blend {float} Extremes-protection blend factor in `[0, 1]`.
+    @return {None} Immutable dataclass container.
+    @satisfies REQ-073, REQ-075
+    """
+
+    enabled: bool
+    color_balance_strength: float
+    denoise_sigma_color: float
+    denoise_sigma_space: float
+    microcontrast_radius: int
+    microcontrast_eps: float
+    microcontrast_amount: float
+    vibrance_strength: float
+    sharpen_sigma: float
+    sharpen_amount: float
+    protect_blend: float
+
+
 def _print_box_table(headers, rows, header_rows=()):
     """@brief Print one Unicode box-drawing table.
 
@@ -279,11 +325,11 @@ def print_help(version):
     """@brief Print help text for the `dng2hdr2jpg` command.
 
     @details Documents required positional arguments, optional EV/RAW gamma
-    controls, shared postprocessing controls, backend selection, and
-    luminance-hdr-cli tone-mapping options.
+    controls, shared postprocessing controls, backend selection, optional
+    `magic_retouch` controls, and luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072
+    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075
     """
 
     print(
@@ -291,6 +337,12 @@ def print_help(version):
         f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
         f"[--jpg-compression=<0..100>] (--enable-enfuse | --enable-luminance) "
+        f"[--magic-retouch] [--magic-color-balance-strength=<0..1>] "
+        f"[--magic-denoise-sigma-color=<value>] [--magic-denoise-sigma-space=<value>] "
+        f"[--magic-microcontrast-radius=<value>] [--magic-microcontrast-eps=<value>] "
+        f"[--magic-microcontrast-amount=<value>] [--magic-vibrance-strength=<value>] "
+        f"[--magic-sharpen-sigma=<value>] [--magic-sharpen-amount=<value>] "
+        f"[--magic-protect-blend=<0..1>] "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
         f"[--tmo*=<value>] ({version})"
@@ -307,6 +359,47 @@ def print_help(version):
     print("  --contrast=<value>   - Postprocess contrast factor (backend-default when omitted).")
     print("  --saturation=<value> - Postprocess saturation factor (backend-default when omitted).")
     print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
+    print("  --magic-retouch            - Enable in-memory 16-bit magic-retouch stage.")
+    print(
+        "  --magic-color-balance-strength=<0..1>"
+        f" - LAB chroma color-balance strength (default: {DEFAULT_MAGIC_COLOR_BALANCE_STRENGTH})."
+    )
+    print(
+        "  --magic-denoise-sigma-color=<value>"
+        f" - Bilateral denoise color sigma (default: {DEFAULT_MAGIC_DENOISE_SIGMA_COLOR})."
+    )
+    print(
+        "  --magic-denoise-sigma-space=<value>"
+        f" - Bilateral denoise spatial sigma (default: {DEFAULT_MAGIC_DENOISE_SIGMA_SPACE})."
+    )
+    print(
+        "  --magic-microcontrast-radius=<value>"
+        f" - Guided filter radius (default: {DEFAULT_MAGIC_MICROCONTRAST_RADIUS})."
+    )
+    print(
+        "  --magic-microcontrast-eps=<value>"
+        f" - Guided filter epsilon (default: {DEFAULT_MAGIC_MICROCONTRAST_EPS})."
+    )
+    print(
+        "  --magic-microcontrast-amount=<value>"
+        f" - Micro-contrast boost factor (default: {DEFAULT_MAGIC_MICROCONTRAST_AMOUNT})."
+    )
+    print(
+        "  --magic-vibrance-strength=<value>"
+        f" - Vibrance gain for low saturation pixels (default: {DEFAULT_MAGIC_VIBRANCE_STRENGTH})."
+    )
+    print(
+        "  --magic-sharpen-sigma=<value>"
+        f" - Luma sharpen Gaussian sigma (default: {DEFAULT_MAGIC_SHARPEN_SIGMA})."
+    )
+    print(
+        "  --magic-sharpen-amount=<value>"
+        f" - Luma sharpen amount (default: {DEFAULT_MAGIC_SHARPEN_AMOUNT})."
+    )
+    print(
+        "  --magic-protect-blend=<0..1>"
+        f" - Extremes-protection blend factor (default: {DEFAULT_MAGIC_PROTECT_BLEND})."
+    )
     print("  --enable-enfuse")
     print("                   - Select enfuse backend (required, mutually exclusive with --enable-luminance).")
     print("  --enable-luminance")
@@ -501,6 +594,78 @@ def _parse_jpg_compression_option(compression_raw):
     return compression_value
 
 
+def _parse_non_negative_float_option(option_name, option_raw):
+    """@brief Parse and validate one non-negative float option value.
+
+    @details Converts option token to `float`, requires value greater than or
+    equal to zero, and emits deterministic parse errors on malformed values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @return {float|None} Parsed non-negative float value when valid; `None` otherwise.
+    @satisfies REQ-073
+    """
+
+    try:
+        option_value = float(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+
+    if option_value < 0.0:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error(f"{option_name} must be greater than or equal to zero.")
+        return None
+    return option_value
+
+
+def _parse_unit_float_option(option_name, option_raw):
+    """@brief Parse and validate one unit-interval float option value.
+
+    @details Converts option token to `float`, requires inclusive range
+    `[0.0, 1.0]`, and emits deterministic parse errors on malformed values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @return {float|None} Parsed unit-interval float value when valid; `None` otherwise.
+    @satisfies REQ-073
+    """
+
+    try:
+        option_value = float(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+
+    if option_value < 0.0 or option_value > 1.0:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error(f"{option_name} must be in range [0.0, 1.0].")
+        return None
+    return option_value
+
+
+def _parse_positive_int_option(option_name, option_raw):
+    """@brief Parse and validate one positive integer option value.
+
+    @details Converts option token to `int`, requires value greater than zero,
+    and emits deterministic parse errors on malformed values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @return {int|None} Parsed positive integer value when valid; `None` otherwise.
+    @satisfies REQ-073
+    """
+
+    try:
+        option_value = int(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+
+    if option_value <= 0:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error(f"{option_name} must be greater than zero.")
+        return None
+    return option_value
+
+
 def _resolve_default_postprocess(enable_luminance, luminance_tmo):
     """@brief Resolve backend-specific postprocess defaults.
 
@@ -546,8 +711,8 @@ def _parse_run_options(args):
     controls including explicit `--tmo*` passthrough options; rejects unknown
     options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072
+    @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, MagicRetouchOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options, magic_retouch_options)` tuple; `None` on parse failure.
+    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073
     """
 
     positional = []
@@ -570,10 +735,233 @@ def _parse_run_options(args):
     luminance_tmo = DEFAULT_LUMINANCE_TMO
     luminance_tmo_extra_args = []
     luminance_option_specified = False
+    magic_retouch_enabled = False
+    magic_color_balance_strength = DEFAULT_MAGIC_COLOR_BALANCE_STRENGTH
+    magic_denoise_sigma_color = DEFAULT_MAGIC_DENOISE_SIGMA_COLOR
+    magic_denoise_sigma_space = DEFAULT_MAGIC_DENOISE_SIGMA_SPACE
+    magic_microcontrast_radius = DEFAULT_MAGIC_MICROCONTRAST_RADIUS
+    magic_microcontrast_eps = DEFAULT_MAGIC_MICROCONTRAST_EPS
+    magic_microcontrast_amount = DEFAULT_MAGIC_MICROCONTRAST_AMOUNT
+    magic_vibrance_strength = DEFAULT_MAGIC_VIBRANCE_STRENGTH
+    magic_sharpen_sigma = DEFAULT_MAGIC_SHARPEN_SIGMA
+    magic_sharpen_amount = DEFAULT_MAGIC_SHARPEN_AMOUNT
+    magic_protect_blend = DEFAULT_MAGIC_PROTECT_BLEND
     idx = 0
 
     while idx < len(args):
         token = args[idx]
+        if token == "--magic-retouch":
+            magic_retouch_enabled = True
+            idx += 1
+            continue
+
+        if token == "--magic-color-balance-strength":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-color-balance-strength")
+                return None
+            parsed_value = _parse_unit_float_option("--magic-color-balance-strength", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_color_balance_strength = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-color-balance-strength="):
+            parsed_value = _parse_unit_float_option(
+                "--magic-color-balance-strength", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_color_balance_strength = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-denoise-sigma-color":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-denoise-sigma-color")
+                return None
+            parsed_value = _parse_non_negative_float_option("--magic-denoise-sigma-color", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_denoise_sigma_color = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-denoise-sigma-color="):
+            parsed_value = _parse_non_negative_float_option(
+                "--magic-denoise-sigma-color", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_denoise_sigma_color = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-denoise-sigma-space":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-denoise-sigma-space")
+                return None
+            parsed_value = _parse_non_negative_float_option("--magic-denoise-sigma-space", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_denoise_sigma_space = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-denoise-sigma-space="):
+            parsed_value = _parse_non_negative_float_option(
+                "--magic-denoise-sigma-space", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_denoise_sigma_space = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-microcontrast-radius":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-microcontrast-radius")
+                return None
+            parsed_value = _parse_positive_int_option("--magic-microcontrast-radius", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_microcontrast_radius = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-microcontrast-radius="):
+            parsed_value = _parse_positive_int_option(
+                "--magic-microcontrast-radius", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_microcontrast_radius = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-microcontrast-eps":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-microcontrast-eps")
+                return None
+            parsed_value = _parse_non_negative_float_option("--magic-microcontrast-eps", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_microcontrast_eps = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-microcontrast-eps="):
+            parsed_value = _parse_non_negative_float_option(
+                "--magic-microcontrast-eps", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_microcontrast_eps = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-microcontrast-amount":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-microcontrast-amount")
+                return None
+            parsed_value = _parse_non_negative_float_option("--magic-microcontrast-amount", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_microcontrast_amount = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-microcontrast-amount="):
+            parsed_value = _parse_non_negative_float_option(
+                "--magic-microcontrast-amount", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_microcontrast_amount = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-vibrance-strength":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-vibrance-strength")
+                return None
+            parsed_value = _parse_non_negative_float_option("--magic-vibrance-strength", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_vibrance_strength = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-vibrance-strength="):
+            parsed_value = _parse_non_negative_float_option(
+                "--magic-vibrance-strength", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_vibrance_strength = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-sharpen-sigma":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-sharpen-sigma")
+                return None
+            parsed_value = _parse_non_negative_float_option("--magic-sharpen-sigma", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_sharpen_sigma = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-sharpen-sigma="):
+            parsed_value = _parse_non_negative_float_option(
+                "--magic-sharpen-sigma", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_sharpen_sigma = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-sharpen-amount":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-sharpen-amount")
+                return None
+            parsed_value = _parse_non_negative_float_option("--magic-sharpen-amount", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_sharpen_amount = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-sharpen-amount="):
+            parsed_value = _parse_non_negative_float_option(
+                "--magic-sharpen-amount", token.split("=", 1)[1]
+            )
+            if parsed_value is None:
+                return None
+            magic_sharpen_amount = parsed_value
+            idx += 1
+            continue
+
+        if token == "--magic-protect-blend":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --magic-protect-blend")
+                return None
+            parsed_value = _parse_unit_float_option("--magic-protect-blend", args[idx + 1])
+            if parsed_value is None:
+                return None
+            magic_protect_blend = parsed_value
+            idx += 2
+            continue
+
+        if token.startswith("--magic-protect-blend="):
+            parsed_value = _parse_unit_float_option("--magic-protect-blend", token.split("=", 1)[1])
+            if parsed_value is None:
+                return None
+            magic_protect_blend = parsed_value
+            idx += 1
+            continue
         if token == "--enable-enfuse":
             enable_enfuse = True
             idx += 1
@@ -893,6 +1281,19 @@ def _parse_run_options(args):
             tmo=luminance_tmo,
             tmo_extra_args=tuple(luminance_tmo_extra_args),
         ),
+        MagicRetouchOptions(
+            enabled=magic_retouch_enabled,
+            color_balance_strength=magic_color_balance_strength,
+            denoise_sigma_color=magic_denoise_sigma_color,
+            denoise_sigma_space=magic_denoise_sigma_space,
+            microcontrast_radius=magic_microcontrast_radius,
+            microcontrast_eps=magic_microcontrast_eps,
+            microcontrast_amount=magic_microcontrast_amount,
+            vibrance_strength=magic_vibrance_strength,
+            sharpen_sigma=magic_sharpen_sigma,
+            sharpen_amount=magic_sharpen_amount,
+            protect_blend=magic_protect_blend,
+        ),
     )
 
 
@@ -901,15 +1302,15 @@ def _load_image_dependencies():
 
     @details Imports `rawpy` for RAW decoding and `imageio` for image IO using
     `imageio.v3` when available with fallback to top-level `imageio` module.
-    @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module)` on success; `None` on missing dependency.
-    @satisfies REQ-059, REQ-066
+    @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module, cv2_module, np_module)` on success; `None` on missing dependency.
+    @satisfies REQ-059, REQ-066, REQ-077
     """
 
     try:
         import rawpy  # type: ignore
     except ModuleNotFoundError:
         print_error("Python dependency missing: rawpy")
-        print_error("Install dependencies with: uv pip install rawpy imageio pillow")
+        print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
         return None
 
     try:
@@ -919,7 +1320,7 @@ def _load_image_dependencies():
             import imageio  # type: ignore
         except ModuleNotFoundError:
             print_error("Python dependency missing: imageio")
-            print_error("Install dependencies with: uv pip install rawpy imageio pillow")
+            print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
             return None
 
     try:
@@ -927,10 +1328,24 @@ def _load_image_dependencies():
         from PIL import ImageEnhance as pil_enhance  # type: ignore
     except ModuleNotFoundError:
         print_error("Python dependency missing: pillow")
-        print_error("Install dependencies with: uv pip install rawpy imageio pillow")
+        print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
         return None
 
-    return rawpy, imageio, pil_image, pil_enhance
+    try:
+        import cv2  # type: ignore
+    except ModuleNotFoundError:
+        print_error("Python dependency missing: opencv-python")
+        print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
+        return None
+
+    try:
+        import numpy as np  # type: ignore
+    except ModuleNotFoundError:
+        print_error("Python dependency missing: numpy")
+        print_error("Install dependencies with: uv pip install rawpy imageio pillow opencv-python numpy")
+        return None
+
+    return rawpy, imageio, pil_image, pil_enhance, cv2, np
 
 
 def _build_exposure_multipliers(ev_value):
@@ -1080,62 +1495,214 @@ def _convert_compression_to_quality(jpg_compression):
     return max(1, min(100, 100 - jpg_compression))
 
 
-def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tiff, output_jpg, postprocess_options):
-    """@brief Encode merged HDR TIFF payload into final JPG output.
+def _to_float01_from_u16(np_module, image_u16):
+    """@brief Convert one uint16 image payload to normalized float image.
 
-    @details Loads merged image payload, down-converts to `uint8` when source
-    dynamic range exceeds JPEG-native depth, applies shared gamma/brightness/
-    contrast/saturation postprocessing, and writes JPEG with configured
-    compression level for both HDR backends.
-    @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
-    @param pil_image_module {ModuleType} Imported Pillow image module.
-    @param pil_enhance_module {ModuleType} Imported Pillow ImageEnhance module.
-    @param merged_tiff {Path} Merged TIFF source path produced by `enfuse`.
-    @param output_jpg {Path} Final JPG output path.
-    @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
-    @return {None} Side effects only.
-    @satisfies REQ-058, REQ-066, REQ-069
+    @details Casts uint16 image payload to float32 and normalizes pixel domain
+    from `[0, 65535]` to `[0.0, 1.0]`.
+    @param np_module {ModuleType} Imported numpy module.
+    @param image_u16 {np.ndarray} 16-bit image payload.
+    @return {np.ndarray} Float32 normalized image payload.
+    @satisfies REQ-066, REQ-076
     """
 
-    merged_data = imageio_module.imread(str(merged_tiff))
-    dtype_name = str(getattr(merged_data, "dtype", ""))
-    if dtype_name and dtype_name != "uint8":
-        scaled = merged_data / 257.0
-        if hasattr(scaled, "clip"):
-            scaled = scaled.clip(0, 255)
-        if hasattr(scaled, "astype"):
-            merged_data = scaled.astype("uint8")
-        else:
-            merged_data = scaled
+    return image_u16.astype(np_module.float32) / 65535.0
 
-    if hasattr(merged_data, "save") and hasattr(merged_data, "convert"):
-        pil_image = merged_data
+
+def _to_u16_from_float01(np_module, image_float):
+    """@brief Convert one normalized float image payload to uint16 image.
+
+    @details Clips pixel domain to `[0.0, 1.0]`, scales to `[0, 65535]`, and
+    casts to uint16 to preserve 16-bit-per-channel lossless stage continuity.
+    @param np_module {ModuleType} Imported numpy module.
+    @param image_float {np.ndarray} Float image payload in normalized domain.
+    @return {np.ndarray} Uint16 image payload.
+    @satisfies REQ-066, REQ-076
+    """
+
+    clipped = np_module.clip(image_float, 0.0, 1.0)
+    return np_module.rint(clipped * 65535.0).astype(np_module.uint16)
+
+
+def _apply_postprocess_16bit(np_module, cv2_module, image_u16, postprocess_options):
+    """@brief Apply gamma/brightness/contrast/saturation in-memory on uint16 image.
+
+    @details Executes all postprocess controls on normalized float payload and
+    converts back to uint16 without lossy 8-bit conversion.
+    @param np_module {ModuleType} Imported numpy module.
+    @param cv2_module {ModuleType} Imported OpenCV module.
+    @param image_u16 {np.ndarray} Input uint16 image payload.
+    @param postprocess_options {PostprocessOptions} Postprocess option values.
+    @return {np.ndarray} Postprocessed uint16 image payload.
+    @satisfies REQ-066, REQ-076
+    """
+
+    image_float = _to_float01_from_u16(np_module, image_u16)
+    if postprocess_options.post_gamma != 1.0:
+        gamma_power = 1.0 / postprocess_options.post_gamma
+        image_float = np_module.power(np_module.maximum(image_float, 0.0), gamma_power)
+
+    if postprocess_options.brightness != 1.0:
+        image_float = image_float * postprocess_options.brightness
+        image_float = np_module.clip(image_float, 0.0, 1.0)
+
+    if postprocess_options.contrast != 1.0:
+        image_float = ((image_float - 0.5) * postprocess_options.contrast) + 0.5
+        image_float = np_module.clip(image_float, 0.0, 1.0)
+
+    if postprocess_options.saturation != 1.0:
+        hsv = cv2_module.cvtColor(image_float, cv2_module.COLOR_RGB2HSV)
+        hsv[:, :, 1] = np_module.clip(hsv[:, :, 1] * postprocess_options.saturation, 0.0, 1.0)
+        image_float = cv2_module.cvtColor(hsv, cv2_module.COLOR_HSV2RGB)
+
+    return _to_u16_from_float01(np_module, image_float)
+
+
+def _guided_filter(np_module, cv2_module, guide, src, radius, eps):
+    """@brief Apply mono-channel guided filter for edge-aware smoothing.
+
+    @details Builds local mean statistics via box-filter and computes guided
+    linear coefficients for deterministic edge-aware base extraction.
+    @param np_module {ModuleType} Imported numpy module.
+    @param cv2_module {ModuleType} Imported OpenCV module.
+    @param guide {np.ndarray} Guide mono channel in `[0, 1]`.
+    @param src {np.ndarray} Source mono channel in `[0, 1]`.
+    @param radius {int} Box-filter radius.
+    @param eps {float} Regularization epsilon.
+    @return {np.ndarray} Filtered mono channel in `[0, 1]`.
+    @satisfies REQ-075
+    """
+
+    ksize = (2 * radius + 1, 2 * radius + 1)
+    mean_i = cv2_module.boxFilter(guide, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
+    mean_p = cv2_module.boxFilter(src, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
+    mean_ip = cv2_module.boxFilter(guide * src, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
+    cov_ip = mean_ip - mean_i * mean_p
+    mean_ii = cv2_module.boxFilter(guide * guide, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
+    var_i = mean_ii - mean_i * mean_i
+    a = cov_ip / (var_i + eps)
+    b = mean_p - a * mean_i
+    mean_a = cv2_module.boxFilter(a, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
+    mean_b = cv2_module.boxFilter(b, ddepth=-1, ksize=ksize, normalize=True, borderType=cv2_module.BORDER_REFLECT)
+    return np_module.clip((mean_a * guide) + mean_b, 0.0, 1.0)
+
+
+def _magic_retouch(np_module, cv2_module, image_u16, magic_options):
+    """@brief Execute in-memory 16-bit deterministic magic-retouch pipeline.
+
+    @details Applies mild color balance, light denoise, edge-aware
+    micro-contrast, mild vibrance, luminance-only sharpen, and extremes
+    protection on normalized float data, then returns uint16 payload.
+    @param np_module {ModuleType} Imported numpy module.
+    @param cv2_module {ModuleType} Imported OpenCV module.
+    @param image_u16 {np.ndarray} Input uint16 image payload.
+    @param magic_options {MagicRetouchOptions} Magic-retouch option values.
+    @return {np.ndarray} Magic-retouched uint16 image payload.
+    @satisfies REQ-074, REQ-075, REQ-076
+    """
+
+    original = _to_float01_from_u16(np_module, image_u16)
+    out = original.copy()
+
+    # 1) Mild color balance in LAB chroma channels.
+    out_lab = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2LAB)
+    channel_l, channel_a, channel_b = cv2_module.split(out_lab)
+    a_mean = float(np_module.mean(channel_a))
+    b_mean = float(np_module.mean(channel_b))
+    channel_a = np_module.clip(channel_a - ((a_mean - 0.5) * magic_options.color_balance_strength), 0.0, 1.0)
+    channel_b = np_module.clip(channel_b - ((b_mean - 0.5) * magic_options.color_balance_strength), 0.0, 1.0)
+    out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
+
+    # 2) Very light denoise.
+    denoise_d = 5
+    out = cv2_module.bilateralFilter(
+        out.astype(np_module.float32),
+        d=denoise_d,
+        sigmaColor=max(1e-6, magic_options.denoise_sigma_color),
+        sigmaSpace=max(1e-6, magic_options.denoise_sigma_space),
+        borderType=cv2_module.BORDER_REFLECT,
+    )
+    out = np_module.clip(out, 0.0, 1.0)
+
+    # 3) Edge-aware micro-contrast on luminance.
+    out_lab = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2LAB)
+    channel_l, channel_a, channel_b = cv2_module.split(out_lab)
+    gray = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2GRAY)
+    base = _guided_filter(
+        np_module=np_module,
+        cv2_module=cv2_module,
+        guide=gray,
+        src=channel_l,
+        radius=magic_options.microcontrast_radius,
+        eps=magic_options.microcontrast_eps,
+    )
+    detail = channel_l - base
+    channel_l = np_module.clip(base + ((1.0 + magic_options.microcontrast_amount) * detail), 0.0, 1.0)
+    out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
+
+    # 4) Mild vibrance.
+    out_hsv = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2HSV)
+    channel_h, channel_s, channel_v = cv2_module.split(out_hsv)
+    gain = 1.0 + (magic_options.vibrance_strength * (1.0 - channel_s))
+    channel_s = np_module.clip(channel_s * gain, 0.0, 1.0)
+    out = cv2_module.cvtColor(cv2_module.merge([channel_h, channel_s, channel_v]), cv2_module.COLOR_HSV2RGB)
+
+    # 5) Luminance-only sharpen.
+    out_lab = cv2_module.cvtColor(out, cv2_module.COLOR_RGB2LAB)
+    channel_l, channel_a, channel_b = cv2_module.split(out_lab)
+    blur_l = cv2_module.GaussianBlur(
+        channel_l,
+        (0, 0),
+        sigmaX=magic_options.sharpen_sigma,
+        sigmaY=magic_options.sharpen_sigma,
+    )
+    channel_l = np_module.clip(
+        cv2_module.addWeighted(
+            channel_l,
+            1.0 + magic_options.sharpen_amount,
+            blur_l,
+            -magic_options.sharpen_amount,
+            0.0,
+        ),
+        0.0,
+        1.0,
+    )
+    out = cv2_module.cvtColor(cv2_module.merge([channel_l, channel_a, channel_b]), cv2_module.COLOR_LAB2RGB)
+
+    # 6) Extremes protection blend.
+    gray_original = cv2_module.cvtColor(original, cv2_module.COLOR_RGB2GRAY)
+    protection = np_module.clip(np_module.abs(gray_original - 0.5) * 2.0, 0.0, 1.0)
+    alpha = 1.0 - ((1.0 - magic_options.protect_blend) * protection)
+    out = (alpha[:, :, None] * out) + ((1.0 - alpha[:, :, None]) * original)
+
+    return _to_u16_from_float01(np_module, out)
+
+
+def _encode_jpg(pil_image_module, image_u16, output_jpg, jpg_compression):
+    """@brief Encode one in-memory 16-bit image payload into final JPG output.
+
+    @details Converts in-memory uint16 payload to uint8 for JPEG-compatible
+    encoding, normalizes channel-mode to RGB, and writes JPG with configured
+    compression level.
+    @param pil_image_module {ModuleType} Imported Pillow image module.
+    @param image_u16 {np.ndarray} Input uint16 image payload.
+    @param output_jpg {Path} Final JPG output path.
+    @param jpg_compression {int} JPEG compression level.
+    @return {None} Side effects only.
+    @satisfies REQ-058, REQ-066, REQ-074, REQ-076
+    """
+
+    scaled = image_u16 / 257.0
+    if hasattr(scaled, "clip"):
+        scaled = scaled.clip(0, 255)
+    if hasattr(scaled, "astype"):
+        image_u8 = scaled.astype("uint8")
     else:
-        pil_image = pil_image_module.fromarray(merged_data)
+        image_u8 = scaled
+    pil_image = pil_image_module.fromarray(image_u8)
 
     if getattr(pil_image, "mode", "") == "RGBA":
         pil_image = pil_image.convert("RGB")
-
-    if postprocess_options.post_gamma != 1.0:
-        lut = [
-            max(
-                0,
-                min(
-                    255,
-                    int(round(((value / 255.0) ** (1.0 / postprocess_options.post_gamma)) * 255.0)),
-                ),
-            )
-            for value in range(256)
-        ]
-        band_count = len(getattr(pil_image, "getbands", lambda: ("R", "G", "B"))())
-        pil_image = pil_image.point(lut * max(1, band_count))
-
-    if postprocess_options.brightness != 1.0:
-        pil_image = pil_enhance_module.Brightness(pil_image).enhance(postprocess_options.brightness)
-    if postprocess_options.contrast != 1.0:
-        pil_image = pil_enhance_module.Contrast(pil_image).enhance(postprocess_options.contrast)
-    if postprocess_options.saturation != 1.0:
-        pil_image = pil_enhance_module.Color(pil_image).enhance(postprocess_options.saturation)
 
     if getattr(pil_image, "mode", "") != "RGB":
         pil_image = pil_image.convert("RGB")
@@ -1143,9 +1710,41 @@ def _encode_jpg(imageio_module, pil_image_module, pil_enhance_module, merged_tif
     pil_image.save(
         str(output_jpg),
         format="JPEG",
-        quality=_convert_compression_to_quality(postprocess_options.jpg_compression),
+        quality=_convert_compression_to_quality(jpg_compression),
         optimize=True,
     )
+
+
+def _read_u16_image(imageio_module, np_module, merged_tiff):
+    """@brief Read merged TIFF and normalize payload to uint16 RGB image.
+
+    @details Reads merged TIFF payload, strips alpha channel when present, and
+    converts integer payloads to uint16 domain required by in-memory postprocess.
+    @param imageio_module {ModuleType} Imported imageio module.
+    @param np_module {ModuleType} Imported numpy module.
+    @param merged_tiff {Path} Merged HDR TIFF path.
+    @return {np.ndarray} Normalized uint16 RGB image payload.
+    @satisfies REQ-066, REQ-074, REQ-076
+    """
+
+    merged_data = imageio_module.imread(str(merged_tiff))
+    image_array = np_module.asarray(merged_data)
+    if image_array.ndim == 2:
+        image_array = np_module.stack([image_array, image_array, image_array], axis=-1)
+    if image_array.ndim == 3 and image_array.shape[2] > 3:
+        image_array = image_array[:, :, :3]
+    if image_array.dtype == np_module.uint16:
+        return image_array
+    if np_module.issubdtype(image_array.dtype, np_module.integer):
+        max_value = int(np_module.iinfo(image_array.dtype).max)
+        if max_value <= 255:
+            return (image_array.astype(np_module.uint16) * 257).astype(np_module.uint16)
+        scale = 65535.0 / max(1.0, float(max_value))
+        return np_module.clip(image_array.astype(np_module.float32) * scale, 0.0, 65535.0).astype(np_module.uint16)
+    image_float = np_module.asarray(image_array, dtype=np_module.float32)
+    if float(np_module.max(image_float)) <= 1.0:
+        image_float = image_float * 65535.0
+    return np_module.clip(image_float, 0.0, 65535.0).astype(np_module.uint16)
 
 
 def _collect_processing_errors(rawpy_module):
@@ -1202,11 +1801,12 @@ def run(args):
 
     @details Parses command options, validates dependencies, extracts three RAW
     brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow,
-    writes JPG output, and guarantees temporary artifact cleanup through isolated
-    temporary directory lifecycle.
+    applies in-memory uint16 postprocess controls, optionally applies in-memory
+    uint16 `magic_retouch`, writes JPG output, and guarantees temporary artifact
+    cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077
     """
 
     if not _is_supported_runtime_os():
@@ -1224,6 +1824,7 @@ def run(args):
         postprocess_options,
         enable_luminance,
         luminance_options,
+        magic_retouch_options,
     ) = parsed
 
     if input_dng.suffix.lower() != ".dng":
@@ -1252,7 +1853,7 @@ def run(args):
     if dependencies is None:
         return 1
 
-    rawpy_module, imageio_module, pil_image_module, pil_enhance_module = dependencies
+    rawpy_module, imageio_module, pil_image_module, _, cv2_module, np_module = dependencies
     processing_errors = _collect_processing_errors(rawpy_module)
     multipliers = _build_exposure_multipliers(ev_value)
 
@@ -1266,6 +1867,10 @@ def run(args):
         f"contrast={postprocess_options.contrast:g}, "
         f"saturation={postprocess_options.saturation:g}, "
         f"jpg-compression={postprocess_options.jpg_compression}"
+    )
+    print_info(
+        "Magic retouch: "
+        + ("enabled" if magic_retouch_options.enabled else "disabled")
     )
     if enable_luminance:
         extra_args_text = ""
@@ -1303,13 +1908,29 @@ def run(args):
                 )
             else:
                 _run_enfuse(bracket_paths=bracket_paths, merged_tiff=merged_tiff)
-            _encode_jpg(
+            image_u16 = _read_u16_image(
                 imageio_module=imageio_module,
-                pil_image_module=pil_image_module,
-                pil_enhance_module=pil_enhance_module,
+                np_module=np_module,
                 merged_tiff=merged_tiff,
-                output_jpg=output_jpg,
+            )
+            image_u16 = _apply_postprocess_16bit(
+                np_module=np_module,
+                cv2_module=cv2_module,
+                image_u16=image_u16,
                 postprocess_options=postprocess_options,
+            )
+            if magic_retouch_options.enabled:
+                image_u16 = _magic_retouch(
+                    np_module=np_module,
+                    cv2_module=cv2_module,
+                    image_u16=image_u16,
+                    magic_options=magic_retouch_options,
+                )
+            _encode_jpg(
+                pil_image_module=pil_image_module,
+                image_u16=image_u16,
+                output_jpg=output_jpg,
+                jpg_compression=postprocess_options.jpg_compression,
             )
         except processing_errors as error:
             print_error(f"dng2hdr2jpg processing failed: {error}")
