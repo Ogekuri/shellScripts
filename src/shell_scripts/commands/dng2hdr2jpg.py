@@ -1018,6 +1018,10 @@ def _parse_exif_datetime_to_timestamp(datetime_raw):
 
     if datetime_raw is None:
         return None
+    if isinstance(datetime_raw, (list, tuple)):
+        if not datetime_raw:
+            return None
+        datetime_raw = datetime_raw[0]
     if isinstance(datetime_raw, bytes):
         datetime_text = datetime_raw.decode("utf-8", errors="ignore").strip()
     else:
@@ -1325,6 +1329,23 @@ def _set_output_file_timestamps(output_jpg, exif_timestamp):
     """
 
     os.utime(output_jpg, (exif_timestamp, exif_timestamp))
+
+
+def _sync_output_file_timestamps_from_exif(output_jpg, exif_timestamp):
+    """@brief Synchronize output JPG atime/mtime from optional EXIF timestamp.
+
+    @details Provides one dedicated call site for filesystem timestamp sync and
+    applies update only when EXIF datetime parsing produced a valid POSIX value.
+    @param output_jpg {Path} Output JPG path.
+    @param exif_timestamp {float|None} Source EXIF-derived POSIX timestamp.
+    @return {None} Side effects only.
+    @exception OSError Raised when filesystem metadata update fails.
+    @satisfies REQ-074, REQ-077
+    """
+
+    if exif_timestamp is None:
+        return
+    _set_output_file_timestamps(output_jpg=output_jpg, exif_timestamp=exif_timestamp)
 
 
 def _build_exposure_multipliers(ev_value):
@@ -2575,8 +2596,10 @@ def run(args):
                 source_exif_payload=source_exif_payload,
                 source_orientation=source_orientation,
             )
-            if source_exif_timestamp is not None:
-                _set_output_file_timestamps(output_jpg=output_jpg, exif_timestamp=source_exif_timestamp)
+            _sync_output_file_timestamps_from_exif(
+                output_jpg=output_jpg,
+                exif_timestamp=source_exif_timestamp,
+            )
         except processing_errors as error:
             print_error(f"dng2hdr2jpg processing failed: {error}")
             return 1

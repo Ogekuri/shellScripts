@@ -1704,6 +1704,204 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
     assert utime_values == (expected_timestamp, expected_timestamp)
 
 
+def test_dng2hdr2jpg_sets_jpg_timestamps_when_exif_datetime_is_sequence(monkeypatch, tmp_path):
+    """
+    @brief Validate timestamp synchronization when EXIF datetime is sequence-like.
+    @details Runs enfuse flow with `DateTimeOriginal` represented as one-item
+      tuple containing null-terminated bytes and verifies output JPG filesystem
+      timestamps are still synchronized from EXIF datetime.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-074, REQ-077
+    """
+
+    observed = {
+        "utime_calls": [],
+        "jpg_save": None,
+        "refresh_calls": [],
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake rawpy module for sequence-like datetime test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            return _FakeRawHandle(
+                {
+                    "brights": [],
+                    "output_bps": [],
+                    "use_camera_wb": [],
+                    "no_auto_bright": [],
+                    "gamma": [],
+                }
+            )
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for minimal pipeline execution."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    class _FakeExif:
+        """@brief Provide fake EXIF payload with sequence-style datetime value."""
+
+        @staticmethod
+        def get(key):
+            if key == 274:
+                return 6
+            if key == 36867:
+                return (b"2024:07:08 09:10:11\x00",)
+            return None
+
+        @staticmethod
+        def tobytes():
+            return b"fake-exif-payload"
+
+    class _FakeDngImage:
+        """@brief Provide fake source DNG image exposing `getexif`."""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+        @staticmethod
+        def getexif():
+            return _FakeExif()
+
+    class _FakePilImage:
+        """@brief Provide fake PIL image object for JPEG save assertions."""
+
+        mode = "RGB"
+
+        @staticmethod
+        def getbands():
+            return ("R", "G", "B")
+
+        def point(self, _lut):
+            return self
+
+        def convert(self, _target_mode):
+            return self
+
+        def save(self, path, format, quality=None, optimize=None, exif=None, compress_level=None):
+            del quality, optimize, compress_level
+            observed["jpg_save"] = {"format": format, "exif": exif}
+            Path(path).write_text("jpg", encoding="utf-8")
+
+    class _FakePilImageModule:
+        """@brief Provide fake PIL Image module with DNG open capability."""
+
+        @staticmethod
+        def open(path):
+            assert Path(path).suffix.lower() == ".dng"
+            return _FakeDngImage()
+
+        @staticmethod
+        def fromarray(_payload):
+            return _FakePilImage()
+
+    class _FakeEnhancer:
+        """@brief No-op enhancer helper."""
+
+        def __init__(self, image):
+            self._image = image
+
+        def enhance(self, _value):
+            return self._image
+
+    class _FakePilEnhanceModule:
+        """@brief Provide fake ImageEnhance module for shared postprocess path."""
+
+        @staticmethod
+        def Brightness(image):
+            return _FakeEnhancer(image)
+
+        @staticmethod
+        def Contrast(image):
+            return _FakeEnhancer(image)
+
+        @staticmethod
+        def Color(image):
+            return _FakeEnhancer(image)
+
+    def _fake_subprocess_run(command, check):
+        assert check is True
+        output_flag = next(token for token in command if token.startswith("--output="))
+        Path(output_flag.split("=", 1)[1]).write_text("merged", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    def _fake_utime(path, times):
+        observed["utime_calls"].append((Path(path), times))
+
+    fake_piexif_module = object()
+
+    def _fake_refresh_output_jpg_exif_thumbnail_after_save(
+        pil_image_module,
+        piexif_module,
+        output_jpg,
+        source_exif_payload,
+        source_orientation,
+    ):
+        observed["refresh_calls"].append(
+            {
+                "pil_image_module": pil_image_module,
+                "piexif_module": piexif_module,
+                "output_jpg": Path(output_jpg),
+                "source_exif_payload": source_exif_payload,
+                "source_orientation": source_orientation,
+            }
+        )
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: (_FakeRawPyModule, _FakeImageIoModule, _FakePilImageModule, _FakePilEnhanceModule),
+    )
+    monkeypatch.setattr(dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module)
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_refresh_output_jpg_exif_thumbnail_after_save",
+        _fake_refresh_output_jpg_exif_thumbnail_after_save,
+    )
+    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr(dng2hdr2jpg.os, "utime", _fake_utime)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"])
+
+    assert result == 0
+    assert observed["jpg_save"] is not None
+    assert observed["jpg_save"]["format"] == "JPEG"
+    assert observed["jpg_save"]["exif"] == b"fake-exif-payload"
+    assert len(observed["refresh_calls"]) == 1
+    assert observed["refresh_calls"][0]["piexif_module"] is fake_piexif_module
+    assert observed["refresh_calls"][0]["output_jpg"] == output_jpg
+    assert observed["refresh_calls"][0]["source_exif_payload"] == b"fake-exif-payload"
+    assert observed["refresh_calls"][0]["source_orientation"] == 6
+    assert len(observed["utime_calls"]) == 1
+    utime_path, utime_values = observed["utime_calls"][0]
+    assert utime_path == output_jpg
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
+    assert utime_values == (expected_timestamp, expected_timestamp)
+
+
 def test_extract_dng_exif_payload_preserves_source_orientation_tag():
     """
     @brief Validate DNG EXIF extraction preserves source orientation metadata.
