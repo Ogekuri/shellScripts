@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.3.0"
-date: "2026-03-24"
+version: "0.3.1"
+date: "2026-03-26"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -180,13 +180,14 @@ No explicit performance optimizations identified.
 - **REQ-070**: MUST render in `dng2hdr2jpg` help two aligned Unicode box-drawing tables where the operators table uses three columns, two-line headers, and two physical lines per operator row.
 - **REQ-064**: MUST parse optional `--gamma=<a,b>` and `--gamma <a,b>` in `dng2hdr2jpg`, default gamma to `(2.222,4.5)`, and reject malformed, non-numeric, or non-positive gamma values with return code `1`.
 - **REQ-065**: MUST parse optional `--post-gamma=<value>`, `--brightness=<value>`, `--contrast=<value>`, `--saturation=<value>`, `--jpg-compression=<0..100>`, and flag `--wow`; MUST default `--jpg-compression` to `15`; and MUST disable wow when omitted.
-- **REQ-066**: MUST apply one shared postprocessing stage on merged HDR TIFF from both backends, performing gamma, brightness, contrast, and saturation corrections, then encode JPG using configured compression level unless `--wow` enables the additional pre-encode wow stage.
+- **REQ-066**: MUST apply one shared postprocessing stage on merged HDR TIFF from both backends, performing gamma, brightness, contrast, and saturation corrections, then encode JPG with copied source DNG EXIF payload when available.
 - **REQ-067**: MUST parse explicit CLI options starting with `--tmo` in assignment or split form when `--enable-luminance` is set, preserve CLI order, and return `1` for missing or empty values.
 - **REQ-068**: MUST pass only `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, and `--ldrTiff 16b` by default, forwarding additional `--tmo*` options only when explicitly provided on CLI.
 - **REQ-069**: MUST default luminance-mode postprocess factors to `post-gamma=1.0`, `brightness=1.25`, `contrast=0.85`, and `saturation=0.55` when `--luminance-tmo` is `reinhard02` and no explicit postprocess overrides are provided.
 - **REQ-071**: MUST default luminance-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when `--luminance-tmo` is not `reinhard02` and no explicit postprocess overrides are provided.
 - **REQ-072**: MUST default enfuse-mode postprocess factors to `1.0` for `post-gamma`, `brightness`, `contrast`, and `saturation` when no explicit postprocess overrides are provided.
 - **REQ-073**: MUST execute wow stage only when `--wow` is set, after shared postprocessing and before JPG encoding, using ImageMagick over temporary lossless 16-bit-per-channel files and passing wow output to JPG conversion.
+- **REQ-074**: MUST set output JPG filesystem access and modification timestamps from source DNG EXIF datetime (priority: `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`) after JPG encoding and EXIF copy when a parseable datetime exists.
 
 ## 4. Test Requirements
 
@@ -206,7 +207,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-070 by monkeypatching RAW decode, image writes, and HDR subprocess calls, passing only if backend selection, parsing, help formatting, postprocessing controls, TIFF merge flow, and cleanup behavior match requirements.
+- **TST-011**: MUST verify REQ-055 through REQ-074 by monkeypatching RAW decode, image writes, EXIF propagation, timestamp updates, and HDR subprocess calls, passing only if backend selection, parsing, help formatting, postprocessing, TIFF merge flow, and cleanup behavior match requirements.
 
 ## 5. Evidence
 

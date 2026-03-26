@@ -6,13 +6,15 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073
+@satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074
 """
 
+import os
 import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from shell_scripts.utils import (
@@ -912,7 +914,7 @@ def _load_image_dependencies():
     @details Imports `rawpy` for RAW decoding and `imageio` for image IO using
     `imageio.v3` when available with fallback to top-level `imageio` module.
     @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module)` on success; `None` on missing dependency.
-    @satisfies REQ-059, REQ-066
+    @satisfies REQ-059, REQ-066, REQ-074
     """
 
     try:
@@ -941,6 +943,78 @@ def _load_image_dependencies():
         return None
 
     return rawpy, imageio, pil_image, pil_enhance
+
+
+def _parse_exif_datetime_to_timestamp(datetime_raw):
+    """@brief Parse one EXIF datetime token into POSIX timestamp.
+
+    @details Normalizes scalar EXIF datetime input (`str` or `bytes`) and parses
+    strict EXIF format `YYYY:MM:DD HH:MM:SS` to generate filesystem timestamp.
+    @param datetime_raw {str|bytes|object} EXIF datetime scalar.
+    @return {float|None} Parsed POSIX timestamp; `None` when value is missing or invalid.
+    @satisfies REQ-074
+    """
+
+    if datetime_raw is None:
+        return None
+    if isinstance(datetime_raw, bytes):
+        datetime_text = datetime_raw.decode("utf-8", errors="ignore").strip()
+    else:
+        datetime_text = str(datetime_raw).strip()
+    if not datetime_text:
+        return None
+    try:
+        parsed_datetime = datetime.strptime(datetime_text, "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+    return parsed_datetime.timestamp()
+
+
+def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
+    """@brief Extract DNG EXIF payload bytes and preferred datetime timestamp.
+
+    @details Opens input DNG via Pillow, reads EXIF mapping, serializes payload
+    for JPEG `exif` save parameter, and resolves filesystem timestamp priority:
+    `DateTimeOriginal`(36867) > `DateTimeDigitized`(36868) > `DateTime`(306).
+    @param pil_image_module {ModuleType} Imported Pillow Image module.
+    @param input_dng {Path} Source DNG path.
+    @return {tuple[bytes|None, float|None]} `(exif_payload, exif_timestamp)` with `None` for unavailable components.
+    @satisfies REQ-066, REQ-074
+    """
+
+    if not hasattr(pil_image_module, "open"):
+        return (None, None)
+    try:
+        with pil_image_module.open(str(input_dng)) as source_image:
+            if not hasattr(source_image, "getexif"):
+                return (None, None)
+            exif_data = source_image.getexif()
+            if not exif_data:
+                return (None, None)
+            exif_payload = exif_data.tobytes() if hasattr(exif_data, "tobytes") else None
+            exif_timestamp = None
+            for exif_tag in (36867, 36868, 306):
+                exif_timestamp = _parse_exif_datetime_to_timestamp(exif_data.get(exif_tag))
+                if exif_timestamp is not None:
+                    break
+            return (exif_payload, exif_timestamp)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return (None, None)
+
+
+def _set_output_file_timestamps(output_jpg, exif_timestamp):
+    """@brief Set output JPG atime and mtime from EXIF timestamp.
+
+    @details Applies EXIF-derived POSIX timestamp to both access and
+    modification times using `os.utime`.
+    @param output_jpg {Path} Output JPG path.
+    @param exif_timestamp {float} Source EXIF-derived POSIX timestamp.
+    @return {None} Side effects only.
+    @exception OSError Raised when filesystem metadata update fails.
+    @satisfies REQ-074
+    """
+
+    os.utime(output_jpg, (exif_timestamp, exif_timestamp))
 
 
 def _build_exposure_multipliers(ev_value):
@@ -1194,6 +1268,7 @@ def _encode_jpg(
     output_jpg,
     postprocess_options,
     imagemagick_command=None,
+    source_exif_payload=None,
 ):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
@@ -1209,9 +1284,10 @@ def _encode_jpg(
     @param output_jpg {Path} Final JPG output path.
     @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
     @param imagemagick_command {str|None} Optional pre-resolved ImageMagick executable.
+    @param source_exif_payload {bytes|None} Serialized EXIF payload copied from input DNG.
     @return {None} Side effects only.
     @exception RuntimeError Raised when wow is enabled and no supported ImageMagick executable is available.
-    @satisfies REQ-058, REQ-066, REQ-069, REQ-073
+    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074
     """
 
     merged_data = imageio_module.imread(str(merged_tiff))
@@ -1287,12 +1363,14 @@ def _encode_jpg(
     if getattr(pil_image, "mode", "") != "RGB":
         pil_image = pil_image.convert("RGB")
 
-    pil_image.save(
-        str(output_jpg),
-        format="JPEG",
-        quality=_convert_compression_to_quality(postprocess_options.jpg_compression),
-        optimize=True,
-    )
+    save_kwargs = {
+        "format": "JPEG",
+        "quality": _convert_compression_to_quality(postprocess_options.jpg_compression),
+        "optimize": True,
+    }
+    if source_exif_payload is not None:
+        save_kwargs["exif"] = source_exif_payload
+    pil_image.save(str(output_jpg), **save_kwargs)
 
 
 def _collect_processing_errors(rawpy_module):
@@ -1353,7 +1431,7 @@ def run(args):
     temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074
     """
 
     if not _is_supported_runtime_os():
@@ -1406,6 +1484,10 @@ def run(args):
         return 1
 
     rawpy_module, imageio_module, pil_image_module, pil_enhance_module = dependencies
+    source_exif_payload, source_exif_timestamp = _extract_dng_exif_payload_and_timestamp(
+        pil_image_module=pil_image_module,
+        input_dng=input_dng,
+    )
     processing_errors = _collect_processing_errors(rawpy_module)
     multipliers = _build_exposure_multipliers(ev_value)
 
@@ -1465,7 +1547,10 @@ def run(args):
                 output_jpg=output_jpg,
                 postprocess_options=postprocess_options,
                 imagemagick_command=imagemagick_command,
+                source_exif_payload=source_exif_payload,
             )
+            if source_exif_timestamp is not None:
+                _set_output_file_timestamps(output_jpg=output_jpg, exif_timestamp=source_exif_timestamp)
         except processing_errors as error:
             print_error(f"dng2hdr2jpg processing failed: {error}")
             return 1
