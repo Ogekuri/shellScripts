@@ -3,7 +3,7 @@
 @details Verifies argument validation, EV parsing/default behavior, three-
   bracket extraction multipliers, dual-backend HDR merge behavior, shared
   postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075
 @return {None} Pytest module scope.
 """
 
@@ -210,14 +210,25 @@ def _build_fake_pillow_modules(observed):
             self.mode = target_mode
             return self
 
-        def save(self, path, format, quality=None, optimize=None, compress_level=None):
+        def save(
+            self,
+            path,
+            format,
+            quality=None,
+            optimize=None,
+            compress_level=None,
+            compression=None,
+            exif=None,
+        ):
             """@brief Persist deterministic JPEG artifact and record encode args."""
 
+            del exif
             observed["jpg_save"] = {
                 "format": format,
                 "quality": quality,
                 "optimize": optimize,
                 "compress_level": compress_level,
+                "compression": compression,
                 "mode": self.mode,
             }
             if format == "PNG":
@@ -923,6 +934,24 @@ def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
     assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow=1"]) == 1
 
 
+def test_dng2hdr2jpg_rejects_missing_and_unknown_wow_mode(tmp_path):
+    """
+    @brief Validate wow mode parser rejects missing and unknown values.
+    @details Exercises `--wow` token without value and with unsupported mode
+      selector and asserts deterministic parse failures.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-065, REQ-073, REQ-075
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow"]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow", "Unknown"]) == 1
+
+
 def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
     """
     @brief Validate custom gamma option is propagated to RAW postprocess calls.
@@ -1226,10 +1255,33 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow"])
+    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow", "ImageMagick"])
 
     assert result == 0
     assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_fails_when_wow_opencv_dependencies_are_missing(monkeypatch, tmp_path):
+    """
+    @brief Validate OpenCV wow mode fails when Python dependencies are missing.
+    @details Enables wow with `OpenCV`, forces dependency resolver failure, and
+      asserts deterministic command failure without processing.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-059, REQ-073, REQ-075
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(dng2hdr2jpg, "_resolve_wow_opencv_dependencies", lambda: None)
+
+    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow", "OpenCV"])
+
+    assert result == 1
 
 
 def test_dng2hdr2jpg_rejects_luminance_options_without_enable(tmp_path):
@@ -1321,8 +1373,8 @@ def test_dng2hdr2jpg_returns_error_on_macos_runtime(monkeypatch, tmp_path):
 def test_dng2hdr2jpg_runtime_dependencies_are_declared_in_pyproject():
     """
     @brief Validate runtime dependency declaration for DNG processing modules.
-    @details Parses `pyproject.toml` and asserts that `rawpy`, `imageio`, and
-      `pillow`
+    @details Parses `pyproject.toml` and asserts that `rawpy`, `imageio`,
+      `pillow`, `numpy`, and `opencv-python`
       are declared in `project.dependencies` so uv tool installs provide command
       runtime requirements without manual post-install steps.
     @return {None} Assertions only.
@@ -1337,6 +1389,8 @@ def test_dng2hdr2jpg_runtime_dependencies_are_declared_in_pyproject():
     assert any(dep.startswith("rawpy") for dep in dependencies)
     assert any(dep.startswith("imageio") for dep in dependencies)
     assert any(dep.startswith("pillow") for dep in dependencies)
+    assert any(dep.startswith("numpy") for dep in dependencies)
+    assert any(dep.startswith("opencv-python") for dep in dependencies)
 
 
 def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_path):
@@ -1828,7 +1882,6 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
             contrast=0.9,
             saturation=1.3,
             jpg_compression=80,
-            wow_enabled=False,
         ),
     )
 
@@ -1843,9 +1896,9 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
 def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_path):
     """
     @brief Validate wow-stage execution only when explicitly enabled.
-    @details Executes encode path with `wow_enabled=True`, captures ImageMagick
+    @details Executes encode path with `wow_mode="ImageMagick"`, captures ImageMagick
       command vectors, and verifies two-step wow flow over temporary files
-      (`wow_input_16.tif` then `wow_output.tif`) before final JPEG save.
+      (`postprocessed_input.tif` then `wow_output.tif`) before final JPEG save.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -1897,7 +1950,7 @@ def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_pat
             contrast=1.0,
             saturation=1.0,
             jpg_compression=10,
-            wow_enabled=True,
+            wow_mode="ImageMagick",
         ),
     )
 
@@ -1906,6 +1959,85 @@ def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_pat
     assert observed["commands"][1][0] == "magick"
     assert Path(observed["commands"][0][-1]).name == "wow_input_16.tif"
     assert Path(observed["commands"][1][-1]).name == "wow_output.tif"
+    assert observed["jpg_save"] is not None
+    assert observed["jpg_save"]["format"] == "JPEG"
+    assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_path):
+    """
+    @brief Validate OpenCV wow-stage dispatch when wow mode is `OpenCV`.
+    @details Executes encode path with `wow_mode="OpenCV"`, injects fake OpenCV
+      dependency tuple, and verifies OpenCV wow function receives expected
+      temporary input/output TIFF paths before final JPEG save.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-073, REQ-075
+    """
+
+    observed = {"opencv_call": {}, "jpg_save": None}
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for OpenCV wow dispatch test."""
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake payload for merged/wow TIFF reads."""
+
+            if Path(path).name == "wow_output.tif":
+                class _FakeWowPayload:
+                    mode = "RGB"
+
+                return _FakeWowPayload()
+            return _FakeImage16()
+
+    def _fake_apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np_module):
+        """@brief Capture OpenCV wow dispatch parameters and materialize output."""
+
+        observed["opencv_call"] = {
+            "input": Path(input_file).name,
+            "output": Path(output_file).name,
+            "cv2": cv2_module,
+            "np": np_module,
+        }
+        Path(output_file).write_text("wow", encoding="utf-8")
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_apply_validated_wow_pipeline_opencv",
+        _fake_apply_validated_wow_pipeline_opencv,
+    )
+
+    merged_tiff = tmp_path / "merged_hdr.tif"
+    merged_tiff.write_text("merged", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+    pil_image_module, pil_enhance_module = _build_fake_pillow_modules(observed)
+    fake_cv2_module = object()
+    fake_numpy_module = object()
+
+    dng2hdr2jpg._encode_jpg(
+        imageio_module=_FakeImageIoModule,
+        pil_image_module=pil_image_module,
+        pil_enhance_module=pil_enhance_module,
+        merged_tiff=merged_tiff,
+        output_jpg=output_jpg,
+        postprocess_options=dng2hdr2jpg.PostprocessOptions(
+            post_gamma=1.0,
+            brightness=1.0,
+            contrast=1.0,
+            saturation=1.0,
+            jpg_compression=10,
+            wow_mode="OpenCV",
+        ),
+        wow_opencv_dependencies=(fake_cv2_module, fake_numpy_module),
+    )
+
+    assert observed["opencv_call"] is not None
+    assert observed["opencv_call"]["input"] == "postprocessed_input.tif"
+    assert observed["opencv_call"]["output"] == "wow_output.tif"
+    assert observed["opencv_call"]["cv2"] is fake_cv2_module
+    assert observed["opencv_call"]["np"] is fake_numpy_module
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()
@@ -1976,8 +2108,17 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatc
                     def convert(self, _mode):
                         return self
 
-                    def save(self, save_path, format, quality=None, optimize=None, compress_level=None):
-                        del quality, optimize, compress_level
+                    def save(
+                        self,
+                        save_path,
+                        format,
+                        quality=None,
+                        optimize=None,
+                        compress_level=None,
+                        compression=None,
+                        exif=None,
+                    ):
+                        del quality, optimize, compress_level, compression, exif
                         Path(save_path).write_text(format.lower(), encoding="utf-8")
 
                 return _BasePilPayload()
@@ -2006,8 +2147,17 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatc
                 def convert(self, _mode):
                     return self
 
-                def save(self, path, format, quality=None, optimize=None, compress_level=None):
-                    del quality, optimize, compress_level
+                def save(
+                    self,
+                    path,
+                    format,
+                    quality=None,
+                    optimize=None,
+                    compress_level=None,
+                    compression=None,
+                    exif=None,
+                ):
+                    del quality, optimize, compress_level, compression, exif
                     observed["jpg_save"] = {"format": format}
                     Path(path).write_text("jpg", encoding="utf-8")
 
@@ -2066,7 +2216,7 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatc
             contrast=1.0,
             saturation=1.0,
             jpg_compression=10,
-            wow_enabled=True,
+            wow_mode="ImageMagick",
         ),
     )
 
