@@ -1007,8 +1007,9 @@ def _load_image_dependencies():
 def _parse_exif_datetime_to_timestamp(datetime_raw):
     """@brief Parse one EXIF datetime token into POSIX timestamp.
 
-    @details Normalizes scalar EXIF datetime input (`str` or `bytes`) and parses
-    strict EXIF format `YYYY:MM:DD HH:MM:SS` to generate filesystem timestamp.
+    @details Normalizes scalar EXIF datetime input (`str` or `bytes`), trims
+    optional null-terminated EXIF payload suffix, and parses strict EXIF format
+    `YYYY:MM:DD HH:MM:SS` to generate filesystem timestamp.
     @param datetime_raw {str|bytes|object} EXIF datetime scalar.
     @return {float|None} Parsed POSIX timestamp; `None` when value is missing or invalid.
     @satisfies REQ-074, REQ-077
@@ -1020,6 +1021,7 @@ def _parse_exif_datetime_to_timestamp(datetime_raw):
         datetime_text = datetime_raw.decode("utf-8", errors="ignore").strip()
     else:
         datetime_text = str(datetime_raw).strip()
+    datetime_text = datetime_text.rstrip("\x00")
     if not datetime_text:
         return None
     try:

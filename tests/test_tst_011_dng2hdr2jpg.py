@@ -1762,6 +1762,22 @@ def test_extract_dng_exif_payload_preserves_source_orientation_tag():
     assert source_orientation == 6
 
 
+def test_parse_exif_datetime_to_timestamp_accepts_exif_null_terminated_text():
+    """
+    @brief Reproduce EXIF datetime parsing failure with null-terminated payload.
+    @details Validates parser behavior for EXIF datetime scalar ending with
+      `\x00`; expected behavior requires successful parsing because EXIF tools
+      may emit null-terminated ASCII strings.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-074
+    """
+
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
+    parsed_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(b"2024:07:08 09:10:11\x00")
+
+    assert parsed_timestamp == expected_timestamp
+
+
 def test_refresh_output_jpg_exif_thumbnail_normalizes_short_sequence_values(tmp_path):
     """
     @brief Reproduce EXIF dump crash on non-integer SHORT sequence values.
