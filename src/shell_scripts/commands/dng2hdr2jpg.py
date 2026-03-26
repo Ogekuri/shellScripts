@@ -221,7 +221,7 @@ class PostprocessOptions:
     @param contrast {float} Contrast enhancement factor.
     @param saturation {float} Saturation enhancement factor.
     @param jpg_compression {int} JPEG compression level in range `[0, 100]`.
-    @param wow_mode {str|None} Optional wow implementation selector (`ImageMagick` or `OpenCV`).
+    @param auto_adjust_mode {str|None} Optional auto-adjust implementation selector (`ImageMagick` or `OpenCV`).
     @return {None} Immutable dataclass container.
     @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075
     """
@@ -231,7 +231,7 @@ class PostprocessOptions:
     contrast: float
     saturation: float
     jpg_compression: int
-    wow_mode: str | None = None
+    auto_adjust_mode: str | None = None
 
 
 @dataclass(frozen=True)
@@ -355,7 +355,7 @@ def print_help(version):
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
         f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
-        f"[--jpg-compression=<0..100>] [--wow <ImageMagick|OpenCV>] "
+        f"[--jpg-compression=<0..100>] [--auto-adjust <ImageMagick|OpenCV>] "
         f"(--enable-enfuse | --enable-luminance) "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
@@ -392,7 +392,7 @@ def print_help(version):
         f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION})."
     )
     print(
-        "  --wow <name>     - Enable wow stage implementation (`ImageMagick` or `OpenCV`)."
+        "  --auto-adjust <name>     - Enable auto-adjust stage implementation (`ImageMagick` or `OpenCV`)."
     )
     print("  --enable-enfuse")
     print(
@@ -787,26 +787,26 @@ def _parse_jpg_compression_option(compression_raw):
     return compression_value
 
 
-def _parse_wow_mode_option(wow_raw):
-    """@brief Parse wow implementation selector option value.
+def _parse_auto_adjust_mode_option(auto_adjust_raw):
+    """@brief Parse auto-adjust implementation selector option value.
 
-    @details Accepts case-insensitive wow implementation names and normalizes
+    @details Accepts case-insensitive auto-adjust implementation names and normalizes
     to canonical values for runtime dispatch.
-    @param wow_raw {str} Raw wow implementation token.
-    @return {str|None} Canonical wow mode (`ImageMagick` or `OpenCV`) or `None` on parse failure.
+    @param auto_adjust_raw {str} Raw auto-adjust implementation token.
+    @return {str|None} Canonical auto-adjust mode (`ImageMagick` or `OpenCV`) or `None` on parse failure.
     @satisfies REQ-065, REQ-073, REQ-075
     """
 
-    wow_text = wow_raw.strip()
-    if not wow_text:
-        print_error("Invalid --wow value: empty value")
+    auto_adjust_text = auto_adjust_raw.strip()
+    if not auto_adjust_text:
+        print_error("Invalid --auto-adjust value: empty value")
         return None
-    wow_text_lower = wow_text.lower()
-    if wow_text_lower == "imagemagick":
+    auto_adjust_text_lower = auto_adjust_text.lower()
+    if auto_adjust_text_lower == "imagemagick":
         return "ImageMagick"
-    if wow_text_lower == "opencv":
+    if auto_adjust_text_lower == "opencv":
         return "OpenCV"
-    print_error(f"Invalid --wow value: {wow_raw}")
+    print_error(f"Invalid --auto-adjust value: {auto_adjust_raw}")
     print_error("Allowed values: ImageMagick, OpenCV")
     return None
 
@@ -854,8 +854,8 @@ def _parse_run_options(args):
     `--auto-ev[=<1|true|yes|on>]`), optional `--gamma=<a,b>` or `--gamma <a,b>`,
     optional postprocess controls, required backend selector
     (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls
-    including explicit `--tmo*` passthrough options and optional wow
-    implementation selector (`--wow <ImageMagick|OpenCV>`); rejects
+    including explicit `--tmo*` passthrough options and optional auto-adjust
+    implementation selector (`--auto-adjust <ImageMagick|OpenCV>`); rejects
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
@@ -875,7 +875,7 @@ def _parse_run_options(args):
     brightness_set = False
     contrast_set = False
     saturation_set = False
-    wow_mode = None
+    auto_adjust_mode = None
     enable_enfuse = False
     enable_luminance = False
     luminance_hdr_model = DEFAULT_LUMINANCE_HDR_MODEL
@@ -898,25 +898,27 @@ def _parse_run_options(args):
             idx += 1
             continue
 
-        if token == "--wow":
+        if token == "--auto-adjust":
             if idx + 1 >= len(args):
-                print_error("Missing value for --wow")
+                print_error("Missing value for --auto-adjust")
                 return None
             if args[idx + 1].startswith("--"):
-                print_error("Missing value for --wow")
+                print_error("Missing value for --auto-adjust")
                 return None
-            parsed_wow_mode = _parse_wow_mode_option(args[idx + 1])
-            if parsed_wow_mode is None:
+            parsed_auto_adjust_mode = _parse_auto_adjust_mode_option(args[idx + 1])
+            if parsed_auto_adjust_mode is None:
                 return None
-            wow_mode = parsed_wow_mode
+            auto_adjust_mode = parsed_auto_adjust_mode
             idx += 2
             continue
 
-        if token.startswith("--wow="):
-            parsed_wow_mode = _parse_wow_mode_option(token.split("=", 1)[1])
-            if parsed_wow_mode is None:
+        if token.startswith("--auto-adjust="):
+            parsed_auto_adjust_mode = _parse_auto_adjust_mode_option(
+                token.split("=", 1)[1]
+            )
+            if parsed_auto_adjust_mode is None:
                 return None
-            wow_mode = parsed_wow_mode
+            auto_adjust_mode = parsed_auto_adjust_mode
             idx += 1
             continue
 
@@ -1272,7 +1274,7 @@ def _parse_run_options(args):
             contrast=contrast,
             saturation=saturation,
             jpg_compression=jpg_compression,
-            wow_mode=wow_mode,
+            auto_adjust_mode=auto_adjust_mode,
         ),
         enable_luminance,
         LuminanceOptions(
@@ -1916,7 +1918,7 @@ def _resolve_imagemagick_command():
     """@brief Resolve ImageMagick executable name for current runtime.
 
     @details Probes `magick` first (ImageMagick 7+ preferred CLI), then
-    `convert` (legacy-compatible CLI alias) to preserve wow-stage compatibility
+    `convert` (legacy-compatible CLI alias) to preserve auto-adjust-stage compatibility
     across distributions that package ImageMagick under different executable
     names.
     @return {str|None} Resolved executable token (`magick` or `convert`) or
@@ -1930,10 +1932,10 @@ def _resolve_imagemagick_command():
     return None
 
 
-def _resolve_wow_opencv_dependencies():
-    """@brief Resolve OpenCV wow runtime dependencies.
+def _resolve_auto_adjust_opencv_dependencies():
+    """@brief Resolve OpenCV auto-adjust runtime dependencies.
 
-    @details Imports `cv2` and `numpy` modules required by OpenCV wow pipeline
+    @details Imports `cv2` and `numpy` modules required by OpenCV auto-adjust pipeline
     execution and returns `None` with deterministic error output when missing.
     @return {tuple[ModuleType, ModuleType]|None} `(cv2_module, numpy_module)` when available; `None` on dependency failure.
     @satisfies REQ-059, REQ-073, REQ-075
@@ -1954,21 +1956,23 @@ def _resolve_wow_opencv_dependencies():
     return (cv2, numpy_module)
 
 
-def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_command):
-    """@brief Execute validated wow pipeline over temporary lossless 16-bit TIFF files.
+def _apply_validated_auto_adjust_pipeline(
+    postprocessed_input, auto_adjust_output, imagemagick_command
+):
+    """@brief Execute validated auto-adjust pipeline over temporary lossless 16-bit TIFF files.
 
     @details Uses ImageMagick to normalize source data to 16-bit-per-channel TIFF,
     applies deterministic denoise/level/sigmoidal/vibrance/high-pass overlay
-    stages, and writes lossless wow output artifact consumed by JPG encoder.
+    stages, and writes lossless auto-adjust output artifact consumed by JPG encoder.
     @param postprocessed_input {Path} Temporary postprocess image input path.
-    @param wow_output {Path} Temporary wow output TIFF path.
+    @param auto_adjust_output {Path} Temporary auto-adjust output TIFF path.
     @param imagemagick_command {str} Resolved ImageMagick executable token.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when ImageMagick returns non-zero.
     @satisfies REQ-073, REQ-077
     """
 
-    wow_input_16 = wow_output.parent / "wow_input_16.tif"
+    auto_adjust_input_16 = auto_adjust_output.parent / "auto_adjust_input_16.tif"
     to_16_bit_command = [
         imagemagick_command,
         str(postprocessed_input),
@@ -1978,13 +1982,13 @@ def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_c
         "16",
         "-compress",
         "LZW",
-        str(wow_input_16),
+        str(auto_adjust_input_16),
     ]
     subprocess.run(to_16_bit_command, check=True)
 
-    wow_command = [
+    auto_adjust_command = [
         imagemagick_command,
-        str(wow_input_16),
+        str(auto_adjust_input_16),
         "-depth",
         "16",
         "-selective-blur",
@@ -2027,16 +2031,16 @@ def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_c
         "16",
         "-compress",
         "LZW",
-        str(wow_output),
+        str(auto_adjust_output),
     ]
-    subprocess.run(wow_command, check=True)
+    subprocess.run(auto_adjust_command, check=True)
 
 
 def _clamp01(np_module, values):
     """@brief Clamp numeric image tensor values into `[0.0, 1.0]` interval.
 
     @details Applies vectorized clipping to ensure deterministic bounded values
-    for OpenCV wow pipeline float-domain operations.
+    for OpenCV auto-adjust pipeline float-domain operations.
     @param np_module {ModuleType} Imported numpy module.
     @param values {object} Numeric tensor-like payload.
     @return {object} Clipped tensor payload.
@@ -2072,7 +2076,7 @@ def _gaussian_kernel_2d(np_module, sigma, radius=None):
 def _rgb_to_hsl(np_module, rgb):
     """@brief Convert RGB float tensor to HSL channels.
 
-    @details Implements explicit HSL conversion for OpenCV wow saturation-gamma
+    @details Implements explicit HSL conversion for OpenCV auto-adjust saturation-gamma
     stage without delegating to external color-space helpers.
     @param np_module {ModuleType} Imported numpy module.
     @param rgb {object} RGB tensor in `[0.0, 1.0]`.
@@ -2107,7 +2111,7 @@ def _hue_to_rgb(np_module, p_values, q_values, t_values):
     """@brief Convert one hue-shift channel to RGB component.
 
     @details Evaluates piecewise hue interpolation branch used by HSL-to-RGB
-    conversion in OpenCV wow pipeline.
+    conversion in OpenCV auto-adjust pipeline.
     @param np_module {ModuleType} Imported numpy module.
     @param p_values {object} Lower chroma interpolation boundary.
     @param q_values {object} Upper chroma interpolation boundary.
@@ -2138,7 +2142,7 @@ def _hsl_to_rgb(np_module, hue, saturation, lightness):
     """@brief Convert HSL channels to RGB float tensor.
 
     @details Reconstructs RGB tensor with explicit achromatic/chromatic branches
-    for OpenCV wow saturation-gamma stage.
+    for OpenCV auto-adjust saturation-gamma stage.
     @param np_module {ModuleType} Imported numpy module.
     @param hue {object} Hue channel tensor.
     @param saturation {object} Saturation channel tensor.
@@ -2361,12 +2365,12 @@ def _overlay_composite(np_module, base_rgb, overlay_gray):
     return _clamp01(np_module, output)
 
 
-def _apply_validated_wow_pipeline_opencv(
+def _apply_validated_auto_adjust_pipeline_opencv(
     input_file, output_file, cv2_module, np_module
 ):
-    """@brief Execute validated wow pipeline using OpenCV and numpy.
+    """@brief Execute validated auto-adjust pipeline using OpenCV and numpy.
 
-    @details Reads RGB image payload and enforces deterministic wow input
+    @details Reads RGB image payload and enforces deterministic auto-adjust input
     normalization: `uint8` inputs are promoted to `uint16` using `value*257`,
     then explicit 16-bit-to-float normalization is applied. Executes selective
     blur, adaptive levels, sigmoidal contrast, HSL saturation gamma,
@@ -2383,17 +2387,21 @@ def _apply_validated_wow_pipeline_opencv(
     """
 
     if not input_file.exists():
-        raise OSError(f"OpenCV wow input file not found: {input_file}")
+        raise OSError(f"OpenCV auto-adjust input file not found: {input_file}")
     image_bgr = cv2_module.imread(str(input_file), cv2_module.IMREAD_UNCHANGED)
     if image_bgr is None:
-        raise RuntimeError(f"OpenCV failed to read wow input: {input_file}")
+        raise RuntimeError(f"OpenCV failed to read auto-adjust input: {input_file}")
     if len(image_bgr.shape) != 3 or image_bgr.shape[2] != 3:
-        raise RuntimeError(f"OpenCV wow input must be 3-channel image: {input_file}")
+        raise RuntimeError(
+            f"OpenCV auto-adjust input must be 3-channel image: {input_file}"
+        )
     dtype_name = str(getattr(image_bgr, "dtype", ""))
     if dtype_name == "uint8":
         image_bgr = (image_bgr.astype(np_module.uint16) * 257).astype(np_module.uint16)
     elif dtype_name != "uint16":
-        raise RuntimeError(f"OpenCV wow input must be uint16 image: {input_file}")
+        raise RuntimeError(
+            f"OpenCV auto-adjust input must be uint16 image: {input_file}"
+        )
     rgb_float = (
         cv2_module.cvtColor(image_bgr, cv2_module.COLOR_BGR2RGB).astype(
             np_module.float64
@@ -2417,7 +2425,7 @@ def _apply_validated_wow_pipeline_opencv(
     ).astype(np_module.uint16)
     output_bgr_u16 = cv2_module.cvtColor(output_rgb_u16, cv2_module.COLOR_RGB2BGR)
     if not cv2_module.imwrite(str(output_file), output_bgr_u16):
-        raise RuntimeError(f"OpenCV failed to write wow output: {output_file}")
+        raise RuntimeError(f"OpenCV failed to write auto-adjust output: {output_file}")
 
 
 def _load_piexif_dependency():
@@ -2446,7 +2454,7 @@ def _encode_jpg(
     output_jpg,
     postprocess_options,
     imagemagick_command=None,
-    wow_opencv_dependencies=None,
+    auto_adjust_opencv_dependencies=None,
     piexif_module=None,
     source_exif_payload=None,
     source_orientation=1,
@@ -2455,7 +2463,7 @@ def _encode_jpg(
 
     @details Loads merged image payload, down-converts to `uint8` when source
     dynamic range exceeds JPEG-native depth, applies shared gamma/brightness/
-    contrast/saturation postprocessing, optionally executes wow stage over
+    contrast/saturation postprocessing, optionally executes auto-adjust stage over
     temporary lossless 16-bit TIFF intermediates, and writes JPEG with
     configured compression level for both HDR backends.
     @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
@@ -2465,12 +2473,12 @@ def _encode_jpg(
     @param output_jpg {Path} Final JPG output path.
     @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
     @param imagemagick_command {str|None} Optional pre-resolved ImageMagick executable.
-    @param wow_opencv_dependencies {tuple[ModuleType, ModuleType]|None} Optional `(cv2, numpy)` modules for OpenCV wow implementations.
+    @param auto_adjust_opencv_dependencies {tuple[ModuleType, ModuleType]|None} Optional `(cv2, numpy)` modules for OpenCV auto-adjust implementations.
     @param piexif_module {ModuleType|None} Optional piexif module for EXIF thumbnail refresh.
     @param source_exif_payload {bytes|None} Serialized EXIF payload copied from input DNG.
     @param source_orientation {int} Source EXIF orientation value in range `1..8`.
     @return {None} Side effects only.
-    @exception RuntimeError Raised when wow mode dependencies are missing or wow mode value is unsupported.
+    @exception RuntimeError Raised when auto-adjust mode dependencies are missing or auto-adjust mode value is unsupported.
     @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078
     """
 
@@ -2525,56 +2533,60 @@ def _encode_jpg(
             postprocess_options.saturation
         )
 
-    if postprocess_options.wow_mode is not None:
-        with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-wow-") as wow_temp_dir_raw:
-            wow_temp_dir = Path(wow_temp_dir_raw)
-            postprocessed_input = wow_temp_dir / "postprocessed_input.tif"
-            wow_output = wow_temp_dir / "wow_output.tif"
+    if postprocess_options.auto_adjust_mode is not None:
+        with tempfile.TemporaryDirectory(
+            prefix="dng2hdr2jpg-auto-adjust-"
+        ) as auto_adjust_temp_dir_raw:
+            auto_adjust_temp_dir = Path(auto_adjust_temp_dir_raw)
+            postprocessed_input = auto_adjust_temp_dir / "postprocessed_input.tif"
+            auto_adjust_output = auto_adjust_temp_dir / "auto_adjust_output.tif"
             pil_image.save(
                 str(postprocessed_input), format="TIFF", compression="tiff_lzw"
             )
-            if postprocess_options.wow_mode == "ImageMagick":
+            if postprocess_options.auto_adjust_mode == "ImageMagick":
                 if imagemagick_command is None:
                     imagemagick_command = _resolve_imagemagick_command()
                 if imagemagick_command is None:
                     raise RuntimeError(
                         "Missing required dependency: ImageMagick executable (magick or convert)"
                     )
-                _apply_validated_wow_pipeline(
+                _apply_validated_auto_adjust_pipeline(
                     postprocessed_input=postprocessed_input,
-                    wow_output=wow_output,
+                    auto_adjust_output=auto_adjust_output,
                     imagemagick_command=imagemagick_command,
                 )
-            elif postprocess_options.wow_mode == "OpenCV":
-                if wow_opencv_dependencies is None:
+            elif postprocess_options.auto_adjust_mode == "OpenCV":
+                if auto_adjust_opencv_dependencies is None:
                     raise RuntimeError(
                         "Missing required dependencies: opencv-python and numpy"
                     )
-                cv2_module, np_module = wow_opencv_dependencies
-                _apply_validated_wow_pipeline_opencv(
+                cv2_module, np_module = auto_adjust_opencv_dependencies
+                _apply_validated_auto_adjust_pipeline_opencv(
                     input_file=postprocessed_input,
-                    output_file=wow_output,
+                    output_file=auto_adjust_output,
                     cv2_module=cv2_module,
                     np_module=np_module,
                 )
             else:
                 raise RuntimeError(
-                    f"Unsupported wow mode: {postprocess_options.wow_mode}"
+                    f"Unsupported auto-adjust mode: {postprocess_options.auto_adjust_mode}"
                 )
-            wow_data = imageio_module.imread(str(wow_output))
-            wow_dtype_name = str(getattr(wow_data, "dtype", ""))
-            if wow_dtype_name and wow_dtype_name != "uint8":
-                wow_scaled = wow_data / 257.0
-                if hasattr(wow_scaled, "clip"):
-                    wow_scaled = wow_scaled.clip(0, 255)
-                if hasattr(wow_scaled, "astype"):
-                    wow_data = wow_scaled.astype("uint8")
+            auto_adjust_data = imageio_module.imread(str(auto_adjust_output))
+            auto_adjust_dtype_name = str(getattr(auto_adjust_data, "dtype", ""))
+            if auto_adjust_dtype_name and auto_adjust_dtype_name != "uint8":
+                auto_adjust_scaled = auto_adjust_data / 257.0
+                if hasattr(auto_adjust_scaled, "clip"):
+                    auto_adjust_scaled = auto_adjust_scaled.clip(0, 255)
+                if hasattr(auto_adjust_scaled, "astype"):
+                    auto_adjust_data = auto_adjust_scaled.astype("uint8")
                 else:
-                    wow_data = wow_scaled
-            if hasattr(wow_data, "save") and hasattr(wow_data, "convert"):
-                pil_image = wow_data
+                    auto_adjust_data = auto_adjust_scaled
+            if hasattr(auto_adjust_data, "save") and hasattr(
+                auto_adjust_data, "convert"
+            ):
+                pil_image = auto_adjust_data
             else:
-                pil_image = pil_image_module.fromarray(wow_data)
+                pil_image = pil_image_module.fromarray(auto_adjust_data)
 
     if getattr(pil_image, "mode", "") != "RGB":
         pil_image = pil_image.convert("RGB")
@@ -2700,17 +2712,17 @@ def run(args):
             print_error("Missing required dependency: enfuse")
             return 1
     imagemagick_command = None
-    wow_opencv_dependencies = None
-    if postprocess_options.wow_mode == "ImageMagick":
+    auto_adjust_opencv_dependencies = None
+    if postprocess_options.auto_adjust_mode == "ImageMagick":
         imagemagick_command = _resolve_imagemagick_command()
         if imagemagick_command is None:
             print_error(
                 "Missing required dependency: ImageMagick executable (magick or convert)"
             )
             return 1
-    elif postprocess_options.wow_mode == "OpenCV":
-        wow_opencv_dependencies = _resolve_wow_opencv_dependencies()
-        if wow_opencv_dependencies is None:
+    elif postprocess_options.auto_adjust_mode == "OpenCV":
+        auto_adjust_opencv_dependencies = _resolve_auto_adjust_opencv_dependencies()
+        if auto_adjust_opencv_dependencies is None:
             return 1
 
     dependencies = _load_image_dependencies()
@@ -2738,7 +2750,7 @@ def run(args):
         f"contrast={postprocess_options.contrast:g}, "
         f"saturation={postprocess_options.saturation:g}, "
         f"jpg-compression={postprocess_options.jpg_compression}, "
-        f"wow={postprocess_options.wow_mode or 'disabled'}"
+        f"auto-adjust={postprocess_options.auto_adjust_mode or 'disabled'}"
     )
     if enable_luminance:
         extra_args_text = ""
@@ -2798,7 +2810,7 @@ def run(args):
                 output_jpg=output_jpg,
                 postprocess_options=postprocess_options,
                 imagemagick_command=imagemagick_command,
-                wow_opencv_dependencies=wow_opencv_dependencies,
+                auto_adjust_opencv_dependencies=auto_adjust_opencv_dependencies,
                 piexif_module=piexif_module,
                 source_exif_payload=source_exif_payload,
                 source_orientation=source_orientation,

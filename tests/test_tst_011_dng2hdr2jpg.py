@@ -1349,16 +1349,22 @@ def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
     )
     assert (
         dng2hdr2jpg.run(
-            [str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse", "--wow=1"]
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--auto-adjust=1",
+            ]
         )
         == 1
     )
 
 
-def test_dng2hdr2jpg_rejects_missing_and_unknown_wow_mode(tmp_path):
+def test_dng2hdr2jpg_rejects_missing_and_unknown_auto_adjust_mode(tmp_path):
     """
-    @brief Validate wow mode parser rejects missing and unknown values.
-    @details Exercises `--wow` token without value and with unsupported mode
+    @brief Validate auto-adjust mode parser rejects missing and unknown values.
+    @details Exercises `--auto-adjust` token without value and with unsupported mode
       selector and asserts deterministic parse failures.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -1371,7 +1377,13 @@ def test_dng2hdr2jpg_rejects_missing_and_unknown_wow_mode(tmp_path):
 
     assert (
         dng2hdr2jpg.run(
-            [str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse", "--wow"]
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--auto-adjust",
+            ]
         )
         == 1
     )
@@ -1382,7 +1394,7 @@ def test_dng2hdr2jpg_rejects_missing_and_unknown_wow_mode(tmp_path):
                 str(output_jpg),
                 "--ev=1",
                 "--enable-enfuse",
-                "--wow",
+                "--auto-adjust",
                 "Unknown",
             ]
         )
@@ -1650,11 +1662,13 @@ def test_dng2hdr2jpg_fails_when_luminance_dependency_is_missing(monkeypatch, tmp
     )
 
 
-def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_auto_adjust_uses_convert_when_magick_is_missing(
+    monkeypatch, tmp_path
+):
     """
-    @brief Reproduce wow dependency bug when only `convert` binary is available.
+    @brief Reproduce auto-adjust dependency bug when only `convert` binary is available.
     @details Configures dependency lookup so `magick` is missing but `convert`
-      exists; expected behavior is successful wow execution path for backward-
+      exists; expected behavior is successful auto-adjust execution path for backward-
       compatible ImageMagick CLI naming.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
@@ -1672,7 +1686,7 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
 
     class _FakeRawPyModule:
-        """@brief Provide fake `rawpy` module for wow dependency fallback test."""
+        """@brief Provide fake `rawpy` module for auto-adjust dependency fallback test."""
 
         LibRawError = RuntimeError
 
@@ -1683,7 +1697,7 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
             return _FakeRawHandle(observed)
 
     class _FakeImageIoModule:
-        """@brief Provide fake imageio module for wow dependency fallback test."""
+        """@brief Provide fake imageio module for auto-adjust dependency fallback test."""
 
         @staticmethod
         def imwrite(path, _data):
@@ -1693,15 +1707,15 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
 
         @staticmethod
         def imread(path):
-            """@brief Return merged/wow payload compatible with encode path."""
+            """@brief Return merged/auto-adjust payload compatible with encode path."""
 
             name = Path(path).name
-            if name in {"merged_hdr.tif", "wow_output.tif"}:
+            if name in {"merged_hdr.tif", "auto_adjust_output.tif"}:
                 return _FakeImage16()
             return _FakeImage16()
 
     def _fake_subprocess_run(command, check):
-        """@brief Emulate successful backend and wow subprocess executions."""
+        """@brief Emulate successful backend and auto-adjust subprocess executions."""
 
         assert check is True
         if command and command[0] == "enfuse":
@@ -1711,7 +1725,7 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
             Path(output_flag.split("=", 1)[1]).write_text("merged", encoding="utf-8")
             return subprocess.CompletedProcess(command, 0)
         if command and command[0] == "convert":
-            Path(command[-1]).write_text("wow", encoding="utf-8")
+            Path(command[-1]).write_text("auto-adjust", encoding="utf-8")
             return subprocess.CompletedProcess(command, 0)
         raise AssertionError(f"Unexpected command: {command}")
 
@@ -1745,7 +1759,7 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
             str(output_jpg),
             "--ev=1",
             "--enable-enfuse",
-            "--wow",
+            "--auto-adjust",
             "ImageMagick",
         ]
     )
@@ -1754,12 +1768,12 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
     assert output_jpg.exists()
 
 
-def test_dng2hdr2jpg_fails_when_wow_opencv_dependencies_are_missing(
+def test_dng2hdr2jpg_fails_when_auto_adjust_opencv_dependencies_are_missing(
     monkeypatch, tmp_path
 ):
     """
-    @brief Validate OpenCV wow mode fails when Python dependencies are missing.
-    @details Enables wow with `OpenCV`, forces dependency resolver failure, and
+    @brief Validate OpenCV auto-adjust mode fails when Python dependencies are missing.
+    @details Enables auto-adjust with `OpenCV`, forces dependency resolver failure, and
       asserts deterministic command failure without processing.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
@@ -1776,7 +1790,9 @@ def test_dng2hdr2jpg_fails_when_wow_opencv_dependencies_are_missing(
         "which",
         lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
     )
-    monkeypatch.setattr(dng2hdr2jpg, "_resolve_wow_opencv_dependencies", lambda: None)
+    monkeypatch.setattr(
+        dng2hdr2jpg, "_resolve_auto_adjust_opencv_dependencies", lambda: None
+    )
 
     result = dng2hdr2jpg.run(
         [
@@ -1784,7 +1800,7 @@ def test_dng2hdr2jpg_fails_when_wow_opencv_dependencies_are_missing(
             str(output_jpg),
             "--ev=1",
             "--enable-enfuse",
-            "--wow",
+            "--auto-adjust",
             "OpenCV",
         ]
     )
@@ -3212,7 +3228,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--contrast=<value>" in output
     assert "--saturation=<value>" in output
     assert "--jpg-compression=<0..100>" in output
-    assert "--wow" in output
+    assert "--auto-adjust" in output
     assert "--luminance-hdr-model=<name>" in output
     assert "--luminance-hdr-weight=<name>" in output
     assert "--luminance-hdr-response-curve=<name>" in output
@@ -3325,12 +3341,14 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(
     assert output_jpg.exists()
 
 
-def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_applies_auto_adjust_pipeline_only_when_enabled(
+    monkeypatch, tmp_path
+):
     """
-    @brief Validate wow-stage execution only when explicitly enabled.
-    @details Executes encode path with `wow_mode="ImageMagick"`, captures ImageMagick
-      command vectors, and verifies two-step wow flow over temporary files
-      (`postprocessed_input.tif` then `wow_output.tif`) before final JPEG save.
+    @brief Validate auto-adjust-stage execution only when explicitly enabled.
+    @details Executes encode path with `auto_adjust_mode="ImageMagick"`, captures ImageMagick
+      command vectors, and verifies two-step auto-adjust flow over temporary files
+      (`postprocessed_input.tif` then `auto_adjust_output.tif`) before final JPEG save.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -3340,22 +3358,22 @@ def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_pat
     observed = {"commands": [], "jpg_save": None}
 
     class _FakeImageIoModule:
-        """@brief Provide fake imageio module for wow encode assertions."""
+        """@brief Provide fake imageio module for auto-adjust encode assertions."""
 
         @staticmethod
         def imread(path):
-            """@brief Return fake payload for merged/wow TIFF paths."""
+            """@brief Return fake payload for merged/auto-adjust TIFF paths."""
 
-            if Path(path).name == "wow_output.tif":
+            if Path(path).name == "auto_adjust_output.tif":
 
-                class _FakeWowPayload:
+                class _FakeAutoAdjustPayload:
                     mode = "RGB"
 
-                return _FakeWowPayload()
+                return _FakeAutoAdjustPayload()
             return _FakeImage16()
 
     def _fake_subprocess_run(command, check):
-        """@brief Capture wow subprocess calls and materialize outputs."""
+        """@brief Capture auto-adjust subprocess calls and materialize outputs."""
 
         assert check is True
         observed["commands"].append(command)
@@ -3383,25 +3401,27 @@ def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_pat
             contrast=1.0,
             saturation=1.0,
             jpg_compression=10,
-            wow_mode="ImageMagick",
+            auto_adjust_mode="ImageMagick",
         ),
     )
 
     assert len(observed["commands"]) == 2
     assert observed["commands"][0][0] == "magick"
     assert observed["commands"][1][0] == "magick"
-    assert Path(observed["commands"][0][-1]).name == "wow_input_16.tif"
-    assert Path(observed["commands"][1][-1]).name == "wow_output.tif"
+    assert Path(observed["commands"][0][-1]).name == "auto_adjust_input_16.tif"
+    assert Path(observed["commands"][1][-1]).name == "auto_adjust_output.tif"
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()
 
 
-def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_applies_opencv_auto_adjust_pipeline_when_selected(
+    monkeypatch, tmp_path
+):
     """
-    @brief Validate OpenCV wow-stage dispatch when wow mode is `OpenCV`.
-    @details Executes encode path with `wow_mode="OpenCV"`, injects fake OpenCV
-      dependency tuple, and verifies OpenCV wow function receives expected
+    @brief Validate OpenCV auto-adjust-stage dispatch when auto-adjust mode is `OpenCV`.
+    @details Executes encode path with `auto_adjust_mode="OpenCV"`, injects fake OpenCV
+      dependency tuple, and verifies OpenCV auto-adjust function receives expected
       temporary input/output TIFF paths before final JPEG save.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
@@ -3412,24 +3432,24 @@ def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_
     observed = {"opencv_call": {}, "jpg_save": None}
 
     class _FakeImageIoModule:
-        """@brief Provide fake imageio module for OpenCV wow dispatch test."""
+        """@brief Provide fake imageio module for OpenCV auto-adjust dispatch test."""
 
         @staticmethod
         def imread(path):
-            """@brief Return fake payload for merged/wow TIFF reads."""
+            """@brief Return fake payload for merged/auto-adjust TIFF reads."""
 
-            if Path(path).name == "wow_output.tif":
+            if Path(path).name == "auto_adjust_output.tif":
 
-                class _FakeWowPayload:
+                class _FakeAutoAdjustPayload:
                     mode = "RGB"
 
-                return _FakeWowPayload()
+                return _FakeAutoAdjustPayload()
             return _FakeImage16()
 
-    def _fake_apply_validated_wow_pipeline_opencv(
+    def _fake_apply_validated_auto_adjust_pipeline_opencv(
         input_file, output_file, cv2_module, np_module
     ):
-        """@brief Capture OpenCV wow dispatch parameters and materialize output."""
+        """@brief Capture OpenCV auto-adjust dispatch parameters and materialize output."""
 
         observed["opencv_call"] = {
             "input": Path(input_file).name,
@@ -3437,12 +3457,12 @@ def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_
             "cv2": cv2_module,
             "np": np_module,
         }
-        Path(output_file).write_text("wow", encoding="utf-8")
+        Path(output_file).write_text("auto-adjust", encoding="utf-8")
 
     monkeypatch.setattr(
         dng2hdr2jpg,
-        "_apply_validated_wow_pipeline_opencv",
-        _fake_apply_validated_wow_pipeline_opencv,
+        "_apply_validated_auto_adjust_pipeline_opencv",
+        _fake_apply_validated_auto_adjust_pipeline_opencv,
     )
 
     merged_tiff = tmp_path / "merged_hdr.tif"
@@ -3464,14 +3484,14 @@ def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_
             contrast=1.0,
             saturation=1.0,
             jpg_compression=10,
-            wow_mode="OpenCV",
+            auto_adjust_mode="OpenCV",
         ),
-        wow_opencv_dependencies=(fake_cv2_module, fake_numpy_module),
+        auto_adjust_opencv_dependencies=(fake_cv2_module, fake_numpy_module),
     )
 
     assert observed["opencv_call"] is not None
     assert observed["opencv_call"]["input"] == "postprocessed_input.tif"
-    assert observed["opencv_call"]["output"] == "wow_output.tif"
+    assert observed["opencv_call"]["output"] == "auto_adjust_output.tif"
     assert observed["opencv_call"]["cv2"] is fake_cv2_module
     assert observed["opencv_call"]["np"] is fake_numpy_module
     assert observed["jpg_save"] is not None
@@ -3479,10 +3499,10 @@ def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_
     assert output_jpg.exists()
 
 
-def test_dng2hdr2jpg_opencv_wow_accepts_uint8_input_by_upconverting(tmp_path):
+def test_dng2hdr2jpg_opencv_auto_adjust_accepts_uint8_input_by_upconverting(tmp_path):
     """
-    @brief Reproduce OpenCV wow failure when wow input TIFF is decoded as uint8.
-    @details Executes `_apply_validated_wow_pipeline_opencv` with fake cv2 read
+    @brief Reproduce OpenCV auto-adjust failure when auto-adjust input TIFF is decoded as uint8.
+    @details Executes `_apply_validated_auto_adjust_pipeline_opencv` with fake cv2 read
       path returning `uint8` 3-channel image and expects deterministic in-function
       promotion to `uint16` before float-domain pipeline execution.
     @param tmp_path {Path} Isolated filesystem fixture.
@@ -3493,7 +3513,7 @@ def test_dng2hdr2jpg_opencv_wow_accepts_uint8_input_by_upconverting(tmp_path):
     numpy_module = __import__("numpy")
 
     class _FakeCv2Module:
-        """@brief Provide minimal cv2 surface for uint8 OpenCV wow reproducer."""
+        """@brief Provide minimal cv2 surface for uint8 OpenCV auto-adjust reproducer."""
 
         IMREAD_UNCHANGED = -1
         COLOR_BGR2RGB = 10
@@ -3504,7 +3524,7 @@ def test_dng2hdr2jpg_opencv_wow_accepts_uint8_input_by_upconverting(tmp_path):
             self.written = None
 
         def imread(self, path, mode):
-            """@brief Return deterministic uint8 wow input tensor."""
+            """@brief Return deterministic uint8 auto-adjust input tensor."""
 
             del path
             assert mode == self.IMREAD_UNCHANGED
@@ -3534,15 +3554,15 @@ def test_dng2hdr2jpg_opencv_wow_accepts_uint8_input_by_upconverting(tmp_path):
                 "dtype": str(payload.dtype),
                 "shape": payload.shape,
             }
-            Path(path).write_text("wow-output", encoding="utf-8")
+            Path(path).write_text("auto-adjust-output", encoding="utf-8")
             return True
 
     input_tiff = tmp_path / "postprocessed_input.tif"
     input_tiff.write_text("payload", encoding="utf-8")
-    output_tiff = tmp_path / "wow_output.tif"
+    output_tiff = tmp_path / "auto_adjust_output.tif"
     fake_cv2_module = _FakeCv2Module()
 
-    dng2hdr2jpg._apply_validated_wow_pipeline_opencv(
+    dng2hdr2jpg._apply_validated_auto_adjust_pipeline_opencv(
         input_file=input_tiff,
         output_file=output_tiff,
         cv2_module=fake_cv2_module,
@@ -3550,18 +3570,18 @@ def test_dng2hdr2jpg_opencv_wow_accepts_uint8_input_by_upconverting(tmp_path):
     )
 
     assert fake_cv2_module.written is not None
-    assert fake_cv2_module.written["path"] == "wow_output.tif"
+    assert fake_cv2_module.written["path"] == "auto_adjust_output.tif"
     assert fake_cv2_module.written["dtype"] == "uint16"
     assert fake_cv2_module.written["shape"] == (2, 2, 3)
     assert output_tiff.exists()
 
 
-def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(
+def test_dng2hdr2jpg_auto_adjust_uint16_output_is_normalized_before_fromarray(
     monkeypatch, tmp_path
 ):
     """
-    @brief Reproduce wow-path crash when ImageMagick output is uint16 RGB payload.
-    @details Simulates wow output decode as `uint16` data and enforces a strict
+    @brief Reproduce auto-adjust-path crash when ImageMagick output is uint16 RGB payload.
+    @details Simulates auto-adjust output decode as `uint16` data and enforces a strict
       fake `Image.fromarray` contract that rejects non-`uint8` payload, matching
       observed Pillow failure; expected behavior is successful normalization before
       `fromarray`.
@@ -3573,8 +3593,8 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(
 
     observed = {"jpg_save": None, "commands": []}
 
-    class _FakeWowScaled:
-        """@brief Provide clip/astype chain for wow uint16 normalization."""
+    class _FakeAutoAdjustScaled:
+        """@brief Provide clip/astype chain for auto-adjust uint16 normalization."""
 
         def clip(self, _low, _high):
             """@brief Return self for deterministic clipping chain."""
@@ -3586,14 +3606,14 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(
 
             assert dtype == "uint8"
 
-            class _FakeWowUint8Payload:
+            class _FakeAutoAdjustUint8Payload:
                 mode = "RGB"
                 dtype = "uint8"
 
-            return _FakeWowUint8Payload()
+            return _FakeAutoAdjustUint8Payload()
 
-    class _FakeWowU16Payload:
-        """@brief Emulate wow output payload with uint16 dtype."""
+    class _FakeAutoAdjustU16Payload:
+        """@brief Emulate auto-adjust output payload with uint16 dtype."""
 
         dtype = "uint16"
 
@@ -3601,14 +3621,14 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(
             """@brief Emulate normalization division branch."""
 
             assert value == 257.0
-            return _FakeWowScaled()
+            return _FakeAutoAdjustScaled()
 
     class _FakeImageIoModule:
-        """@brief Provide fake imageio module for wow uint16 reproducer."""
+        """@brief Provide fake imageio module for auto-adjust uint16 reproducer."""
 
         @staticmethod
         def imread(path):
-            """@brief Return base and wow payloads for encode path."""
+            """@brief Return base and auto-adjust payloads for encode path."""
 
             if Path(path).name == "merged_hdr.tif":
 
@@ -3638,8 +3658,8 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(
                         Path(save_path).write_text(format.lower(), encoding="utf-8")
 
                 return _BasePilPayload()
-            if Path(path).name == "wow_output.tif":
-                return _FakeWowU16Payload()
+            if Path(path).name == "auto_adjust_output.tif":
+                return _FakeAutoAdjustU16Payload()
             return _FakeImage16()
 
     class _StrictPilImageModule:
@@ -3710,7 +3730,7 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(
             return _E()
 
     def _fake_subprocess_run(command, check):
-        """@brief Emulate successful wow subprocess output materialization."""
+        """@brief Emulate successful auto-adjust subprocess output materialization."""
 
         assert check is True
         observed["commands"].append(command)
@@ -3738,7 +3758,7 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(
             contrast=1.0,
             saturation=1.0,
             jpg_compression=10,
-            wow_mode="ImageMagick",
+            auto_adjust_mode="ImageMagick",
         ),
     )
 
