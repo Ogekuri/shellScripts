@@ -6,13 +6,14 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076
+    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
 """
 
 import os
 import shutil
 import subprocess
 import tempfile
+from io import BytesIO
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -53,6 +54,12 @@ _RUNTIME_OS_LABELS = {
     "windows": "Windows",
     "darwin": "MacOS",
 }
+_EXIF_TAG_ORIENTATION = 274
+_EXIF_TAG_DATETIME = 306
+_EXIF_TAG_DATETIME_ORIGINAL = 36867
+_EXIF_TAG_DATETIME_DIGITIZED = 36868
+_EXIF_VALID_ORIENTATIONS = (1, 2, 3, 4, 5, 6, 7, 8)
+_THUMBNAIL_MAX_SIZE = (256, 256)
 _LUMINANCE_OPERATOR_TABLE_HEADERS = (
     "Operator",
     "Family / idea",
@@ -1004,7 +1011,7 @@ def _parse_exif_datetime_to_timestamp(datetime_raw):
     strict EXIF format `YYYY:MM:DD HH:MM:SS` to generate filesystem timestamp.
     @param datetime_raw {str|bytes|object} EXIF datetime scalar.
     @return {float|None} Parsed POSIX timestamp; `None` when value is missing or invalid.
-    @satisfies REQ-074
+    @satisfies REQ-074, REQ-077
     """
 
     if datetime_raw is None:
@@ -1023,39 +1030,174 @@ def _parse_exif_datetime_to_timestamp(datetime_raw):
 
 
 def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
-    """@brief Extract DNG EXIF payload bytes and preferred datetime timestamp.
+    """@brief Extract DNG EXIF payload bytes, preferred datetime timestamp, and source orientation.
 
-    @details Opens input DNG via Pillow, reads EXIF mapping, normalizes EXIF
-    orientation tag (`274`) to `1` before serialization for JPEG `exif` save
-    parameter to keep metadata coherent with emitted pixel orientation, and
-    resolves filesystem timestamp priority:
+    @details Opens input DNG via Pillow, reads EXIF mapping without orientation
+    mutation, serializes payload for JPEG save, resolves source orientation from
+    EXIF tag `274`, and resolves filesystem timestamp priority:
     `DateTimeOriginal`(36867) > `DateTimeDigitized`(36868) > `DateTime`(306).
     @param pil_image_module {ModuleType} Imported Pillow Image module.
     @param input_dng {Path} Source DNG path.
-    @return {tuple[bytes|None, float|None]} `(exif_payload, exif_timestamp)` with `None` for unavailable components.
-    @satisfies REQ-066, REQ-074
+    @return {tuple[bytes|None, float|None, int]} `(exif_payload, exif_timestamp, source_orientation)` with orientation defaulting to `1`.
+    @satisfies REQ-066, REQ-074, REQ-077
     """
 
     if not hasattr(pil_image_module, "open"):
-        return (None, None)
+        return (None, None, 1)
     try:
         with pil_image_module.open(str(input_dng)) as source_image:
             if not hasattr(source_image, "getexif"):
-                return (None, None)
+                return (None, None, 1)
             exif_data = source_image.getexif()
             if not exif_data:
-                return (None, None)
-            if hasattr(exif_data, "__setitem__"):
-                exif_data[274] = 1
+                return (None, None, 1)
             exif_payload = exif_data.tobytes() if hasattr(exif_data, "tobytes") else None
+            source_orientation = 1
+            orientation_raw = exif_data.get(_EXIF_TAG_ORIENTATION)
+            if orientation_raw is not None:
+                try:
+                    orientation_value = int(orientation_raw)
+                    if orientation_value in _EXIF_VALID_ORIENTATIONS:
+                        source_orientation = orientation_value
+                except (TypeError, ValueError):
+                    source_orientation = 1
             exif_timestamp = None
-            for exif_tag in (36867, 36868, 306):
+            for exif_tag in (_EXIF_TAG_DATETIME_ORIGINAL, _EXIF_TAG_DATETIME_DIGITIZED, _EXIF_TAG_DATETIME):
                 exif_timestamp = _parse_exif_datetime_to_timestamp(exif_data.get(exif_tag))
                 if exif_timestamp is not None:
                     break
-            return (exif_payload, exif_timestamp)
+            return (exif_payload, exif_timestamp, source_orientation)
     except (OSError, ValueError, TypeError, AttributeError):
-        return (None, None)
+        return (None, None, 1)
+
+
+def _resolve_thumbnail_transpose_map(pil_image_module):
+    """@brief Build deterministic EXIF-orientation-to-transpose mapping.
+
+    @details Resolves Pillow transpose constants from modern `Image.Transpose`
+    namespace with fallback to legacy module-level constants.
+    @param pil_image_module {ModuleType} Imported Pillow Image module.
+    @return {dict[int, int]} Orientation-to-transpose mapping for values `2..8`.
+    @satisfies REQ-077, REQ-078
+    """
+
+    transpose_enum = getattr(pil_image_module, "Transpose", None)
+    if transpose_enum is not None:
+        return {
+            2: transpose_enum.FLIP_LEFT_RIGHT,
+            3: transpose_enum.ROTATE_180,
+            4: transpose_enum.FLIP_TOP_BOTTOM,
+            5: transpose_enum.TRANSPOSE,
+            6: transpose_enum.ROTATE_270,
+            7: transpose_enum.TRANSVERSE,
+            8: transpose_enum.ROTATE_90,
+        }
+    return {
+        2: getattr(pil_image_module, "FLIP_LEFT_RIGHT"),
+        3: getattr(pil_image_module, "ROTATE_180"),
+        4: getattr(pil_image_module, "FLIP_TOP_BOTTOM"),
+        5: getattr(pil_image_module, "TRANSPOSE"),
+        6: getattr(pil_image_module, "ROTATE_270"),
+        7: getattr(pil_image_module, "TRANSVERSE"),
+        8: getattr(pil_image_module, "ROTATE_90"),
+    }
+
+
+def _apply_orientation_transform(pil_image_module, pil_image, source_orientation):
+    """@brief Apply EXIF orientation transform to one image copy.
+
+    @details Produces display-oriented pixels from source-oriented input while
+    preserving the original image object and preserving orientation invariants in
+    the main processing pipeline.
+    @param pil_image_module {ModuleType} Imported Pillow Image module.
+    @param pil_image {object} Pillow image-like object.
+    @param source_orientation {int} EXIF orientation value in range `1..8`.
+    @return {object} Transformed Pillow image object.
+    @satisfies REQ-077, REQ-078
+    """
+
+    transformed = pil_image.copy()
+    if source_orientation not in _EXIF_VALID_ORIENTATIONS:
+        return transformed
+    transpose_map = _resolve_thumbnail_transpose_map(pil_image_module)
+    transpose_method = transpose_map.get(source_orientation)
+    if transpose_method is None:
+        return transformed
+    return transformed.transpose(transpose_method)
+
+
+def _build_oriented_thumbnail_jpeg_bytes(pil_image_module, output_jpg, source_orientation):
+    """@brief Build refreshed JPEG thumbnail bytes from final JPG output.
+
+    @details Opens final JPG pixels, applies source-orientation-aware transform,
+    scales to bounded thumbnail size, and serializes deterministic JPEG thumbnail
+    payload for EXIF embedding.
+    @param pil_image_module {ModuleType} Imported Pillow Image module.
+    @param output_jpg {Path} Final JPG path.
+    @param source_orientation {int} EXIF orientation value in range `1..8`.
+    @return {bytes} Serialized JPEG thumbnail payload.
+    @exception OSError Raised when final JPG cannot be read.
+    @satisfies REQ-077, REQ-078
+    """
+
+    with pil_image_module.open(str(output_jpg)) as output_image:
+        thumbnail_image = _apply_orientation_transform(
+            pil_image_module=pil_image_module,
+            pil_image=output_image,
+            source_orientation=source_orientation,
+        )
+        if getattr(thumbnail_image, "mode", "") not in ("RGB", "L"):
+            thumbnail_image = thumbnail_image.convert("RGB")
+        thumbnail_image.thumbnail(_THUMBNAIL_MAX_SIZE)
+        buffer = BytesIO()
+        thumbnail_image.save(buffer, format="JPEG", quality=85, optimize=True)
+        return buffer.getvalue()
+
+
+def _refresh_output_jpg_exif_thumbnail_after_save(
+    pil_image_module,
+    piexif_module,
+    output_jpg,
+    source_exif_payload,
+    source_orientation,
+):
+    """@brief Refresh output JPG EXIF thumbnail while preserving source orientation.
+
+    @details Loads source EXIF payload, regenerates thumbnail from final JPG
+    pixels with orientation-aware transform, preserves source orientation in main
+    EXIF IFD, sets thumbnail orientation to identity, and re-inserts updated EXIF
+    payload into output JPG.
+    @param pil_image_module {ModuleType} Imported Pillow Image module.
+    @param piexif_module {ModuleType} Imported piexif module.
+    @param output_jpg {Path} Final JPG path.
+    @param source_exif_payload {bytes} Serialized EXIF payload from source DNG.
+    @param source_orientation {int} Source EXIF orientation value in range `1..8`.
+    @return {None} Side effects only.
+    @exception RuntimeError Raised when EXIF thumbnail refresh fails.
+    @satisfies REQ-066, REQ-077, REQ-078
+    """
+
+    if source_exif_payload is None:
+        return
+    try:
+        exif_dict = piexif_module.load(source_exif_payload)
+        for ifd_name in ("0th", "Exif", "GPS", "Interop", "1st"):
+            if ifd_name not in exif_dict or exif_dict[ifd_name] is None:
+                exif_dict[ifd_name] = {}
+        thumbnail_payload = _build_oriented_thumbnail_jpeg_bytes(
+            pil_image_module=pil_image_module,
+            output_jpg=output_jpg,
+            source_orientation=source_orientation,
+        )
+        orientation_tag = piexif_module.ImageIFD.Orientation
+        orientation_value = source_orientation if source_orientation in _EXIF_VALID_ORIENTATIONS else 1
+        exif_dict["0th"][orientation_tag] = orientation_value
+        exif_dict["1st"][orientation_tag] = 1
+        exif_dict["thumbnail"] = thumbnail_payload
+        exif_bytes = piexif_module.dump(exif_dict)
+        piexif_module.insert(exif_bytes, str(output_jpg))
+    except (ValueError, TypeError, KeyError, OSError, AttributeError) as error:
+        raise RuntimeError(f"Failed to refresh output JPG EXIF thumbnail: {error}") from error
 
 
 def _set_output_file_timestamps(output_jpg, exif_timestamp):
@@ -1067,7 +1209,7 @@ def _set_output_file_timestamps(output_jpg, exif_timestamp):
     @param exif_timestamp {float} Source EXIF-derived POSIX timestamp.
     @return {None} Side effects only.
     @exception OSError Raised when filesystem metadata update fails.
-    @satisfies REQ-074
+    @satisfies REQ-074, REQ-077
     """
 
     os.utime(output_jpg, (exif_timestamp, exif_timestamp))
@@ -1080,7 +1222,7 @@ def _build_exposure_multipliers(ev_value):
     `[-ev, 0, +ev]` as powers of two for RAW postprocess brightness control.
     @param ev_value {float} Exposure bracket EV delta.
     @return {tuple[float, float, float]} Multipliers in order `(under, base, over)`.
-    @satisfies REQ-057
+    @satisfies REQ-057, REQ-077
     """
 
     return (2 ** (-ev_value), 1.0, 2 ** ev_value)
@@ -1155,7 +1297,7 @@ def _run_enfuse(bracket_paths, merged_tiff):
     @param merged_tiff {Path} Output merged TIFF target path.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when `enfuse` returns non-zero exit status.
-    @satisfies REQ-058
+    @satisfies REQ-058, REQ-077
     """
 
     command = [
@@ -1181,7 +1323,7 @@ def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_o
     @param luminance_options {LuminanceOptions} Luminance backend command controls.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
-    @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068
+    @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068, REQ-077
     """
 
     ordered_paths = _order_bracket_paths(bracket_paths)
@@ -1298,7 +1440,7 @@ def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_c
     @param imagemagick_command {str} Resolved ImageMagick executable token.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when ImageMagick returns non-zero.
-    @satisfies REQ-073
+    @satisfies REQ-073, REQ-077
     """
 
     wow_input_16 = wow_output.parent / "wow_input_16.tif"
@@ -1874,7 +2016,7 @@ def _apply_validated_wow_pipeline_opencv_np(input_file, output_file, cv2_module,
     @return {None} Side effects only.
     @exception OSError Raised when source file is missing.
     @exception RuntimeError Raised when OpenCV read/write fails or input dtype is unsupported.
-    @satisfies REQ-073, REQ-076
+    @satisfies REQ-073, REQ-076, REQ-077
     """
 
     if not input_file.exists():
@@ -1928,7 +2070,7 @@ def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np
     @return {None} Side effects only.
     @exception OSError Raised when source file is missing.
     @exception RuntimeError Raised when OpenCV read/write fails or input dtype is unsupported.
-    @satisfies REQ-073, REQ-075
+    @satisfies REQ-073, REQ-075, REQ-077
     """
 
     if not input_file.exists():
@@ -1956,6 +2098,24 @@ def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np
         raise RuntimeError(f"OpenCV failed to write wow output: {output_file}")
 
 
+def _load_piexif_dependency():
+    """@brief Resolve piexif runtime dependency for EXIF thumbnail refresh.
+
+    @details Imports `piexif` module required for EXIF thumbnail regeneration and
+    reinsertion; emits deterministic install guidance when dependency is missing.
+    @return {ModuleType|None} Imported piexif module; `None` on dependency failure.
+    @satisfies REQ-059, REQ-078
+    """
+
+    try:
+        import piexif  # type: ignore
+    except ModuleNotFoundError:
+        print_error("Python dependency missing: piexif")
+        print_error("Install dependencies with: uv pip install piexif")
+        return None
+    return piexif
+
+
 def _encode_jpg(
     imageio_module,
     pil_image_module,
@@ -1965,7 +2125,9 @@ def _encode_jpg(
     postprocess_options,
     imagemagick_command=None,
     wow_opencv_dependencies=None,
+    piexif_module=None,
     source_exif_payload=None,
+    source_orientation=1,
 ):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
@@ -1982,10 +2144,12 @@ def _encode_jpg(
     @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
     @param imagemagick_command {str|None} Optional pre-resolved ImageMagick executable.
     @param wow_opencv_dependencies {tuple[ModuleType, ModuleType]|None} Optional `(cv2, numpy)` modules for OpenCV wow implementations.
+    @param piexif_module {ModuleType|None} Optional piexif module for EXIF thumbnail refresh.
     @param source_exif_payload {bytes|None} Serialized EXIF payload copied from input DNG.
+    @param source_orientation {int} Source EXIF orientation value in range `1..8`.
     @return {None} Side effects only.
     @exception RuntimeError Raised when wow mode dependencies are missing or wow mode value is unsupported.
-    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-076
+    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
     """
 
     merged_data = imageio_module.imread(str(merged_tiff))
@@ -2092,6 +2256,16 @@ def _encode_jpg(
     if source_exif_payload is not None:
         save_kwargs["exif"] = source_exif_payload
     pil_image.save(str(output_jpg), **save_kwargs)
+    if source_exif_payload is not None:
+        if piexif_module is None:
+            raise RuntimeError("Missing required dependency: piexif")
+        _refresh_output_jpg_exif_thumbnail_after_save(
+            pil_image_module=pil_image_module,
+            piexif_module=piexif_module,
+            output_jpg=output_jpg,
+            source_exif_payload=source_exif_payload,
+            source_orientation=source_orientation,
+        )
 
 
 def _collect_processing_errors(rawpy_module):
@@ -2152,7 +2326,7 @@ def run(args):
     temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
     """
 
     if not _is_supported_runtime_os():
@@ -2214,10 +2388,15 @@ def run(args):
         return 1
 
     rawpy_module, imageio_module, pil_image_module, pil_enhance_module = dependencies
-    source_exif_payload, source_exif_timestamp = _extract_dng_exif_payload_and_timestamp(
+    source_exif_payload, source_exif_timestamp, source_orientation = _extract_dng_exif_payload_and_timestamp(
         pil_image_module=pil_image_module,
         input_dng=input_dng,
     )
+    piexif_module = None
+    if source_exif_payload is not None:
+        piexif_module = _load_piexif_dependency()
+        if piexif_module is None:
+            return 1
     processing_errors = _collect_processing_errors(rawpy_module)
     multipliers = _build_exposure_multipliers(ev_value)
 
@@ -2278,7 +2457,9 @@ def run(args):
                 postprocess_options=postprocess_options,
                 imagemagick_command=imagemagick_command,
                 wow_opencv_dependencies=wow_opencv_dependencies,
+                piexif_module=piexif_module,
                 source_exif_payload=source_exif_payload,
+                source_orientation=source_orientation,
             )
             if source_exif_timestamp is not None:
                 _set_output_file_timestamps(output_jpg=output_jpg, exif_timestamp=source_exif_timestamp)

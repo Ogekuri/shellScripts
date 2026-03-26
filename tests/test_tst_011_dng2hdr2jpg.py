@@ -3,7 +3,7 @@
 @details Verifies argument validation, EV parsing/default behavior, three-
   bracket extraction multipliers, dual-backend HDR merge behavior, shared
   postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
 @return {None} Pytest module scope.
 """
 
@@ -1409,7 +1409,7 @@ def test_dng2hdr2jpg_runtime_dependencies_are_declared_in_pyproject():
     """
     @brief Validate runtime dependency declaration for DNG processing modules.
     @details Parses `pyproject.toml` and asserts that `rawpy`, `imageio`,
-      `pillow`, `numpy`, and `opencv-python`
+      `pillow`, `piexif`, `numpy`, and `opencv-python`
       are declared in `project.dependencies` so uv tool installs provide command
       runtime requirements without manual post-install steps.
     @return {None} Assertions only.
@@ -1424,6 +1424,7 @@ def test_dng2hdr2jpg_runtime_dependencies_are_declared_in_pyproject():
     assert any(dep.startswith("rawpy") for dep in dependencies)
     assert any(dep.startswith("imageio") for dep in dependencies)
     assert any(dep.startswith("pillow") for dep in dependencies)
+    assert any(dep.startswith("piexif") for dep in dependencies)
     assert any(dep.startswith("numpy") for dep in dependencies)
     assert any(dep.startswith("opencv-python") for dep in dependencies)
 
@@ -1437,7 +1438,7 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-066, REQ-074
+    @satisfies TST-011, REQ-066, REQ-074, REQ-077, REQ-078
     """
 
     observed = {
@@ -1450,6 +1451,7 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
         "enfuse_cmd": None,
         "jpg_save": None,
         "utime_calls": [],
+        "refresh_calls": [],
     }
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
 
@@ -1486,6 +1488,7 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
 
         def __init__(self):
             self._values = {
+                274: 6,
                 36867: "2024:07:08 09:10:11",
             }
 
@@ -1592,10 +1595,37 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
 
         observed["utime_calls"].append((Path(path), times))
 
+    fake_piexif_module = object()
+
+    def _fake_refresh_output_jpg_exif_thumbnail_after_save(
+        pil_image_module,
+        piexif_module,
+        output_jpg,
+        source_exif_payload,
+        source_orientation,
+    ):
+        """@brief Capture EXIF thumbnail refresh call arguments."""
+
+        observed["refresh_calls"].append(
+            {
+                "pil_image_module": pil_image_module,
+                "piexif_module": piexif_module,
+                "output_jpg": Path(output_jpg),
+                "source_exif_payload": source_exif_payload,
+                "source_orientation": source_orientation,
+            }
+        )
+
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
         lambda: (_FakeRawPyModule, _FakeImageIoModule, _FakePilImageModule, _FakePilEnhanceModule),
+    )
+    monkeypatch.setattr(dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module)
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_refresh_output_jpg_exif_thumbnail_after_save",
+        _fake_refresh_output_jpg_exif_thumbnail_after_save,
     )
     monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
@@ -1611,6 +1641,11 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert observed["jpg_save"]["exif"] == b"fake-exif-payload"
+    assert len(observed["refresh_calls"]) == 1
+    assert observed["refresh_calls"][0]["piexif_module"] is fake_piexif_module
+    assert observed["refresh_calls"][0]["output_jpg"] == output_jpg
+    assert observed["refresh_calls"][0]["source_exif_payload"] == b"fake-exif-payload"
+    assert observed["refresh_calls"][0]["source_orientation"] == 6
     assert len(observed["utime_calls"]) == 1
     utime_path, utime_values = observed["utime_calls"][0]
     assert utime_path == output_jpg
@@ -1618,14 +1653,14 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
     assert utime_values == (expected_timestamp, expected_timestamp)
 
 
-def test_extract_dng_exif_payload_normalizes_orientation_tag_for_jpg():
+def test_extract_dng_exif_payload_preserves_source_orientation_tag():
     """
-    @brief Reproduce EXIF orientation inconsistency during DNG metadata extraction.
+    @brief Validate DNG EXIF extraction preserves source orientation metadata.
     @details Builds a fake DNG EXIF container with camera orientation `6` and
-      verifies extractor normalizes orientation to `1` in serialized payload so
-      final JPG metadata remains coherent with already-postprocessed pixel data.
+      verifies extractor preserves orientation value in serialized payload and
+      emits orientation scalar for downstream pipeline invariants.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-066
+    @satisfies TST-011, REQ-066, REQ-077
     """
 
     class _FakeExif:
@@ -1638,11 +1673,6 @@ def test_extract_dng_exif_payload_normalizes_orientation_tag_for_jpg():
             """@brief Return EXIF value for requested numeric tag."""
 
             return self._values.get(key)
-
-        def __setitem__(self, key, value):
-            """@brief Update EXIF value for requested numeric tag."""
-
-            self._values[key] = value
 
         def tobytes(self):
             """@brief Encode current orientation value into payload marker."""
@@ -1671,14 +1701,15 @@ def test_extract_dng_exif_payload_normalizes_orientation_tag_for_jpg():
         def open(_path):
             return _FakeSourceImage()
 
-    exif_payload, exif_timestamp = dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
+    exif_payload, exif_timestamp, source_orientation = dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
         pil_image_module=_FakePilImageModule,
         input_dng=Path("scene.dng"),
     )
 
-    assert exif_payload == b"orientation=1"
+    assert exif_payload == b"orientation=6"
     expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
     assert exif_timestamp == expected_timestamp
+    assert source_orientation == 6
 
 
 def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypatch, tmp_path):
@@ -1690,7 +1721,7 @@ def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypat
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-066, REQ-074
+    @satisfies TST-011, REQ-066, REQ-074, REQ-077, REQ-078
     """
 
     observed = {
@@ -1701,6 +1732,7 @@ def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypat
         "gamma": [],
         "utime_calls": [],
         "jpg_save": None,
+        "refresh_calls": [],
     }
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
 
@@ -1729,7 +1761,9 @@ def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypat
         """@brief Provide fake EXIF payload without supported datetime tags."""
 
         @staticmethod
-        def get(_key):
+        def get(key):
+            if key == 274:
+                return 8
             return None
 
         @staticmethod
@@ -1815,10 +1849,35 @@ def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypat
     def _fake_utime(path, times):
         observed["utime_calls"].append((Path(path), times))
 
+    fake_piexif_module = object()
+
+    def _fake_refresh_output_jpg_exif_thumbnail_after_save(
+        pil_image_module,
+        piexif_module,
+        output_jpg,
+        source_exif_payload,
+        source_orientation,
+    ):
+        observed["refresh_calls"].append(
+            {
+                "pil_image_module": pil_image_module,
+                "piexif_module": piexif_module,
+                "output_jpg": Path(output_jpg),
+                "source_exif_payload": source_exif_payload,
+                "source_orientation": source_orientation,
+            }
+        )
+
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
         lambda: (_FakeRawPyModule, _FakeImageIoModule, _FakePilImageModule, _FakePilEnhanceModule),
+    )
+    monkeypatch.setattr(dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module)
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_refresh_output_jpg_exif_thumbnail_after_save",
+        _fake_refresh_output_jpg_exif_thumbnail_after_save,
     )
     monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
@@ -1834,6 +1893,11 @@ def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypat
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert observed["jpg_save"]["exif"] == b"fake-exif-no-date"
+    assert len(observed["refresh_calls"]) == 1
+    assert observed["refresh_calls"][0]["piexif_module"] is fake_piexif_module
+    assert observed["refresh_calls"][0]["output_jpg"] == output_jpg
+    assert observed["refresh_calls"][0]["source_exif_payload"] == b"fake-exif-no-date"
+    assert observed["refresh_calls"][0]["source_orientation"] == 8
     assert observed["utime_calls"] == []
 
 
@@ -1941,17 +2005,17 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "mutually exclusive with --enable-luminance" in output
 
 
-def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
+def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(monkeypatch, tmp_path):
     """
     @brief Validate shared postprocess controls and JPEG quality mapping.
     @details Executes encode path with non-default gamma/brightness/contrast/
       saturation factors and verifies fake Pillow operations and quality value.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-065, REQ-066, REQ-073
+    @satisfies TST-011, REQ-065, REQ-066, REQ-073, REQ-078
     """
 
-    observed = {}
+    observed = {"refresh_calls": []}
 
     class _FakeImageIoModule:
         """@brief Provide fake `imageio` module for postprocess assertions."""
@@ -1962,6 +2026,31 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
 
             assert Path(path).name == "merged_hdr.tif"
             return _FakeImage16()
+
+    fake_piexif_module = object()
+
+    def _fake_refresh_output_jpg_exif_thumbnail_after_save(
+        pil_image_module,
+        piexif_module,
+        output_jpg,
+        source_exif_payload,
+        source_orientation,
+    ):
+        observed["refresh_calls"].append(
+            {
+                "pil_image_module": pil_image_module,
+                "piexif_module": piexif_module,
+                "output_jpg": Path(output_jpg),
+                "source_exif_payload": source_exif_payload,
+                "source_orientation": source_orientation,
+            }
+        )
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_refresh_output_jpg_exif_thumbnail_after_save",
+        _fake_refresh_output_jpg_exif_thumbnail_after_save,
+    )
 
     merged_tiff = tmp_path / "merged_hdr.tif"
     merged_tiff.write_text("merged", encoding="utf-8")
@@ -1981,13 +2070,23 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(tmp_path):
             saturation=1.3,
             jpg_compression=80,
         ),
+        piexif_module=fake_piexif_module,
+        source_exif_payload=b"source-exif",
+        source_orientation=3,
     )
 
     assert "gamma" in observed["postprocess_ops"]
     assert ("brightness", 1.1) in observed["postprocess_ops"]
     assert ("contrast", 0.9) in observed["postprocess_ops"]
     assert ("saturation", 1.3) in observed["postprocess_ops"]
-    assert observed["jpg_save"]["quality"] == 20
+    jpg_save = observed["jpg_save"]
+    assert isinstance(jpg_save, dict)
+    assert jpg_save.get("quality") == 20
+    assert len(observed["refresh_calls"]) == 1
+    assert observed["refresh_calls"][0]["piexif_module"] is fake_piexif_module
+    assert observed["refresh_calls"][0]["output_jpg"] == output_jpg
+    assert observed["refresh_calls"][0]["source_exif_payload"] == b"source-exif"
+    assert observed["refresh_calls"][0]["source_orientation"] == 3
     assert output_jpg.exists()
 
 
