@@ -71,7 +71,7 @@ DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
             "claude:prompts",
             "github:skills",
             "codex:prompts",
-            "opencode:agents",
+            "opencode:prompts",
             "gemini:prompts",
             "kiro:agents",
         ],

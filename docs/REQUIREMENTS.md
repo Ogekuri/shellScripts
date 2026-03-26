@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.0"
+version: "0.6.1"
 date: "2026-03-26"
 author: "Auto-generated from repository evidence"
 scope:
@@ -163,7 +163,7 @@ No explicit performance optimizations identified.
 - **REQ-047**: MUST determine and cache the runtime operating system at CLI startup before command dispatch.
 - **REQ-048**: MUST implement `req` command that removes predefined AI-integration directories and creates `guidelines`, `docs`, `tests`, `src`, `scripts`, and `.github/workflows` for each selected target directory.
 - **REQ-049**: MUST invoke external `req` once per target directory using hardcoded arguments `--base`, `--docs-dir`, `--guidelines-dir`, three `--src-dir`, `--tests-dir`, and `--upgrade-guidelines`.
-- **REQ-050**: MUST source repeated `--provider` and `--enable-static-check` arguments for `req` from runtime config and MUST use hardcoded defaults when config keys are missing or invalid.
+- **REQ-050**: MUST source repeated `--provider` and `--enable-static-check` arguments for `req` from runtime config and MUST use hardcoded defaults with OpenCode provider `opencode:prompts` when config keys are missing or invalid.
 - **REQ-051**: MUST target current directory when `req` is invoked without selector options.
 - **REQ-052**: MUST make `req --dirs` target only first-level child directories and MUST exclude the current directory.
 - **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.

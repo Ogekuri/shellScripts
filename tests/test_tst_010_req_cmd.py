@@ -278,3 +278,25 @@ def test_req_builds_hardcoded_and_configurable_args(monkeypatch, tmp_path):
     assert command.count("--provider") == 2
     assert command.count("--enable-static-check") == 2
     assert "--upgrade-guidelines" in command
+
+
+def test_req_prepare_target_directory_cleans_opencode_prompt_path(tmp_path):
+    """
+    @brief Validate OpenCode prompt cleanup target path.
+    @details Creates `.opencode/prompt` and `.opencode/command` directories,
+      runs target preparation, and asserts both directories are removed by
+      predefined cleanup list semantics.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-010, REQ-048
+    """
+
+    opencode_prompt = tmp_path / ".opencode" / "prompt"
+    opencode_command = tmp_path / ".opencode" / "command"
+    opencode_prompt.mkdir(parents=True, exist_ok=True)
+    opencode_command.mkdir(parents=True, exist_ok=True)
+
+    req_cmd._prepare_target_directory(tmp_path)
+
+    assert not opencode_prompt.exists()
+    assert not opencode_command.exists()

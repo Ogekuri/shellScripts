@@ -35,7 +35,7 @@ DELETE_DIRS: tuple[str, ...] = (
     ".kiro/prompts",
     ".kiro/agents",
     ".kiro/skills",
-    ".opencode/agent",
+    ".opencode/prompt",
     ".opencode/command",
     ".opencode/skill",
 )
