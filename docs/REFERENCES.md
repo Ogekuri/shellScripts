@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 1988L | 64 symbols | 15 imports | 46 comments
+# dng2hdr2jpg.py | Python | 2286L | 84 symbols | 17 imports | 57 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -646,6 +646,8 @@ import imageio.v3 as imageio  # type: ignore
 import imageio  # type: ignore
 from PIL import Image as pil_image  # type: ignore
 from PIL import ImageEnhance as pil_enhance  # type: ignore
+import cv2  # type: ignore
+import numpy as numpy_module  # type: ignore
 import cv2  # type: ignore
 import numpy as numpy_module  # type: ignore
 ```
@@ -668,8 +670,16 @@ import numpy as numpy_module  # type: ignore
 - var `DEFAULT_REINHARD02_BRIGHTNESS = 1.25` (L40)
 - var `DEFAULT_REINHARD02_CONTRAST = 0.85` (L41)
 - var `DEFAULT_REINHARD02_SATURATION = 0.55` (L42)
-- var `SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)` (L43)
-### class `class PostprocessOptions` `@dataclass(frozen=True)` (L183-205)
+- var `OPENCV_NP_SELECTIVE_BLUR_SIGMA = 2.0` (L43)
+- var `OPENCV_NP_SELECTIVE_BLUR_THRESHOLD_PERCENT = 10.0` (L44)
+- var `OPENCV_NP_LEVEL_BLACK = 0.001` (L45)
+- var `OPENCV_NP_LEVEL_WHITE = 0.999` (L46)
+- var `OPENCV_NP_SIGMOIDAL_CONTRAST = 3.0` (L47)
+- var `OPENCV_NP_SIGMOIDAL_MIDPOINT = 0.5` (L48)
+- var `OPENCV_NP_SATURATION_GAMMA = 0.8` (L49)
+- var `OPENCV_NP_HIGH_PASS_BLUR_SIGMA = 2.5` (L50)
+- var `SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)` (L51)
+### class `class PostprocessOptions` `@dataclass(frozen=True)` (L191-213)
 - @brief Hold deterministic postprocessing option values.
 - @details Encapsulates correction factors and JPEG compression level used by shared TIFF-to-JPG postprocessing for both HDR backends.
 - @param post_gamma {float} Gamma correction factor for postprocessing stage.
@@ -677,11 +687,11 @@ import numpy as numpy_module  # type: ignore
 - @param contrast {float} Contrast enhancement factor.
 - @param saturation {float} Saturation enhancement factor.
 - @param jpg_compression {int} JPEG compression level in range `[0, 100]`.
-- @param wow_mode {str|None} Optional wow implementation selector (`ImageMagick` or `OpenCV`).
+- @param wow_mode {str|None} Optional wow implementation selector (`ImageMagick`, `OpenCV`, or `OpenCV-NP`).
 - @return {None} Immutable dataclass container.
-- @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075
+- @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076
 
-### class `class LuminanceOptions` `@dataclass(frozen=True)` (L207-227)
+### class `class LuminanceOptions` `@dataclass(frozen=True)` (L215-235)
 - @brief Hold deterministic luminance-hdr-cli option values.
 - @details Encapsulates luminance backend model and tone-mapping parameters forwarded to `luminance-hdr-cli` command generation.
 - @param hdr_model {str} Luminance HDR model (`--hdrModel`).
@@ -692,7 +702,7 @@ import numpy as numpy_module  # type: ignore
 - @return {None} Immutable dataclass container.
 - @satisfies REQ-061, REQ-067, REQ-068
 
-### fn `def _print_box_table(headers, rows, header_rows=())` `priv` (L228-264)
+### fn `def _print_box_table(headers, rows, header_rows=())` `priv` (L236-272)
 - @brief Print one Unicode box-drawing table.
 - @details Computes deterministic column widths from headers and rows, then prints aligned borders and cells using Unicode line-drawing glyphs.
 - @param headers {tuple[str, ...]} Table header labels in fixed output order.
@@ -701,7 +711,7 @@ import numpy as numpy_module  # type: ignore
 - @return {None} Writes formatted table to stdout.
 - @satisfies REQ-070
 
-### fn `def _border(left, middle, right)` `priv` (L248-250)
+### fn `def _border(left, middle, right)` `priv` (L256-258)
 - @brief Print one Unicode box-drawing table.
 - @details Computes deterministic column widths from headers and rows, then
 prints aligned borders and cells using Unicode line-drawing glyphs.
@@ -711,30 +721,30 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {None} Writes formatted table to stdout.
 - @satisfies REQ-070
 
-### fn `def _line(values)` `priv` (L251-254)
+### fn `def _line(values)` `priv` (L259-262)
 
-### fn `def _build_two_line_operator_rows(operator_entries)` `priv` (L265-281)
+### fn `def _build_two_line_operator_rows(operator_entries)` `priv` (L273-289)
 - @brief Build two-line physical rows for luminance operator table.
 - @details Expands each logical operator entry into two physical rows while preserving the bordered three-column layout used by help rendering.
 - @param operator_entries {tuple[tuple[str, str, str, str, str], ...]} Logical operator rows in `(operator, family, character, neutrality, when_to_use)` format.
 - @return {tuple[tuple[str, str, str], ...]} Expanded physical rows for `_print_box_table`.
 - @satisfies REQ-070
 
-### fn `def print_help(version)` (L282-361)
+### fn `def print_help(version)` (L290-369)
 - @brief Print help text for the `dng2hdr2jpg` command.
 - @details Documents required positional arguments, optional EV/RAW gamma controls, shared postprocessing controls, backend selection, and luminance-hdr-cli tone-mapping options.
 - @param version {str} CLI version label to append in usage output.
 - @return {None} Writes help text to stdout.
-- @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075
+- @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076
 
-### fn `def _parse_ev_option(ev_raw)` `priv` (L362-386)
+### fn `def _parse_ev_option(ev_raw)` `priv` (L370-394)
 - @brief Parse and validate one EV option value.
 - @details Converts the raw token to `float` and validates membership against the supported EV value set used by bracket multiplier computation.
 - @param ev_raw {str} EV token extracted from command arguments.
 - @return {float|None} Parsed EV value when valid; `None` otherwise.
 - @satisfies REQ-056
 
-### fn `def _parse_luminance_text_option(option_name, option_raw)` `priv` (L387-407)
+### fn `def _parse_luminance_text_option(option_name, option_raw)` `priv` (L395-415)
 - @brief Parse and validate non-empty luminance string option value.
 - @details Normalizes surrounding spaces, lowercases token, rejects empty values, and rejects ambiguous values that start with option prefix marker.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -742,14 +752,14 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {str|None} Parsed normalized option token when valid; `None` otherwise.
 - @satisfies REQ-061
 
-### fn `def _parse_gamma_option(gamma_raw)` `priv` (L408-444)
+### fn `def _parse_gamma_option(gamma_raw)` `priv` (L416-452)
 - @brief Parse and validate one gamma option value pair.
 - @details Accepts comma-separated positive float pair in `a,b` format with optional surrounding parentheses, normalizes to `(a, b)` tuple, and rejects malformed, non-numeric, or non-positive values.
 - @param gamma_raw {str} Raw gamma token extracted from CLI args.
 - @return {tuple[float, float]|None} Parsed gamma tuple when valid; `None` otherwise.
 - @satisfies REQ-064
 
-### fn `def _parse_positive_float_option(option_name, option_raw)` `priv` (L445-468)
+### fn `def _parse_positive_float_option(option_name, option_raw)` `priv` (L453-476)
 - @brief Parse and validate one positive float option value.
 - @details Converts option token to `float`, requires value greater than zero, and emits deterministic parse errors on malformed values.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -757,7 +767,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {float|None} Parsed positive float value when valid; `None` otherwise.
 - @satisfies REQ-065
 
-### fn `def _parse_tmo_passthrough_value(option_name, option_raw)` `priv` (L469-485)
+### fn `def _parse_tmo_passthrough_value(option_name, option_raw)` `priv` (L477-493)
 - @brief Parse and validate one luminance `--tmo*` passthrough value.
 - @details Rejects empty values and preserves original payload for transparent forwarding to `luminance-hdr-cli`.
 - @param option_name {str} Long-option identifier used in error messages.
@@ -765,21 +775,21 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {str|None} Original value when valid; `None` otherwise.
 - @satisfies REQ-067
 
-### fn `def _parse_jpg_compression_option(compression_raw)` `priv` (L486-508)
+### fn `def _parse_jpg_compression_option(compression_raw)` `priv` (L494-516)
 - @brief Parse and validate JPEG compression option value.
 - @details Converts option token to `int`, requires inclusive range `[0, 100]`, and emits deterministic parse errors on malformed values.
 - @param compression_raw {str} Raw compression token value from CLI args.
 - @return {int|None} Parsed JPEG compression level when valid; `None` otherwise.
 - @satisfies REQ-065
 
-### fn `def _parse_wow_mode_option(wow_raw)` `priv` (L509-532)
+### fn `def _parse_wow_mode_option(wow_raw)` `priv` (L517-542)
 - @brief Parse wow implementation selector option value.
 - @details Accepts case-insensitive wow implementation names and normalizes to canonical values for runtime dispatch.
 - @param wow_raw {str} Raw wow implementation token.
-- @return {str|None} Canonical wow mode (`ImageMagick` or `OpenCV`) or `None` on parse failure.
-- @satisfies REQ-065, REQ-073, REQ-075
+- @return {str|None} Canonical wow mode (`ImageMagick`, `OpenCV`, or `OpenCV-NP`) or `None` on parse failure.
+- @satisfies REQ-065, REQ-073, REQ-075, REQ-076
 
-### fn `def _resolve_default_postprocess(enable_luminance, luminance_tmo)` `priv` (L533-567)
+### fn `def _resolve_default_postprocess(enable_luminance, luminance_tmo)` `priv` (L543-577)
 - @brief Resolve backend-specific postprocess defaults.
 - @details Selects neutral defaults for enfuse and non-`reinhard02` luminance operators, and selects tuned defaults for luminance `reinhard02`.
 - @param enable_luminance {bool} Backend selector state.
@@ -787,27 +797,27 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {tuple[float, float, float, float]} Defaults in `(post_gamma, brightness, contrast, saturation)` order.
 - @satisfies REQ-069, REQ-071, REQ-072
 
-### fn `def _parse_run_options(args)` `priv` (L568-767)
+### fn `def _parse_run_options(args)` `priv` (L578-777)
 - @brief Parse CLI args into input, output, and EV parameters.
-- @details Supports positional file arguments, optional `--ev=<value>` or `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional postprocess controls, required backend selector (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls including explicit `--tmo*` passthrough options, optional wow implementation selector (`--wow <ImageMagick|OpenCV>`); rejects unknown options and invalid arity.
+- @details Supports positional file arguments, optional `--ev=<value>` or `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional postprocess controls, required backend selector (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls including explicit `--tmo*` passthrough options, optional wow implementation selector (`--wow <ImageMagick|OpenCV|OpenCV-NP>`); rejects unknown options and invalid arity.
 - @param args {list[str]} Raw command argument vector.
 - @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-- @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075
+- @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076
 
-### fn `def _load_image_dependencies()` `priv` (L953-989)
+### fn `def _load_image_dependencies()` `priv` (L963-999)
 - @brief Load optional Python dependencies required by `dng2hdr2jpg`.
 - @details Imports `rawpy` for RAW decoding and `imageio` for image IO using `imageio.v3` when available with fallback to top-level `imageio` module.
 - @return {tuple[ModuleType, ModuleType, ModuleType, ModuleType]|None} `(rawpy_module, imageio_module, pil_image_module, pil_enhance_module)` on success; `None` on missing dependency.
 - @satisfies REQ-059, REQ-066, REQ-074
 
-### fn `def _parse_exif_datetime_to_timestamp(datetime_raw)` `priv` (L990-1014)
+### fn `def _parse_exif_datetime_to_timestamp(datetime_raw)` `priv` (L1000-1024)
 - @brief Parse one EXIF datetime token into POSIX timestamp.
 - @details Normalizes scalar EXIF datetime input (`str` or `bytes`) and parses strict EXIF format `YYYY:MM:DD HH:MM:SS` to generate filesystem timestamp.
 - @param datetime_raw {str|bytes|object} EXIF datetime scalar.
 - @return {float|None} Parsed POSIX timestamp; `None` when value is missing or invalid.
 - @satisfies REQ-074
 
-### fn `def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng)` `priv` (L1015-1046)
+### fn `def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng)` `priv` (L1025-1056)
 - @brief Extract DNG EXIF payload bytes and preferred datetime timestamp.
 - @details Opens input DNG via Pillow, reads EXIF mapping, serializes payload for JPEG `exif` save parameter, and resolves filesystem timestamp priority: `DateTimeOriginal`(36867) > `DateTimeDigitized`(36868) > `DateTime`(306).
 - @param pil_image_module {ModuleType} Imported Pillow Image module.
@@ -815,7 +825,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {tuple[bytes|None, float|None]} `(exif_payload, exif_timestamp)` with `None` for unavailable components.
 - @satisfies REQ-066, REQ-074
 
-### fn `def _set_output_file_timestamps(output_jpg, exif_timestamp)` `priv` (L1047-1061)
+### fn `def _set_output_file_timestamps(output_jpg, exif_timestamp)` `priv` (L1057-1071)
 - @brief Set output JPG atime and mtime from EXIF timestamp.
 - @details Applies EXIF-derived POSIX timestamp to both access and modification times using `os.utime`.
 - @param output_jpg {Path} Output JPG path.
@@ -824,14 +834,14 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @exception OSError Raised when filesystem metadata update fails.
 - @satisfies REQ-074
 
-### fn `def _build_exposure_multipliers(ev_value)` `priv` (L1062-1074)
+### fn `def _build_exposure_multipliers(ev_value)` `priv` (L1072-1084)
 - @brief Compute bracketing brightness multipliers from EV value.
 - @details Produces exactly three multipliers mapped to exposure stops `[-ev, 0, +ev]` as powers of two for RAW postprocess brightness control.
 - @param ev_value {float} Exposure bracket EV delta.
 - @return {tuple[float, float, float]} Multipliers in order `(under, base, over)`.
 - @satisfies REQ-057
 
-### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, temp_dir)` `priv` (L1075-1108)
+### fn `def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, temp_dir)` `priv` (L1085-1118)
 - @brief Materialize three bracket TIFF files from one RAW handle.
 - @details Invokes `raw.postprocess` with `output_bps=16`, `use_camera_wb=True`, `no_auto_bright=True`, and configurable gamma pair for deterministic HDR-oriented bracket extraction before merge.
 - @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
@@ -842,7 +852,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {list[Path]} Ordered temporary TIFF file paths.
 - @satisfies REQ-057
 
-### fn `def _order_bracket_paths(bracket_paths)` `priv` (L1109-1134)
+### fn `def _order_bracket_paths(bracket_paths)` `priv` (L1119-1144)
 - @brief Validate and reorder bracket TIFF paths for deterministic backend argv.
 - @details Enforces exact exposure order `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` required by luminance-hdr-cli command generation and raises on missing labels.
 - @param bracket_paths {list[Path]} Temporary bracket TIFF paths generated from RAW.
@@ -850,7 +860,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @exception ValueError Raised when any expected bracket label is missing.
 - @satisfies REQ-062
 
-### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L1135-1155)
+### fn `def _run_enfuse(bracket_paths, merged_tiff)` `priv` (L1145-1165)
 - @brief Merge bracket TIFF files into one HDR TIFF via `enfuse`.
 - @details Builds deterministic enfuse argv with LZW compression and executes subprocess in checked mode to propagate command failures.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
@@ -859,7 +869,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @exception subprocess.CalledProcessError Raised when `enfuse` returns non-zero exit status.
 - @satisfies REQ-058
 
-### fn `def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_options)` `priv` (L1156-1195)
+### fn `def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_options)` `priv` (L1166-1205)
 - @brief Merge bracket TIFF files into one HDR TIFF via `luminance-hdr-cli`.
 - @details Builds deterministic luminance-hdr-cli argv using EV sequence, HDR model controls, tone-mapper controls, mandatory `--ldrTiff 16b`, optional explicit `--tmo*` passthrough arguments, and ordered exposure inputs (`ev_minus`, `ev_zero`, `ev_plus`), then writes to TIFF output path used by shared postprocess conversion.
 - @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
@@ -870,26 +880,32 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
 - @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068
 
-### fn `def _convert_compression_to_quality(jpg_compression)` `priv` (L1196-1208)
+### fn `def _convert_compression_to_quality(jpg_compression)` `priv` (L1206-1218)
 - @brief Convert JPEG compression level to Pillow quality value.
 - @details Maps inclusive compression range `[0, 100]` to inclusive quality range `[100, 1]` preserving deterministic inverse relation.
 - @param jpg_compression {int} JPEG compression level.
 - @return {int} Pillow quality value in `[1, 100]`.
 - @satisfies REQ-065, REQ-066
 
-### fn `def _resolve_imagemagick_command()` `priv` (L1209-1226)
+### fn `def _resolve_imagemagick_command()` `priv` (L1219-1236)
 - @brief Resolve ImageMagick executable name for current runtime.
 - @details Probes `magick` first (ImageMagick 7+ preferred CLI), then `convert` (legacy-compatible CLI alias) to preserve wow-stage compatibility across distributions that package ImageMagick under different executable names.
 - @return {str|None} Resolved executable token (`magick` or `convert`) or `None` when no supported executable is available.
 - @satisfies REQ-059, REQ-073
 
-### fn `def _resolve_wow_opencv_dependencies()` `priv` (L1227-1250)
+### fn `def _resolve_wow_opencv_dependencies()` `priv` (L1237-1260)
 - @brief Resolve OpenCV wow runtime dependencies.
 - @details Imports `cv2` and `numpy` modules required by OpenCV wow pipeline execution and returns `None` with deterministic error output when missing.
 - @return {tuple[ModuleType, ModuleType]|None} `(cv2_module, numpy_module)` when available; `None` on dependency failure.
 - @satisfies REQ-059, REQ-073, REQ-075
 
-### fn `def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_command)` `priv` (L1251-1328)
+### fn `def _resolve_wow_opencv_np_dependencies()` `priv` (L1261-1285)
+- @brief Resolve OpenCV-NP wow runtime dependencies.
+- @details Imports `cv2` and `numpy` modules required by OpenCV-NP wow pipeline execution and returns `None` with deterministic error output when dependencies are missing.
+- @return {tuple[ModuleType, ModuleType]|None} `(cv2_module, numpy_module)` when available; `None` on dependency failure.
+- @satisfies REQ-059, REQ-073, REQ-076
+
+### fn `def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_command)` `priv` (L1286-1363)
 - @brief Execute validated wow pipeline over temporary lossless 16-bit TIFF files.
 - @details Uses ImageMagick to normalize source data to 16-bit-per-channel TIFF, applies deterministic denoise/level/sigmoidal/vibrance/high-pass overlay stages, and writes lossless wow output artifact consumed by JPG encoder.
 - @param postprocessed_input {Path} Temporary postprocess image input path.
@@ -899,7 +915,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @exception subprocess.CalledProcessError Raised when ImageMagick returns non-zero.
 - @satisfies REQ-073
 
-### fn `def _clamp01(np_module, values)` `priv` (L1329-1342)
+### fn `def _clamp01(np_module, values)` `priv` (L1364-1377)
 - @brief Clamp numeric image tensor values into `[0.0, 1.0]` interval.
 - @details Applies vectorized clipping to ensure deterministic bounded values for OpenCV wow pipeline float-domain operations.
 - @param np_module {ModuleType} Imported numpy module.
@@ -907,7 +923,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {object} Clipped tensor payload.
 - @satisfies REQ-075
 
-### fn `def _gaussian_kernel_2d(np_module, sigma, radius=None)` `priv` (L1343-1365)
+### fn `def _gaussian_kernel_2d(np_module, sigma, radius=None)` `priv` (L1378-1400)
 - @brief Build normalized 2D Gaussian kernel.
 - @details Creates deterministic Gaussian kernel used by selective blur stage; returns identity kernel when `sigma <= 0`.
 - @param np_module {ModuleType} Imported numpy module.
@@ -916,7 +932,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {object} Normalized 2D kernel tensor.
 - @satisfies REQ-075
 
-### fn `def _rgb_to_hsl(np_module, rgb)` `priv` (L1366-1397)
+### fn `def _rgb_to_hsl(np_module, rgb)` `priv` (L1401-1432)
 - @brief Convert RGB float tensor to HSL channels.
 - @details Implements explicit HSL conversion for OpenCV wow saturation-gamma stage without delegating to external color-space helpers.
 - @param np_module {ModuleType} Imported numpy module.
@@ -924,7 +940,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {tuple[object, object, object]} `(h, s, l)` channel tensors.
 - @satisfies REQ-075
 
-### fn `def _hue_to_rgb(np_module, p_values, q_values, t_values)` `priv` (L1398-1423)
+### fn `def _hue_to_rgb(np_module, p_values, q_values, t_values)` `priv` (L1433-1458)
 - @brief Convert one hue-shift channel to RGB component.
 - @details Evaluates piecewise hue interpolation branch used by HSL-to-RGB conversion in OpenCV wow pipeline.
 - @param np_module {ModuleType} Imported numpy module.
@@ -934,7 +950,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {object} RGB component tensor.
 - @satisfies REQ-075
 
-### fn `def _hsl_to_rgb(np_module, hue, saturation, lightness)` `priv` (L1424-1458)
+### fn `def _hsl_to_rgb(np_module, hue, saturation, lightness)` `priv` (L1459-1493)
 - @brief Convert HSL channels to RGB float tensor.
 - @details Reconstructs RGB tensor with explicit achromatic/chromatic branches for OpenCV wow saturation-gamma stage.
 - @param np_module {ModuleType} Imported numpy module.
@@ -944,7 +960,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {object} RGB tensor in `[0.0, 1.0]`.
 - @satisfies REQ-075
 
-### fn `def _selective_blur_contrast_gated_vectorized(np_module, rgb, sigma=2.0, threshold_percent=10.0)` `priv` (L1459-1496)
+### fn `def _selective_blur_contrast_gated_vectorized(np_module, rgb, sigma=2.0, threshold_percent=10.0)` `priv` (L1494-1531)
 - @brief Execute contrast-gated selective blur stage.
 - @details Applies vectorized contrast-gated neighborhood accumulation over Gaussian kernel offsets to emulate selective blur behavior.
 - @param np_module {ModuleType} Imported numpy module.
@@ -954,7 +970,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {object} Blurred RGB float tensor.
 - @satisfies REQ-075
 
-### fn `def _level_per_channel_adaptive(np_module, rgb, low_pct=0.1, high_pct=99.9)` `priv` (L1497-1519)
+### fn `def _level_per_channel_adaptive(np_module, rgb, low_pct=0.1, high_pct=99.9)` `priv` (L1532-1554)
 - @brief Execute adaptive per-channel level normalization.
 - @details Applies percentile-based level stretching independently for each RGB channel.
 - @param np_module {ModuleType} Imported numpy module.
@@ -964,7 +980,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {object} Level-normalized RGB float tensor.
 - @satisfies REQ-075
 
-### fn `def _sigmoidal_contrast(np_module, rgb, contrast=3.0, midpoint=0.5)` `priv` (L1520-1542)
+### fn `def _sigmoidal_contrast(np_module, rgb, contrast=3.0, midpoint=0.5)` `priv` (L1555-1577)
 - @brief Execute sigmoidal contrast stage.
 - @details Applies logistic remapping with bounded normalization for each RGB channel.
 - @param np_module {ModuleType} Imported numpy module.
@@ -974,7 +990,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @return {object} Contrast-adjusted RGB float tensor.
 - @satisfies REQ-075
 
-### fn `def logistic(z_values)` (L1534-1535)
+### fn `def logistic(z_values)` (L1569-1570)
 - @brief Execute sigmoidal contrast stage.
 - @details Applies logistic remapping with bounded normalization for each RGB
 channel.
@@ -985,7 +1001,7 @@ channel.
 - @return {object} Contrast-adjusted RGB float tensor.
 - @satisfies REQ-075
 
-### fn `def _vibrance_hsl_gamma(np_module, rgb, saturation_gamma=0.8)` `priv` (L1543-1560)
+### fn `def _vibrance_hsl_gamma(np_module, rgb, saturation_gamma=0.8)` `priv` (L1578-1595)
 - @brief Execute HSL saturation gamma stage.
 - @details Converts RGB to HSL, applies saturation gamma transform, and converts back to RGB.
 - @param np_module {ModuleType} Imported numpy module.
@@ -994,7 +1010,7 @@ channel.
 - @return {object} Saturation-adjusted RGB float tensor.
 - @satisfies REQ-075
 
-### fn `def _gaussian_blur_rgb(cv2_module, np_module, rgb, sigma)` `priv` (L1561-1584)
+### fn `def _gaussian_blur_rgb(cv2_module, np_module, rgb, sigma)` `priv` (L1596-1619)
 - @brief Execute RGB Gaussian blur with reflected border mode.
 - @details Computes odd kernel size from sigma and applies OpenCV Gaussian blur preserving reflected border behavior.
 - @param cv2_module {ModuleType} Imported cv2 module.
@@ -1004,7 +1020,7 @@ channel.
 - @return {object} Blurred RGB float tensor.
 - @satisfies REQ-075
 
-### fn `def _high_pass_math_gray(cv2_module, np_module, rgb, blur_sigma=2.5)` `priv` (L1585-1604)
+### fn `def _high_pass_math_gray(cv2_module, np_module, rgb, blur_sigma=2.5)` `priv` (L1620-1639)
 - @brief Execute high-pass math grayscale stage.
 - @details Computes high-pass response as `A - B + 0.5` over RGB channels and converts to luminance grayscale tensor.
 - @param cv2_module {ModuleType} Imported cv2 module.
@@ -1014,7 +1030,7 @@ channel.
 - @return {object} Grayscale float tensor in `[0.0, 1.0]`.
 - @satisfies REQ-075
 
-### fn `def _overlay_composite(np_module, base_rgb, overlay_gray)` `priv` (L1605-1626)
+### fn `def _overlay_composite(np_module, base_rgb, overlay_gray)` `priv` (L1640-1661)
 - @brief Execute overlay composite stage.
 - @details Applies conditional overlay blend equation over RGB base and grayscale overlay tensors.
 - @param np_module {ModuleType} Imported numpy module.
@@ -1023,7 +1039,109 @@ channel.
 - @return {object} Overlay-composited RGB float tensor.
 - @satisfies REQ-075
 
-### fn `def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np_module)` `priv` (L1627-1670)
+### fn `def _srgb_luminance(np_module, rgb)` `priv` (L1662-1675)
+- @brief Compute weighted sRGB luminance tensor from RGB float payload.
+- @details Applies deterministic channel weights (`0.2126`, `0.7152`, `0.0722`) over RGB tensor in `[0.0, 1.0]` and returns scalar luminance map.
+- @param np_module {ModuleType} Imported numpy module.
+- @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
+- @return {object} Luminance tensor in `[0.0, 1.0]`.
+- @satisfies REQ-076
+
+### fn `def _selective_blur_contrast_gated_np(` `priv` (L1676-1680)
+
+### fn `def _level_per_channel_fixed_np(np_module, rgb, black=OPENCV_NP_LEVEL_BLACK, white=OPENCV_NP_LEVEL_WHITE)` `priv` (L1719-1735)
+- @brief Execute selective blur using contrast-gated pixel neighborhood loops.
+- @brief Execute fixed black/white level normalization in RGB channels.
+- @details Implements OpenCV-NP variant of selective blur with Gaussian kernel,
+reflect-padding, luminance threshold gating per central pixel, and fallback
+to source pixel when no weighted sample survives threshold gating.
+- @details Applies deterministic fixed black/white points (`0.001`, `0.999`) over each RGB channel with guarded denominator and clamps result to `[0,1]`.
+- @param np_module {ModuleType} Imported numpy module.
+- @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
+- @param sigma {float} Gaussian sigma.
+- @param threshold_percent {float} Luminance threshold percentage.
+- @param np_module {ModuleType} Imported numpy module.
+- @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
+- @param black {float} Fixed black level.
+- @param white {float} Fixed white level.
+- @return {object} Contrast-gated selectively blurred RGB tensor.
+- @return {object} Level-normalized RGB tensor.
+- @satisfies REQ-076
+- @satisfies REQ-076
+
+### fn `def _build_sigmoidal_lut_u8_np(` `priv` (L1736-1739)
+
+### fn `def logistic(z_values)` (L1753-1754)
+- @brief Build deterministic uint8 LUT for sigmoidal contrast mapping.
+- @details Builds `256`-entry LUT using logistic mapping normalized by
+endpoint bounds and rounded to uint8 for OpenCV LUT application.
+- @param np_module {ModuleType} Imported numpy module.
+- @param contrast {float} Logistic slope.
+- @param midpoint {float} Logistic midpoint.
+- @return {object} `uint8` LUT tensor with shape `(256,)`.
+- @satisfies REQ-076
+
+### fn `def _apply_sigmoidal_contrast_with_lut_np(cv2_module, np_module, rgb, lut)` `priv` (L1763-1780)
+- @brief Apply LUT-based sigmoidal contrast and restore float-domain tensor.
+- @details Converts RGB float payload to uint8, applies OpenCV `LUT`, and converts output back to float `[0.0, 1.0]` for downstream wow stages.
+- @param cv2_module {ModuleType} Imported cv2 module.
+- @param np_module {ModuleType} Imported numpy module.
+- @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
+- @param lut {object} Sigmoidal uint8 LUT.
+- @return {object} Contrast-adjusted RGB float tensor.
+- @satisfies REQ-076
+
+### fn `def _gamma_im_semantics(np_module, values, gamma_value)` `priv` (L1781-1796)
+- @brief Apply ImageMagick-compatible gamma transfer over bounded input.
+- @details Uses gamma semantics `out = in ** (1/gamma)` over clamped values in `[0,1]` and returns bounded result for wow saturation stage.
+- @param np_module {ModuleType} Imported numpy module.
+- @param values {object} Input scalar/tensor values.
+- @param gamma_value {float} Gamma denominator value.
+- @return {object} Gamma-adjusted values in `[0,1]`.
+- @satisfies REQ-076
+
+### fn `def _vibrance_hsl_gamma_np(np_module, rgb, saturation_gamma=OPENCV_NP_SATURATION_GAMMA)` `priv` (L1797-1813)
+- @brief Execute OpenCV-NP HSL saturation gamma stage.
+- @details Converts RGB tensor to HSL, applies ImageMagick-equivalent gamma transform on saturation channel, then converts HSL back to RGB.
+- @param np_module {ModuleType} Imported numpy module.
+- @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
+- @param saturation_gamma {float} Saturation gamma denominator.
+- @return {object} Saturation-adjusted RGB tensor in `[0.0, 1.0]`.
+- @satisfies REQ-076
+
+### fn `def _high_pass_math_gray_np(` `priv` (L1814-1818)
+
+### fn `def _overlay_composite_opaque_np(np_module, base_rgb, overlay_gray)` `priv` (L1837-1858)
+- @brief Execute OpenCV-NP high-pass gray stage (`A - B + 0.5`).
+- @brief Execute opaque overlay composition for OpenCV-NP wow stage.
+- @details Applies Gaussian blur baseline, computes high-pass response, clamps
+to `[0,1]`, and converts result to weighted luminance grayscale tensor.
+- @details Repeats grayscale overlay to RGB channels and applies conditional overlay equation against base RGB tensor, returning bounded output tensor.
+- @param cv2_module {ModuleType} Imported cv2 module.
+- @param np_module {ModuleType} Imported numpy module.
+- @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
+- @param blur_sigma {float} Gaussian blur sigma.
+- @param np_module {ModuleType} Imported numpy module.
+- @param base_rgb {object} Base RGB tensor in `[0.0, 1.0]`.
+- @param overlay_gray {object} Grayscale overlay tensor in `[0.0, 1.0]`.
+- @return {object} Grayscale high-pass tensor in `[0.0, 1.0]`.
+- @return {object} Overlay-composited RGB tensor in `[0.0, 1.0]`.
+- @satisfies REQ-076
+- @satisfies REQ-076
+
+### fn `def _apply_validated_wow_pipeline_opencv_np(input_file, output_file, cv2_module, np_module)` `priv` (L1859-1910)
+- @brief Execute validated OpenCV-NP wow pipeline over 16-bit TIFF payload.
+- @details Reads wow input TIFF, enforces 3-channel payload, normalizes `uint16` to float domain, runs selective blur (looped contrast gating), fixed level, LUT-based sigmoidal contrast, HSL saturation gamma, high-pass gray and overlay composition stages, then restores float payload to `uint16` output.
+- @param input_file {Path} Source TIFF path.
+- @param output_file {Path} Output TIFF path.
+- @param cv2_module {ModuleType} Imported cv2 module.
+- @param np_module {ModuleType} Imported numpy module.
+- @return {None} Side effects only.
+- @exception OSError Raised when source file is missing.
+- @exception RuntimeError Raised when OpenCV read/write fails or input dtype is unsupported.
+- @satisfies REQ-073, REQ-076
+
+### fn `def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np_module)` `priv` (L1911-1954)
 - @brief Execute validated wow pipeline using OpenCV and numpy.
 - @details Reads RGB image payload and enforces deterministic wow input normalization: `uint8` inputs are promoted to `uint16` using `value*257`, then explicit 16-bit-to-float normalization is applied. Executes selective blur, adaptive levels, sigmoidal contrast, HSL saturation gamma, high-pass/overlay stages, then restores float payload to 16-bit-per-channel RGB TIFF output.
 - @param input_file {Path} Source TIFF path.
@@ -1035,9 +1153,9 @@ channel.
 - @exception RuntimeError Raised when OpenCV read/write fails or input dtype is unsupported.
 - @satisfies REQ-073, REQ-075
 
-### fn `def _encode_jpg(` `priv` (L1671-1680)
+### fn `def _encode_jpg(` `priv` (L1955-1964)
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1799-1827)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L2093-2121)
 - @brief Encode merged HDR TIFF payload into final JPG output.
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Loads merged image payload, down-converts to `uint8` when source
@@ -1053,27 +1171,27 @@ configured compression level for both HDR backends.
 - @param output_jpg {Path} Final JPG output path.
 - @param postprocess_options {PostprocessOptions} Shared TIFF-to-JPG correction settings.
 - @param imagemagick_command {str|None} Optional pre-resolved ImageMagick executable.
-- @param wow_opencv_dependencies {tuple[ModuleType, ModuleType]|None} Optional `(cv2, numpy)` modules for OpenCV wow implementation.
+- @param wow_opencv_dependencies {tuple[ModuleType, ModuleType]|None} Optional `(cv2, numpy)` modules for OpenCV wow implementations.
 - @param source_exif_payload {bytes|None} Serialized EXIF payload copied from input DNG.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {None} Side effects only.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
 - @exception RuntimeError Raised when wow mode dependencies are missing or wow mode value is unsupported.
-- @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075
+- @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-076
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L1828-1847)
+### fn `def _is_supported_runtime_os()` `priv` (L2122-2141)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L1848-1988)
+### fn `def run(args)` (L2142-2286)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
 - @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-- @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075
+- @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1094,54 +1212,74 @@ configured compression level for both HDR backends.
 |`DEFAULT_REINHARD02_BRIGHTNESS`|var|pub|40||
 |`DEFAULT_REINHARD02_CONTRAST`|var|pub|41||
 |`DEFAULT_REINHARD02_SATURATION`|var|pub|42||
-|`SUPPORTED_EV_VALUES`|var|pub|43||
-|`PostprocessOptions`|class|pub|183-205|class PostprocessOptions|
-|`LuminanceOptions`|class|pub|207-227|class LuminanceOptions|
-|`_print_box_table`|fn|priv|228-264|def _print_box_table(headers, rows, header_rows=())|
-|`_border`|fn|priv|248-250|def _border(left, middle, right)|
-|`_line`|fn|priv|251-254|def _line(values)|
-|`_build_two_line_operator_rows`|fn|priv|265-281|def _build_two_line_operator_rows(operator_entries)|
-|`print_help`|fn|pub|282-361|def print_help(version)|
-|`_parse_ev_option`|fn|priv|362-386|def _parse_ev_option(ev_raw)|
-|`_parse_luminance_text_option`|fn|priv|387-407|def _parse_luminance_text_option(option_name, option_raw)|
-|`_parse_gamma_option`|fn|priv|408-444|def _parse_gamma_option(gamma_raw)|
-|`_parse_positive_float_option`|fn|priv|445-468|def _parse_positive_float_option(option_name, option_raw)|
-|`_parse_tmo_passthrough_value`|fn|priv|469-485|def _parse_tmo_passthrough_value(option_name, option_raw)|
-|`_parse_jpg_compression_option`|fn|priv|486-508|def _parse_jpg_compression_option(compression_raw)|
-|`_parse_wow_mode_option`|fn|priv|509-532|def _parse_wow_mode_option(wow_raw)|
-|`_resolve_default_postprocess`|fn|priv|533-567|def _resolve_default_postprocess(enable_luminance, lumina...|
-|`_parse_run_options`|fn|priv|568-767|def _parse_run_options(args)|
-|`_load_image_dependencies`|fn|priv|953-989|def _load_image_dependencies()|
-|`_parse_exif_datetime_to_timestamp`|fn|priv|990-1014|def _parse_exif_datetime_to_timestamp(datetime_raw)|
-|`_extract_dng_exif_payload_and_timestamp`|fn|priv|1015-1046|def _extract_dng_exif_payload_and_timestamp(pil_image_mod...|
-|`_set_output_file_timestamps`|fn|priv|1047-1061|def _set_output_file_timestamps(output_jpg, exif_timestamp)|
-|`_build_exposure_multipliers`|fn|priv|1062-1074|def _build_exposure_multipliers(ev_value)|
-|`_write_bracket_images`|fn|priv|1075-1108|def _write_bracket_images(raw_handle, imageio_module, mul...|
-|`_order_bracket_paths`|fn|priv|1109-1134|def _order_bracket_paths(bracket_paths)|
-|`_run_enfuse`|fn|priv|1135-1155|def _run_enfuse(bracket_paths, merged_tiff)|
-|`_run_luminance_hdr_cli`|fn|priv|1156-1195|def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff...|
-|`_convert_compression_to_quality`|fn|priv|1196-1208|def _convert_compression_to_quality(jpg_compression)|
-|`_resolve_imagemagick_command`|fn|priv|1209-1226|def _resolve_imagemagick_command()|
-|`_resolve_wow_opencv_dependencies`|fn|priv|1227-1250|def _resolve_wow_opencv_dependencies()|
-|`_apply_validated_wow_pipeline`|fn|priv|1251-1328|def _apply_validated_wow_pipeline(postprocessed_input, wo...|
-|`_clamp01`|fn|priv|1329-1342|def _clamp01(np_module, values)|
-|`_gaussian_kernel_2d`|fn|priv|1343-1365|def _gaussian_kernel_2d(np_module, sigma, radius=None)|
-|`_rgb_to_hsl`|fn|priv|1366-1397|def _rgb_to_hsl(np_module, rgb)|
-|`_hue_to_rgb`|fn|priv|1398-1423|def _hue_to_rgb(np_module, p_values, q_values, t_values)|
-|`_hsl_to_rgb`|fn|priv|1424-1458|def _hsl_to_rgb(np_module, hue, saturation, lightness)|
-|`_selective_blur_contrast_gated_vectorized`|fn|priv|1459-1496|def _selective_blur_contrast_gated_vectorized(np_module, ...|
-|`_level_per_channel_adaptive`|fn|priv|1497-1519|def _level_per_channel_adaptive(np_module, rgb, low_pct=0...|
-|`_sigmoidal_contrast`|fn|priv|1520-1542|def _sigmoidal_contrast(np_module, rgb, contrast=3.0, mid...|
-|`logistic`|fn|pub|1534-1535|def logistic(z_values)|
-|`_vibrance_hsl_gamma`|fn|priv|1543-1560|def _vibrance_hsl_gamma(np_module, rgb, saturation_gamma=...|
-|`_gaussian_blur_rgb`|fn|priv|1561-1584|def _gaussian_blur_rgb(cv2_module, np_module, rgb, sigma)|
-|`_high_pass_math_gray`|fn|priv|1585-1604|def _high_pass_math_gray(cv2_module, np_module, rgb, blur...|
-|`_overlay_composite`|fn|priv|1605-1626|def _overlay_composite(np_module, base_rgb, overlay_gray)|
-|`_apply_validated_wow_pipeline_opencv`|fn|priv|1627-1670|def _apply_validated_wow_pipeline_opencv(input_file, outp...|
-|`_encode_jpg`|fn|priv|1671-1680|def _encode_jpg(|
-|`_collect_processing_errors`|fn|priv|1799-1827|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|1828-1847|def _is_supported_runtime_os()|
-|`run`|fn|pub|1848-1988|def run(args)|
+|`OPENCV_NP_SELECTIVE_BLUR_SIGMA`|var|pub|43||
+|`OPENCV_NP_SELECTIVE_BLUR_THRESHOLD_PERCENT`|var|pub|44||
+|`OPENCV_NP_LEVEL_BLACK`|var|pub|45||
+|`OPENCV_NP_LEVEL_WHITE`|var|pub|46||
+|`OPENCV_NP_SIGMOIDAL_CONTRAST`|var|pub|47||
+|`OPENCV_NP_SIGMOIDAL_MIDPOINT`|var|pub|48||
+|`OPENCV_NP_SATURATION_GAMMA`|var|pub|49||
+|`OPENCV_NP_HIGH_PASS_BLUR_SIGMA`|var|pub|50||
+|`SUPPORTED_EV_VALUES`|var|pub|51||
+|`PostprocessOptions`|class|pub|191-213|class PostprocessOptions|
+|`LuminanceOptions`|class|pub|215-235|class LuminanceOptions|
+|`_print_box_table`|fn|priv|236-272|def _print_box_table(headers, rows, header_rows=())|
+|`_border`|fn|priv|256-258|def _border(left, middle, right)|
+|`_line`|fn|priv|259-262|def _line(values)|
+|`_build_two_line_operator_rows`|fn|priv|273-289|def _build_two_line_operator_rows(operator_entries)|
+|`print_help`|fn|pub|290-369|def print_help(version)|
+|`_parse_ev_option`|fn|priv|370-394|def _parse_ev_option(ev_raw)|
+|`_parse_luminance_text_option`|fn|priv|395-415|def _parse_luminance_text_option(option_name, option_raw)|
+|`_parse_gamma_option`|fn|priv|416-452|def _parse_gamma_option(gamma_raw)|
+|`_parse_positive_float_option`|fn|priv|453-476|def _parse_positive_float_option(option_name, option_raw)|
+|`_parse_tmo_passthrough_value`|fn|priv|477-493|def _parse_tmo_passthrough_value(option_name, option_raw)|
+|`_parse_jpg_compression_option`|fn|priv|494-516|def _parse_jpg_compression_option(compression_raw)|
+|`_parse_wow_mode_option`|fn|priv|517-542|def _parse_wow_mode_option(wow_raw)|
+|`_resolve_default_postprocess`|fn|priv|543-577|def _resolve_default_postprocess(enable_luminance, lumina...|
+|`_parse_run_options`|fn|priv|578-777|def _parse_run_options(args)|
+|`_load_image_dependencies`|fn|priv|963-999|def _load_image_dependencies()|
+|`_parse_exif_datetime_to_timestamp`|fn|priv|1000-1024|def _parse_exif_datetime_to_timestamp(datetime_raw)|
+|`_extract_dng_exif_payload_and_timestamp`|fn|priv|1025-1056|def _extract_dng_exif_payload_and_timestamp(pil_image_mod...|
+|`_set_output_file_timestamps`|fn|priv|1057-1071|def _set_output_file_timestamps(output_jpg, exif_timestamp)|
+|`_build_exposure_multipliers`|fn|priv|1072-1084|def _build_exposure_multipliers(ev_value)|
+|`_write_bracket_images`|fn|priv|1085-1118|def _write_bracket_images(raw_handle, imageio_module, mul...|
+|`_order_bracket_paths`|fn|priv|1119-1144|def _order_bracket_paths(bracket_paths)|
+|`_run_enfuse`|fn|priv|1145-1165|def _run_enfuse(bracket_paths, merged_tiff)|
+|`_run_luminance_hdr_cli`|fn|priv|1166-1205|def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff...|
+|`_convert_compression_to_quality`|fn|priv|1206-1218|def _convert_compression_to_quality(jpg_compression)|
+|`_resolve_imagemagick_command`|fn|priv|1219-1236|def _resolve_imagemagick_command()|
+|`_resolve_wow_opencv_dependencies`|fn|priv|1237-1260|def _resolve_wow_opencv_dependencies()|
+|`_resolve_wow_opencv_np_dependencies`|fn|priv|1261-1285|def _resolve_wow_opencv_np_dependencies()|
+|`_apply_validated_wow_pipeline`|fn|priv|1286-1363|def _apply_validated_wow_pipeline(postprocessed_input, wo...|
+|`_clamp01`|fn|priv|1364-1377|def _clamp01(np_module, values)|
+|`_gaussian_kernel_2d`|fn|priv|1378-1400|def _gaussian_kernel_2d(np_module, sigma, radius=None)|
+|`_rgb_to_hsl`|fn|priv|1401-1432|def _rgb_to_hsl(np_module, rgb)|
+|`_hue_to_rgb`|fn|priv|1433-1458|def _hue_to_rgb(np_module, p_values, q_values, t_values)|
+|`_hsl_to_rgb`|fn|priv|1459-1493|def _hsl_to_rgb(np_module, hue, saturation, lightness)|
+|`_selective_blur_contrast_gated_vectorized`|fn|priv|1494-1531|def _selective_blur_contrast_gated_vectorized(np_module, ...|
+|`_level_per_channel_adaptive`|fn|priv|1532-1554|def _level_per_channel_adaptive(np_module, rgb, low_pct=0...|
+|`_sigmoidal_contrast`|fn|priv|1555-1577|def _sigmoidal_contrast(np_module, rgb, contrast=3.0, mid...|
+|`logistic`|fn|pub|1569-1570|def logistic(z_values)|
+|`_vibrance_hsl_gamma`|fn|priv|1578-1595|def _vibrance_hsl_gamma(np_module, rgb, saturation_gamma=...|
+|`_gaussian_blur_rgb`|fn|priv|1596-1619|def _gaussian_blur_rgb(cv2_module, np_module, rgb, sigma)|
+|`_high_pass_math_gray`|fn|priv|1620-1639|def _high_pass_math_gray(cv2_module, np_module, rgb, blur...|
+|`_overlay_composite`|fn|priv|1640-1661|def _overlay_composite(np_module, base_rgb, overlay_gray)|
+|`_srgb_luminance`|fn|priv|1662-1675|def _srgb_luminance(np_module, rgb)|
+|`_selective_blur_contrast_gated_np`|fn|priv|1676-1680|def _selective_blur_contrast_gated_np(|
+|`_level_per_channel_fixed_np`|fn|priv|1719-1735|def _level_per_channel_fixed_np(np_module, rgb, black=OPE...|
+|`_build_sigmoidal_lut_u8_np`|fn|priv|1736-1739|def _build_sigmoidal_lut_u8_np(|
+|`logistic`|fn|pub|1753-1754|def logistic(z_values)|
+|`_apply_sigmoidal_contrast_with_lut_np`|fn|priv|1763-1780|def _apply_sigmoidal_contrast_with_lut_np(cv2_module, np_...|
+|`_gamma_im_semantics`|fn|priv|1781-1796|def _gamma_im_semantics(np_module, values, gamma_value)|
+|`_vibrance_hsl_gamma_np`|fn|priv|1797-1813|def _vibrance_hsl_gamma_np(np_module, rgb, saturation_gam...|
+|`_high_pass_math_gray_np`|fn|priv|1814-1818|def _high_pass_math_gray_np(|
+|`_overlay_composite_opaque_np`|fn|priv|1837-1858|def _overlay_composite_opaque_np(np_module, base_rgb, ove...|
+|`_apply_validated_wow_pipeline_opencv_np`|fn|priv|1859-1910|def _apply_validated_wow_pipeline_opencv_np(input_file, o...|
+|`_apply_validated_wow_pipeline_opencv`|fn|priv|1911-1954|def _apply_validated_wow_pipeline_opencv(input_file, outp...|
+|`_encode_jpg`|fn|priv|1955-1964|def _encode_jpg(|
+|`_collect_processing_errors`|fn|priv|2093-2121|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|2122-2141|def _is_supported_runtime_os()|
+|`run`|fn|pub|2142-2286|def run(args)|
 
 
 ---
