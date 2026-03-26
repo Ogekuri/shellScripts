@@ -2043,6 +2043,83 @@ def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_
     assert output_jpg.exists()
 
 
+def test_dng2hdr2jpg_opencv_wow_accepts_uint8_input_by_upconverting(tmp_path):
+    """
+    @brief Reproduce OpenCV wow failure when wow input TIFF is decoded as uint8.
+    @details Executes `_apply_validated_wow_pipeline_opencv` with fake cv2 read
+      path returning `uint8` 3-channel image and expects deterministic in-function
+      promotion to `uint16` before float-domain pipeline execution.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-073, REQ-075
+    """
+
+    numpy_module = __import__("numpy")
+
+    class _FakeCv2Module:
+        """@brief Provide minimal cv2 surface for uint8 OpenCV wow reproducer."""
+
+        IMREAD_UNCHANGED = -1
+        COLOR_BGR2RGB = 10
+        COLOR_RGB2BGR = 11
+        BORDER_REFLECT = 12
+
+        def __init__(self):
+            self.written = None
+
+        def imread(self, path, mode):
+            """@brief Return deterministic uint8 wow input tensor."""
+
+            del path
+            assert mode == self.IMREAD_UNCHANGED
+            return numpy_module.zeros((2, 2, 3), dtype=numpy_module.uint8)
+
+        @staticmethod
+        def cvtColor(image, code):
+            """@brief Return channel-reordered tensor for BGR/RGB conversions."""
+
+            if code in (_FakeCv2Module.COLOR_BGR2RGB, _FakeCv2Module.COLOR_RGB2BGR):
+                return image[..., ::-1]
+            raise AssertionError(f"Unexpected conversion code: {code}")
+
+        @staticmethod
+        def GaussianBlur(image, ksize, sigmaX, sigmaY, borderType):
+            """@brief Return deterministic no-op blur payload."""
+
+            del ksize, sigmaX, sigmaY
+            assert borderType == _FakeCv2Module.BORDER_REFLECT
+            return image
+
+        def imwrite(self, path, payload):
+            """@brief Capture output tensor metadata and materialize artifact."""
+
+            self.written = {
+                "path": Path(path).name,
+                "dtype": str(payload.dtype),
+                "shape": payload.shape,
+            }
+            Path(path).write_text("wow-output", encoding="utf-8")
+            return True
+
+    input_tiff = tmp_path / "postprocessed_input.tif"
+    input_tiff.write_text("payload", encoding="utf-8")
+    output_tiff = tmp_path / "wow_output.tif"
+    fake_cv2_module = _FakeCv2Module()
+
+    dng2hdr2jpg._apply_validated_wow_pipeline_opencv(
+        input_file=input_tiff,
+        output_file=output_tiff,
+        cv2_module=fake_cv2_module,
+        np_module=numpy_module,
+    )
+
+    assert fake_cv2_module.written is not None
+    assert fake_cv2_module.written["path"] == "wow_output.tif"
+    assert fake_cv2_module.written["dtype"] == "uint16"
+    assert fake_cv2_module.written["shape"] == (2, 2, 3)
+    assert output_tiff.exists()
+
+
 def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatch, tmp_path):
     """
     @brief Reproduce wow-path crash when ImageMagick output is uint16 RGB payload.

@@ -1627,17 +1627,19 @@ def _overlay_composite(np_module, base_rgb, overlay_gray):
 def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np_module):
     """@brief Execute validated wow pipeline using OpenCV and numpy.
 
-    @details Reads 16-bit RGB image, performs explicit 16-bit-to-float
-    normalization, executes selective blur, adaptive levels, sigmoidal
-    contrast, HSL saturation gamma, high-pass/overlay stages, then restores
-    float payload to 16-bit-per-channel RGB TIFF output.
+    @details Reads RGB image payload and enforces deterministic wow input
+    normalization: `uint8` inputs are promoted to `uint16` using `value*257`,
+    then explicit 16-bit-to-float normalization is applied. Executes selective
+    blur, adaptive levels, sigmoidal contrast, HSL saturation gamma,
+    high-pass/overlay stages, then restores float payload to 16-bit-per-channel
+    RGB TIFF output.
     @param input_file {Path} Source TIFF path.
     @param output_file {Path} Output TIFF path.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
     @return {None} Side effects only.
     @exception OSError Raised when source file is missing.
-    @exception RuntimeError Raised when OpenCV read/write fails.
+    @exception RuntimeError Raised when OpenCV read/write fails or input dtype is unsupported.
     @satisfies REQ-073, REQ-075
     """
 
@@ -1648,7 +1650,10 @@ def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np
         raise RuntimeError(f"OpenCV failed to read wow input: {input_file}")
     if len(image_bgr.shape) != 3 or image_bgr.shape[2] != 3:
         raise RuntimeError(f"OpenCV wow input must be 3-channel image: {input_file}")
-    if str(getattr(image_bgr, "dtype", "")) != "uint16":
+    dtype_name = str(getattr(image_bgr, "dtype", ""))
+    if dtype_name == "uint8":
+        image_bgr = (image_bgr.astype(np_module.uint16) * 257).astype(np_module.uint16)
+    elif dtype_name != "uint16":
         raise RuntimeError(f"OpenCV wow input must be uint16 image: {input_file}")
     rgb_float = cv2_module.cvtColor(image_bgr, cv2_module.COLOR_BGR2RGB).astype(np_module.float64) / 65535.0
     rgb_float = _selective_blur_contrast_gated_vectorized(np_module, rgb_float, sigma=2.0, threshold_percent=10.0)

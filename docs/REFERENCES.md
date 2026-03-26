@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 1983L | 64 symbols | 15 imports | 46 comments
+# dng2hdr2jpg.py | Python | 1988L | 64 symbols | 15 imports | 46 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -1023,21 +1023,21 @@ channel.
 - @return {object} Overlay-composited RGB float tensor.
 - @satisfies REQ-075
 
-### fn `def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np_module)` `priv` (L1627-1665)
+### fn `def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np_module)` `priv` (L1627-1670)
 - @brief Execute validated wow pipeline using OpenCV and numpy.
-- @details Reads 16-bit RGB image, performs explicit 16-bit-to-float normalization, executes selective blur, adaptive levels, sigmoidal contrast, HSL saturation gamma, high-pass/overlay stages, then restores float payload to 16-bit-per-channel RGB TIFF output.
+- @details Reads RGB image payload and enforces deterministic wow input normalization: `uint8` inputs are promoted to `uint16` using `value*257`, then explicit 16-bit-to-float normalization is applied. Executes selective blur, adaptive levels, sigmoidal contrast, HSL saturation gamma, high-pass/overlay stages, then restores float payload to 16-bit-per-channel RGB TIFF output.
 - @param input_file {Path} Source TIFF path.
 - @param output_file {Path} Output TIFF path.
 - @param cv2_module {ModuleType} Imported cv2 module.
 - @param np_module {ModuleType} Imported numpy module.
 - @return {None} Side effects only.
 - @exception OSError Raised when source file is missing.
-- @exception RuntimeError Raised when OpenCV read/write fails.
+- @exception RuntimeError Raised when OpenCV read/write fails or input dtype is unsupported.
 - @satisfies REQ-073, REQ-075
 
-### fn `def _encode_jpg(` `priv` (L1666-1675)
+### fn `def _encode_jpg(` `priv` (L1671-1680)
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1794-1822)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L1799-1827)
 - @brief Encode merged HDR TIFF payload into final JPG output.
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Loads merged image payload, down-converts to `uint8` when source
@@ -1062,13 +1062,13 @@ configured compression level for both HDR backends.
 - @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L1823-1842)
+### fn `def _is_supported_runtime_os()` `priv` (L1828-1847)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L1843-1983)
+### fn `def run(args)` (L1848-1988)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, extracts three RAW brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -1137,11 +1137,11 @@ configured compression level for both HDR backends.
 |`_gaussian_blur_rgb`|fn|priv|1561-1584|def _gaussian_blur_rgb(cv2_module, np_module, rgb, sigma)|
 |`_high_pass_math_gray`|fn|priv|1585-1604|def _high_pass_math_gray(cv2_module, np_module, rgb, blur...|
 |`_overlay_composite`|fn|priv|1605-1626|def _overlay_composite(np_module, base_rgb, overlay_gray)|
-|`_apply_validated_wow_pipeline_opencv`|fn|priv|1627-1665|def _apply_validated_wow_pipeline_opencv(input_file, outp...|
-|`_encode_jpg`|fn|priv|1666-1675|def _encode_jpg(|
-|`_collect_processing_errors`|fn|priv|1794-1822|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|1823-1842|def _is_supported_runtime_os()|
-|`run`|fn|pub|1843-1983|def run(args)|
+|`_apply_validated_wow_pipeline_opencv`|fn|priv|1627-1670|def _apply_validated_wow_pipeline_opencv(input_file, outp...|
+|`_encode_jpg`|fn|priv|1671-1680|def _encode_jpg(|
+|`_collect_processing_errors`|fn|priv|1799-1827|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|1828-1847|def _is_supported_runtime_os()|
+|`run`|fn|pub|1848-1988|def run(args)|
 
 
 ---

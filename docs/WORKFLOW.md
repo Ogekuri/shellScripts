@@ -175,7 +175,7 @@
           - `dng2hdr2jpg._resolve_imagemagick_command(...)`: Resolve ImageMagick executable token with compatibility fallback (`magick` then `convert`) for wow-stage execution [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._resolve_wow_opencv_dependencies(...)`: Resolve OpenCV wow Python dependencies (`cv2`, `numpy`) used by OpenCV wow-stage execution [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._apply_validated_wow_pipeline(...)`: Execute validated ImageMagick wow sequence over temporary lossless 16-bit artifacts before final JPG encoding [`src/shell_scripts/commands/dng2hdr2jpg.py`]
-          - `dng2hdr2jpg._apply_validated_wow_pipeline_opencv(...)`: Execute validated OpenCV wow sequence with explicit uint16-to-float normalization, staged float processing, and float-to-uint16 restoration before final JPG encoding [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+          - `dng2hdr2jpg._apply_validated_wow_pipeline_opencv(...)`: Execute validated OpenCV wow sequence with deterministic uint8-to-uint16 upconversion, explicit uint16-to-float normalization, staged float processing, and float-to-uint16 restoration before final JPG encoding [`src/shell_scripts/commands/dng2hdr2jpg.py`]
         - `dng2hdr2jpg._set_output_file_timestamps(...)`: Apply EXIF-derived POSIX timestamp to output JPG filesystem atime/mtime via `os.utime` [`src/shell_scripts/commands/dng2hdr2jpg.py`]
       - `dicomviewer.run(...)`: Open DICOM viewer via Java class invocation [`src/shell_scripts/commands/dicomviewer.py`]
         - `dicomviewer._find_java(...)`: Resolve Java executable path [`src/shell_scripts/commands/dicomviewer.py`]
