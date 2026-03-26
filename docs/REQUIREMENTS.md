@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.1"
+version: "0.6.2"
 date: "2026-03-26"
 author: "Auto-generated from repository evidence"
 scope:
@@ -169,14 +169,14 @@ No explicit performance optimizations identified.
 - **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
 - **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
-- **REQ-056**: MUST parse optional `--ev=<value>` and `--ev <value>` in `dng2hdr2jpg`, default EV to `2.0`, and reject unsupported or non-numeric EV values with return code `1`.
-- **REQ-057**: MUST generate exactly three exposure images from one DNG input using `raw.postprocess(bright=<2^(-ev)|1.0|2^(ev)>, output_bps=16, use_camera_wb=True, no_auto_bright=True, gamma=<selected_gamma>)` before HDR merge without orientation mutation.
+- **REQ-056**: MUST require exactly one exposure selector in `dng2hdr2jpg` (`--ev` or `--auto-ev`) and MUST return `1` when both selectors are present or both selectors are absent.
+- **REQ-057**: MUST parse `--ev=<value>` and `--ev <value>` without default EV fallback and MUST reject unsupported or non-numeric EV values with return code `1`.
 - **REQ-058**: MUST execute HDR merge via `enfuse` over three generated exposure files when `--enable-enfuse` is selected, MUST persist an intermediate 16-bit TIFF, and MUST use lossless TIFF compression before JPG conversion.
 - **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving Linux temporary-file cleanup and dependency-failure behavior.
 - **REQ-060**: MUST require exactly one backend selector in `dng2hdr2jpg` (`--enable-enfuse` or `--enable-luminance`) and MUST return `1` when neither or both selectors are provided.
 - **REQ-061**: MUST parse `--luminance-hdr-model`, `--luminance-hdr-weight`, `--luminance-hdr-response-curve`, and `--luminance-tmo` in assignment or split form, default `--luminance-hdr-weight` to `flat` and `--luminance-tmo` to `reinhard02`, and return `1` for malformed values.
-- **REQ-062**: MUST execute `luminance-hdr-cli` with `-e <-ev,0,+ev>`, `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, `--ldrTiff 16b`, and ordered inputs `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` writing `<merged_hdr.tif>`.
-- **REQ-063**: MUST document required mutually exclusive backend selectors (`--enable-enfuse`, `--enable-luminance`), luminance controls, generic passthrough `--tmo*` options, `--gamma`, shared postprocess options, optional `--wow`, and control-table rows for operators with exposed CLI controls.
+- **REQ-062**: MUST execute `luminance-hdr-cli` with `-e <-ev_delta,0,+ev_delta>`, `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, `--ldrTiff 16b`, and ordered inputs `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` writing `<merged_hdr.tif>`.
+- **REQ-063**: MUST document required mutually exclusive backend selectors (`--enable-enfuse`, `--enable-luminance`), required mutually exclusive exposure selectors (`--ev`, `--auto-ev`), luminance controls, generic passthrough `--tmo*` options, `--gamma`, shared postprocess options, optional `--wow`, and control-table rows for operators with exposed CLI controls.
 - **REQ-070**: MUST render in `dng2hdr2jpg` help two aligned Unicode box-drawing tables where the operators table uses three columns, two-line headers, and two physical lines per operator row.
 - **REQ-064**: MUST parse optional `--gamma=<a,b>` and `--gamma <a,b>` in `dng2hdr2jpg`, default gamma to `(2.222,4.5)`, and reject malformed, non-numeric, or non-positive gamma values with return code `1`.
 - **REQ-065**: MUST parse optional `--post-gamma=<value>`, `--brightness=<value>`, `--contrast=<value>`, `--saturation=<value>`, `--jpg-compression=<0..100>`, and `--wow <ImageMagick|OpenCV|OpenCV-NP>`; MUST default `--jpg-compression` to `15`; and MUST disable wow when omitted.
@@ -192,6 +192,9 @@ No explicit performance optimizations identified.
 - **REQ-074**: MUST set output JPG filesystem access and modification timestamps from source DNG EXIF datetime (priority: `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`) after JPG encoding and EXIF copy when a parseable datetime exists.
 - **REQ-077**: MUST preserve orientation invariants across DNG extraction, HDR merge, wow processing, and JPG encoding; if any function rotates or transposes pixels for algorithmic constraints, it MUST restore source orientation before return.
 - **REQ-078**: MUST refresh output JPG EXIF thumbnail after final JPG save using final JPG pixels while preserving source EXIF Orientation semantics and maintaining thumbnail metadata coherence with the saved JPG.
+- **REQ-079**: MUST execute static exposure pipeline `Options -> Fixed Multipliers -> Extraction -> Merge -> Wow -> Save` when `--ev` is selected.
+- **REQ-080**: MUST execute adaptive exposure pipeline `Options -> Fast RAW Preview -> Histogram Analysis -> Optimal Multipliers Calculation -> Extraction -> Merge -> Wow -> Save` when `--auto-ev` is selected.
+- **REQ-081**: MUST compute adaptive EV delta using linear preview luminance percentiles (`0.1%`, `99.9%`) and median-centered optimization, then apply `ev* = clamp(max(log2(T_shadow/p_low), log2(p_high/T_high)), ev_min, ev_max)` with tunable thresholds.
 
 ## 4. Test Requirements
 
@@ -211,7 +214,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-078 by monkeypatching RAW decode, image writes, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, wow implementation selection, and HDR subprocess calls, passing only if pipeline behavior matches requirements.
+- **TST-011**: MUST verify REQ-055 through REQ-081 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, wow implementation selection, and HDR subprocess calls, passing only if pipeline behavior matches requirements.
 
 ## 5. Evidence
 

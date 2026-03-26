@@ -1,9 +1,9 @@
 """
 @brief Validate `dng2hdr2jpg` command EV parsing and HDR merge contract.
-@details Verifies argument validation, EV parsing/default behavior, three-
-  bracket extraction multipliers, dual-backend HDR merge behavior, shared
-  postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
+@details Verifies argument validation, static/adaptive EV selector behavior,
+  three-bracket extraction multipliers, dual-backend HDR merge behavior,
+  shared postprocessing options, and temporary artifact cleanup semantics.
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
 @return {None} Pytest module scope.
 """
 
@@ -22,7 +22,11 @@ PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
 if str(PROJECT_SRC) not in sys.path:
     sys.path.insert(0, str(PROJECT_SRC))
 
-for module_name in ("shell_scripts.commands.dng2hdr2jpg", "shell_scripts.commands", "shell_scripts"):
+for module_name in (
+    "shell_scripts.commands.dng2hdr2jpg",
+    "shell_scripts.commands",
+    "shell_scripts",
+):
     sys.modules.pop(module_name, None)
 dng2hdr2jpg = import_module("shell_scripts.commands.dng2hdr2jpg")
 
@@ -114,7 +118,9 @@ class _FakeRawHandle:
         del exc_type, exc, tb
         return False
 
-    def postprocess(self, bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None):
+    def postprocess(
+        self, bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
+    ):
         """@brief Capture bracket extraction options and return payload marker.
 
         @param bright {float} Brightness multiplier.
@@ -333,15 +339,23 @@ def test_dng2hdr2jpg_rejects_invalid_ev_value(tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=3"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--ev", "bad"]) == 1
+    assert (
+        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=3"])
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--enable-enfuse", "--ev", "bad"]
+        )
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_rejects_missing_or_duplicated_backend_selector(tmp_path):
     """
     @brief Validate backend selector exclusivity and requiredness.
-    @details Verifies parser rejects calls without selector and calls with both
-      selectors together.
+    @details Verifies parser rejects calls without backend selector and calls
+      with both backend selectors together.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-060
@@ -351,22 +365,209 @@ def test_dng2hdr2jpg_rejects_missing_or_duplicated_backend_selector(tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg)]) == 1
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--ev=1"]) == 1
     assert (
-        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--enable-luminance"])
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--enable-luminance",
+            ]
+        )
         == 1
     )
 
 
-def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_rejects_missing_or_duplicated_exposure_selector(tmp_path):
     """
-    @brief Validate default EV behavior and complete HDR pipeline invocation.
+    @brief Validate exposure selector requiredness and exclusivity.
+    @details Verifies parser rejects calls without exposure selector and calls
+      with both `--ev` and `--auto-ev` selectors together.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-056
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+
+    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"]) == 1
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--auto-ev",
+                "--enable-enfuse",
+            ]
+        )
+        == 1
+    )
+
+
+def test_dng2hdr2jpg_rejects_invalid_auto_ev_value(tmp_path):
+    """
+    @brief Validate `--auto-ev` parser rejects unsupported values.
+    @details Provides unsupported `--auto-ev` assignment value while keeping
+      backend and positional arguments valid.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-056
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--auto-ev=maybe", "--enable-enfuse"]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--auto-ev=false", "--enable-enfuse"]
+        )
+        == 1
+    )
+
+
+def test_compute_auto_ev_value_quantizes_supported_result():
+    """
+    @brief Validate adaptive EV computation returns supported quantized selector.
+    @details Uses deterministic linear preview luminance distribution and
+      verifies computed adaptive EV belongs to supported selector set.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-080, REQ-081
+    """
+
+    class _FakeRawHandle:
+        """@brief Provide fake RAW handle for adaptive EV computation test."""
+
+        @staticmethod
+        def postprocess(
+            bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
+        ):
+            assert bright == 1.0
+            assert output_bps == 16
+            assert use_camera_wb is True
+            assert no_auto_bright is True
+            assert gamma == (1.0, 1.0)
+            assert user_flip == 0
+            return [
+                [[1000.0, 1000.0, 1000.0]],
+                [[8000.0, 8000.0, 8000.0]],
+                [[30000.0, 30000.0, 30000.0]],
+                [[65000.0, 65000.0, 65000.0]],
+            ]
+
+    computed_ev = dng2hdr2jpg._compute_auto_ev_value(_FakeRawHandle)
+
+    assert computed_ev in dng2hdr2jpg.SUPPORTED_EV_VALUES
+
+
+def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
+    """
+    @brief Validate adaptive EV pipeline computes EV and reuses static merge path.
+    @details Mocks adaptive EV resolver to deterministic value and asserts
+      bracket multipliers and luminance backend EV list use the computed value.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-056, REQ-080, REQ-081
+    """
+
+    observed = {
+        "brights": [],
+        "output_bps": [],
+        "use_camera_wb": [],
+        "no_auto_bright": [],
+        "gamma": [],
+        "luminance_cmd": None,
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(dng2hdr2jpg, "_compute_auto_ev_value", lambda _raw_handle: 1.5)
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module for adaptive EV run test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            return _FakeRawHandle(observed)
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for adaptive EV run test."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    def _fake_subprocess_run(command, check):
+        assert check is True
+        observed["luminance_cmd"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        output_index = command.index("-o") + 1
+        Path(command[output_index]).write_text("jpg", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
+    )
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--auto-ev",
+            "--enable-luminance",
+        ]
+    )
+
+    assert result == 0
+    assert observed["brights"] == pytest.approx([2 ** (-1.5), 1.0, 2**1.5])
+    assert observed["luminance_cmd"][0] == "luminance-hdr-cli"
+    assert observed["luminance_cmd"][2] == "-1.5,0,1.5"
+
+
+def test_dng2hdr2jpg_uses_static_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path):
+    """
+    @brief Validate static EV behavior and complete HDR pipeline invocation.
     @details Mocks rawpy/imageio/subprocess boundaries and asserts multiplier
       sequence, enfuse command shape, JPG output creation, and temp cleanup.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060
+    @satisfies TST-011, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-079
     """
 
     observed = {
@@ -453,9 +654,15 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
     )
-    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(
         dng2hdr2jpg.tempfile,
@@ -467,7 +674,9 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"])
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--ev=2", "--enable-enfuse"]
+    )
 
     assert result == 0
     assert observed["brights"] == pytest.approx([0.25, 1.0, 4.0])
@@ -484,7 +693,9 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     assert not observed["tmp_dir"].exists()
 
 
-def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate luminance-hdr-cli backend execution with default parameters.
     @details Enables luminance mode and verifies command argv shape uses
@@ -550,12 +761,16 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
     )
     monkeypatch.setattr(
         dng2hdr2jpg.shutil,
         "which",
-        lambda cmd: "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None,
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
     )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(
@@ -568,7 +783,9 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--ev=1"])
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--enable-luminance", "--ev=1"]
+    )
 
     assert result == 0
     assert observed["brights"] == pytest.approx([0.5, 1.0, 2.0])
@@ -623,7 +840,9 @@ def test_write_bracket_images_disables_raw_orientation_auto_flip(tmp_path):
         """@brief Provide fake RAW handle that records postprocess options."""
 
         @staticmethod
-        def postprocess(bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None):
+        def postprocess(
+            bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
+        ):
             observed["user_flip"].append(user_flip)
             assert output_bps == 16
             assert use_camera_wb is True
@@ -647,7 +866,11 @@ def test_write_bracket_images_disables_raw_orientation_auto_flip(tmp_path):
         temp_dir=tmp_path,
     )
 
-    assert [path.name for path in bracket_paths] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
+    assert [path.name for path in bracket_paths] == [
+        "ev_minus.tif",
+        "ev_zero.tif",
+        "ev_plus.tif",
+    ]
     assert observed["writes"] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
     assert observed["user_flip"] == [0, 0, 0]
 
@@ -677,7 +900,13 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
             """@brief Return fake RAW handle."""
 
             return _FakeRawHandle(
-                {"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": [], "gamma": []}
+                {
+                    "brights": [],
+                    "output_bps": [],
+                    "use_camera_wb": [],
+                    "no_auto_bright": [],
+                    "gamma": [],
+                }
             )
 
     class _FakeImageIoModule:
@@ -711,12 +940,16 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
     )
     monkeypatch.setattr(
         dng2hdr2jpg.shutil,
         "which",
-        lambda cmd: "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None,
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
     )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
 
@@ -728,6 +961,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
         [
             str(input_dng),
             str(output_jpg),
+            "--ev=2",
             "--enable-luminance",
             "--luminance-hdr-model=robertson",
             "--luminance-hdr-weight=gaussian",
@@ -767,10 +1001,16 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
         "-o",
     ]
     assert Path(command[20]).name == "merged_hdr.tif"
-    assert [Path(value).name for value in command[21:]] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
+    assert [Path(value).name for value in command[21:]] == [
+        "ev_minus.tif",
+        "ev_zero.tif",
+        "ev_plus.tif",
+    ]
 
 
-def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate neutral postprocess defaults for non-`reinhard02` luminance TMO.
     @details Selects luminance backend with `--luminance-tmo=drago` and asserts
@@ -794,7 +1034,13 @@ def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(monkeypatch,
             """@brief Return fake RAW handle."""
 
             return _FakeRawHandle(
-                {"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": [], "gamma": []}
+                {
+                    "brights": [],
+                    "output_bps": [],
+                    "use_camera_wb": [],
+                    "no_auto_bright": [],
+                    "gamma": [],
+                }
             )
 
     class _FakeImageIoModule:
@@ -828,12 +1074,16 @@ def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(monkeypatch,
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
     )
     monkeypatch.setattr(
         dng2hdr2jpg.shutil,
         "which",
-        lambda cmd: "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None,
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
     )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
 
@@ -842,7 +1092,13 @@ def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(monkeypatch,
     output_jpg = tmp_path / "scene.jpg"
 
     result = dng2hdr2jpg.run(
-        [str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-tmo=drago"]
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--ev=2",
+            "--enable-luminance",
+            "--luminance-tmo=drago",
+        ]
     )
 
     assert result == 0
@@ -852,7 +1108,9 @@ def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(monkeypatch,
     assert "postprocess_ops" not in observed
 
 
-def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate merge failure path returns non-zero and cleans artifacts.
     @details Mocks subprocess merge call to raise `CalledProcessError`, then
@@ -885,7 +1143,13 @@ def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch
             """
 
             return _FakeRawHandle(
-                {"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": [], "gamma": []}
+                {
+                    "brights": [],
+                    "output_bps": [],
+                    "use_camera_wb": [],
+                    "no_auto_bright": [],
+                    "gamma": [],
+                }
             )
 
     class _FakeImageIoModule:
@@ -922,9 +1186,15 @@ def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
     )
-    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(
         dng2hdr2jpg.tempfile,
@@ -936,7 +1206,9 @@ def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(monkeypatch
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=1.5"])
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--ev=1.5", "--enable-enfuse"]
+    )
 
     assert result == 1
     assert observed["tmp_dir"] is not None
@@ -957,9 +1229,36 @@ def test_dng2hdr2jpg_rejects_invalid_gamma_value(tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--gamma=1"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--gamma=a,b"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--gamma=0,1"]) == 1
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse", "--gamma=1"]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--gamma=a,b",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--gamma=0,1",
+            ]
+        )
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
@@ -976,13 +1275,84 @@ def test_dng2hdr2jpg_rejects_invalid_postprocess_values(tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--post-gamma=0"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--brightness=foo"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--contrast=-1"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--saturation=0"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--jpg-compression=200"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--jpg-compression=bad"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow=1"]) == 1
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--post-gamma=0",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--brightness=foo",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--contrast=-1",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--saturation=0",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--jpg-compression=200",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--jpg-compression=bad",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse", "--wow=1"]
+        )
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_rejects_missing_and_unknown_wow_mode(tmp_path):
@@ -999,8 +1369,25 @@ def test_dng2hdr2jpg_rejects_missing_and_unknown_wow_mode(tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "result.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow", "Unknown"]) == 1
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse", "--wow"]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--wow",
+                "Unknown",
+            ]
+        )
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_parses_opencv_np_wow_mode():
@@ -1082,9 +1469,15 @@ def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
     )
-    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(
         dng2hdr2jpg.tempfile,
@@ -1096,7 +1489,9 @@ def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--gamma=1,1"])
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse", "--gamma=1,1"]
+    )
 
     assert result == 0
     assert observed["gamma"] == [(1.0, 1.0), (1.0, 1.0), (1.0, 1.0)]
@@ -1125,7 +1520,15 @@ def test_dng2hdr2jpg_reorders_luminance_brackets(monkeypatch, tmp_path):
         def imread(_path):
             """@brief Return fake RAW handle for luminance ordering test."""
 
-            return _FakeRawHandle({"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": [], "gamma": []})
+            return _FakeRawHandle(
+                {
+                    "brights": [],
+                    "output_bps": [],
+                    "use_camera_wb": [],
+                    "no_auto_bright": [],
+                    "gamma": [],
+                }
+            )
 
     class _FakeImageIoModule:
         """@brief Provide fake imageio module for bracket ordering test."""
@@ -1155,7 +1558,9 @@ def test_dng2hdr2jpg_reorders_luminance_brackets(monkeypatch, tmp_path):
         Path(command[output_index]).write_text("merged", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    def _fake_write_brackets(raw_handle, imageio_module, multipliers, gamma_value, temp_dir):
+    def _fake_write_brackets(
+        raw_handle, imageio_module, multipliers, gamma_value, temp_dir
+    ):
         """@brief Return shuffled bracket list for reorder validation."""
 
         del raw_handle, imageio_module, multipliers, gamma_value
@@ -1171,12 +1576,16 @@ def test_dng2hdr2jpg_reorders_luminance_brackets(monkeypatch, tmp_path):
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
     )
     monkeypatch.setattr(
         dng2hdr2jpg.shutil,
         "which",
-        lambda cmd: "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None,
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
     )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(dng2hdr2jpg, "_write_bracket_images", _fake_write_brackets)
@@ -1185,12 +1594,18 @@ def test_dng2hdr2jpg_reorders_luminance_brackets(monkeypatch, tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance"])
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--ev=2", "--enable-luminance"]
+    )
 
     assert result == 0
     command = observed["command"]
     assert command
-    assert [Path(value).name for value in command[-3:]] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
+    assert [Path(value).name for value in command[-3:]] == [
+        "ev_minus.tif",
+        "ev_zero.tif",
+        "ev_plus.tif",
+    ]
 
 
 def test_dng2hdr2jpg_fails_when_enfuse_dependency_is_missing(monkeypatch, tmp_path):
@@ -1211,7 +1626,10 @@ def test_dng2hdr2jpg_fails_when_enfuse_dependency_is_missing(monkeypatch, tmp_pa
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
     monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda _cmd: None)
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"]) == 1
+    assert (
+        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse"])
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_fails_when_luminance_dependency_is_missing(monkeypatch, tmp_path):
@@ -1236,7 +1654,12 @@ def test_dng2hdr2jpg_fails_when_luminance_dependency_is_missing(monkeypatch, tmp
         lambda cmd: None if cmd == "luminance-hdr-cli" else "/usr/bin/enfuse",
     )
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance"]) == 1
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--ev=1", "--enable-luminance"]
+        )
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_path):
@@ -1251,7 +1674,13 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
     @satisfies TST-011, REQ-059, REQ-073
     """
 
-    observed = {"brights": [], "output_bps": [], "use_camera_wb": [], "no_auto_bright": [], "gamma": []}
+    observed = {
+        "brights": [],
+        "output_bps": [],
+        "use_camera_wb": [],
+        "no_auto_bright": [],
+        "gamma": [],
+    }
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
 
     class _FakeRawPyModule:
@@ -1288,7 +1717,9 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
 
         assert check is True
         if command and command[0] == "enfuse":
-            output_flag = next(token for token in command if token.startswith("--output="))
+            output_flag = next(
+                token for token in command if token.startswith("--output=")
+            )
             Path(output_flag.split("=", 1)[1]).write_text("merged", encoding="utf-8")
             return subprocess.CompletedProcess(command, 0)
         if command and command[0] == "convert":
@@ -1299,7 +1730,9 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: _build_fake_dependencies(_FakeRawPyModule, _FakeImageIoModule, observed),
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
     )
 
     def _fake_which(cmd):
@@ -1318,13 +1751,24 @@ def test_dng2hdr2jpg_wow_uses_convert_when_magick_is_missing(monkeypatch, tmp_pa
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow", "ImageMagick"])
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--ev=1",
+            "--enable-enfuse",
+            "--wow",
+            "ImageMagick",
+        ]
+    )
 
     assert result == 0
     assert output_jpg.exists()
 
 
-def test_dng2hdr2jpg_fails_when_wow_opencv_dependencies_are_missing(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_fails_when_wow_opencv_dependencies_are_missing(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate OpenCV wow mode fails when Python dependencies are missing.
     @details Enables wow with `OpenCV`, forces dependency resolver failure, and
@@ -1339,15 +1783,30 @@ def test_dng2hdr2jpg_fails_when_wow_opencv_dependencies_are_missing(monkeypatch,
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
-    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
     monkeypatch.setattr(dng2hdr2jpg, "_resolve_wow_opencv_dependencies", lambda: None)
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow", "OpenCV"])
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--ev=1",
+            "--enable-enfuse",
+            "--wow",
+            "OpenCV",
+        ]
+    )
 
     assert result == 1
 
 
-def test_dng2hdr2jpg_fails_when_wow_opencv_np_dependencies_are_missing(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_fails_when_wow_opencv_np_dependencies_are_missing(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate OpenCV-NP wow mode fails when Python dependencies are missing.
     @details Enables wow with `OpenCV-NP`, forces dependency resolver failure,
@@ -1362,10 +1821,25 @@ def test_dng2hdr2jpg_fails_when_wow_opencv_np_dependencies_are_missing(monkeypat
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
-    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
-    monkeypatch.setattr(dng2hdr2jpg, "_resolve_wow_opencv_np_dependencies", lambda: None)
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg, "_resolve_wow_opencv_np_dependencies", lambda: None
+    )
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--wow", "OpenCV-NP"])
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--ev=1",
+            "--enable-enfuse",
+            "--wow",
+            "OpenCV-NP",
+        ]
+    )
 
     assert result == 1
 
@@ -1384,9 +1858,42 @@ def test_dng2hdr2jpg_rejects_luminance_options_without_enable(tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--luminance-tmo=fattal"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--luminance-hdr-model=robertson"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--tmoR05Brightness=0"]) == 1
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--luminance-tmo=fattal",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--luminance-hdr-model=robertson",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--tmoR05Brightness=0",
+            ]
+        )
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_rejects_malformed_luminance_options(monkeypatch, tmp_path):
@@ -1406,13 +1913,65 @@ def test_dng2hdr2jpg_rejects_malformed_luminance_options(monkeypatch, tmp_path):
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-tmo="]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--luminance-hdr-model", ""]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--tmoR05Brightness"]) == 1
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-luminance", "--tmoR05Chroma="]) == 1
     assert (
         dng2hdr2jpg.run(
-            [str(input_dng), str(output_jpg), "--enable-luminance", "--tmoR05Lightness", "--invalid"]
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-luminance",
+                "--luminance-tmo=",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-luminance",
+                "--luminance-hdr-model",
+                "",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-luminance",
+                "--tmoR05Brightness",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-luminance",
+                "--tmoR05Chroma=",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-luminance",
+                "--tmoR05Lightness",
+                "--invalid",
+            ]
         )
         == 1
     )
@@ -1434,7 +1993,10 @@ def test_dng2hdr2jpg_returns_error_on_windows_runtime(monkeypatch, tmp_path):
     output_jpg = tmp_path / "scene.jpg"
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "windows")
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg)]) == 1
+    assert (
+        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse"])
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_returns_error_on_macos_runtime(monkeypatch, tmp_path):
@@ -1453,7 +2015,10 @@ def test_dng2hdr2jpg_returns_error_on_macos_runtime(monkeypatch, tmp_path):
     output_jpg = tmp_path / "scene.jpg"
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "darwin")
 
-    assert dng2hdr2jpg.run([str(input_dng), str(output_jpg)]) == 1
+    assert (
+        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--ev=1", "--enable-enfuse"])
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_runtime_dependencies_are_declared_in_pyproject():
@@ -1584,7 +2149,15 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
             self.mode = target_mode
             return self
 
-        def save(self, path, format, quality=None, optimize=None, exif=None, compress_level=None):
+        def save(
+            self,
+            path,
+            format,
+            quality=None,
+            optimize=None,
+            exif=None,
+            compress_level=None,
+        ):
             del compress_level
             observed["jpg_save"] = {
                 "path": str(path),
@@ -1670,15 +2243,26 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: (_FakeRawPyModule, _FakeImageIoModule, _FakePilImageModule, _FakePilEnhanceModule),
+        lambda: (
+            _FakeRawPyModule,
+            _FakeImageIoModule,
+            _FakePilImageModule,
+            _FakePilEnhanceModule,
+        ),
     )
-    monkeypatch.setattr(dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module)
+    monkeypatch.setattr(
+        dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module
+    )
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_refresh_output_jpg_exif_thumbnail_after_save",
         _fake_refresh_output_jpg_exif_thumbnail_after_save,
     )
-    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(dng2hdr2jpg.os, "utime", _fake_utime)
 
@@ -1686,7 +2270,9 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"])
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--ev=2", "--enable-enfuse"]
+    )
 
     assert result == 0
     assert observed["jpg_save"] is not None
@@ -1700,11 +2286,15 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
     assert len(observed["utime_calls"]) == 1
     utime_path, utime_values = observed["utime_calls"][0]
     assert utime_path == output_jpg
-    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(
+        "2024:07:08 09:10:11"
+    )
     assert utime_values == (expected_timestamp, expected_timestamp)
 
 
-def test_dng2hdr2jpg_sets_jpg_timestamps_when_exif_datetime_is_sequence(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_sets_jpg_timestamps_when_exif_datetime_is_sequence(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate timestamp synchronization when EXIF datetime is sequence-like.
     @details Runs enfuse flow with `DateTimeOriginal` represented as one-item
@@ -1796,7 +2386,15 @@ def test_dng2hdr2jpg_sets_jpg_timestamps_when_exif_datetime_is_sequence(monkeypa
         def convert(self, _target_mode):
             return self
 
-        def save(self, path, format, quality=None, optimize=None, exif=None, compress_level=None):
+        def save(
+            self,
+            path,
+            format,
+            quality=None,
+            optimize=None,
+            exif=None,
+            compress_level=None,
+        ):
             del quality, optimize, compress_level
             observed["jpg_save"] = {"format": format, "exif": exif}
             Path(path).write_text("jpg", encoding="utf-8")
@@ -1868,15 +2466,26 @@ def test_dng2hdr2jpg_sets_jpg_timestamps_when_exif_datetime_is_sequence(monkeypa
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: (_FakeRawPyModule, _FakeImageIoModule, _FakePilImageModule, _FakePilEnhanceModule),
+        lambda: (
+            _FakeRawPyModule,
+            _FakeImageIoModule,
+            _FakePilImageModule,
+            _FakePilEnhanceModule,
+        ),
     )
-    monkeypatch.setattr(dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module)
+    monkeypatch.setattr(
+        dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module
+    )
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_refresh_output_jpg_exif_thumbnail_after_save",
         _fake_refresh_output_jpg_exif_thumbnail_after_save,
     )
-    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(dng2hdr2jpg.os, "utime", _fake_utime)
 
@@ -1884,7 +2493,9 @@ def test_dng2hdr2jpg_sets_jpg_timestamps_when_exif_datetime_is_sequence(monkeypa
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"])
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--ev=2", "--enable-enfuse"]
+    )
 
     assert result == 0
     assert observed["jpg_save"] is not None
@@ -1898,7 +2509,9 @@ def test_dng2hdr2jpg_sets_jpg_timestamps_when_exif_datetime_is_sequence(monkeypa
     assert len(observed["utime_calls"]) == 1
     utime_path, utime_values = observed["utime_calls"][0]
     assert utime_path == output_jpg
-    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(
+        "2024:07:08 09:10:11"
+    )
     assert utime_values == (expected_timestamp, expected_timestamp)
 
 
@@ -1950,13 +2563,17 @@ def test_extract_dng_exif_payload_preserves_source_orientation_tag():
         def open(_path):
             return _FakeSourceImage()
 
-    exif_payload, exif_timestamp, source_orientation = dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
-        pil_image_module=_FakePilImageModule,
-        input_dng=Path("scene.dng"),
+    exif_payload, exif_timestamp, source_orientation = (
+        dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
+            pil_image_module=_FakePilImageModule,
+            input_dng=Path("scene.dng"),
+        )
     )
 
     assert exif_payload == b"orientation=6"
-    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(
+        "2024:07:08 09:10:11"
+    )
     assert exif_timestamp == expected_timestamp
     assert source_orientation == 6
 
@@ -2016,16 +2633,22 @@ def test_extract_dng_exif_payload_suppresses_tiff_tag_33723_warning():
 
     with warnings.catch_warnings(record=True) as captured_warnings:
         warnings.simplefilter("always")
-        exif_payload, exif_timestamp, source_orientation = dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
-            pil_image_module=_FakePilImageModule,
-            input_dng=Path("scene.dng"),
+        exif_payload, exif_timestamp, source_orientation = (
+            dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
+                pil_image_module=_FakePilImageModule,
+                input_dng=Path("scene.dng"),
+            )
         )
 
     assert exif_payload == b"exif-warning-test"
-    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(
+        "2024:07:08 09:10:11"
+    )
     assert exif_timestamp == expected_timestamp
     assert source_orientation == 1
-    assert not any("tag 33723 had too many entries" in str(w.message) for w in captured_warnings)
+    assert not any(
+        "tag 33723 had too many entries" in str(w.message) for w in captured_warnings
+    )
 
 
 def test_extract_dng_exif_payload_reads_payload_before_closing_image():
@@ -2082,13 +2705,17 @@ def test_extract_dng_exif_payload_reads_payload_before_closing_image():
         def open(_path):
             return _FakeSourceImage(observed)
 
-    exif_payload, exif_timestamp, source_orientation = dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
-        pil_image_module=_FakePilImageModule,
-        input_dng=Path("scene.dng"),
+    exif_payload, exif_timestamp, source_orientation = (
+        dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
+            pil_image_module=_FakePilImageModule,
+            input_dng=Path("scene.dng"),
+        )
     )
 
     assert exif_payload == b"lazy-exif"
-    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2004:08:28 16:04:14")
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(
+        "2004:08:28 16:04:14"
+    )
     assert exif_timestamp == expected_timestamp
     assert source_orientation == 6
 
@@ -2103,8 +2730,12 @@ def test_parse_exif_datetime_to_timestamp_accepts_exif_null_terminated_text():
     @satisfies TST-011, REQ-074
     """
 
-    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
-    parsed_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(b"2024:07:08 09:10:11\x00")
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(
+        "2024:07:08 09:10:11"
+    )
+    parsed_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp(
+        b"2024:07:08 09:10:11\x00"
+    )
 
     assert parsed_timestamp == expected_timestamp
 
@@ -2342,7 +2973,9 @@ def test_normalize_ifd_integer_like_values_converts_byte_tuple_to_bytes():
     assert exif_dict["0th"][50972] == bytes((38, 78, 96, 211))
 
 
-def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate no timestamp update when EXIF datetime fields are absent.
     @details Runs enfuse flow with EXIF payload but without supported datetime
@@ -2429,7 +3062,15 @@ def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypat
         def convert(self, _target_mode):
             return self
 
-        def save(self, path, format, quality=None, optimize=None, exif=None, compress_level=None):
+        def save(
+            self,
+            path,
+            format,
+            quality=None,
+            optimize=None,
+            exif=None,
+            compress_level=None,
+        ):
             del quality, optimize, compress_level
             observed["jpg_save"] = {"format": format, "exif": exif}
             Path(path).write_text("jpg", encoding="utf-8")
@@ -2501,15 +3142,26 @@ def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypat
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_load_image_dependencies",
-        lambda: (_FakeRawPyModule, _FakeImageIoModule, _FakePilImageModule, _FakePilEnhanceModule),
+        lambda: (
+            _FakeRawPyModule,
+            _FakeImageIoModule,
+            _FakePilImageModule,
+            _FakePilEnhanceModule,
+        ),
     )
-    monkeypatch.setattr(dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module)
+    monkeypatch.setattr(
+        dng2hdr2jpg, "_load_piexif_dependency", lambda: fake_piexif_module
+    )
     monkeypatch.setattr(
         dng2hdr2jpg,
         "_refresh_output_jpg_exif_thumbnail_after_save",
         _fake_refresh_output_jpg_exif_thumbnail_after_save,
     )
-    monkeypatch.setattr(dng2hdr2jpg.shutil, "which", lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None)
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
     monkeypatch.setattr(dng2hdr2jpg.os, "utime", _fake_utime)
 
@@ -2517,7 +3169,9 @@ def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypat
     input_dng.write_text("dng", encoding="utf-8")
     output_jpg = tmp_path / "scene.jpg"
 
-    result = dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse"])
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--ev=2", "--enable-enfuse"]
+    )
 
     assert result == 0
     assert observed["jpg_save"] is not None
@@ -2603,6 +3257,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
 
     assert "--enable-luminance" in output
     assert "--enable-enfuse" in output
+    assert "--auto-ev" in output
     assert "--gamma=<a,b>" in output
     assert "--post-gamma=<value>" in output
     assert "--brightness=<value>" in output
@@ -2635,7 +3290,9 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "mutually exclusive with --enable-luminance" in output
 
 
-def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate shared postprocess controls and JPEG quality mapping.
     @details Executes encode path with non-default gamma/brightness/contrast/
@@ -2742,6 +3399,7 @@ def test_dng2hdr2jpg_applies_wow_pipeline_only_when_enabled(monkeypatch, tmp_pat
             """@brief Return fake payload for merged/wow TIFF paths."""
 
             if Path(path).name == "wow_output.tif":
+
                 class _FakeWowPayload:
                     mode = "RGB"
 
@@ -2813,13 +3471,16 @@ def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_
             """@brief Return fake payload for merged/wow TIFF reads."""
 
             if Path(path).name == "wow_output.tif":
+
                 class _FakeWowPayload:
                     mode = "RGB"
 
                 return _FakeWowPayload()
             return _FakeImage16()
 
-    def _fake_apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np_module):
+    def _fake_apply_validated_wow_pipeline_opencv(
+        input_file, output_file, cv2_module, np_module
+    ):
         """@brief Capture OpenCV wow dispatch parameters and materialize output."""
 
         observed["opencv_call"] = {
@@ -2870,7 +3531,9 @@ def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_
     assert output_jpg.exists()
 
 
-def test_dng2hdr2jpg_applies_opencv_np_wow_pipeline_when_selected(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_applies_opencv_np_wow_pipeline_when_selected(
+    monkeypatch, tmp_path
+):
     """
     @brief Validate OpenCV-NP wow-stage dispatch when wow mode is `OpenCV-NP`.
     @details Executes encode path with `wow_mode="OpenCV-NP"`, injects fake
@@ -2892,13 +3555,16 @@ def test_dng2hdr2jpg_applies_opencv_np_wow_pipeline_when_selected(monkeypatch, t
             """@brief Return fake payload for merged/wow TIFF reads."""
 
             if Path(path).name == "wow_output.tif":
+
                 class _FakeWowPayload:
                     mode = "RGB"
 
                 return _FakeWowPayload()
             return _FakeImage16()
 
-    def _fake_apply_validated_wow_pipeline_opencv_np(input_file, output_file, cv2_module, np_module):
+    def _fake_apply_validated_wow_pipeline_opencv_np(
+        input_file, output_file, cv2_module, np_module
+    ):
         """@brief Capture OpenCV-NP wow dispatch parameters and materialize output."""
 
         observed["opencv_np_call"] = {
@@ -3109,7 +3775,9 @@ def test_dng2hdr2jpg_opencv_np_wow_accepts_uint8_input_by_upconverting(tmp_path)
     assert output_tiff.exists()
 
 
-def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(
+    monkeypatch, tmp_path
+):
     """
     @brief Reproduce wow-path crash when ImageMagick output is uint16 RGB payload.
     @details Simulates wow output decode as `uint16` data and enforces a strict
@@ -3162,6 +3830,7 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatc
             """@brief Return base and wow payloads for encode path."""
 
             if Path(path).name == "merged_hdr.tif":
+
                 class _BasePilPayload:
                     mode = "RGB"
 
@@ -3200,7 +3869,10 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatc
             """@brief Enforce uint8-only conversion to reproduce original crash."""
 
             if getattr(payload, "dtype", None) != "uint8":
-                raise TypeError(f"Cannot handle this data type: {getattr(payload, 'dtype', None)}")
+                raise TypeError(
+                    f"Cannot handle this data type: {getattr(payload, 'dtype', None)}"
+                )
+
             class _FakePilImage:
                 mode = "RGB"
 
@@ -3237,6 +3909,7 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatc
             class _E:
                 def enhance(self, _v):
                     return image
+
             return _E()
 
         @staticmethod
@@ -3244,6 +3917,7 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatc
             class _E:
                 def enhance(self, _v):
                     return image
+
             return _E()
 
         @staticmethod
@@ -3251,6 +3925,7 @@ def test_dng2hdr2jpg_wow_uint16_output_is_normalized_before_fromarray(monkeypatc
             class _E:
                 def enhance(self, _v):
                     return image
+
             return _E()
 
     def _fake_subprocess_run(command, check):

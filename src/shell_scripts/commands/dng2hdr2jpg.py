@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
+    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
 """
 
 import os
@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tempfile
 import warnings
+import math
 from io import BytesIO
 from dataclasses import dataclass
 from datetime import datetime
@@ -28,7 +29,6 @@ from shell_scripts.utils import (
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Convert DNG to HDR-merged JPG with optional luminance-hdr-cli backend."
-DEFAULT_EV = 2.0
 DEFAULT_GAMMA = (2.222, 4.5)
 DEFAULT_POST_GAMMA = 1.0
 DEFAULT_BRIGHTNESS = 1.0
@@ -51,6 +51,14 @@ OPENCV_NP_SIGMOIDAL_MIDPOINT = 0.5
 OPENCV_NP_SATURATION_GAMMA = 0.8
 OPENCV_NP_HIGH_PASS_BLUR_SIGMA = 2.5
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
+AUTO_EV_LOW_PERCENTILE = 0.1
+AUTO_EV_HIGH_PERCENTILE = 99.9
+AUTO_EV_MEDIAN_PERCENTILE = 50.0
+AUTO_EV_TARGET_SHADOW = 0.05
+AUTO_EV_TARGET_HIGHLIGHT = 0.90
+AUTO_EV_MEDIAN_TARGET = 0.5
+AUTO_EV_MIN = min(SUPPORTED_EV_VALUES)
+AUTO_EV_MAX = max(SUPPORTED_EV_VALUES)
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
     "darwin": "MacOS",
@@ -148,7 +156,7 @@ _LUMINANCE_OPERATOR_TABLE_ENTRIES = (
     (
         "`mantiuk06`",
         "Contrast mapping with detail enhancement",
-        "Punchy, detailed, classic \"HDR\" look",
+        'Punchy, detailed, classic "HDR" look',
         "Low",
         "Strong detail and local contrast enhancement",
     ),
@@ -182,14 +190,29 @@ _LUMINANCE_CONTROL_TABLE_ROWS = (
     ("`ashikhmin`", "`--tmoAshEq2`, `--tmoAshSimple`, `--tmoAshLocal`"),
     ("`drago`", "`--tmoDrgBias`"),
     ("`durand`", "`--tmoDurSigmaS`, `--tmoDurSigmaR`, `--tmoDurBase`"),
-    ("`fattal`", "`--tmoFatAlpha`, `--tmoFatBeta`, `--tmoFatColor`, `--tmoFatNoise`, `--tmoFatNew`"),
+    (
+        "`fattal`",
+        "`--tmoFatAlpha`, `--tmoFatBeta`, `--tmoFatColor`, `--tmoFatNoise`, `--tmoFatNew`",
+    ),
     ("`ferradans`", "`--tmoFerRho`, `--tmoFerInvAlpha`"),
     ("`kimkautz`", "`--tmoKimKautzC1`, `--tmoKimKautzC2`"),
-    ("`pattanaik`", "`--tmoPatMultiplier`, `--tmoPatLocal`, `--tmoPatAutoLum`, `--tmoPatCone`, `--tmoPatRod`"),
-    ("`reinhard02`", "`--tmoR02Key`, `--tmoR02Phi`, `--tmoR02Scales`, `--tmoR02Num`, `--tmoR02Low`, `--tmoR02High`"),
+    (
+        "`pattanaik`",
+        "`--tmoPatMultiplier`, `--tmoPatLocal`, `--tmoPatAutoLum`, `--tmoPatCone`, `--tmoPatRod`",
+    ),
+    (
+        "`reinhard02`",
+        "`--tmoR02Key`, `--tmoR02Phi`, `--tmoR02Scales`, `--tmoR02Num`, `--tmoR02Low`, `--tmoR02High`",
+    ),
     ("`reinhard05`", "`--tmoR05Brightness`, `--tmoR05Chroma`, `--tmoR05Lightness`"),
-    ("`mantiuk06`", "`--tmoM06Contrast`, `--tmoM06Saturation`, `--tmoM06Detail`, `--tmoM06ContrastEqual`"),
-    ("`mantiuk08`", "`--tmoM08ColorSaturation`, `--tmoM08ConstrastEnh`, `--tmoM08LuminanceLvl`, `--tmoM08SetLuminance`"),
+    (
+        "`mantiuk06`",
+        "`--tmoM06Contrast`, `--tmoM06Saturation`, `--tmoM06Detail`, `--tmoM06ContrastEqual`",
+    ),
+    (
+        "`mantiuk08`",
+        "`--tmoM08ColorSaturation`, `--tmoM08ConstrastEnh`, `--tmoM08LuminanceLvl`, `--tmoM08SetLuminance`",
+    ),
     ("`vanhateren`", "`--tmoVanHaterenPupilArea`"),
     ("`lischinski`", "`--tmoLischinskiAlpha`"),
 )
@@ -239,6 +262,35 @@ class LuminanceOptions:
     hdr_response_curve: str
     tmo: str
     tmo_extra_args: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AutoEvInputs:
+    """@brief Hold adaptive EV optimization scalar inputs.
+
+    @details Stores normalized luminance percentiles and thresholds for
+    deterministic adaptive EV optimization. The optimization function uses these
+    scalar values to compute one clamped EV delta for bracket generation.
+    @param p_low {float} Luminance at low percentile bound in `[0.0, 1.0]`.
+    @param p_median {float} Median luminance in `[0.0, 1.0]`.
+    @param p_high {float} Luminance at high percentile bound in `[0.0, 1.0]`.
+    @param target_shadow {float} Target lower luminance guardrail in `(0.0, 1.0)`.
+    @param target_highlight {float} Target upper luminance guardrail in `(0.0, 1.0)`.
+    @param median_target {float} Preferred median-centered luminance target in `(0.0, 1.0)`.
+    @param ev_min {float} Minimum supported EV delta.
+    @param ev_max {float} Maximum supported EV delta.
+    @return {None} Immutable scalar container.
+    @satisfies REQ-080, REQ-081
+    """
+
+    p_low: float
+    p_median: float
+    p_high: float
+    target_shadow: float
+    target_highlight: float
+    median_target: float
+    ev_min: float
+    ev_max: float
 
 
 def _print_box_table(headers, rows, header_rows=()):
@@ -298,19 +350,21 @@ def _build_two_line_operator_rows(operator_entries):
 def print_help(version):
     """@brief Print help text for the `dng2hdr2jpg` command.
 
-    @details Documents required positional arguments, optional EV/RAW gamma
+    @details Documents required positional arguments, required mutually
+    exclusive exposure selectors (`--ev` or `--auto-ev`), optional RAW gamma
     controls, shared postprocessing controls, backend selection, and
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076
+    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076
     """
 
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
-        f"[--ev=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
+        f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
-        f"[--jpg-compression=<0..100>] [--wow <ImageMagick|OpenCV|OpenCV-NP>] (--enable-enfuse | --enable-luminance) "
+        f"[--jpg-compression=<0..100>] [--wow <ImageMagick|OpenCV|OpenCV-NP>] "
+        f"(--enable-enfuse | --enable-luminance) "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
         f"[--tmo*=<value>] ({version})"
@@ -319,19 +373,43 @@ def print_help(version):
     print("dng2hdr2jpg options:")
     print("  <input.dng>      - Input DNG file (required).")
     print("  <output.jpg>     - Output JPG file (required).")
-    print("  --ev=<value>     - Exposure bracket EV: 0.5 | 1 | 1.5 | 2 (default: 2).")
-    print(f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]}).")
+    print(
+        "  --ev=<value>     - Fixed exposure bracket EV: 0.5 | 1 | 1.5 | 2 (required unless --auto-ev is selected)."
+    )
+    print("  --auto-ev        - Adaptive EV mode (required unless --ev is selected).")
+    print(
+        "                     Optional value forms: --auto-ev=1, --auto-ev=true, --auto-ev yes."
+    )
+    print(
+        f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]})."
+    )
     print("                     Example: --gamma=1,1 for linear extraction.")
-    print("  --post-gamma=<value> - Postprocess gamma correction factor (backend-default when omitted).")
-    print("  --brightness=<value> - Postprocess brightness factor (backend-default when omitted).")
-    print("  --contrast=<value>   - Postprocess contrast factor (backend-default when omitted).")
-    print("  --saturation=<value> - Postprocess saturation factor (backend-default when omitted).")
-    print(f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION}).")
-    print("  --wow <name>     - Enable wow stage implementation (`ImageMagick`, `OpenCV`, or `OpenCV-NP`).")
+    print(
+        "  --post-gamma=<value> - Postprocess gamma correction factor (backend-default when omitted)."
+    )
+    print(
+        "  --brightness=<value> - Postprocess brightness factor (backend-default when omitted)."
+    )
+    print(
+        "  --contrast=<value>   - Postprocess contrast factor (backend-default when omitted)."
+    )
+    print(
+        "  --saturation=<value> - Postprocess saturation factor (backend-default when omitted)."
+    )
+    print(
+        f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION})."
+    )
+    print(
+        "  --wow <name>     - Enable wow stage implementation (`ImageMagick`, `OpenCV`, or `OpenCV-NP`)."
+    )
     print("  --enable-enfuse")
-    print("                   - Select enfuse backend (required, mutually exclusive with --enable-luminance).")
+    print(
+        "                   - Select enfuse backend (required, mutually exclusive with --enable-luminance)."
+    )
     print("  --enable-luminance")
-    print("                   - Select luminance-hdr-cli backend (required, mutually exclusive with --enable-enfuse).")
+    print(
+        "                   - Select luminance-hdr-cli backend (required, mutually exclusive with --enable-enfuse)."
+    )
     print(
         "  [postprocess defaults]"
         f" - --enable-enfuse: post-gamma={DEFAULT_POST_GAMMA}, brightness={DEFAULT_BRIGHTNESS},"
@@ -348,15 +426,21 @@ def print_help(version):
         f"contrast={DEFAULT_CONTRAST}, saturation={DEFAULT_SATURATION}."
     )
     print("  --luminance-hdr-model=<name>")
-    print(f"                   - Luminance HDR model (default: {DEFAULT_LUMINANCE_HDR_MODEL}).")
+    print(
+        f"                   - Luminance HDR model (default: {DEFAULT_LUMINANCE_HDR_MODEL})."
+    )
     print("  --luminance-hdr-weight=<name>")
-    print(f"                   - Luminance weighting function (default: {DEFAULT_LUMINANCE_HDR_WEIGHT}).")
+    print(
+        f"                   - Luminance weighting function (default: {DEFAULT_LUMINANCE_HDR_WEIGHT})."
+    )
     print("  --luminance-hdr-response-curve=<name>")
     print(
         f"                   - Luminance response curve (default: {DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE})."
     )
     print("  --luminance-tmo=<name>")
-    print(f"                   - Luminance tone mapper (default: {DEFAULT_LUMINANCE_TMO}).")
+    print(
+        f"                   - Luminance tone mapper (default: {DEFAULT_LUMINANCE_TMO})."
+    )
     print()
     print("  Luminance operators:")
     operator_rows = _build_two_line_operator_rows(_LUMINANCE_OPERATOR_TABLE_ENTRIES)
@@ -370,7 +454,9 @@ def print_help(version):
     _print_box_table(_LUMINANCE_CONTROL_TABLE_HEADERS, _LUMINANCE_CONTROL_TABLE_ROWS)
     print()
     print("  --tmo* <value> | --tmo*=<value>")
-    print("                   - Forward explicit luminance-hdr-cli --tmo* parameters as-is.")
+    print(
+        "                   - Forward explicit luminance-hdr-cli --tmo* parameters as-is."
+    )
     print("  [platform]       - Command is available on Linux only.")
     print("  --help           - Show this help message.")
 
@@ -397,6 +483,193 @@ def _parse_ev_option(ev_raw):
         print_error("Allowed values: 0.5, 1, 1.5, 2")
         return None
 
+    return ev_value
+
+
+def _parse_auto_ev_option(auto_ev_raw):
+    """@brief Parse and validate one `--auto-ev` option value.
+
+    @details Accepts only boolean-like activator tokens (`1`, `true`, `yes`,
+    `on`) and rejects all other values to keep deterministic CLI behavior.
+    @param auto_ev_raw {str} Raw `--auto-ev` value token from CLI args.
+    @return {bool|None} `True` when token enables adaptive mode; `None` on parse failure.
+    @satisfies REQ-056
+    """
+
+    auto_ev_text = auto_ev_raw.strip().lower()
+    if auto_ev_text in ("1", "true", "yes", "on"):
+        return True
+    print_error(f"Invalid --auto-ev value: {auto_ev_raw}")
+    print_error("Allowed values: 1, true, yes, on")
+    return None
+
+
+def _clamp_ev_to_supported(ev_candidate, ev_min=AUTO_EV_MIN, ev_max=AUTO_EV_MAX):
+    """@brief Clamp one EV candidate to supported numeric interval.
+
+    @details Applies lower/upper bound clamp to keep computed adaptive EV value
+    inside configured EV bounds before command generation.
+    @param ev_candidate {float} Candidate EV delta from adaptive optimization.
+    @param ev_min {float} Lower clamp bound.
+    @param ev_max {float} Upper clamp bound.
+    @return {float} Clamped EV delta in `[ev_min, ev_max]`.
+    @satisfies REQ-081
+    """
+
+    return max(ev_min, min(ev_max, ev_candidate))
+
+
+def _quantize_ev_to_supported(ev_value):
+    """@brief Quantize one EV value to nearest supported selector value.
+
+    @details Chooses nearest value from `SUPPORTED_EV_VALUES` to preserve
+    deterministic three-bracket behavior in downstream static multiplier and HDR
+    command construction paths.
+    @param ev_value {float} Clamped EV value.
+    @return {float} Nearest supported EV selector value.
+    @satisfies REQ-080, REQ-081
+    """
+
+    nearest_ev = SUPPORTED_EV_VALUES[0]
+    smallest_distance = abs(ev_value - nearest_ev)
+    for candidate in SUPPORTED_EV_VALUES[1:]:
+        distance = abs(ev_value - candidate)
+        if distance < smallest_distance:
+            nearest_ev = candidate
+            smallest_distance = distance
+    return nearest_ev
+
+
+def _coerce_positive_luminance(value, fallback):
+    """@brief Coerce luminance scalar to positive range for logarithmic math.
+
+    @details Converts input to float and enforces a strictly positive minimum.
+    Returns fallback when conversion fails or result is non-positive.
+    @param value {object} Candidate luminance scalar.
+    @param fallback {float} Fallback positive luminance scalar.
+    @return {float} Positive luminance value suitable for `log2`.
+    @satisfies REQ-081
+    """
+
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    if numeric_value <= 0.0:
+        return fallback
+    return numeric_value
+
+
+def _optimize_adaptive_ev_delta(auto_ev_inputs):
+    """@brief Compute adaptive EV delta from preview luminance statistics.
+
+    @details Computes `ev_shadow=log2(target_shadow/p_low)` and
+    `ev_high=log2(p_high/target_highlight)`, applies median-centering tie-break
+    candidate `ev_median=abs(log2(median_target/p_median))`, clamps by
+    `[ev_min, ev_max]`, and quantizes to nearest supported EV value.
+    @param auto_ev_inputs {AutoEvInputs} Adaptive EV scalar inputs.
+    @return {float} Quantized adaptive EV delta.
+    @satisfies REQ-080, REQ-081
+    """
+
+    ev_shadow = math.log2(auto_ev_inputs.target_shadow / auto_ev_inputs.p_low)
+    ev_high = math.log2(auto_ev_inputs.p_high / auto_ev_inputs.target_highlight)
+    ev_median = abs(math.log2(auto_ev_inputs.median_target / auto_ev_inputs.p_median))
+    ev_candidate = max(ev_shadow, ev_high, ev_median)
+    clamped_candidate = _clamp_ev_to_supported(
+        ev_candidate, auto_ev_inputs.ev_min, auto_ev_inputs.ev_max
+    )
+    return _quantize_ev_to_supported(clamped_candidate)
+
+
+def _compute_auto_ev_value(raw_handle):
+    """@brief Compute adaptive EV selector from RAW linear preview histogram.
+
+    @details Generates one linear RAW preview using camera white balance,
+    `no_auto_bright=True`, `gamma=(1.0, 1.0)`, and `user_flip=0`; computes
+    luminance map and percentiles (`0.1`, `50.0`, `99.9`); then derives adaptive
+    EV delta through constrained logarithmic optimization and quantization.
+    @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
+    @return {float} Adaptive EV selector value from `SUPPORTED_EV_VALUES`.
+    @exception ValueError Raised when preview luminance extraction cannot produce valid values.
+    @satisfies REQ-080, REQ-081
+    """
+
+    linear_preview = raw_handle.postprocess(
+        bright=1.0,
+        output_bps=16,
+        use_camera_wb=True,
+        no_auto_bright=True,
+        gamma=(1.0, 1.0),
+        user_flip=0,
+    )
+    flat_luminance = []
+    for row in linear_preview:
+        for pixel in row:
+            red = _coerce_positive_luminance(pixel[0], 0.0)
+            green = _coerce_positive_luminance(pixel[1], 0.0)
+            blue = _coerce_positive_luminance(pixel[2], 0.0)
+            luminance = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+            if luminance > 0.0:
+                flat_luminance.append(luminance)
+    if not flat_luminance:
+        raise ValueError("Adaptive preview produced no valid luminance values")
+    flat_luminance.sort()
+
+    def _percentile(percentile_value):
+        position = (len(flat_luminance) - 1) * (percentile_value / 100.0)
+        lower_index = int(math.floor(position))
+        upper_index = int(math.ceil(position))
+        if lower_index == upper_index:
+            return flat_luminance[lower_index]
+        weight = position - lower_index
+        lower_value = flat_luminance[lower_index]
+        upper_value = flat_luminance[upper_index]
+        return lower_value + ((upper_value - lower_value) * weight)
+
+    p_low_raw = _percentile(AUTO_EV_LOW_PERCENTILE)
+    p_median_raw = _percentile(AUTO_EV_MEDIAN_PERCENTILE)
+    p_high_raw = _percentile(AUTO_EV_HIGH_PERCENTILE)
+
+    max_luminance = max(flat_luminance)
+    if max_luminance <= 0.0:
+        raise ValueError("Adaptive preview maximum luminance is not positive")
+
+    epsilon = 1e-9
+    p_low = max(epsilon, min(1.0 - epsilon, p_low_raw / max_luminance))
+    p_high = max(epsilon, min(1.0 - epsilon, p_high_raw / max_luminance))
+    p_median = max(epsilon, min(1.0 - epsilon, p_median_raw / max_luminance))
+
+    auto_ev_inputs = AutoEvInputs(
+        p_low=p_low,
+        p_median=p_median,
+        p_high=p_high,
+        target_shadow=AUTO_EV_TARGET_SHADOW,
+        target_highlight=AUTO_EV_TARGET_HIGHLIGHT,
+        median_target=AUTO_EV_MEDIAN_TARGET,
+        ev_min=AUTO_EV_MIN,
+        ev_max=AUTO_EV_MAX,
+    )
+    return _optimize_adaptive_ev_delta(auto_ev_inputs)
+
+
+def _resolve_ev_value(raw_handle, ev_value, auto_ev_enabled):
+    """@brief Resolve effective EV selector for static or adaptive mode.
+
+    @details Returns explicit static `--ev` value when adaptive mode is not
+    enabled. In adaptive mode, computes EV from RAW linear preview statistics.
+    @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
+    @param ev_value {float|None} Parsed static EV option value.
+    @param auto_ev_enabled {bool} Adaptive mode selector state.
+    @return {float} Effective EV selector value used for bracket multipliers.
+    @exception ValueError Raised when no static EV is provided while adaptive mode is disabled.
+    @satisfies REQ-056, REQ-057, REQ-080, REQ-081
+    """
+
+    if auto_ev_enabled:
+        return _compute_auto_ev_value(raw_handle)
+    if ev_value is None:
+        raise ValueError("Missing static EV value")
     return ev_value
 
 
@@ -586,20 +859,22 @@ def _resolve_default_postprocess(enable_luminance, luminance_tmo):
 def _parse_run_options(args):
     """@brief Parse CLI args into input, output, and EV parameters.
 
-    @details Supports positional file arguments, optional `--ev=<value>` or
-    `--ev <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`, optional
-    postprocess controls, required backend selector (`--enable-enfuse` or
-    `--enable-luminance`), and luminance backend
-    controls including explicit `--tmo*` passthrough options, optional wow
-    implementation selector (`--wow <ImageMagick|OpenCV|OpenCV-NP>`); rejects unknown
-    options and invalid arity.
+    @details Supports positional file arguments, required mutually exclusive
+    exposure selectors (`--ev=<value>`/`--ev <value>` or
+    `--auto-ev[=<1|true|yes|on>]`), optional `--gamma=<a,b>` or `--gamma <a,b>`,
+    optional postprocess controls, required backend selector
+    (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls
+    including explicit `--tmo*` passthrough options and optional wow
+    implementation selector (`--wow <ImageMagick|OpenCV|OpenCV-NP>`); rejects
+    unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @return {tuple[Path, Path, float, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076
+    @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076, REQ-079, REQ-080, REQ-081
     """
 
     positional = []
-    ev_value = DEFAULT_EV
+    ev_value = None
+    auto_ev_enabled = False
     gamma_value = DEFAULT_GAMMA
     post_gamma = DEFAULT_POST_GAMMA
     brightness = DEFAULT_BRIGHTNESS
@@ -659,7 +934,9 @@ def _parse_run_options(args):
             if idx + 1 >= len(args):
                 print_error("Missing value for --luminance-hdr-model")
                 return None
-            parsed_value = _parse_luminance_text_option("--luminance-hdr-model", args[idx + 1])
+            parsed_value = _parse_luminance_text_option(
+                "--luminance-hdr-model", args[idx + 1]
+            )
             if parsed_value is None:
                 return None
             luminance_hdr_model = parsed_value
@@ -668,7 +945,9 @@ def _parse_run_options(args):
             continue
 
         if token.startswith("--luminance-hdr-model="):
-            parsed_value = _parse_luminance_text_option("--luminance-hdr-model", token.split("=", 1)[1])
+            parsed_value = _parse_luminance_text_option(
+                "--luminance-hdr-model", token.split("=", 1)[1]
+            )
             if parsed_value is None:
                 return None
             luminance_hdr_model = parsed_value
@@ -680,7 +959,9 @@ def _parse_run_options(args):
             if idx + 1 >= len(args):
                 print_error("Missing value for --luminance-hdr-weight")
                 return None
-            parsed_value = _parse_luminance_text_option("--luminance-hdr-weight", args[idx + 1])
+            parsed_value = _parse_luminance_text_option(
+                "--luminance-hdr-weight", args[idx + 1]
+            )
             if parsed_value is None:
                 return None
             luminance_hdr_weight = parsed_value
@@ -689,7 +970,9 @@ def _parse_run_options(args):
             continue
 
         if token.startswith("--luminance-hdr-weight="):
-            parsed_value = _parse_luminance_text_option("--luminance-hdr-weight", token.split("=", 1)[1])
+            parsed_value = _parse_luminance_text_option(
+                "--luminance-hdr-weight", token.split("=", 1)[1]
+            )
             if parsed_value is None:
                 return None
             luminance_hdr_weight = parsed_value
@@ -701,7 +984,9 @@ def _parse_run_options(args):
             if idx + 1 >= len(args):
                 print_error("Missing value for --luminance-hdr-response-curve")
                 return None
-            parsed_value = _parse_luminance_text_option("--luminance-hdr-response-curve", args[idx + 1])
+            parsed_value = _parse_luminance_text_option(
+                "--luminance-hdr-response-curve", args[idx + 1]
+            )
             if parsed_value is None:
                 return None
             luminance_hdr_response_curve = parsed_value
@@ -724,7 +1009,9 @@ def _parse_run_options(args):
             if idx + 1 >= len(args):
                 print_error("Missing value for --luminance-tmo")
                 return None
-            parsed_value = _parse_luminance_text_option("--luminance-tmo", args[idx + 1])
+            parsed_value = _parse_luminance_text_option(
+                "--luminance-tmo", args[idx + 1]
+            )
             if parsed_value is None:
                 return None
             luminance_tmo = parsed_value
@@ -733,7 +1020,9 @@ def _parse_run_options(args):
             continue
 
         if token.startswith("--luminance-tmo="):
-            parsed_value = _parse_luminance_text_option("--luminance-tmo", token.split("=", 1)[1])
+            parsed_value = _parse_luminance_text_option(
+                "--luminance-tmo", token.split("=", 1)[1]
+            )
             if parsed_value is None:
                 return None
             luminance_tmo = parsed_value
@@ -788,6 +1077,19 @@ def _parse_run_options(args):
             idx += 1
             continue
 
+        if token == "--auto-ev":
+            auto_ev_enabled = True
+            idx += 1
+            continue
+
+        if token.startswith("--auto-ev="):
+            parsed_auto_ev = _parse_auto_ev_option(token.split("=", 1)[1])
+            if parsed_auto_ev is None:
+                return None
+            auto_ev_enabled = parsed_auto_ev
+            idx += 1
+            continue
+
         if token == "--gamma":
             if idx + 1 >= len(args):
                 print_error("Missing value for --gamma")
@@ -811,7 +1113,9 @@ def _parse_run_options(args):
             if idx + 1 >= len(args):
                 print_error("Missing value for --post-gamma")
                 return None
-            parsed_post_gamma = _parse_positive_float_option("--post-gamma", args[idx + 1])
+            parsed_post_gamma = _parse_positive_float_option(
+                "--post-gamma", args[idx + 1]
+            )
             if parsed_post_gamma is None:
                 return None
             post_gamma = parsed_post_gamma
@@ -820,7 +1124,9 @@ def _parse_run_options(args):
             continue
 
         if token.startswith("--post-gamma="):
-            parsed_post_gamma = _parse_positive_float_option("--post-gamma", token.split("=", 1)[1])
+            parsed_post_gamma = _parse_positive_float_option(
+                "--post-gamma", token.split("=", 1)[1]
+            )
             if parsed_post_gamma is None:
                 return None
             post_gamma = parsed_post_gamma
@@ -832,7 +1138,9 @@ def _parse_run_options(args):
             if idx + 1 >= len(args):
                 print_error("Missing value for --brightness")
                 return None
-            parsed_brightness = _parse_positive_float_option("--brightness", args[idx + 1])
+            parsed_brightness = _parse_positive_float_option(
+                "--brightness", args[idx + 1]
+            )
             if parsed_brightness is None:
                 return None
             brightness = parsed_brightness
@@ -841,7 +1149,9 @@ def _parse_run_options(args):
             continue
 
         if token.startswith("--brightness="):
-            parsed_brightness = _parse_positive_float_option("--brightness", token.split("=", 1)[1])
+            parsed_brightness = _parse_positive_float_option(
+                "--brightness", token.split("=", 1)[1]
+            )
             if parsed_brightness is None:
                 return None
             brightness = parsed_brightness
@@ -862,7 +1172,9 @@ def _parse_run_options(args):
             continue
 
         if token.startswith("--contrast="):
-            parsed_contrast = _parse_positive_float_option("--contrast", token.split("=", 1)[1])
+            parsed_contrast = _parse_positive_float_option(
+                "--contrast", token.split("=", 1)[1]
+            )
             if parsed_contrast is None:
                 return None
             contrast = parsed_contrast
@@ -874,7 +1186,9 @@ def _parse_run_options(args):
             if idx + 1 >= len(args):
                 print_error("Missing value for --saturation")
                 return None
-            parsed_saturation = _parse_positive_float_option("--saturation", args[idx + 1])
+            parsed_saturation = _parse_positive_float_option(
+                "--saturation", args[idx + 1]
+            )
             if parsed_saturation is None:
                 return None
             saturation = parsed_saturation
@@ -883,7 +1197,9 @@ def _parse_run_options(args):
             continue
 
         if token.startswith("--saturation="):
-            parsed_saturation = _parse_positive_float_option("--saturation", token.split("=", 1)[1])
+            parsed_saturation = _parse_positive_float_option(
+                "--saturation", token.split("=", 1)[1]
+            )
             if parsed_saturation is None:
                 return None
             saturation = parsed_saturation
@@ -918,11 +1234,21 @@ def _parse_run_options(args):
         idx += 1
 
     if len(positional) != 2:
-        print_error("Usage: dng2hdr2jpg <input.dng> <output.jpg> [--ev=<value>] [--gamma=<a,b>]")
+        print_error(
+            "Usage: dng2hdr2jpg <input.dng> <output.jpg> (--ev=<value> | --auto-ev) [--gamma=<a,b>]"
+        )
+        return None
+
+    if (ev_value is None and not auto_ev_enabled) or (
+        ev_value is not None and auto_ev_enabled
+    ):
+        print_error("Exactly one exposure selector is required: --ev or --auto-ev")
         return None
 
     if enable_enfuse == enable_luminance:
-        print_error("Exactly one backend selector is required: --enable-enfuse or --enable-luminance")
+        print_error(
+            "Exactly one backend selector is required: --enable-enfuse or --enable-luminance"
+        )
         return None
 
     if luminance_option_specified and not enable_luminance:
@@ -948,6 +1274,7 @@ def _parse_run_options(args):
         Path(positional[0]),
         Path(positional[1]),
         ev_value,
+        auto_ev_enabled,
         gamma_value,
         PostprocessOptions(
             post_gamma=post_gamma,
@@ -991,7 +1318,9 @@ def _load_image_dependencies():
             import imageio  # type: ignore
         except ModuleNotFoundError:
             print_error("Python dependency missing: imageio")
-            print_error("Install dependencies with: uv pip install rawpy imageio pillow")
+            print_error(
+                "Install dependencies with: uv pip install rawpy imageio pillow"
+            )
             return None
 
     try:
@@ -1066,7 +1395,9 @@ def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
                 exif_data = source_image.getexif()
                 if exif_data is None:
                     return (None, None, 1)
-                exif_payload = exif_data.tobytes() if hasattr(exif_data, "tobytes") else None
+                exif_payload = (
+                    exif_data.tobytes() if hasattr(exif_data, "tobytes") else None
+                )
                 source_orientation = 1
                 orientation_raw = exif_data.get(_EXIF_TAG_ORIENTATION)
                 if orientation_raw is not None:
@@ -1077,8 +1408,14 @@ def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
                     except (TypeError, ValueError):
                         source_orientation = 1
                 exif_timestamp = None
-                for exif_tag in (_EXIF_TAG_DATETIME_ORIGINAL, _EXIF_TAG_DATETIME_DIGITIZED, _EXIF_TAG_DATETIME):
-                    exif_timestamp = _parse_exif_datetime_to_timestamp(exif_data.get(exif_tag))
+                for exif_tag in (
+                    _EXIF_TAG_DATETIME_ORIGINAL,
+                    _EXIF_TAG_DATETIME_DIGITIZED,
+                    _EXIF_TAG_DATETIME,
+                ):
+                    exif_timestamp = _parse_exif_datetime_to_timestamp(
+                        exif_data.get(exif_tag)
+                    )
                     if exif_timestamp is not None:
                         break
                 return (exif_payload, exif_timestamp, source_orientation)
@@ -1141,7 +1478,9 @@ def _apply_orientation_transform(pil_image_module, pil_image, source_orientation
     return transformed.transpose(transpose_method)
 
 
-def _build_oriented_thumbnail_jpeg_bytes(pil_image_module, output_jpg, source_orientation):
+def _build_oriented_thumbnail_jpeg_bytes(
+    pil_image_module, output_jpg, source_orientation
+):
     """@brief Build refreshed JPEG thumbnail bytes from final JPG output.
 
     @details Opens final JPG pixels, applies source-orientation-aware transform,
@@ -1243,7 +1582,9 @@ def _normalize_ifd_integer_like_values_for_piexif_dump(piexif_module, exif_dict)
         ifd_mapping = exif_dict.get(ifd_name)
         if not isinstance(ifd_mapping, dict):
             continue
-        ifd_tag_definitions = tags_table.get(ifd_name, {}) if isinstance(tags_table, dict) else {}
+        ifd_tag_definitions = (
+            tags_table.get(ifd_name, {}) if isinstance(tags_table, dict) else {}
+        )
         for tag_id, raw_value in list(ifd_mapping.items()):
             normalized_value = raw_value
             if isinstance(raw_value, tuple):
@@ -1267,23 +1608,39 @@ def _normalize_ifd_integer_like_values_for_piexif_dump(piexif_module, exif_dict)
                 if normalized_items:
                     normalized_value = normalized_items
             else:
-                tag_metadata = ifd_tag_definitions.get(tag_id) if isinstance(ifd_tag_definitions, dict) else None
-                tag_type = tag_metadata.get("type") if isinstance(tag_metadata, dict) else None
+                tag_metadata = (
+                    ifd_tag_definitions.get(tag_id)
+                    if isinstance(ifd_tag_definitions, dict)
+                    else None
+                )
+                tag_type = (
+                    tag_metadata.get("type") if isinstance(tag_metadata, dict) else None
+                )
                 if tag_type in integer_type_ids:
                     coerced_scalar = _coerce_exif_int_like_value(raw_value)
                     if coerced_scalar is not None:
                         normalized_value = coerced_scalar
 
-            tag_metadata = ifd_tag_definitions.get(tag_id) if isinstance(ifd_tag_definitions, dict) else None
-            tag_type = tag_metadata.get("type") if isinstance(tag_metadata, dict) else None
-            if tag_type in integer_type_ids and isinstance(normalized_value, (tuple, list)):
+            tag_metadata = (
+                ifd_tag_definitions.get(tag_id)
+                if isinstance(ifd_tag_definitions, dict)
+                else None
+            )
+            tag_type = (
+                tag_metadata.get("type") if isinstance(tag_metadata, dict) else None
+            )
+            if tag_type in integer_type_ids and isinstance(
+                normalized_value, (tuple, list)
+            ):
                 flattened_items = []
                 flattenable = True
                 for item in normalized_value:
                     if isinstance(item, (tuple, list)):
                         nested_values = []
                         for nested_item in item:
-                            coerced_nested_item = _coerce_exif_int_like_value(nested_item)
+                            coerced_nested_item = _coerce_exif_int_like_value(
+                                nested_item
+                            )
                             if coerced_nested_item is None:
                                 flattenable = False
                                 break
@@ -1298,11 +1655,20 @@ def _normalize_ifd_integer_like_values_for_piexif_dump(piexif_module, exif_dict)
                         break
                     flattened_items.append(coerced_item)
                 if flattenable and flattened_items:
-                    normalized_value = tuple(flattened_items) if isinstance(normalized_value, tuple) else flattened_items
+                    normalized_value = (
+                        tuple(flattened_items)
+                        if isinstance(normalized_value, tuple)
+                        else flattened_items
+                    )
             if tag_type in integer_type_ranges:
                 min_allowed, max_allowed = integer_type_ranges[tag_type]
                 if isinstance(normalized_value, (tuple, list)):
-                    if any(not isinstance(item, int) or item < min_allowed or item > max_allowed for item in normalized_value):
+                    if any(
+                        not isinstance(item, int)
+                        or item < min_allowed
+                        or item > max_allowed
+                        for item in normalized_value
+                    ):
                         ifd_mapping.pop(tag_id, None)
                         continue
                 elif isinstance(normalized_value, int):
@@ -1310,7 +1676,10 @@ def _normalize_ifd_integer_like_values_for_piexif_dump(piexif_module, exif_dict)
                         ifd_mapping.pop(tag_id, None)
                         continue
             if tag_type == 7 and isinstance(normalized_value, tuple):
-                if all(isinstance(item, int) and 0 <= item <= 255 for item in normalized_value):
+                if all(
+                    isinstance(item, int) and 0 <= item <= 255
+                    for item in normalized_value
+                ):
                     normalized_value = bytes(normalized_value)
             if normalized_value is not raw_value:
                 ifd_mapping[tag_id] = normalized_value
@@ -1352,7 +1721,9 @@ def _refresh_output_jpg_exif_thumbnail_after_save(
             source_orientation=source_orientation,
         )
         orientation_tag = piexif_module.ImageIFD.Orientation
-        orientation_value = source_orientation if source_orientation in _EXIF_VALID_ORIENTATIONS else 1
+        orientation_value = (
+            source_orientation if source_orientation in _EXIF_VALID_ORIENTATIONS else 1
+        )
         exif_dict["0th"][orientation_tag] = orientation_value
         exif_dict["1st"][orientation_tag] = 1
         exif_dict["thumbnail"] = thumbnail_payload
@@ -1363,7 +1734,9 @@ def _refresh_output_jpg_exif_thumbnail_after_save(
         exif_bytes = piexif_module.dump(exif_dict)
         piexif_module.insert(exif_bytes, str(output_jpg))
     except (ValueError, TypeError, KeyError, OSError, AttributeError) as error:
-        raise RuntimeError(f"Failed to refresh output JPG EXIF thumbnail: {error}") from error
+        raise RuntimeError(
+            f"Failed to refresh output JPG EXIF thumbnail: {error}"
+        ) from error
 
 
 def _set_output_file_timestamps(output_jpg, exif_timestamp):
@@ -1405,13 +1778,15 @@ def _build_exposure_multipliers(ev_value):
     `[-ev, 0, +ev]` as powers of two for RAW postprocess brightness control.
     @param ev_value {float} Exposure bracket EV delta.
     @return {tuple[float, float, float]} Multipliers in order `(under, base, over)`.
-    @satisfies REQ-057, REQ-077
+    @satisfies REQ-057, REQ-077, REQ-079, REQ-080
     """
 
-    return (2 ** (-ev_value), 1.0, 2 ** ev_value)
+    return (2 ** (-ev_value), 1.0, 2**ev_value)
 
 
-def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, temp_dir):
+def _write_bracket_images(
+    raw_handle, imageio_module, multipliers, gamma_value, temp_dir
+):
     """@brief Materialize three bracket TIFF files from one RAW handle.
 
     @details Invokes `raw.postprocess` with `output_bps=16`,
@@ -1424,7 +1799,7 @@ def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, 
     @param gamma_value {tuple[float, float]} Gamma pair forwarded to RAW postprocess.
     @param temp_dir {Path} Directory for intermediate TIFF artifacts.
     @return {list[Path]} Ordered temporary TIFF file paths.
-    @satisfies REQ-057, REQ-077
+    @satisfies REQ-057, REQ-077, REQ-079, REQ-080
     """
 
     labels = ("ev_minus", "ev_zero", "ev_plus")
@@ -1508,7 +1883,7 @@ def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_o
     @param luminance_options {LuminanceOptions} Luminance backend command controls.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
-    @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068, REQ-077
+    @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068, REQ-077, REQ-080
     """
 
     ordered_paths = _order_bracket_paths(bracket_paths)
@@ -1749,7 +2124,9 @@ def _rgb_to_hsl(np_module, rgb):
     lightness = 0.5 * (cmax + cmin)
     saturation = np_module.zeros_like(lightness)
     nonzero = delta > 1e-12
-    saturation[nonzero] = delta[nonzero] / (1.0 - np_module.abs(2.0 * lightness[nonzero] - 1.0))
+    saturation[nonzero] = delta[nonzero] / (
+        1.0 - np_module.abs(2.0 * lightness[nonzero] - 1.0)
+    )
     hue = np_module.zeros_like(lightness)
     mask_r = nonzero & (cmax == r)
     mask_g = nonzero & (cmax == g)
@@ -1780,9 +2157,14 @@ def _hue_to_rgb(np_module, p_values, q_values, t_values):
     case2 = (t_values >= (1.0 / 6.0)) & (t_values < 0.5)
     case3 = (t_values >= 0.5) & (t_values < (2.0 / 3.0))
     case4 = ~(case1 | case2 | case3)
-    output[case1] = p_values[case1] + (q_values[case1] - p_values[case1]) * 6.0 * t_values[case1]
+    output[case1] = (
+        p_values[case1] + (q_values[case1] - p_values[case1]) * 6.0 * t_values[case1]
+    )
     output[case2] = q_values[case2]
-    output[case3] = p_values[case3] + (q_values[case3] - p_values[case3]) * ((2.0 / 3.0) - t_values[case3]) * 6.0
+    output[case3] = (
+        p_values[case3]
+        + (q_values[case3] - p_values[case3]) * ((2.0 / 3.0) - t_values[case3]) * 6.0
+    )
     output[case4] = p_values[case4]
     return output
 
@@ -1813,16 +2195,24 @@ def _hsl_to_rgb(np_module, hue, saturation, lightness):
         q_values = np_module.where(
             lightness_chromatic < 0.5,
             lightness_chromatic * (1.0 + saturation_chromatic),
-            lightness_chromatic + saturation_chromatic - lightness_chromatic * saturation_chromatic,
+            lightness_chromatic
+            + saturation_chromatic
+            - lightness_chromatic * saturation_chromatic,
         )
         p_values = 2.0 * lightness_chromatic - q_values
-        rgb[chromatic, 0] = _hue_to_rgb(np_module, p_values, q_values, hue_chromatic + 1.0 / 3.0)
+        rgb[chromatic, 0] = _hue_to_rgb(
+            np_module, p_values, q_values, hue_chromatic + 1.0 / 3.0
+        )
         rgb[chromatic, 1] = _hue_to_rgb(np_module, p_values, q_values, hue_chromatic)
-        rgb[chromatic, 2] = _hue_to_rgb(np_module, p_values, q_values, hue_chromatic - 1.0 / 3.0)
+        rgb[chromatic, 2] = _hue_to_rgb(
+            np_module, p_values, q_values, hue_chromatic - 1.0 / 3.0
+        )
     return _clamp01(np_module, rgb)
 
 
-def _selective_blur_contrast_gated_vectorized(np_module, rgb, sigma=2.0, threshold_percent=10.0):
+def _selective_blur_contrast_gated_vectorized(
+    np_module, rgb, sigma=2.0, threshold_percent=10.0
+):
     """@brief Execute contrast-gated selective blur stage.
 
     @details Applies vectorized contrast-gated neighborhood accumulation over
@@ -1840,8 +2230,12 @@ def _selective_blur_contrast_gated_vectorized(np_module, rgb, sigma=2.0, thresho
     radius = kernel.shape[0] // 2
     threshold = threshold_percent / 100.0
     gray = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
-    rgb_padded = np_module.pad(rgb, ((radius, radius), (radius, radius), (0, 0)), mode="reflect")
-    gray_padded = np_module.pad(gray, ((radius, radius), (radius, radius)), mode="reflect")
+    rgb_padded = np_module.pad(
+        rgb, ((radius, radius), (radius, radius), (0, 0)), mode="reflect"
+    )
+    gray_padded = np_module.pad(
+        gray, ((radius, radius), (radius, radius)), mode="reflect"
+    )
     out_numerator = np_module.zeros_like(rgb)
     out_denominator = np_module.zeros_like(gray)
     for delta_y in range(2 * radius + 1):
@@ -1849,14 +2243,20 @@ def _selective_blur_contrast_gated_vectorized(np_module, rgb, sigma=2.0, thresho
             weight = kernel[delta_y, delta_x]
             if weight <= 1e-5:
                 continue
-            shifted_gray = gray_padded[delta_y:delta_y + height, delta_x:delta_x + width]
-            shifted_rgb = rgb_padded[delta_y:delta_y + height, delta_x:delta_x + width, :]
+            shifted_gray = gray_padded[
+                delta_y : delta_y + height, delta_x : delta_x + width
+            ]
+            shifted_rgb = rgb_padded[
+                delta_y : delta_y + height, delta_x : delta_x + width, :
+            ]
             mask = np_module.abs(shifted_gray - gray) <= threshold
             weighted_mask = mask * weight
             out_denominator += weighted_mask
             out_numerator += shifted_rgb * weighted_mask[..., None]
     valid = out_denominator > 1e-15
-    output = np_module.where(valid[..., None], out_numerator / out_denominator[..., None], rgb)
+    output = np_module.where(
+        valid[..., None], out_numerator / out_denominator[..., None], rgb
+    )
     return _clamp01(np_module, output)
 
 
@@ -1897,8 +2297,10 @@ def _sigmoidal_contrast(np_module, rgb, contrast=3.0, midpoint=0.5):
     """
 
     x_values = _clamp01(np_module, rgb)
+
     def logistic(z_values):
         return 1.0 / (1.0 + np_module.exp(-z_values))
+
     low_bound = logistic(contrast * (0.0 - midpoint))
     high_bound = logistic(contrast * (1.0 - midpoint))
     mapped = logistic(contrast * (x_values - midpoint))
@@ -1964,7 +2366,11 @@ def _high_pass_math_gray(cv2_module, np_module, rgb, blur_sigma=2.5):
     blurred = _gaussian_blur_rgb(cv2_module, np_module, rgb, sigma=blur_sigma)
     high_pass = rgb - blurred + 0.5
     high_pass = _clamp01(np_module, high_pass)
-    gray = 0.2126 * high_pass[..., 0] + 0.7152 * high_pass[..., 1] + 0.0722 * high_pass[..., 2]
+    gray = (
+        0.2126 * high_pass[..., 0]
+        + 0.7152 * high_pass[..., 1]
+        + 0.0722 * high_pass[..., 2]
+    )
     return _clamp01(np_module, gray)
 
 
@@ -2027,27 +2433,42 @@ def _selective_blur_contrast_gated_np(
     kernel = _gaussian_kernel_2d(np_module, sigma=sigma)
     radius = kernel.shape[0] // 2
     gray = _srgb_luminance(np_module, rgb)
-    rgb_padded = np_module.pad(rgb, ((radius, radius), (radius, radius), (0, 0)), mode="reflect")
-    gray_padded = np_module.pad(gray, ((radius, radius), (radius, radius)), mode="reflect")
+    rgb_padded = np_module.pad(
+        rgb, ((radius, radius), (radius, radius), (0, 0)), mode="reflect"
+    )
+    gray_padded = np_module.pad(
+        gray, ((radius, radius), (radius, radius)), mode="reflect"
+    )
     output = np_module.empty_like(rgb)
     threshold = threshold_percent / 100.0
     for y_index in range(height):
         for x_index in range(width):
             center_gray = gray_padded[y_index + radius, x_index + radius]
-            patch_rgb = rgb_padded[y_index:y_index + 2 * radius + 1, x_index:x_index + 2 * radius + 1, :]
-            patch_gray = gray_padded[y_index:y_index + 2 * radius + 1, x_index:x_index + 2 * radius + 1]
+            patch_rgb = rgb_padded[
+                y_index : y_index + 2 * radius + 1,
+                x_index : x_index + 2 * radius + 1,
+                :,
+            ]
+            patch_gray = gray_padded[
+                y_index : y_index + 2 * radius + 1, x_index : x_index + 2 * radius + 1
+            ]
             allowed = np_module.abs(patch_gray - center_gray) <= threshold
             weights = kernel * allowed.astype(np_module.float64)
             weight_sum = np_module.sum(weights)
             if weight_sum <= 1e-15:
                 output[y_index, x_index, :] = rgb[y_index, x_index, :]
             else:
-                weighted = np_module.sum(patch_rgb * weights[..., None], axis=(0, 1)) / weight_sum
+                weighted = (
+                    np_module.sum(patch_rgb * weights[..., None], axis=(0, 1))
+                    / weight_sum
+                )
                 output[y_index, x_index, :] = weighted
     return _clamp01(np_module, output)
 
 
-def _level_per_channel_fixed_np(np_module, rgb, black=OPENCV_NP_LEVEL_BLACK, white=OPENCV_NP_LEVEL_WHITE):
+def _level_per_channel_fixed_np(
+    np_module, rgb, black=OPENCV_NP_LEVEL_BLACK, white=OPENCV_NP_LEVEL_WHITE
+):
     """@brief Execute fixed black/white level normalization in RGB channels.
 
     @details Applies deterministic fixed black/white points (`0.001`, `0.999`)
@@ -2081,13 +2502,17 @@ def _build_sigmoidal_lut_u8_np(
     """
 
     x_values = np_module.arange(256, dtype=np_module.float64) / 255.0
+
     def logistic(z_values):
         return 1.0 / (1.0 + np_module.exp(-z_values))
+
     low_bound = logistic(contrast * (0.0 - midpoint))
     high_bound = logistic(contrast * (1.0 - midpoint))
     mapped = logistic(contrast * (x_values - midpoint))
     mapped = (mapped - low_bound) / max(high_bound - low_bound, 1e-12)
-    lut = np_module.clip(np_module.round(mapped * 255.0), 0, 255).astype(np_module.uint8)
+    lut = np_module.clip(np_module.round(mapped * 255.0), 0, 255).astype(
+        np_module.uint8
+    )
     return lut
 
 
@@ -2104,7 +2529,9 @@ def _apply_sigmoidal_contrast_with_lut_np(cv2_module, np_module, rgb, lut):
     @satisfies REQ-076
     """
 
-    rgb_u8 = np_module.clip(np_module.round(rgb * 255.0), 0, 255).astype(np_module.uint8)
+    rgb_u8 = np_module.clip(np_module.round(rgb * 255.0), 0, 255).astype(
+        np_module.uint8
+    )
     out_u8 = cv2_module.LUT(rgb_u8, lut)
     return out_u8.astype(np_module.float64) / 255.0
 
@@ -2187,7 +2614,9 @@ def _overlay_composite_opaque_np(np_module, base_rgb, overlay_gray):
     return _clamp01(np_module, output)
 
 
-def _apply_validated_wow_pipeline_opencv_np(input_file, output_file, cv2_module, np_module):
+def _apply_validated_wow_pipeline_opencv_np(
+    input_file, output_file, cv2_module, np_module
+):
     """@brief Execute validated OpenCV-NP wow pipeline over 16-bit TIFF payload.
 
     @details Reads wow input TIFF, enforces 3-channel payload, normalizes `uint16`
@@ -2216,30 +2645,47 @@ def _apply_validated_wow_pipeline_opencv_np(input_file, output_file, cv2_module,
         image_bgr = (image_bgr.astype(np_module.uint16) * 257).astype(np_module.uint16)
     elif dtype_name != "uint16":
         raise RuntimeError(f"OpenCV-NP wow input must be uint16 image: {input_file}")
-    rgb = cv2_module.cvtColor(image_bgr, cv2_module.COLOR_BGR2RGB).astype(np_module.float64) / 65535.0
+    rgb = (
+        cv2_module.cvtColor(image_bgr, cv2_module.COLOR_BGR2RGB).astype(
+            np_module.float64
+        )
+        / 65535.0
+    )
     rgb = _selective_blur_contrast_gated_np(
         np_module,
         rgb,
         sigma=OPENCV_NP_SELECTIVE_BLUR_SIGMA,
         threshold_percent=OPENCV_NP_SELECTIVE_BLUR_THRESHOLD_PERCENT,
     )
-    rgb = _level_per_channel_fixed_np(np_module, rgb, black=OPENCV_NP_LEVEL_BLACK, white=OPENCV_NP_LEVEL_WHITE)
+    rgb = _level_per_channel_fixed_np(
+        np_module, rgb, black=OPENCV_NP_LEVEL_BLACK, white=OPENCV_NP_LEVEL_WHITE
+    )
     sigmoidal_lut = _build_sigmoidal_lut_u8_np(
         np_module,
         contrast=OPENCV_NP_SIGMOIDAL_CONTRAST,
         midpoint=OPENCV_NP_SIGMOIDAL_MIDPOINT,
     )
-    rgb = _apply_sigmoidal_contrast_with_lut_np(cv2_module, np_module, rgb, sigmoidal_lut)
-    rgb = _vibrance_hsl_gamma_np(np_module, rgb, saturation_gamma=OPENCV_NP_SATURATION_GAMMA)
-    high_pass_gray = _high_pass_math_gray_np(cv2_module, np_module, rgb, blur_sigma=OPENCV_NP_HIGH_PASS_BLUR_SIGMA)
+    rgb = _apply_sigmoidal_contrast_with_lut_np(
+        cv2_module, np_module, rgb, sigmoidal_lut
+    )
+    rgb = _vibrance_hsl_gamma_np(
+        np_module, rgb, saturation_gamma=OPENCV_NP_SATURATION_GAMMA
+    )
+    high_pass_gray = _high_pass_math_gray_np(
+        cv2_module, np_module, rgb, blur_sigma=OPENCV_NP_HIGH_PASS_BLUR_SIGMA
+    )
     rgb = _overlay_composite_opaque_np(np_module, rgb, high_pass_gray)
-    out_rgb_u16 = np_module.clip(np_module.round(rgb * 65535.0), 0, 65535).astype(np_module.uint16)
+    out_rgb_u16 = np_module.clip(np_module.round(rgb * 65535.0), 0, 65535).astype(
+        np_module.uint16
+    )
     out_bgr_u16 = cv2_module.cvtColor(out_rgb_u16, cv2_module.COLOR_RGB2BGR)
     if not cv2_module.imwrite(str(output_file), out_bgr_u16):
         raise RuntimeError(f"OpenCV-NP failed to write wow output: {output_file}")
 
 
-def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np_module):
+def _apply_validated_wow_pipeline_opencv(
+    input_file, output_file, cv2_module, np_module
+):
     """@brief Execute validated wow pipeline using OpenCV and numpy.
 
     @details Reads RGB image payload and enforces deterministic wow input
@@ -2270,14 +2716,27 @@ def _apply_validated_wow_pipeline_opencv(input_file, output_file, cv2_module, np
         image_bgr = (image_bgr.astype(np_module.uint16) * 257).astype(np_module.uint16)
     elif dtype_name != "uint16":
         raise RuntimeError(f"OpenCV wow input must be uint16 image: {input_file}")
-    rgb_float = cv2_module.cvtColor(image_bgr, cv2_module.COLOR_BGR2RGB).astype(np_module.float64) / 65535.0
-    rgb_float = _selective_blur_contrast_gated_vectorized(np_module, rgb_float, sigma=2.0, threshold_percent=10.0)
-    rgb_float = _level_per_channel_adaptive(np_module, rgb_float, low_pct=0.1, high_pct=99.9)
+    rgb_float = (
+        cv2_module.cvtColor(image_bgr, cv2_module.COLOR_BGR2RGB).astype(
+            np_module.float64
+        )
+        / 65535.0
+    )
+    rgb_float = _selective_blur_contrast_gated_vectorized(
+        np_module, rgb_float, sigma=2.0, threshold_percent=10.0
+    )
+    rgb_float = _level_per_channel_adaptive(
+        np_module, rgb_float, low_pct=0.1, high_pct=99.9
+    )
     rgb_float = _sigmoidal_contrast(np_module, rgb_float, contrast=3.0, midpoint=0.5)
     rgb_float = _vibrance_hsl_gamma(np_module, rgb_float, saturation_gamma=0.8)
-    high_pass_gray = _high_pass_math_gray(cv2_module, np_module, rgb_float, blur_sigma=2.5)
+    high_pass_gray = _high_pass_math_gray(
+        cv2_module, np_module, rgb_float, blur_sigma=2.5
+    )
     rgb_float = _overlay_composite(np_module, rgb_float, high_pass_gray)
-    output_rgb_u16 = np_module.clip(np_module.round(rgb_float * 65535.0), 0, 65535).astype(np_module.uint16)
+    output_rgb_u16 = np_module.clip(
+        np_module.round(rgb_float * 65535.0), 0, 65535
+    ).astype(np_module.uint16)
     output_bgr_u16 = cv2_module.cvtColor(output_rgb_u16, cv2_module.COLOR_RGB2BGR)
     if not cv2_module.imwrite(str(output_file), output_bgr_u16):
         raise RuntimeError(f"OpenCV failed to write wow output: {output_file}")
@@ -2362,7 +2821,12 @@ def _encode_jpg(
                 0,
                 min(
                     255,
-                    int(round(((value / 255.0) ** (1.0 / postprocess_options.post_gamma)) * 255.0)),
+                    int(
+                        round(
+                            ((value / 255.0) ** (1.0 / postprocess_options.post_gamma))
+                            * 255.0
+                        )
+                    ),
                 ),
             )
             for value in range(256)
@@ -2371,23 +2835,33 @@ def _encode_jpg(
         pil_image = pil_image.point(lut * max(1, band_count))
 
     if postprocess_options.brightness != 1.0:
-        pil_image = pil_enhance_module.Brightness(pil_image).enhance(postprocess_options.brightness)
+        pil_image = pil_enhance_module.Brightness(pil_image).enhance(
+            postprocess_options.brightness
+        )
     if postprocess_options.contrast != 1.0:
-        pil_image = pil_enhance_module.Contrast(pil_image).enhance(postprocess_options.contrast)
+        pil_image = pil_enhance_module.Contrast(pil_image).enhance(
+            postprocess_options.contrast
+        )
     if postprocess_options.saturation != 1.0:
-        pil_image = pil_enhance_module.Color(pil_image).enhance(postprocess_options.saturation)
+        pil_image = pil_enhance_module.Color(pil_image).enhance(
+            postprocess_options.saturation
+        )
 
     if postprocess_options.wow_mode is not None:
         with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-wow-") as wow_temp_dir_raw:
             wow_temp_dir = Path(wow_temp_dir_raw)
             postprocessed_input = wow_temp_dir / "postprocessed_input.tif"
             wow_output = wow_temp_dir / "wow_output.tif"
-            pil_image.save(str(postprocessed_input), format="TIFF", compression="tiff_lzw")
+            pil_image.save(
+                str(postprocessed_input), format="TIFF", compression="tiff_lzw"
+            )
             if postprocess_options.wow_mode == "ImageMagick":
                 if imagemagick_command is None:
                     imagemagick_command = _resolve_imagemagick_command()
                 if imagemagick_command is None:
-                    raise RuntimeError("Missing required dependency: ImageMagick executable (magick or convert)")
+                    raise RuntimeError(
+                        "Missing required dependency: ImageMagick executable (magick or convert)"
+                    )
                 _apply_validated_wow_pipeline(
                     postprocessed_input=postprocessed_input,
                     wow_output=wow_output,
@@ -2395,7 +2869,9 @@ def _encode_jpg(
                 )
             elif postprocess_options.wow_mode == "OpenCV":
                 if wow_opencv_dependencies is None:
-                    raise RuntimeError("Missing required dependencies: opencv-python and numpy")
+                    raise RuntimeError(
+                        "Missing required dependencies: opencv-python and numpy"
+                    )
                 cv2_module, np_module = wow_opencv_dependencies
                 _apply_validated_wow_pipeline_opencv(
                     input_file=postprocessed_input,
@@ -2405,7 +2881,9 @@ def _encode_jpg(
                 )
             elif postprocess_options.wow_mode == "OpenCV-NP":
                 if wow_opencv_dependencies is None:
-                    raise RuntimeError("Missing required dependencies: opencv-python and numpy")
+                    raise RuntimeError(
+                        "Missing required dependencies: opencv-python and numpy"
+                    )
                 cv2_module, np_module = wow_opencv_dependencies
                 _apply_validated_wow_pipeline_opencv_np(
                     input_file=postprocessed_input,
@@ -2414,7 +2892,9 @@ def _encode_jpg(
                     np_module=np_module,
                 )
             else:
-                raise RuntimeError(f"Unsupported wow mode: {postprocess_options.wow_mode}")
+                raise RuntimeError(
+                    f"Unsupported wow mode: {postprocess_options.wow_mode}"
+                )
             wow_data = imageio_module.imread(str(wow_output))
             wow_dtype_name = str(getattr(wow_data, "dtype", ""))
             if wow_dtype_name and wow_dtype_name != "uint8":
@@ -2505,13 +2985,13 @@ def _is_supported_runtime_os():
 def run(args):
     """@brief Execute `dng2hdr2jpg` command pipeline.
 
-    @details Parses command options, validates dependencies, extracts three RAW
-    brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow,
-    writes JPG output, and guarantees temporary artifact cleanup through isolated
-    temporary directory lifecycle.
+    @details Parses command options, validates dependencies, resolves static or
+    adaptive EV selector, extracts three RAW brackets, executes selected `enfuse`
+    flow or selected luminance-hdr-cli flow, writes JPG output, and guarantees
+    temporary artifact cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
     """
 
     if not _is_supported_runtime_os():
@@ -2525,6 +3005,7 @@ def run(args):
         input_dng,
         output_jpg,
         ev_value,
+        auto_ev_enabled,
         gamma_value,
         postprocess_options,
         enable_luminance,
@@ -2557,7 +3038,9 @@ def run(args):
     if postprocess_options.wow_mode == "ImageMagick":
         imagemagick_command = _resolve_imagemagick_command()
         if imagemagick_command is None:
-            print_error("Missing required dependency: ImageMagick executable (magick or convert)")
+            print_error(
+                "Missing required dependency: ImageMagick executable (magick or convert)"
+            )
             return 1
     elif postprocess_options.wow_mode == "OpenCV":
         wow_opencv_dependencies = _resolve_wow_opencv_dependencies()
@@ -2573,20 +3056,18 @@ def run(args):
         return 1
 
     rawpy_module, imageio_module, pil_image_module, pil_enhance_module = dependencies
-    source_exif_payload, source_exif_timestamp, source_orientation = _extract_dng_exif_payload_and_timestamp(
-        pil_image_module=pil_image_module,
-        input_dng=input_dng,
+    source_exif_payload, source_exif_timestamp, source_orientation = (
+        _extract_dng_exif_payload_and_timestamp(
+            pil_image_module=pil_image_module,
+            input_dng=input_dng,
+        )
     )
     piexif_module = None
     if source_exif_payload is not None:
         piexif_module = _load_piexif_dependency()
         if piexif_module is None:
             return 1
-    processing_errors = _collect_processing_errors(rawpy_module)
-    multipliers = _build_exposure_multipliers(ev_value)
-
     print_info(f"Reading DNG input: {input_dng}")
-    print_info(f"Using EV bracket: {ev_value}")
     print_info(f"Using gamma pair: {gamma_value[0]:g},{gamma_value[1]:g}")
     print_info(
         "Postprocess factors: "
@@ -2600,7 +3081,9 @@ def run(args):
     if enable_luminance:
         extra_args_text = ""
         if luminance_options.tmo_extra_args:
-            extra_args_text = f", tmoExtraArgs=[{' '.join(luminance_options.tmo_extra_args)}]"
+            extra_args_text = (
+                f", tmoExtraArgs=[{' '.join(luminance_options.tmo_extra_args)}]"
+            )
         print_info(
             "HDR backend: luminance-hdr-cli "
             f"(hdrModel={luminance_options.hdr_model}, "
@@ -2611,12 +3094,24 @@ def run(args):
     else:
         print_info("HDR backend: enfuse")
 
+    processing_errors = _collect_processing_errors(rawpy_module)
+
     with tempfile.TemporaryDirectory(prefix="dng2hdr2jpg-") as temp_dir_raw:
         temp_dir = Path(temp_dir_raw)
         merged_tiff = temp_dir / "merged_hdr.tif"
 
         try:
             with rawpy_module.imread(str(input_dng)) as raw_handle:
+                effective_ev_value = _resolve_ev_value(
+                    raw_handle=raw_handle,
+                    ev_value=ev_value,
+                    auto_ev_enabled=auto_ev_enabled,
+                )
+                print_info(
+                    f"Using EV bracket: {effective_ev_value}"
+                    + (" (adaptive)" if auto_ev_enabled else " (static)")
+                )
+                multipliers = _build_exposure_multipliers(effective_ev_value)
                 bracket_paths = _write_bracket_images(
                     raw_handle=raw_handle,
                     imageio_module=imageio_module,
@@ -2628,7 +3123,7 @@ def run(args):
                 _run_luminance_hdr_cli(
                     bracket_paths=bracket_paths,
                     output_hdr_tiff=merged_tiff,
-                    ev_value=ev_value,
+                    ev_value=effective_ev_value,
                     luminance_options=luminance_options,
                 )
             else:
