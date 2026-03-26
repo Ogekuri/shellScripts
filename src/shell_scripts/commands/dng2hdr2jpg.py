@@ -1330,15 +1330,16 @@ def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, 
     """@brief Materialize three bracket TIFF files from one RAW handle.
 
     @details Invokes `raw.postprocess` with `output_bps=16`,
-    `use_camera_wb=True`, `no_auto_bright=True`, and configurable gamma pair
-    for deterministic HDR-oriented bracket extraction before merge.
+    `use_camera_wb=True`, `no_auto_bright=True`, explicit `user_flip=0` to
+    disable implicit RAW orientation mutation, and configurable gamma pair for
+    deterministic HDR-oriented bracket extraction before merge.
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
     @param imageio_module {ModuleType} Imported imageio module with `imwrite`.
     @param multipliers {tuple[float, float, float]} Ordered exposure multipliers.
     @param gamma_value {tuple[float, float]} Gamma pair forwarded to RAW postprocess.
     @param temp_dir {Path} Directory for intermediate TIFF artifacts.
     @return {list[Path]} Ordered temporary TIFF file paths.
-    @satisfies REQ-057
+    @satisfies REQ-057, REQ-077
     """
 
     labels = ("ev_minus", "ev_zero", "ev_plus")
@@ -1353,6 +1354,7 @@ def _write_bracket_images(raw_handle, imageio_module, multipliers, gamma_value, 
             use_camera_wb=True,
             no_auto_bright=True,
             gamma=gamma_value,
+            user_flip=0,
         )
         imageio_module.imwrite(str(temp_path), rgb_data)
         bracket_paths.append(temp_path)

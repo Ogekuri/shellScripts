@@ -113,7 +113,7 @@ class _FakeRawHandle:
         del exc_type, exc, tb
         return False
 
-    def postprocess(self, bright, output_bps, use_camera_wb, no_auto_bright, gamma):
+    def postprocess(self, bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None):
         """@brief Capture bracket extraction options and return payload marker.
 
         @param bright {float} Brightness multiplier.
@@ -121,6 +121,7 @@ class _FakeRawHandle:
         @param use_camera_wb {bool} Camera white-balance enable flag.
         @param no_auto_bright {bool} Auto-bright disable flag.
         @param gamma {tuple[float, float]} Raw gamma pair.
+        @param user_flip {int|None} rawpy orientation override selector.
         @return {str} Deterministic payload marker.
         """
 
@@ -129,6 +130,7 @@ class _FakeRawHandle:
         self._observed["use_camera_wb"].append(use_camera_wb)
         self._observed["no_auto_bright"].append(no_auto_bright)
         self._observed["gamma"].append(gamma)
+        self._observed.setdefault("user_flip", []).append(user_flip)
         return f"rgb-{bright}"
 
 
@@ -472,6 +474,7 @@ def test_dng2hdr2jpg_uses_default_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path
     assert observed["use_camera_wb"] == [True, True, True]
     assert observed["no_auto_bright"] == [True, True, True]
     assert observed["gamma"] == [(2.222, 4.5), (2.222, 4.5), (2.222, 4.5)]
+    assert observed["user_flip"] == [0, 0, 0]
     assert observed["enfuse_cmd"][0] == "enfuse"
     assert len(observed["enfuse_cmd"]) == 6
     assert "postprocess_ops" not in observed
@@ -600,6 +603,52 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(monkeypatch, t
     assert output_jpg.exists()
     assert observed["tmp_dir"] is not None
     assert not observed["tmp_dir"].exists()
+
+
+def test_write_bracket_images_disables_raw_orientation_auto_flip(tmp_path):
+    """
+    @brief Reproduce orientation defect in RAW bracket extraction path.
+    @details Calls `_write_bracket_images` with a fake RAW handle that records
+      `user_flip` values from `raw.postprocess`; expected behavior requires
+      explicit `user_flip=0` to disable implicit orientation mutation.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-057, REQ-077
+    """
+
+    observed = {"user_flip": [], "writes": []}
+
+    class _FakeRawHandle:
+        """@brief Provide fake RAW handle that records postprocess options."""
+
+        @staticmethod
+        def postprocess(bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None):
+            observed["user_flip"].append(user_flip)
+            assert output_bps == 16
+            assert use_camera_wb is True
+            assert no_auto_bright is True
+            assert gamma == (2.222, 4.5)
+            return f"rgb-{bright}"
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module that records TIFF writes."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            observed["writes"].append(Path(path).name)
+            Path(path).write_text("payload", encoding="utf-8")
+
+    bracket_paths = dng2hdr2jpg._write_bracket_images(
+        raw_handle=_FakeRawHandle,
+        imageio_module=_FakeImageIoModule,
+        multipliers=(0.25, 1.0, 4.0),
+        gamma_value=(2.222, 4.5),
+        temp_dir=tmp_path,
+    )
+
+    assert [path.name for path in bracket_paths] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
+    assert observed["writes"] == ["ev_minus.tif", "ev_zero.tif", "ev_plus.tif"]
+    assert observed["user_flip"] == [0, 0, 0]
 
 
 def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_path):
