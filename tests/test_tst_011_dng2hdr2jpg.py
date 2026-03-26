@@ -10,6 +10,7 @@
 from pathlib import Path
 from importlib import import_module
 import sys
+import struct
 import subprocess
 import tempfile as std_tempfile
 import tomllib
@@ -1710,6 +1711,115 @@ def test_extract_dng_exif_payload_preserves_source_orientation_tag():
     expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
     assert exif_timestamp == expected_timestamp
     assert source_orientation == 6
+
+
+def test_refresh_output_jpg_exif_thumbnail_normalizes_short_sequence_values(tmp_path):
+    """
+    @brief Reproduce EXIF dump crash on non-integer SHORT sequence values.
+    @details Exercises EXIF thumbnail refresh with source EXIF payload containing
+      a SHORT-sequence tag encoded as strings and verifies the refresh path
+      normalizes values before `piexif.dump`, preventing `struct.error`.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-077, REQ-078
+    """
+
+    observed = {"insert_calls": []}
+    output_jpg = tmp_path / "scene.jpg"
+    output_jpg.write_text("jpg", encoding="utf-8")
+
+    class _FakeThumbnailImage:
+        """@brief Provide fake Pillow image for deterministic thumbnail refresh."""
+
+        mode = "RGB"
+
+        def copy(self):
+            """@brief Return self copy for orientation helper compatibility."""
+
+            return self
+
+        def thumbnail(self, _size):
+            """@brief Accept thumbnail resize request without side effects."""
+
+        def save(self, buffer, format, quality, optimize):
+            """@brief Serialize deterministic thumbnail payload into buffer."""
+
+            assert format == "JPEG"
+            assert quality == 85
+            assert optimize is True
+            buffer.write(b"thumb")
+
+    class _FakeOpenedImage(_FakeThumbnailImage):
+        """@brief Provide context-manager wrapper for fake Pillow open call."""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+    class _FakePilImageModule:
+        """@brief Provide fake PIL module exposing deterministic `open`."""
+
+        class Transpose:
+            """@brief Provide transpose constants required by orientation map."""
+
+            FLIP_LEFT_RIGHT = 0
+            ROTATE_180 = 1
+            FLIP_TOP_BOTTOM = 2
+            TRANSPOSE = 3
+            ROTATE_270 = 4
+            TRANSVERSE = 5
+            ROTATE_90 = 6
+
+        @staticmethod
+        def open(path):
+            assert Path(path).name == "scene.jpg"
+            return _FakeOpenedImage()
+
+    class _FakeImageIfd:
+        """@brief Provide minimal EXIF tag constants used by production code."""
+
+        Orientation = 274
+        YCbCrSubSampling = 530
+
+    class _FakePiexifModule:
+        """@brief Provide deterministic piexif-like module for defect repro."""
+
+        ImageIFD = _FakeImageIfd
+
+        @staticmethod
+        def load(_payload):
+            return {
+                "0th": {_FakeImageIfd.YCbCrSubSampling: ("2", "1")},
+                "Exif": {},
+                "GPS": {},
+                "Interop": {},
+                "1st": {},
+                "thumbnail": None,
+            }
+
+        @staticmethod
+        def dump(exif_dict):
+            ycbcr_subsampling = exif_dict["0th"].get(_FakeImageIfd.YCbCrSubSampling)
+            if ycbcr_subsampling != (2, 1):
+                raise struct.error("required argument is not an integer")
+            return b"exif-bytes"
+
+        @staticmethod
+        def insert(exif_bytes, output_path):
+            observed["insert_calls"].append((exif_bytes, Path(output_path)))
+
+    dng2hdr2jpg._refresh_output_jpg_exif_thumbnail_after_save(
+        pil_image_module=_FakePilImageModule,
+        piexif_module=_FakePiexifModule,
+        output_jpg=output_jpg,
+        source_exif_payload=b"source-exif",
+        source_orientation=1,
+    )
+
+    assert observed["insert_calls"] == [(b"exif-bytes", output_jpg)]
 
 
 def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypatch, tmp_path):

@@ -1154,6 +1154,100 @@ def _build_oriented_thumbnail_jpeg_bytes(pil_image_module, output_jpg, source_or
         return buffer.getvalue()
 
 
+def _coerce_exif_int_like_value(raw_value):
+    """@brief Coerce integer-like EXIF scalar values to Python integers.
+
+    @details Converts scalar EXIF values represented as `int`, integer-valued
+    `float`, ASCII-digit `str`, or ASCII-digit `bytes` into deterministic Python
+    `int`; returns `None` when conversion is not safe.
+    @param raw_value {object} Candidate EXIF scalar value.
+    @return {int|None} Coerced integer value or `None` when not coercible.
+    @satisfies REQ-066, REQ-077, REQ-078
+    """
+
+    if isinstance(raw_value, bool):
+        return None
+    if isinstance(raw_value, int):
+        return raw_value
+    if isinstance(raw_value, float):
+        if raw_value.is_integer():
+            return int(raw_value)
+        return None
+    text_value = None
+    if isinstance(raw_value, bytes):
+        try:
+            text_value = raw_value.decode("ascii").strip()
+        except UnicodeDecodeError:
+            return None
+    elif isinstance(raw_value, str):
+        text_value = raw_value.strip()
+    if text_value is None or not text_value:
+        return None
+    sign = text_value[0]
+    digits = text_value[1:] if sign in ("+", "-") else text_value
+    if not digits.isdigit():
+        return None
+    try:
+        return int(text_value)
+    except ValueError:
+        return None
+
+
+def _normalize_ifd_integer_like_values_for_piexif_dump(piexif_module, exif_dict):
+    """@brief Normalize integer-like IFD values before `piexif.dump`.
+
+    @details Traverses EXIF IFD mappings (`0th`, `Exif`, `GPS`, `Interop`,
+    `1st`) and coerces integer-like values that can trigger `piexif.dump`
+    packing failures when represented as strings or other non-int scalars.
+    Tuple/list values are normalized only when all items are integer-like.
+    Scalar conversion is additionally constrained by `piexif.TAGS` integer
+    field types when tag metadata is available.
+    @param piexif_module {ModuleType} Imported piexif module.
+    @param exif_dict {dict[str, object]} EXIF dictionary loaded via piexif.
+    @return {None} Mutates `exif_dict` in place.
+    @satisfies REQ-066, REQ-077, REQ-078
+    """
+
+    integer_type_ids = {1, 3, 4, 6, 8, 9}
+    tags_table = getattr(piexif_module, "TAGS", {})
+    for ifd_name in ("0th", "Exif", "GPS", "Interop", "1st"):
+        ifd_mapping = exif_dict.get(ifd_name)
+        if not isinstance(ifd_mapping, dict):
+            continue
+        ifd_tag_definitions = tags_table.get(ifd_name, {}) if isinstance(tags_table, dict) else {}
+        for tag_id, raw_value in list(ifd_mapping.items()):
+            normalized_value = raw_value
+            if isinstance(raw_value, tuple):
+                normalized_items = []
+                for item in raw_value:
+                    coerced_item = _coerce_exif_int_like_value(item)
+                    if coerced_item is None:
+                        normalized_items = []
+                        break
+                    normalized_items.append(coerced_item)
+                if normalized_items:
+                    normalized_value = tuple(normalized_items)
+            elif isinstance(raw_value, list):
+                normalized_items = []
+                for item in raw_value:
+                    coerced_item = _coerce_exif_int_like_value(item)
+                    if coerced_item is None:
+                        normalized_items = []
+                        break
+                    normalized_items.append(coerced_item)
+                if normalized_items:
+                    normalized_value = normalized_items
+            else:
+                tag_metadata = ifd_tag_definitions.get(tag_id) if isinstance(ifd_tag_definitions, dict) else None
+                tag_type = tag_metadata.get("type") if isinstance(tag_metadata, dict) else None
+                if tag_type in integer_type_ids:
+                    coerced_scalar = _coerce_exif_int_like_value(raw_value)
+                    if coerced_scalar is not None:
+                        normalized_value = coerced_scalar
+            if normalized_value is not raw_value:
+                ifd_mapping[tag_id] = normalized_value
+
+
 def _refresh_output_jpg_exif_thumbnail_after_save(
     pil_image_module,
     piexif_module,
@@ -1194,6 +1288,10 @@ def _refresh_output_jpg_exif_thumbnail_after_save(
         exif_dict["0th"][orientation_tag] = orientation_value
         exif_dict["1st"][orientation_tag] = 1
         exif_dict["thumbnail"] = thumbnail_payload
+        _normalize_ifd_integer_like_values_for_piexif_dump(
+            piexif_module=piexif_module,
+            exif_dict=exif_dict,
+        )
         exif_bytes = piexif_module.dump(exif_dict)
         piexif_module.insert(exif_bytes, str(output_jpg))
     except (ValueError, TypeError, KeyError, OSError, AttributeError) as error:
