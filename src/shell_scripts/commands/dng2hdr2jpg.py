@@ -1041,7 +1041,8 @@ def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
 
     @details Opens input DNG via Pillow, suppresses known non-actionable
     `PIL.TiffImagePlugin` metadata warning for malformed TIFF tag `33723`, reads
-    EXIF mapping without orientation mutation, serializes payload for JPEG save,
+    EXIF mapping without orientation mutation, serializes payload for JPEG save
+    while source image handle is still open,
     resolves source orientation from EXIF tag `274`, and resolves filesystem timestamp priority:
     `DateTimeOriginal`(36867) > `DateTimeDigitized`(36868) > `DateTime`(306).
     @param pil_image_module {ModuleType} Imported Pillow Image module.
@@ -1063,24 +1064,24 @@ def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
                 if not hasattr(source_image, "getexif"):
                     return (None, None, 1)
                 exif_data = source_image.getexif()
-            if not exif_data:
-                return (None, None, 1)
-            exif_payload = exif_data.tobytes() if hasattr(exif_data, "tobytes") else None
-            source_orientation = 1
-            orientation_raw = exif_data.get(_EXIF_TAG_ORIENTATION)
-            if orientation_raw is not None:
-                try:
-                    orientation_value = int(orientation_raw)
-                    if orientation_value in _EXIF_VALID_ORIENTATIONS:
-                        source_orientation = orientation_value
-                except (TypeError, ValueError):
-                    source_orientation = 1
-            exif_timestamp = None
-            for exif_tag in (_EXIF_TAG_DATETIME_ORIGINAL, _EXIF_TAG_DATETIME_DIGITIZED, _EXIF_TAG_DATETIME):
-                exif_timestamp = _parse_exif_datetime_to_timestamp(exif_data.get(exif_tag))
-                if exif_timestamp is not None:
-                    break
-            return (exif_payload, exif_timestamp, source_orientation)
+                if exif_data is None:
+                    return (None, None, 1)
+                exif_payload = exif_data.tobytes() if hasattr(exif_data, "tobytes") else None
+                source_orientation = 1
+                orientation_raw = exif_data.get(_EXIF_TAG_ORIENTATION)
+                if orientation_raw is not None:
+                    try:
+                        orientation_value = int(orientation_raw)
+                        if orientation_value in _EXIF_VALID_ORIENTATIONS:
+                            source_orientation = orientation_value
+                    except (TypeError, ValueError):
+                        source_orientation = 1
+                exif_timestamp = None
+                for exif_tag in (_EXIF_TAG_DATETIME_ORIGINAL, _EXIF_TAG_DATETIME_DIGITIZED, _EXIF_TAG_DATETIME):
+                    exif_timestamp = _parse_exif_datetime_to_timestamp(exif_data.get(exif_tag))
+                    if exif_timestamp is not None:
+                        break
+                return (exif_payload, exif_timestamp, source_orientation)
     except (OSError, ValueError, TypeError, AttributeError):
         return (None, None, 1)
 
@@ -1218,6 +1219,8 @@ def _normalize_ifd_integer_like_values_for_piexif_dump(piexif_module, exif_dict)
     `1st`) and coerces integer-like values that can trigger `piexif.dump`
     packing failures when represented as strings or other non-int scalars.
     Tuple/list values are normalized only when all items are integer-like.
+    For integer sequence tag types, nested two-item pairs are flattened to a
+    single integer sequence for `piexif.dump` compatibility.
     Scalar conversion is additionally constrained by `piexif.TAGS` integer
     field types when tag metadata is available.
     @param piexif_module {ModuleType} Imported piexif module.
@@ -1227,6 +1230,14 @@ def _normalize_ifd_integer_like_values_for_piexif_dump(piexif_module, exif_dict)
     """
 
     integer_type_ids = {1, 3, 4, 6, 8, 9}
+    integer_type_ranges = {
+        1: (0, 255),
+        3: (0, 65535),
+        4: (0, 4294967295),
+        6: (-128, 127),
+        8: (-32768, 32767),
+        9: (-2147483648, 2147483647),
+    }
     tags_table = getattr(piexif_module, "TAGS", {})
     for ifd_name in ("0th", "Exif", "GPS", "Interop", "1st"):
         ifd_mapping = exif_dict.get(ifd_name)
@@ -1262,6 +1273,45 @@ def _normalize_ifd_integer_like_values_for_piexif_dump(piexif_module, exif_dict)
                     coerced_scalar = _coerce_exif_int_like_value(raw_value)
                     if coerced_scalar is not None:
                         normalized_value = coerced_scalar
+
+            tag_metadata = ifd_tag_definitions.get(tag_id) if isinstance(ifd_tag_definitions, dict) else None
+            tag_type = tag_metadata.get("type") if isinstance(tag_metadata, dict) else None
+            if tag_type in integer_type_ids and isinstance(normalized_value, (tuple, list)):
+                flattened_items = []
+                flattenable = True
+                for item in normalized_value:
+                    if isinstance(item, (tuple, list)):
+                        nested_values = []
+                        for nested_item in item:
+                            coerced_nested_item = _coerce_exif_int_like_value(nested_item)
+                            if coerced_nested_item is None:
+                                flattenable = False
+                                break
+                            nested_values.append(coerced_nested_item)
+                        if not flattenable:
+                            break
+                        flattened_items.extend(nested_values)
+                        continue
+                    coerced_item = _coerce_exif_int_like_value(item)
+                    if coerced_item is None:
+                        flattenable = False
+                        break
+                    flattened_items.append(coerced_item)
+                if flattenable and flattened_items:
+                    normalized_value = tuple(flattened_items) if isinstance(normalized_value, tuple) else flattened_items
+            if tag_type in integer_type_ranges:
+                min_allowed, max_allowed = integer_type_ranges[tag_type]
+                if isinstance(normalized_value, (tuple, list)):
+                    if any(not isinstance(item, int) or item < min_allowed or item > max_allowed for item in normalized_value):
+                        ifd_mapping.pop(tag_id, None)
+                        continue
+                elif isinstance(normalized_value, int):
+                    if normalized_value < min_allowed or normalized_value > max_allowed:
+                        ifd_mapping.pop(tag_id, None)
+                        continue
+            if tag_type == 7 and isinstance(normalized_value, tuple):
+                if all(isinstance(item, int) and 0 <= item <= 255 for item in normalized_value):
+                    normalized_value = bytes(normalized_value)
             if normalized_value is not raw_value:
                 ifd_mapping[tag_id] = normalized_value
 

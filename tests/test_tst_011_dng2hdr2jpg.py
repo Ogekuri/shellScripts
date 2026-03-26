@@ -2028,6 +2028,71 @@ def test_extract_dng_exif_payload_suppresses_tiff_tag_33723_warning():
     assert not any("tag 33723 had too many entries" in str(w.message) for w in captured_warnings)
 
 
+def test_extract_dng_exif_payload_reads_payload_before_closing_image():
+    """
+    @brief Reproduce EXIF payload read failure after source image context closes.
+    @details Builds fake EXIF object whose `tobytes` fails when invoked after
+      source-image context exit; extractor must serialize payload and parse
+      `DateTime` while image handle is still open.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-074, REQ-077
+    """
+
+    observed = {"closed": False}
+
+    class _LazyExif:
+        """@brief Provide EXIF object requiring open source handle for `tobytes`."""
+
+        def __init__(self, state):
+            self._state = state
+
+        def get(self, key):
+            if key == 274:
+                return 6
+            if key == 306:
+                return "2004:08:28 16:04:14"
+            return None
+
+        def tobytes(self):
+            if self._state["closed"]:
+                raise ValueError("seek of closed file")
+            return b"lazy-exif"
+
+    class _FakeSourceImage:
+        """@brief Provide fake source image with close-sensitive EXIF payload."""
+
+        def __init__(self, state):
+            self._state = state
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            self._state["closed"] = True
+            return False
+
+        def getexif(self):
+            return _LazyExif(self._state)
+
+    class _FakePilImageModule:
+        """@brief Provide fake PIL module exposing deterministic `open`."""
+
+        @staticmethod
+        def open(_path):
+            return _FakeSourceImage(observed)
+
+    exif_payload, exif_timestamp, source_orientation = dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
+        pil_image_module=_FakePilImageModule,
+        input_dng=Path("scene.dng"),
+    )
+
+    assert exif_payload == b"lazy-exif"
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2004:08:28 16:04:14")
+    assert exif_timestamp == expected_timestamp
+    assert source_orientation == 6
+
+
 def test_parse_exif_datetime_to_timestamp_accepts_exif_null_terminated_text():
     """
     @brief Reproduce EXIF datetime parsing failure with null-terminated payload.
@@ -2152,6 +2217,129 @@ def test_refresh_output_jpg_exif_thumbnail_normalizes_short_sequence_values(tmp_
     )
 
     assert observed["insert_calls"] == [(b"exif-bytes", output_jpg)]
+
+
+def test_normalize_ifd_integer_like_values_flattens_nested_short_pairs():
+    """
+    @brief Reproduce piexif dump crash with nested SHORT pair tuples.
+    @details Builds EXIF dictionary containing nested tuple values for a SHORT
+      sequence tag and verifies normalization flattens two-item integer pairs
+      into one flat tuple acceptable by `piexif.dump`.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-077, REQ-078
+    """
+
+    class _FakePiexifModule:
+        """@brief Provide minimal piexif metadata table for SHORT sequence tag."""
+
+        TAGS = {
+            "0th": {
+                50728: {"type": 3},
+            },
+            "Exif": {},
+            "GPS": {},
+            "Interop": {},
+            "1st": {},
+        }
+
+    exif_dict = {
+        "0th": {
+            50728: ((105991, 200000), (1, 1), (157481, 200000)),
+        },
+        "Exif": {},
+        "GPS": {},
+        "Interop": {},
+        "1st": {},
+    }
+
+    dng2hdr2jpg._normalize_ifd_integer_like_values_for_piexif_dump(
+        piexif_module=_FakePiexifModule,
+        exif_dict=exif_dict,
+    )
+
+    assert 50728 not in exif_dict["0th"]
+
+
+def test_normalize_ifd_integer_like_values_drops_out_of_range_short_values():
+    """
+    @brief Reproduce piexif dump crash with out-of-range SHORT sequence values.
+    @details Builds EXIF dictionary with flattened SHORT sequence containing
+      values above `65535` and verifies normalization drops that invalid tag to
+      prevent `piexif.dump` unsigned-short range failures.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-077, REQ-078
+    """
+
+    class _FakePiexifModule:
+        """@brief Provide minimal piexif metadata table for SHORT sequence tag."""
+
+        TAGS = {
+            "0th": {
+                50728: {"type": 3},
+            },
+            "Exif": {},
+            "GPS": {},
+            "Interop": {},
+            "1st": {},
+        }
+
+    exif_dict = {
+        "0th": {
+            50728: (105991, 200000, 1, 1, 157481, 200000),
+        },
+        "Exif": {},
+        "GPS": {},
+        "Interop": {},
+        "1st": {},
+    }
+
+    dng2hdr2jpg._normalize_ifd_integer_like_values_for_piexif_dump(
+        piexif_module=_FakePiexifModule,
+        exif_dict=exif_dict,
+    )
+
+    assert 50728 not in exif_dict["0th"]
+
+
+def test_normalize_ifd_integer_like_values_converts_byte_tuple_to_bytes():
+    """
+    @brief Reproduce piexif type error for BYTE tags represented as tuples.
+    @details Builds EXIF dictionary where BYTE-type tag `RawImageDigest` uses a
+      tuple of integers and verifies normalization converts it to `bytes` for
+      `piexif.dump` compatibility.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-077, REQ-078
+    """
+
+    class _FakePiexifModule:
+        """@brief Provide minimal piexif metadata table for BYTE tag."""
+
+        TAGS = {
+            "0th": {
+                50972: {"type": 7},
+            },
+            "Exif": {},
+            "GPS": {},
+            "Interop": {},
+            "1st": {},
+        }
+
+    exif_dict = {
+        "0th": {
+            50972: (38, 78, 96, 211),
+        },
+        "Exif": {},
+        "GPS": {},
+        "Interop": {},
+        "1st": {},
+    }
+
+    dng2hdr2jpg._normalize_ifd_integer_like_values_for_piexif_dump(
+        piexif_module=_FakePiexifModule,
+        exif_dict=exif_dict,
+    )
+
+    assert exif_dict["0th"][50972] == bytes((38, 78, 96, 211))
 
 
 def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypatch, tmp_path):
