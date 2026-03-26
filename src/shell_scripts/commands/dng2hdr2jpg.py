@@ -1025,8 +1025,10 @@ def _parse_exif_datetime_to_timestamp(datetime_raw):
 def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
     """@brief Extract DNG EXIF payload bytes and preferred datetime timestamp.
 
-    @details Opens input DNG via Pillow, reads EXIF mapping, serializes payload
-    for JPEG `exif` save parameter, and resolves filesystem timestamp priority:
+    @details Opens input DNG via Pillow, reads EXIF mapping, normalizes EXIF
+    orientation tag (`274`) to `1` before serialization for JPEG `exif` save
+    parameter to keep metadata coherent with emitted pixel orientation, and
+    resolves filesystem timestamp priority:
     `DateTimeOriginal`(36867) > `DateTimeDigitized`(36868) > `DateTime`(306).
     @param pil_image_module {ModuleType} Imported Pillow Image module.
     @param input_dng {Path} Source DNG path.
@@ -1043,6 +1045,8 @@ def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
             exif_data = source_image.getexif()
             if not exif_data:
                 return (None, None)
+            if hasattr(exif_data, "__setitem__"):
+                exif_data[274] = 1
             exif_payload = exif_data.tobytes() if hasattr(exif_data, "tobytes") else None
             exif_timestamp = None
             for exif_tag in (36867, 36868, 306):

@@ -1618,6 +1618,69 @@ def test_dng2hdr2jpg_copies_dng_exif_and_sets_jpg_timestamps(monkeypatch, tmp_pa
     assert utime_values == (expected_timestamp, expected_timestamp)
 
 
+def test_extract_dng_exif_payload_normalizes_orientation_tag_for_jpg():
+    """
+    @brief Reproduce EXIF orientation inconsistency during DNG metadata extraction.
+    @details Builds a fake DNG EXIF container with camera orientation `6` and
+      verifies extractor normalizes orientation to `1` in serialized payload so
+      final JPG metadata remains coherent with already-postprocessed pixel data.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066
+    """
+
+    class _FakeExif:
+        """@brief Provide mutable EXIF map and deterministic serialized payload."""
+
+        def __init__(self):
+            self._values = {274: 6, 36867: "2024:07:08 09:10:11"}
+
+        def get(self, key):
+            """@brief Return EXIF value for requested numeric tag."""
+
+            return self._values.get(key)
+
+        def __setitem__(self, key, value):
+            """@brief Update EXIF value for requested numeric tag."""
+
+            self._values[key] = value
+
+        def tobytes(self):
+            """@brief Encode current orientation value into payload marker."""
+
+            orientation = self._values.get(274)
+            return f"orientation={orientation}".encode("utf-8")
+
+    class _FakeSourceImage:
+        """@brief Provide fake source image exposing `getexif` context surface."""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+        @staticmethod
+        def getexif():
+            return _FakeExif()
+
+    class _FakePilImageModule:
+        """@brief Provide fake PIL module exposing `open` callable."""
+
+        @staticmethod
+        def open(_path):
+            return _FakeSourceImage()
+
+    exif_payload, exif_timestamp = dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
+        pil_image_module=_FakePilImageModule,
+        input_dng=Path("scene.dng"),
+    )
+
+    assert exif_payload == b"orientation=1"
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
+    assert exif_timestamp == expected_timestamp
+
+
 def test_dng2hdr2jpg_skips_timestamp_update_when_exif_datetime_missing(monkeypatch, tmp_path):
     """
     @brief Validate no timestamp update when EXIF datetime fields are absent.
