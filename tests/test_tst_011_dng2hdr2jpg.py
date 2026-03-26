@@ -14,6 +14,7 @@ import struct
 import subprocess
 import tempfile as std_tempfile
 import tomllib
+import warnings
 
 import pytest
 
@@ -1762,6 +1763,73 @@ def test_extract_dng_exif_payload_preserves_source_orientation_tag():
     assert source_orientation == 6
 
 
+def test_extract_dng_exif_payload_suppresses_tiff_tag_33723_warning():
+    """
+    @brief Reproduce noisy PIL metadata warning during EXIF extraction.
+    @details Emits explicit `PIL.TiffImagePlugin` warning for TIFF tag `33723`
+      from fake `getexif` path and verifies extractor suppresses this known
+      non-actionable warning while preserving EXIF payload and timestamp parse.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-074
+    """
+
+    class _FakeExif:
+        """@brief Provide deterministic EXIF values for warning-suppression test."""
+
+        @staticmethod
+        def get(key):
+            if key == 274:
+                return 1
+            if key == 36867:
+                return "2024:07:08 09:10:11"
+            return None
+
+        @staticmethod
+        def tobytes():
+            return b"exif-warning-test"
+
+    class _FakeSourceImage:
+        """@brief Provide fake source image surface for EXIF extraction test."""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+        @staticmethod
+        def getexif():
+            warnings.warn_explicit(
+                "Metadata Warning, tag 33723 had too many entries: 15, expected 1",
+                UserWarning,
+                filename="/tmp/PIL/TiffImagePlugin.py",
+                lineno=759,
+                module="PIL.TiffImagePlugin",
+            )
+            return _FakeExif()
+
+    class _FakePilImageModule:
+        """@brief Provide fake PIL module exposing deterministic `open`."""
+
+        @staticmethod
+        def open(_path):
+            return _FakeSourceImage()
+
+    with warnings.catch_warnings(record=True) as captured_warnings:
+        warnings.simplefilter("always")
+        exif_payload, exif_timestamp, source_orientation = dng2hdr2jpg._extract_dng_exif_payload_and_timestamp(
+            pil_image_module=_FakePilImageModule,
+            input_dng=Path("scene.dng"),
+        )
+
+    assert exif_payload == b"exif-warning-test"
+    expected_timestamp = dng2hdr2jpg._parse_exif_datetime_to_timestamp("2024:07:08 09:10:11")
+    assert exif_timestamp == expected_timestamp
+    assert source_orientation == 1
+    assert not any("tag 33723 had too many entries" in str(w.message) for w in captured_warnings)
+
+
 def test_parse_exif_datetime_to_timestamp_accepts_exif_null_terminated_text():
     """
     @brief Reproduce EXIF datetime parsing failure with null-terminated payload.
@@ -1782,8 +1850,9 @@ def test_refresh_output_jpg_exif_thumbnail_normalizes_short_sequence_values(tmp_
     """
     @brief Reproduce EXIF dump crash on non-integer SHORT sequence values.
     @details Exercises EXIF thumbnail refresh with source EXIF payload containing
-      a SHORT-sequence tag encoded as strings and verifies the refresh path
-      normalizes values before `piexif.dump`, preventing `struct.error`.
+      a SHORT-sequence tag with a null-terminated ASCII bytes element and
+      verifies the refresh path normalizes values before `piexif.dump`,
+      preventing `struct.error`.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-066, REQ-077, REQ-078
@@ -1857,7 +1926,7 @@ def test_refresh_output_jpg_exif_thumbnail_normalizes_short_sequence_values(tmp_
         @staticmethod
         def load(_payload):
             return {
-                "0th": {_FakeImageIfd.YCbCrSubSampling: ("2", "1")},
+                "0th": {_FakeImageIfd.YCbCrSubSampling: (b"2\x00", "1")},
                 "Exif": {},
                 "GPS": {},
                 "Interop": {},

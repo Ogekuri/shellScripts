@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import warnings
 from io import BytesIO
 from dataclasses import dataclass
 from datetime import datetime
@@ -1034,9 +1035,10 @@ def _parse_exif_datetime_to_timestamp(datetime_raw):
 def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
     """@brief Extract DNG EXIF payload bytes, preferred datetime timestamp, and source orientation.
 
-    @details Opens input DNG via Pillow, reads EXIF mapping without orientation
-    mutation, serializes payload for JPEG save, resolves source orientation from
-    EXIF tag `274`, and resolves filesystem timestamp priority:
+    @details Opens input DNG via Pillow, suppresses known non-actionable
+    `PIL.TiffImagePlugin` metadata warning for malformed TIFF tag `33723`, reads
+    EXIF mapping without orientation mutation, serializes payload for JPEG save,
+    resolves source orientation from EXIF tag `274`, and resolves filesystem timestamp priority:
     `DateTimeOriginal`(36867) > `DateTimeDigitized`(36868) > `DateTime`(306).
     @param pil_image_module {ModuleType} Imported Pillow Image module.
     @param input_dng {Path} Source DNG path.
@@ -1047,10 +1049,16 @@ def _extract_dng_exif_payload_and_timestamp(pil_image_module, input_dng):
     if not hasattr(pil_image_module, "open"):
         return (None, None, 1)
     try:
-        with pil_image_module.open(str(input_dng)) as source_image:
-            if not hasattr(source_image, "getexif"):
-                return (None, None, 1)
-            exif_data = source_image.getexif()
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*tag 33723 had too many entries.*",
+                category=UserWarning,
+            )
+            with pil_image_module.open(str(input_dng)) as source_image:
+                if not hasattr(source_image, "getexif"):
+                    return (None, None, 1)
+                exif_data = source_image.getexif()
             if not exif_data:
                 return (None, None, 1)
             exif_payload = exif_data.tobytes() if hasattr(exif_data, "tobytes") else None
@@ -1160,8 +1168,9 @@ def _coerce_exif_int_like_value(raw_value):
     """@brief Coerce integer-like EXIF scalar values to Python integers.
 
     @details Converts scalar EXIF values represented as `int`, integer-valued
-    `float`, ASCII-digit `str`, or ASCII-digit `bytes` into deterministic Python
-    `int`; returns `None` when conversion is not safe.
+    `float`, ASCII-digit `str`, or ASCII-digit `bytes` (including trailing
+    null-terminated variants) into deterministic Python `int`; returns `None`
+    when conversion is not safe.
     @param raw_value {object} Candidate EXIF scalar value.
     @return {int|None} Coerced integer value or `None` when not coercible.
     @satisfies REQ-066, REQ-077, REQ-078
@@ -1184,6 +1193,9 @@ def _coerce_exif_int_like_value(raw_value):
     elif isinstance(raw_value, str):
         text_value = raw_value.strip()
     if text_value is None or not text_value:
+        return None
+    text_value = text_value.rstrip("\x00")
+    if not text_value:
         return None
     sign = text_value[0]
     digits = text_value[1:] if sign in ("+", "-") else text_value
