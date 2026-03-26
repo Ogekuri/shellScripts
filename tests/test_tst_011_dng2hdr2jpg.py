@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
 @return {None} Pytest module scope.
 """
 
@@ -1390,18 +1390,6 @@ def test_dng2hdr2jpg_rejects_missing_and_unknown_wow_mode(tmp_path):
     )
 
 
-def test_dng2hdr2jpg_parses_opencv_np_wow_mode():
-    """
-    @brief Validate wow parser accepts OpenCV-NP implementation selector.
-    @details Calls wow parser directly and verifies canonical mode token emitted
-      for mixed-case `OpenCV-NP` input value.
-    @return {None} Assertions only.
-    @satisfies TST-011, REQ-065, REQ-073, REQ-076
-    """
-
-    assert dng2hdr2jpg._parse_wow_mode_option("OpenCV-NP") == "OpenCV-NP"
-
-
 def test_dng2hdr2jpg_applies_custom_gamma_value(monkeypatch, tmp_path):
     """
     @brief Validate custom gamma option is propagated to RAW postprocess calls.
@@ -1798,46 +1786,6 @@ def test_dng2hdr2jpg_fails_when_wow_opencv_dependencies_are_missing(
             "--enable-enfuse",
             "--wow",
             "OpenCV",
-        ]
-    )
-
-    assert result == 1
-
-
-def test_dng2hdr2jpg_fails_when_wow_opencv_np_dependencies_are_missing(
-    monkeypatch, tmp_path
-):
-    """
-    @brief Validate OpenCV-NP wow mode fails when Python dependencies are missing.
-    @details Enables wow with `OpenCV-NP`, forces dependency resolver failure,
-      and asserts deterministic command failure without processing.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @param tmp_path {Path} Isolated filesystem fixture.
-    @return {None} Assertions only.
-    @satisfies TST-011, REQ-059, REQ-073, REQ-076
-    """
-
-    input_dng = tmp_path / "scene.dng"
-    input_dng.write_text("dng", encoding="utf-8")
-    output_jpg = tmp_path / "scene.jpg"
-    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
-    monkeypatch.setattr(
-        dng2hdr2jpg.shutil,
-        "which",
-        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
-    )
-    monkeypatch.setattr(
-        dng2hdr2jpg, "_resolve_wow_opencv_np_dependencies", lambda: None
-    )
-
-    result = dng2hdr2jpg.run(
-        [
-            str(input_dng),
-            str(output_jpg),
-            "--ev=1",
-            "--enable-enfuse",
-            "--wow",
-            "OpenCV-NP",
         ]
     )
 
@@ -3531,90 +3479,6 @@ def test_dng2hdr2jpg_applies_opencv_wow_pipeline_when_selected(monkeypatch, tmp_
     assert output_jpg.exists()
 
 
-def test_dng2hdr2jpg_applies_opencv_np_wow_pipeline_when_selected(
-    monkeypatch, tmp_path
-):
-    """
-    @brief Validate OpenCV-NP wow-stage dispatch when wow mode is `OpenCV-NP`.
-    @details Executes encode path with `wow_mode="OpenCV-NP"`, injects fake
-      OpenCV dependency tuple, and verifies OpenCV-NP wow function receives
-      expected temporary input/output TIFF paths before final JPEG save.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @param tmp_path {Path} Isolated filesystem fixture.
-    @return {None} Assertions only.
-    @satisfies TST-011, REQ-066, REQ-073, REQ-076
-    """
-
-    observed = {"opencv_np_call": {}, "jpg_save": None}
-
-    class _FakeImageIoModule:
-        """@brief Provide fake imageio module for OpenCV-NP wow dispatch test."""
-
-        @staticmethod
-        def imread(path):
-            """@brief Return fake payload for merged/wow TIFF reads."""
-
-            if Path(path).name == "wow_output.tif":
-
-                class _FakeWowPayload:
-                    mode = "RGB"
-
-                return _FakeWowPayload()
-            return _FakeImage16()
-
-    def _fake_apply_validated_wow_pipeline_opencv_np(
-        input_file, output_file, cv2_module, np_module
-    ):
-        """@brief Capture OpenCV-NP wow dispatch parameters and materialize output."""
-
-        observed["opencv_np_call"] = {
-            "input": Path(input_file).name,
-            "output": Path(output_file).name,
-            "cv2": cv2_module,
-            "np": np_module,
-        }
-        Path(output_file).write_text("wow", encoding="utf-8")
-
-    monkeypatch.setattr(
-        dng2hdr2jpg,
-        "_apply_validated_wow_pipeline_opencv_np",
-        _fake_apply_validated_wow_pipeline_opencv_np,
-    )
-
-    merged_tiff = tmp_path / "merged_hdr.tif"
-    merged_tiff.write_text("merged", encoding="utf-8")
-    output_jpg = tmp_path / "scene.jpg"
-    pil_image_module, pil_enhance_module = _build_fake_pillow_modules(observed)
-    fake_cv2_module = object()
-    fake_numpy_module = object()
-
-    dng2hdr2jpg._encode_jpg(
-        imageio_module=_FakeImageIoModule,
-        pil_image_module=pil_image_module,
-        pil_enhance_module=pil_enhance_module,
-        merged_tiff=merged_tiff,
-        output_jpg=output_jpg,
-        postprocess_options=dng2hdr2jpg.PostprocessOptions(
-            post_gamma=1.0,
-            brightness=1.0,
-            contrast=1.0,
-            saturation=1.0,
-            jpg_compression=10,
-            wow_mode="OpenCV-NP",
-        ),
-        wow_opencv_dependencies=(fake_cv2_module, fake_numpy_module),
-    )
-
-    assert observed["opencv_np_call"] is not None
-    assert observed["opencv_np_call"]["input"] == "postprocessed_input.tif"
-    assert observed["opencv_np_call"]["output"] == "wow_output.tif"
-    assert observed["opencv_np_call"]["cv2"] is fake_cv2_module
-    assert observed["opencv_np_call"]["np"] is fake_numpy_module
-    assert observed["jpg_save"] is not None
-    assert observed["jpg_save"]["format"] == "JPEG"
-    assert output_jpg.exists()
-
-
 def test_dng2hdr2jpg_opencv_wow_accepts_uint8_input_by_upconverting(tmp_path):
     """
     @brief Reproduce OpenCV wow failure when wow input TIFF is decoded as uint8.
@@ -3679,89 +3543,6 @@ def test_dng2hdr2jpg_opencv_wow_accepts_uint8_input_by_upconverting(tmp_path):
     fake_cv2_module = _FakeCv2Module()
 
     dng2hdr2jpg._apply_validated_wow_pipeline_opencv(
-        input_file=input_tiff,
-        output_file=output_tiff,
-        cv2_module=fake_cv2_module,
-        np_module=numpy_module,
-    )
-
-    assert fake_cv2_module.written is not None
-    assert fake_cv2_module.written["path"] == "wow_output.tif"
-    assert fake_cv2_module.written["dtype"] == "uint16"
-    assert fake_cv2_module.written["shape"] == (2, 2, 3)
-    assert output_tiff.exists()
-
-
-def test_dng2hdr2jpg_opencv_np_wow_accepts_uint8_input_by_upconverting(tmp_path):
-    """
-    @brief Validate OpenCV-NP wow path promotes uint8 input before processing.
-    @details Executes `_apply_validated_wow_pipeline_opencv_np` with fake cv2
-      read path returning `uint8` 3-channel image and expects deterministic
-      upconversion to `uint16` before float-domain pipeline stages.
-    @param tmp_path {Path} Isolated filesystem fixture.
-    @return {None} Assertions only.
-    @satisfies TST-011, REQ-073, REQ-076
-    """
-
-    numpy_module = __import__("numpy")
-
-    class _FakeCv2Module:
-        """@brief Provide minimal cv2 surface for uint8 OpenCV-NP wow test."""
-
-        IMREAD_UNCHANGED = -1
-        COLOR_BGR2RGB = 10
-        COLOR_RGB2BGR = 11
-        BORDER_REFLECT = 12
-
-        def __init__(self):
-            self.written = None
-
-        def imread(self, path, mode):
-            """@brief Return deterministic uint8 wow input tensor."""
-
-            del path
-            assert mode == self.IMREAD_UNCHANGED
-            return numpy_module.zeros((2, 2, 3), dtype=numpy_module.uint8)
-
-        @staticmethod
-        def cvtColor(image, code):
-            """@brief Return channel-reordered tensor for BGR/RGB conversions."""
-
-            if code in (_FakeCv2Module.COLOR_BGR2RGB, _FakeCv2Module.COLOR_RGB2BGR):
-                return image[..., ::-1]
-            raise AssertionError(f"Unexpected conversion code: {code}")
-
-        @staticmethod
-        def GaussianBlur(image, ksize, sigmaX, sigmaY, borderType):
-            """@brief Return deterministic no-op blur payload."""
-
-            del ksize, sigmaX, sigmaY
-            assert borderType == _FakeCv2Module.BORDER_REFLECT
-            return image
-
-        @staticmethod
-        def LUT(src, lut):
-            """@brief Apply deterministic LUT indexing over uint8 source tensor."""
-
-            return lut[src]
-
-        def imwrite(self, path, payload):
-            """@brief Capture output tensor metadata and materialize artifact."""
-
-            self.written = {
-                "path": Path(path).name,
-                "dtype": str(payload.dtype),
-                "shape": payload.shape,
-            }
-            Path(path).write_text("wow-output", encoding="utf-8")
-            return True
-
-    input_tiff = tmp_path / "postprocessed_input.tif"
-    input_tiff.write_text("payload", encoding="utf-8")
-    output_tiff = tmp_path / "wow_output.tif"
-    fake_cv2_module = _FakeCv2Module()
-
-    dng2hdr2jpg._apply_validated_wow_pipeline_opencv_np(
         input_file=input_tiff,
         output_file=output_tiff,
         cv2_module=fake_cv2_module,

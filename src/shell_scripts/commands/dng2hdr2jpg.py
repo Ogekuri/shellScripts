@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
+    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
 """
 
 import os
@@ -42,14 +42,6 @@ DEFAULT_LUMINANCE_TMO = "reinhard02"
 DEFAULT_REINHARD02_BRIGHTNESS = 1.25
 DEFAULT_REINHARD02_CONTRAST = 0.85
 DEFAULT_REINHARD02_SATURATION = 0.55
-OPENCV_NP_SELECTIVE_BLUR_SIGMA = 2.0
-OPENCV_NP_SELECTIVE_BLUR_THRESHOLD_PERCENT = 10.0
-OPENCV_NP_LEVEL_BLACK = 0.001
-OPENCV_NP_LEVEL_WHITE = 0.999
-OPENCV_NP_SIGMOIDAL_CONTRAST = 3.0
-OPENCV_NP_SIGMOIDAL_MIDPOINT = 0.5
-OPENCV_NP_SATURATION_GAMMA = 0.8
-OPENCV_NP_HIGH_PASS_BLUR_SIGMA = 2.5
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 AUTO_EV_LOW_PERCENTILE = 0.1
 AUTO_EV_HIGH_PERCENTILE = 99.9
@@ -229,9 +221,9 @@ class PostprocessOptions:
     @param contrast {float} Contrast enhancement factor.
     @param saturation {float} Saturation enhancement factor.
     @param jpg_compression {int} JPEG compression level in range `[0, 100]`.
-    @param wow_mode {str|None} Optional wow implementation selector (`ImageMagick`, `OpenCV`, or `OpenCV-NP`).
+    @param wow_mode {str|None} Optional wow implementation selector (`ImageMagick` or `OpenCV`).
     @return {None} Immutable dataclass container.
-    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076
+    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075
     """
 
     post_gamma: float
@@ -356,14 +348,14 @@ def print_help(version):
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076
+    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075
     """
 
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
         f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
-        f"[--jpg-compression=<0..100>] [--wow <ImageMagick|OpenCV|OpenCV-NP>] "
+        f"[--jpg-compression=<0..100>] [--wow <ImageMagick|OpenCV>] "
         f"(--enable-enfuse | --enable-luminance) "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
@@ -400,7 +392,7 @@ def print_help(version):
         f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION})."
     )
     print(
-        "  --wow <name>     - Enable wow stage implementation (`ImageMagick`, `OpenCV`, or `OpenCV-NP`)."
+        "  --wow <name>     - Enable wow stage implementation (`ImageMagick` or `OpenCV`)."
     )
     print("  --enable-enfuse")
     print(
@@ -801,8 +793,8 @@ def _parse_wow_mode_option(wow_raw):
     @details Accepts case-insensitive wow implementation names and normalizes
     to canonical values for runtime dispatch.
     @param wow_raw {str} Raw wow implementation token.
-    @return {str|None} Canonical wow mode (`ImageMagick`, `OpenCV`, or `OpenCV-NP`) or `None` on parse failure.
-    @satisfies REQ-065, REQ-073, REQ-075, REQ-076
+    @return {str|None} Canonical wow mode (`ImageMagick` or `OpenCV`) or `None` on parse failure.
+    @satisfies REQ-065, REQ-073, REQ-075
     """
 
     wow_text = wow_raw.strip()
@@ -814,10 +806,8 @@ def _parse_wow_mode_option(wow_raw):
         return "ImageMagick"
     if wow_text_lower == "opencv":
         return "OpenCV"
-    if wow_text_lower == "opencv-np":
-        return "OpenCV-NP"
     print_error(f"Invalid --wow value: {wow_raw}")
-    print_error("Allowed values: ImageMagick, OpenCV, OpenCV-NP")
+    print_error("Allowed values: ImageMagick, OpenCV")
     return None
 
 
@@ -865,11 +855,11 @@ def _parse_run_options(args):
     optional postprocess controls, required backend selector
     (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls
     including explicit `--tmo*` passthrough options and optional wow
-    implementation selector (`--wow <ImageMagick|OpenCV|OpenCV-NP>`); rejects
+    implementation selector (`--wow <ImageMagick|OpenCV>`); rejects
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-076, REQ-079, REQ-080, REQ-081
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081
     """
 
     positional = []
@@ -1964,31 +1954,6 @@ def _resolve_wow_opencv_dependencies():
     return (cv2, numpy_module)
 
 
-def _resolve_wow_opencv_np_dependencies():
-    """@brief Resolve OpenCV-NP wow runtime dependencies.
-
-    @details Imports `cv2` and `numpy` modules required by OpenCV-NP wow
-    pipeline execution and returns `None` with deterministic error output when
-    dependencies are missing.
-    @return {tuple[ModuleType, ModuleType]|None} `(cv2_module, numpy_module)` when available; `None` on dependency failure.
-    @satisfies REQ-059, REQ-073, REQ-076
-    """
-
-    try:
-        import cv2  # type: ignore
-    except ModuleNotFoundError:
-        print_error("Python dependency missing: opencv-python")
-        print_error("Install dependencies with: uv pip install opencv-python numpy")
-        return None
-    try:
-        import numpy as numpy_module  # type: ignore
-    except ModuleNotFoundError:
-        print_error("Python dependency missing: numpy")
-        print_error("Install dependencies with: uv pip install opencv-python numpy")
-        return None
-    return (cv2, numpy_module)
-
-
 def _apply_validated_wow_pipeline(postprocessed_input, wow_output, imagemagick_command):
     """@brief Execute validated wow pipeline over temporary lossless 16-bit TIFF files.
 
@@ -2396,293 +2361,6 @@ def _overlay_composite(np_module, base_rgb, overlay_gray):
     return _clamp01(np_module, output)
 
 
-def _srgb_luminance(np_module, rgb):
-    """@brief Compute weighted sRGB luminance tensor from RGB float payload.
-
-    @details Applies deterministic channel weights (`0.2126`, `0.7152`,
-    `0.0722`) over RGB tensor in `[0.0, 1.0]` and returns scalar luminance map.
-    @param np_module {ModuleType} Imported numpy module.
-    @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
-    @return {object} Luminance tensor in `[0.0, 1.0]`.
-    @satisfies REQ-076
-    """
-
-    return 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
-
-
-def _selective_blur_contrast_gated_np(
-    np_module,
-    rgb,
-    sigma=OPENCV_NP_SELECTIVE_BLUR_SIGMA,
-    threshold_percent=OPENCV_NP_SELECTIVE_BLUR_THRESHOLD_PERCENT,
-):
-    """@brief Execute selective blur using contrast-gated pixel neighborhood loops.
-
-    @details Implements OpenCV-NP variant of selective blur with Gaussian kernel,
-    reflect-padding, luminance threshold gating per central pixel, and fallback
-    to source pixel when no weighted sample survives threshold gating.
-    @param np_module {ModuleType} Imported numpy module.
-    @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
-    @param sigma {float} Gaussian sigma.
-    @param threshold_percent {float} Luminance threshold percentage.
-    @return {object} Contrast-gated selectively blurred RGB tensor.
-    @satisfies REQ-076
-    """
-
-    height, width, _channels = rgb.shape
-    kernel = _gaussian_kernel_2d(np_module, sigma=sigma)
-    radius = kernel.shape[0] // 2
-    gray = _srgb_luminance(np_module, rgb)
-    rgb_padded = np_module.pad(
-        rgb, ((radius, radius), (radius, radius), (0, 0)), mode="reflect"
-    )
-    gray_padded = np_module.pad(
-        gray, ((radius, radius), (radius, radius)), mode="reflect"
-    )
-    output = np_module.empty_like(rgb)
-    threshold = threshold_percent / 100.0
-    for y_index in range(height):
-        for x_index in range(width):
-            center_gray = gray_padded[y_index + radius, x_index + radius]
-            patch_rgb = rgb_padded[
-                y_index : y_index + 2 * radius + 1,
-                x_index : x_index + 2 * radius + 1,
-                :,
-            ]
-            patch_gray = gray_padded[
-                y_index : y_index + 2 * radius + 1, x_index : x_index + 2 * radius + 1
-            ]
-            allowed = np_module.abs(patch_gray - center_gray) <= threshold
-            weights = kernel * allowed.astype(np_module.float64)
-            weight_sum = np_module.sum(weights)
-            if weight_sum <= 1e-15:
-                output[y_index, x_index, :] = rgb[y_index, x_index, :]
-            else:
-                weighted = (
-                    np_module.sum(patch_rgb * weights[..., None], axis=(0, 1))
-                    / weight_sum
-                )
-                output[y_index, x_index, :] = weighted
-    return _clamp01(np_module, output)
-
-
-def _level_per_channel_fixed_np(
-    np_module, rgb, black=OPENCV_NP_LEVEL_BLACK, white=OPENCV_NP_LEVEL_WHITE
-):
-    """@brief Execute fixed black/white level normalization in RGB channels.
-
-    @details Applies deterministic fixed black/white points (`0.001`, `0.999`)
-    over each RGB channel with guarded denominator and clamps result to `[0,1]`.
-    @param np_module {ModuleType} Imported numpy module.
-    @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
-    @param black {float} Fixed black level.
-    @param white {float} Fixed white level.
-    @return {object} Level-normalized RGB tensor.
-    @satisfies REQ-076
-    """
-
-    scale = 1.0 / max(white - black, 1e-12)
-    return _clamp01(np_module, (rgb - black) * scale)
-
-
-def _build_sigmoidal_lut_u8_np(
-    np_module,
-    contrast=OPENCV_NP_SIGMOIDAL_CONTRAST,
-    midpoint=OPENCV_NP_SIGMOIDAL_MIDPOINT,
-):
-    """@brief Build deterministic uint8 LUT for sigmoidal contrast mapping.
-
-    @details Builds `256`-entry LUT using logistic mapping normalized by
-    endpoint bounds and rounded to uint8 for OpenCV LUT application.
-    @param np_module {ModuleType} Imported numpy module.
-    @param contrast {float} Logistic slope.
-    @param midpoint {float} Logistic midpoint.
-    @return {object} `uint8` LUT tensor with shape `(256,)`.
-    @satisfies REQ-076
-    """
-
-    x_values = np_module.arange(256, dtype=np_module.float64) / 255.0
-
-    def logistic(z_values):
-        return 1.0 / (1.0 + np_module.exp(-z_values))
-
-    low_bound = logistic(contrast * (0.0 - midpoint))
-    high_bound = logistic(contrast * (1.0 - midpoint))
-    mapped = logistic(contrast * (x_values - midpoint))
-    mapped = (mapped - low_bound) / max(high_bound - low_bound, 1e-12)
-    lut = np_module.clip(np_module.round(mapped * 255.0), 0, 255).astype(
-        np_module.uint8
-    )
-    return lut
-
-
-def _apply_sigmoidal_contrast_with_lut_np(cv2_module, np_module, rgb, lut):
-    """@brief Apply LUT-based sigmoidal contrast and restore float-domain tensor.
-
-    @details Converts RGB float payload to uint8, applies OpenCV `LUT`, and
-    converts output back to float `[0.0, 1.0]` for downstream wow stages.
-    @param cv2_module {ModuleType} Imported cv2 module.
-    @param np_module {ModuleType} Imported numpy module.
-    @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
-    @param lut {object} Sigmoidal uint8 LUT.
-    @return {object} Contrast-adjusted RGB float tensor.
-    @satisfies REQ-076
-    """
-
-    rgb_u8 = np_module.clip(np_module.round(rgb * 255.0), 0, 255).astype(
-        np_module.uint8
-    )
-    out_u8 = cv2_module.LUT(rgb_u8, lut)
-    return out_u8.astype(np_module.float64) / 255.0
-
-
-def _gamma_im_semantics(np_module, values, gamma_value):
-    """@brief Apply ImageMagick-compatible gamma transfer over bounded input.
-
-    @details Uses gamma semantics `out = in ** (1/gamma)` over clamped values
-    in `[0,1]` and returns bounded result for wow saturation stage.
-    @param np_module {ModuleType} Imported numpy module.
-    @param values {object} Input scalar/tensor values.
-    @param gamma_value {float} Gamma denominator value.
-    @return {object} Gamma-adjusted values in `[0,1]`.
-    @satisfies REQ-076
-    """
-
-    clamped = _clamp01(np_module, values)
-    return np_module.power(clamped, 1.0 / gamma_value)
-
-
-def _vibrance_hsl_gamma_np(np_module, rgb, saturation_gamma=OPENCV_NP_SATURATION_GAMMA):
-    """@brief Execute OpenCV-NP HSL saturation gamma stage.
-
-    @details Converts RGB tensor to HSL, applies ImageMagick-equivalent gamma
-    transform on saturation channel, then converts HSL back to RGB.
-    @param np_module {ModuleType} Imported numpy module.
-    @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
-    @param saturation_gamma {float} Saturation gamma denominator.
-    @return {object} Saturation-adjusted RGB tensor in `[0.0, 1.0]`.
-    @satisfies REQ-076
-    """
-
-    hue, saturation, lightness = _rgb_to_hsl(np_module, rgb)
-    saturation = _gamma_im_semantics(np_module, saturation, saturation_gamma)
-    return _hsl_to_rgb(np_module, hue, saturation, lightness)
-
-
-def _high_pass_math_gray_np(
-    cv2_module,
-    np_module,
-    rgb,
-    blur_sigma=OPENCV_NP_HIGH_PASS_BLUR_SIGMA,
-):
-    """@brief Execute OpenCV-NP high-pass gray stage (`A - B + 0.5`).
-
-    @details Applies Gaussian blur baseline, computes high-pass response, clamps
-    to `[0,1]`, and converts result to weighted luminance grayscale tensor.
-    @param cv2_module {ModuleType} Imported cv2 module.
-    @param np_module {ModuleType} Imported numpy module.
-    @param rgb {object} RGB float tensor in `[0.0, 1.0]`.
-    @param blur_sigma {float} Gaussian blur sigma.
-    @return {object} Grayscale high-pass tensor in `[0.0, 1.0]`.
-    @satisfies REQ-076
-    """
-
-    blurred = _gaussian_blur_rgb(cv2_module, np_module, rgb, sigma=blur_sigma)
-    high_pass = _clamp01(np_module, rgb - blurred + 0.5)
-    return _clamp01(np_module, _srgb_luminance(np_module, high_pass))
-
-
-def _overlay_composite_opaque_np(np_module, base_rgb, overlay_gray):
-    """@brief Execute opaque overlay composition for OpenCV-NP wow stage.
-
-    @details Repeats grayscale overlay to RGB channels and applies conditional
-    overlay equation against base RGB tensor, returning bounded output tensor.
-    @param np_module {ModuleType} Imported numpy module.
-    @param base_rgb {object} Base RGB tensor in `[0.0, 1.0]`.
-    @param overlay_gray {object} Grayscale overlay tensor in `[0.0, 1.0]`.
-    @return {object} Overlay-composited RGB tensor in `[0.0, 1.0]`.
-    @satisfies REQ-076
-    """
-
-    source = np_module.repeat(overlay_gray[..., None], 3, axis=2)
-    destination = base_rgb
-    output = np_module.where(
-        destination <= 0.5,
-        2.0 * source * destination,
-        1.0 - 2.0 * (1.0 - source) * (1.0 - destination),
-    )
-    return _clamp01(np_module, output)
-
-
-def _apply_validated_wow_pipeline_opencv_np(
-    input_file, output_file, cv2_module, np_module
-):
-    """@brief Execute validated OpenCV-NP wow pipeline over 16-bit TIFF payload.
-
-    @details Reads wow input TIFF, enforces 3-channel payload, normalizes `uint16`
-    to float domain, runs selective blur (looped contrast gating), fixed level,
-    LUT-based sigmoidal contrast, HSL saturation gamma, high-pass gray and
-    overlay composition stages, then restores float payload to `uint16` output.
-    @param input_file {Path} Source TIFF path.
-    @param output_file {Path} Output TIFF path.
-    @param cv2_module {ModuleType} Imported cv2 module.
-    @param np_module {ModuleType} Imported numpy module.
-    @return {None} Side effects only.
-    @exception OSError Raised when source file is missing.
-    @exception RuntimeError Raised when OpenCV read/write fails or input dtype is unsupported.
-    @satisfies REQ-073, REQ-076, REQ-077
-    """
-
-    if not input_file.exists():
-        raise OSError(f"OpenCV-NP wow input file not found: {input_file}")
-    image_bgr = cv2_module.imread(str(input_file), cv2_module.IMREAD_UNCHANGED)
-    if image_bgr is None:
-        raise RuntimeError(f"OpenCV-NP failed to read wow input: {input_file}")
-    if len(image_bgr.shape) != 3 or image_bgr.shape[2] != 3:
-        raise RuntimeError(f"OpenCV-NP wow input must be 3-channel image: {input_file}")
-    dtype_name = str(getattr(image_bgr, "dtype", ""))
-    if dtype_name == "uint8":
-        image_bgr = (image_bgr.astype(np_module.uint16) * 257).astype(np_module.uint16)
-    elif dtype_name != "uint16":
-        raise RuntimeError(f"OpenCV-NP wow input must be uint16 image: {input_file}")
-    rgb = (
-        cv2_module.cvtColor(image_bgr, cv2_module.COLOR_BGR2RGB).astype(
-            np_module.float64
-        )
-        / 65535.0
-    )
-    rgb = _selective_blur_contrast_gated_np(
-        np_module,
-        rgb,
-        sigma=OPENCV_NP_SELECTIVE_BLUR_SIGMA,
-        threshold_percent=OPENCV_NP_SELECTIVE_BLUR_THRESHOLD_PERCENT,
-    )
-    rgb = _level_per_channel_fixed_np(
-        np_module, rgb, black=OPENCV_NP_LEVEL_BLACK, white=OPENCV_NP_LEVEL_WHITE
-    )
-    sigmoidal_lut = _build_sigmoidal_lut_u8_np(
-        np_module,
-        contrast=OPENCV_NP_SIGMOIDAL_CONTRAST,
-        midpoint=OPENCV_NP_SIGMOIDAL_MIDPOINT,
-    )
-    rgb = _apply_sigmoidal_contrast_with_lut_np(
-        cv2_module, np_module, rgb, sigmoidal_lut
-    )
-    rgb = _vibrance_hsl_gamma_np(
-        np_module, rgb, saturation_gamma=OPENCV_NP_SATURATION_GAMMA
-    )
-    high_pass_gray = _high_pass_math_gray_np(
-        cv2_module, np_module, rgb, blur_sigma=OPENCV_NP_HIGH_PASS_BLUR_SIGMA
-    )
-    rgb = _overlay_composite_opaque_np(np_module, rgb, high_pass_gray)
-    out_rgb_u16 = np_module.clip(np_module.round(rgb * 65535.0), 0, 65535).astype(
-        np_module.uint16
-    )
-    out_bgr_u16 = cv2_module.cvtColor(out_rgb_u16, cv2_module.COLOR_RGB2BGR)
-    if not cv2_module.imwrite(str(output_file), out_bgr_u16):
-        raise RuntimeError(f"OpenCV-NP failed to write wow output: {output_file}")
-
-
 def _apply_validated_wow_pipeline_opencv(
     input_file, output_file, cv2_module, np_module
 ):
@@ -2793,7 +2471,7 @@ def _encode_jpg(
     @param source_orientation {int} Source EXIF orientation value in range `1..8`.
     @return {None} Side effects only.
     @exception RuntimeError Raised when wow mode dependencies are missing or wow mode value is unsupported.
-    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078
+    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078
     """
 
     merged_data = imageio_module.imread(str(merged_tiff))
@@ -2874,18 +2552,6 @@ def _encode_jpg(
                     )
                 cv2_module, np_module = wow_opencv_dependencies
                 _apply_validated_wow_pipeline_opencv(
-                    input_file=postprocessed_input,
-                    output_file=wow_output,
-                    cv2_module=cv2_module,
-                    np_module=np_module,
-                )
-            elif postprocess_options.wow_mode == "OpenCV-NP":
-                if wow_opencv_dependencies is None:
-                    raise RuntimeError(
-                        "Missing required dependencies: opencv-python and numpy"
-                    )
-                cv2_module, np_module = wow_opencv_dependencies
-                _apply_validated_wow_pipeline_opencv_np(
                     input_file=postprocessed_input,
                     output_file=wow_output,
                     cv2_module=cv2_module,
@@ -2991,7 +2657,7 @@ def run(args):
     temporary artifact cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-076, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
     """
 
     if not _is_supported_runtime_os():
@@ -3044,10 +2710,6 @@ def run(args):
             return 1
     elif postprocess_options.wow_mode == "OpenCV":
         wow_opencv_dependencies = _resolve_wow_opencv_dependencies()
-        if wow_opencv_dependencies is None:
-            return 1
-    elif postprocess_options.wow_mode == "OpenCV-NP":
-        wow_opencv_dependencies = _resolve_wow_opencv_np_dependencies()
         if wow_opencv_dependencies is None:
             return 1
 
