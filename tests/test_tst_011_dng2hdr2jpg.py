@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093
 @return {None} Pytest module scope.
 """
 
@@ -139,6 +139,15 @@ class _FakeRawHandle:
         self._observed["gamma"].append(gamma)
         self._observed.setdefault("user_flip", []).append(user_flip)
         return f"rgb-{bright}"
+
+    @property
+    def white_level(self) -> int:
+        """@brief Return deterministic white level used for bit-depth detection.
+
+        @return {int} White-level scalar representing 14-bit RAW range.
+        """
+
+        return 16383
 
 
 class _TrackingTemporaryDirectory:
@@ -451,7 +460,7 @@ def test_compute_auto_ev_value_quantizes_supported_result():
     @details Uses deterministic linear preview luminance distribution and
       verifies computed adaptive EV belongs to supported selector set.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-080, REQ-081
+    @satisfies TST-011, REQ-080, REQ-081, REQ-092, REQ-093
     """
 
     class _FakeRawHandle:
@@ -474,10 +483,17 @@ def test_compute_auto_ev_value_quantizes_supported_result():
                 [[65000.0, 65000.0, 65000.0]],
             ]
 
-    computed_ev = dng2hdr2jpg._compute_auto_ev_value(_FakeRawHandle)
+        @property
+        def white_level(self) -> int:
+            """@brief Return deterministic white level used for bit-depth detection."""
 
-    assert computed_ev in dng2hdr2jpg.SUPPORTED_EV_VALUES
-    assert 0.25 <= computed_ev <= 3.0
+            return 16383
+
+    computed_ev = dng2hdr2jpg._compute_auto_ev_value(_FakeRawHandle())
+
+    expected_ev_values = dng2hdr2jpg._derive_supported_ev_values(14)
+    assert computed_ev in expected_ev_values
+    assert 0.25 <= computed_ev <= expected_ev_values[-1]
     assert computed_ev * 4 == pytest.approx(round(computed_ev * 4))
 
 
@@ -485,14 +501,14 @@ def test_parse_ev_option_accepts_quarter_step_range():
     """
     @brief Validate `--ev` parser accepts full quarter-step range.
     @details Asserts parser accepts lower bound, mid-range quarter-step, and
-      upper bound values from `0.25` to `3.0`.
+      upper bound values aligned to quarter-step granularity.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-057
     """
 
     assert dng2hdr2jpg._parse_ev_option("0.25") == pytest.approx(0.25)
     assert dng2hdr2jpg._parse_ev_option("1.75") == pytest.approx(1.75)
-    assert dng2hdr2jpg._parse_ev_option("3.0") == pytest.approx(3.0)
+    assert dng2hdr2jpg._parse_ev_option("3.25") == pytest.approx(3.25)
 
 
 def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
@@ -503,7 +519,7 @@ def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-056, REQ-080, REQ-081
+    @satisfies TST-011, REQ-056, REQ-080, REQ-081, REQ-092, REQ-093
     """
 
     observed = {
@@ -513,9 +529,11 @@ def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
         "no_auto_bright": [],
         "gamma": [],
         "luminance_cmd": None,
+        "infos": [],
     }
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
-    monkeypatch.setattr(dng2hdr2jpg, "_compute_auto_ev_value", lambda _raw_handle: 1.5)
+    monkeypatch.setattr(dng2hdr2jpg, "_compute_auto_ev_value", lambda _raw_handle, supported_ev_values=None: 1.5)
+    monkeypatch.setattr(dng2hdr2jpg, "print_info", lambda message: observed["infos"].append(message))
 
     class _FakeRawPyModule:
         """@brief Provide fake `rawpy` module for adaptive EV run test."""
@@ -581,6 +599,123 @@ def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
     assert observed["brights"] == pytest.approx([2 ** (-1.5), 1.0, 2**1.5])
     assert observed["luminance_cmd"][0] == "luminance-hdr-cli"
     assert observed["luminance_cmd"][2] == "-1.5,0,1.5"
+    assert "Detected DNG bits per color: 14" in observed["infos"]
+    assert any(
+        "Bit-derived EV ceiling: MAX=3 (formula: (bits_per_color-8)/2)" in line
+        for line in observed["infos"]
+    )
+
+
+def test_dng2hdr2jpg_rejects_static_ev_above_bit_derived_max(monkeypatch, tmp_path):
+    """
+    @brief Validate static EV ceiling uses detected DNG bits per color.
+    @details Uses fake RAW metadata with `12` bits per color (`MAX=2.0`) and
+      asserts `--ev=2.25` is rejected with deterministic non-zero return code.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-057, REQ-092, REQ-093
+    """
+
+    observed = {
+        "brights": [],
+        "output_bps": [],
+        "use_camera_wb": [],
+        "no_auto_bright": [],
+        "gamma": [],
+        "infos": [],
+        "errors": [],
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(dng2hdr2jpg, "print_info", lambda message: observed["infos"].append(message))
+    monkeypatch.setattr(dng2hdr2jpg, "print_error", lambda message: observed["errors"].append(message))
+
+    class _FakeRawHandle12Bit:
+        """@brief Provide fake RAW handle with 12-bit white level metadata."""
+
+        def __init__(self, observed_state):
+            """@brief Store shared observation map for deterministic extraction."""
+
+            self._observed_state = observed_state
+
+        def __enter__(self):
+            """@brief Enter context-manager boundary."""
+
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            """@brief Exit context-manager boundary and propagate exceptions."""
+
+            del exc_type, exc, tb
+            return False
+
+        @property
+        def white_level(self) -> int:
+            """@brief Return deterministic white level for 12-bit RAW range."""
+
+            return 4095
+
+        def postprocess(
+            self, bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
+        ):
+            """@brief Mirror base fake RAW extraction behavior for pipeline compatibility."""
+
+            self._observed_state["brights"].append(bright)
+            self._observed_state["output_bps"].append(output_bps)
+            self._observed_state["use_camera_wb"].append(use_camera_wb)
+            self._observed_state["no_auto_bright"].append(no_auto_bright)
+            self._observed_state["gamma"].append(gamma)
+            self._observed_state.setdefault("user_flip", []).append(user_flip)
+            return f"rgb-{bright}"
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module for bit-derived static EV ceiling test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            return _FakeRawHandle12Bit(observed)
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for static EV ceiling rejection path."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=2.25"]
+    )
+
+    assert result == 1
+    assert "Detected DNG bits per color: 12" in observed["infos"]
+    assert any(
+        "allowed range for input DNG is 0.25..2 in 0.25 steps" in line
+        for line in observed["errors"]
+    )
 
 
 def test_dng2hdr2jpg_uses_static_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path):
@@ -591,7 +726,7 @@ def test_dng2hdr2jpg_uses_static_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path)
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-079
+    @satisfies TST-011, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-079, REQ-092
     """
 
     observed = {
@@ -603,8 +738,10 @@ def test_dng2hdr2jpg_uses_static_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path)
         "writes": [],
         "enfuse_cmd": None,
         "tmp_dir": None,
+        "infos": [],
     }
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(dng2hdr2jpg, "print_info", lambda message: observed["infos"].append(message))
 
     class _FakeRawPyModule:
         """@brief Provide fake `rawpy` module surface for command tests.
@@ -712,6 +849,7 @@ def test_dng2hdr2jpg_uses_static_ev_and_runs_hdr_pipeline(monkeypatch, tmp_path)
     assert observed["enfuse_cmd"][0] == "enfuse"
     assert len(observed["enfuse_cmd"]) == 6
     assert "postprocess_ops" not in observed
+    assert "Detected DNG bits per color: 14" in observed["infos"]
     assert output_jpg.exists()
     assert observed["tmp_dir"] is not None
     assert not observed["tmp_dir"].exists()
@@ -3665,7 +3803,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089
+    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-093
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -3678,7 +3816,8 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--enable-luminance" in output
     assert "--enable-enfuse" in output
     assert "--auto-ev" in output
-    assert "Fixed exposure bracket EV: 0.25 .. 3.0 in 0.25 steps" in output
+    assert "Fixed exposure bracket EV: 0.25 .. MAX in 0.25 steps" in output
+    assert "MAX = (bits_per_color-8)/2 from input DNG" in output
     assert "--gamma=<a,b>" in output
     assert "--post-gamma=<value>" in output
     assert "--brightness=<value>" in output
