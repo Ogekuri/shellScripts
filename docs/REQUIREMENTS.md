@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.5"
+version: "0.7.0"
 date: "2026-03-27"
 author: "Auto-generated from repository evidence"
 scope:
@@ -202,10 +202,11 @@ No explicit performance optimizations identified.
 - **REQ-077**: MUST preserve orientation invariants across DNG extraction, HDR merge, auto-adjust processing, and JPG encoding; if any function rotates or transposes pixels for algorithmic constraints, it MUST restore source orientation before return.
 - **REQ-078**: MUST refresh output JPG EXIF thumbnail after final JPG save using final JPG pixels while preserving source EXIF Orientation semantics and maintaining thumbnail metadata coherence with the saved JPG.
 - **REQ-079**: MUST execute static exposure pipeline `Options -> Fixed Multipliers -> Extraction -> Merge -> AutoAdjust -> Save` when `--ev` is selected.
-- **REQ-080**: MUST execute adaptive exposure pipeline `Options -> Fast RAW Preview -> Histogram Analysis -> Optimal Multipliers Calculation -> Extraction -> Merge -> AutoAdjust -> Save` when `--auto-ev` is selected.
-- **REQ-081**: MUST compute adaptive EV delta using linear preview luminance percentiles (`0.1%`, `99.9%`) and median-centered optimization, clamp to `[0.25,MAX]` where `MAX=((bits_per_color-8)/2)`, then quantize to nearest `0.25`.
+- **REQ-080**: MUST execute adaptive exposure pipeline `Options -> DNG Metadata Detection -> Max EV Derivation -> Extraction -> Merge -> AutoAdjust -> Save` when `--auto-ev` is selected.
+- **REQ-081**: MUST set adaptive EV delta to `MAX=((bits_per_color-8)/2)` from source DNG metadata when `--auto-ev` is selected, without luminance analysis or preview image evaluation.
 - **REQ-092**: MUST print detected source DNG `bits_per_color` in command output for both `--ev` and `--auto-ev` execution paths.
 - **REQ-093**: MUST print bit-derived EV ceiling `MAX=((bits_per_color-8)/2)` in command output when `--auto-ev` is selected.
+- **REQ-094**: MUST extract center bracket image at brightness multiplier `1.0` (0 EV) in both `--ev` and `--auto-ev` modes.
 
 ## 4. Test Requirements
 
@@ -225,7 +226,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-093 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, and HDR subprocess calls.
+- **TST-011**: MUST verify REQ-055 through REQ-094 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, and HDR subprocess calls.
 
 ## 5. Evidence
 
