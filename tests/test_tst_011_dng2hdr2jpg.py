@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087
 @return {None} Pytest module scope.
 """
 
@@ -1368,7 +1368,7 @@ def test_dng2hdr2jpg_rejects_missing_and_unknown_auto_adjust_mode(tmp_path):
       selector and asserts deterministic parse failures.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-065, REQ-073, REQ-075
+    @satisfies TST-011, REQ-065, REQ-073, REQ-075, REQ-085
     """
 
     input_dng = tmp_path / "scene.dng"
@@ -1399,6 +1399,175 @@ def test_dng2hdr2jpg_rejects_missing_and_unknown_auto_adjust_mode(tmp_path):
             ]
         )
         == 1
+    )
+
+
+def test_dng2hdr2jpg_rejects_auto_adjust_knobs_without_auto_adjust(tmp_path):
+    """
+    @brief Validate `--aa-*` knobs are rejected when `--auto-adjust` is omitted.
+    @details Exercises both assignment and split knob forms without
+      `--auto-adjust` and asserts deterministic parser failure.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-082, REQ-085
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--aa-blur-sigma=1.1",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--aa-sigmoid-midpoint",
+                "0.4",
+            ]
+        )
+        == 1
+    )
+
+
+def test_dng2hdr2jpg_rejects_invalid_auto_adjust_knob_values(tmp_path):
+    """
+    @brief Validate shared auto-adjust knob validation constraints.
+    @details Verifies positive-only, bounded-range, and `low < high` validation
+      rules for `--aa-*` options when auto-adjust mode is enabled.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-082, REQ-084
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+    base_args = [
+        str(input_dng),
+        str(output_jpg),
+        "--ev=1",
+        "--enable-enfuse",
+        "--auto-adjust",
+        "ImageMagick",
+    ]
+
+    assert dng2hdr2jpg.run(base_args + ["--aa-blur-sigma=0"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--aa-sigmoid-contrast", "-1"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--aa-saturation-gamma=0"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--aa-highpass-blur-sigma=0"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--aa-blur-threshold-pct=101"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--aa-level-low-pct=-1"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--aa-level-high-pct=101"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--aa-sigmoid-midpoint=1.1"]) == 1
+    assert (
+        dng2hdr2jpg.run(
+            base_args + ["--aa-level-low-pct=80", "--aa-level-high-pct=20"]
+        )
+        == 1
+    )
+
+
+def test_dng2hdr2jpg_parses_auto_adjust_knob_assignment_and_split_forms():
+    """
+    @brief Validate parser handles `--aa-*` assignment and split forms.
+    @details Parses mixed-form knob options and verifies canonical option
+      propagation into `PostprocessOptions.auto_adjust_options`.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-082, REQ-083, REQ-084
+    """
+
+    parsed = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--enable-enfuse",
+            "--auto-adjust",
+            "OpenCV",
+            "--aa-blur-sigma=1.5",
+            "--aa-blur-threshold-pct",
+            "12.5",
+            "--aa-level-low-pct=2",
+            "--aa-level-high-pct",
+            "98",
+            "--aa-sigmoid-contrast",
+            "4",
+            "--aa-sigmoid-midpoint=0.45",
+            "--aa-saturation-gamma",
+            "0.9",
+            "--aa-highpass-blur-sigma=3.3",
+        ]
+    )
+    assert parsed is not None
+    postprocess_options = parsed[5]
+    auto_adjust_options = postprocess_options.auto_adjust_options
+    assert auto_adjust_options.blur_sigma == 1.5
+    assert auto_adjust_options.blur_threshold_pct == 12.5
+    assert auto_adjust_options.level_low_pct == 2.0
+    assert auto_adjust_options.level_high_pct == 98.0
+    assert auto_adjust_options.sigmoid_contrast == 4.0
+    assert auto_adjust_options.sigmoid_midpoint == 0.45
+    assert auto_adjust_options.saturation_gamma == 0.9
+    assert auto_adjust_options.highpass_blur_sigma == 3.3
+
+
+def test_dng2hdr2jpg_auto_adjust_knobs_default_values_are_stable():
+    """
+    @brief Validate shared auto-adjust knob defaults remain backward compatible.
+    @details Parses options with enabled auto-adjust and no explicit `--aa-*`
+      overrides, then asserts all shared knob defaults match legacy constants.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-083
+    """
+
+    parsed = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--enable-enfuse",
+            "--auto-adjust",
+            "ImageMagick",
+        ]
+    )
+    assert parsed is not None
+    auto_adjust_options = parsed[5].auto_adjust_options
+    assert auto_adjust_options.blur_sigma == dng2hdr2jpg.DEFAULT_AA_BLUR_SIGMA
+    assert (
+        auto_adjust_options.blur_threshold_pct
+        == dng2hdr2jpg.DEFAULT_AA_BLUR_THRESHOLD_PCT
+    )
+    assert auto_adjust_options.level_low_pct == dng2hdr2jpg.DEFAULT_AA_LEVEL_LOW_PCT
+    assert auto_adjust_options.level_high_pct == dng2hdr2jpg.DEFAULT_AA_LEVEL_HIGH_PCT
+    assert (
+        auto_adjust_options.sigmoid_contrast
+        == dng2hdr2jpg.DEFAULT_AA_SIGMOID_CONTRAST
+    )
+    assert (
+        auto_adjust_options.sigmoid_midpoint
+        == dng2hdr2jpg.DEFAULT_AA_SIGMOID_MIDPOINT
+    )
+    assert (
+        auto_adjust_options.saturation_gamma
+        == dng2hdr2jpg.DEFAULT_AA_SATURATION_GAMMA
+    )
+    assert (
+        auto_adjust_options.highpass_blur_sigma
+        == dng2hdr2jpg.DEFAULT_AA_HIGHPASS_BLUR_SIGMA
     )
 
 
@@ -3209,7 +3378,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073
+    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -3229,6 +3398,22 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--saturation=<value>" in output
     assert "--jpg-compression=<0..100>" in output
     assert "--auto-adjust" in output
+    assert "--aa-blur-sigma=<value>" in output
+    assert "--aa-blur-threshold-pct=<0..100>" in output
+    assert "--aa-level-low-pct=<0..100>" in output
+    assert "--aa-level-high-pct=<0..100>" in output
+    assert "--aa-sigmoid-contrast=<value>" in output
+    assert "--aa-sigmoid-midpoint=<0..1>" in output
+    assert "--aa-saturation-gamma=<value>" in output
+    assert "--aa-highpass-blur-sigma=<value>" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AA_BLUR_SIGMA:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AA_BLUR_THRESHOLD_PCT:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AA_LEVEL_LOW_PCT:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AA_LEVEL_HIGH_PCT:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AA_SIGMOID_CONTRAST:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AA_SIGMOID_MIDPOINT:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AA_SATURATION_GAMMA:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AA_HIGHPASS_BLUR_SIGMA:g}" in output
     assert "--luminance-hdr-model=<name>" in output
     assert "--luminance-hdr-weight=<name>" in output
     assert "--luminance-hdr-response-curve=<name>" in output
@@ -3352,7 +3537,7 @@ def test_dng2hdr2jpg_applies_auto_adjust_pipeline_only_when_enabled(
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-065, REQ-066, REQ-073
+    @satisfies TST-011, REQ-065, REQ-066, REQ-073, REQ-086
     """
 
     observed = {"commands": [], "jpg_save": None}
@@ -3402,6 +3587,16 @@ def test_dng2hdr2jpg_applies_auto_adjust_pipeline_only_when_enabled(
             saturation=1.0,
             jpg_compression=10,
             auto_adjust_mode="ImageMagick",
+            auto_adjust_options=dng2hdr2jpg.AutoAdjustOptions(
+                blur_sigma=1.7,
+                blur_threshold_pct=8.5,
+                level_low_pct=1.2,
+                level_high_pct=97.8,
+                sigmoid_contrast=4.4,
+                sigmoid_midpoint=0.42,
+                saturation_gamma=0.77,
+                highpass_blur_sigma=3.6,
+            ),
         ),
     )
 
@@ -3410,6 +3605,11 @@ def test_dng2hdr2jpg_applies_auto_adjust_pipeline_only_when_enabled(
     assert observed["commands"][1][0] == "magick"
     assert Path(observed["commands"][0][-1]).name == "auto_adjust_input_16.tif"
     assert Path(observed["commands"][1][-1]).name == "auto_adjust_output.tif"
+    assert observed["commands"][1][5] == "0x1.7+8.5%"
+    assert observed["commands"][1][9] == "1.2%,97.8%"
+    assert observed["commands"][1][12] == "4.4x42%"
+    assert observed["commands"][1][18] == "0.77"
+    assert observed["commands"][1][28] == "0x3.6"
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()
@@ -3426,7 +3626,7 @@ def test_dng2hdr2jpg_applies_opencv_auto_adjust_pipeline_when_selected(
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-066, REQ-073, REQ-075
+    @satisfies TST-011, REQ-066, REQ-073, REQ-075, REQ-087
     """
 
     observed = {"opencv_call": {}, "jpg_save": None}
@@ -3447,7 +3647,7 @@ def test_dng2hdr2jpg_applies_opencv_auto_adjust_pipeline_when_selected(
             return _FakeImage16()
 
     def _fake_apply_validated_auto_adjust_pipeline_opencv(
-        input_file, output_file, cv2_module, np_module
+        input_file, output_file, cv2_module, np_module, auto_adjust_options
     ):
         """@brief Capture OpenCV auto-adjust dispatch parameters and materialize output."""
 
@@ -3456,6 +3656,7 @@ def test_dng2hdr2jpg_applies_opencv_auto_adjust_pipeline_when_selected(
             "output": Path(output_file).name,
             "cv2": cv2_module,
             "np": np_module,
+            "options": auto_adjust_options,
         }
         Path(output_file).write_text("auto-adjust", encoding="utf-8")
 
@@ -3485,6 +3686,16 @@ def test_dng2hdr2jpg_applies_opencv_auto_adjust_pipeline_when_selected(
             saturation=1.0,
             jpg_compression=10,
             auto_adjust_mode="OpenCV",
+            auto_adjust_options=dng2hdr2jpg.AutoAdjustOptions(
+                blur_sigma=1.8,
+                blur_threshold_pct=11.0,
+                level_low_pct=0.2,
+                level_high_pct=99.0,
+                sigmoid_contrast=3.5,
+                sigmoid_midpoint=0.55,
+                saturation_gamma=0.82,
+                highpass_blur_sigma=2.8,
+            ),
         ),
         auto_adjust_opencv_dependencies=(fake_cv2_module, fake_numpy_module),
     )
@@ -3494,6 +3705,16 @@ def test_dng2hdr2jpg_applies_opencv_auto_adjust_pipeline_when_selected(
     assert observed["opencv_call"]["output"] == "auto_adjust_output.tif"
     assert observed["opencv_call"]["cv2"] is fake_cv2_module
     assert observed["opencv_call"]["np"] is fake_numpy_module
+    assert observed["opencv_call"]["options"] == dng2hdr2jpg.AutoAdjustOptions(
+        blur_sigma=1.8,
+        blur_threshold_pct=11.0,
+        level_low_pct=0.2,
+        level_high_pct=99.0,
+        sigmoid_contrast=3.5,
+        sigmoid_midpoint=0.55,
+        saturation_gamma=0.82,
+        highpass_blur_sigma=2.8,
+    )
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()
@@ -3507,7 +3728,7 @@ def test_dng2hdr2jpg_opencv_auto_adjust_accepts_uint8_input_by_upconverting(tmp_
       promotion to `uint16` before float-domain pipeline execution.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-073, REQ-075
+    @satisfies TST-011, REQ-073, REQ-075, REQ-087
     """
 
     numpy_module = __import__("numpy")
@@ -3567,6 +3788,7 @@ def test_dng2hdr2jpg_opencv_auto_adjust_accepts_uint8_input_by_upconverting(tmp_
         output_file=output_tiff,
         cv2_module=fake_cv2_module,
         np_module=numpy_module,
+        auto_adjust_options=dng2hdr2jpg.AutoAdjustOptions(),
     )
 
     assert fake_cv2_module.written is not None
@@ -3574,6 +3796,120 @@ def test_dng2hdr2jpg_opencv_auto_adjust_accepts_uint8_input_by_upconverting(tmp_
     assert fake_cv2_module.written["dtype"] == "uint16"
     assert fake_cv2_module.written["shape"] == (2, 2, 3)
     assert output_tiff.exists()
+
+
+def test_dng2hdr2jpg_opencv_auto_adjust_accepts_shared_knob_values_on_synthetic_fixture(
+    tmp_path,
+):
+    """
+    @brief Validate OpenCV auto-adjust numeric pathway accepts shared knob values.
+    @details Executes OpenCV auto-adjust over deterministic synthetic `uint16`
+      fixture with defaults and with custom shared knobs, asserting stable output
+      shape/dtype bounds and successful write on both runs.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-083, REQ-087
+    """
+
+    numpy_module = __import__("numpy")
+
+    class _FixtureCv2Module:
+        """@brief Provide deterministic cv2 surface for synthetic fixture execution."""
+
+        IMREAD_UNCHANGED = -1
+        COLOR_BGR2RGB = 10
+        COLOR_RGB2BGR = 11
+        BORDER_REFLECT = 12
+
+        def __init__(self):
+            self.written_payloads = []
+
+        @staticmethod
+        def imread(path, mode):
+            """@brief Return deterministic synthetic `uint16` tensor."""
+
+            del path
+            assert mode == _FixtureCv2Module.IMREAD_UNCHANGED
+            return numpy_module.array(
+                [
+                    [[1200, 2100, 3200], [4200, 5300, 6400]],
+                    [[7400, 8500, 9600], [10600, 11700, 12800]],
+                ],
+                dtype=numpy_module.uint16,
+            )
+
+        @staticmethod
+        def cvtColor(image, code):
+            """@brief Apply deterministic channel reorder conversion."""
+
+            if code in (
+                _FixtureCv2Module.COLOR_BGR2RGB,
+                _FixtureCv2Module.COLOR_RGB2BGR,
+            ):
+                return image[..., ::-1]
+            raise AssertionError(f"Unexpected conversion code: {code}")
+
+        @staticmethod
+        def GaussianBlur(image, ksize, sigmaX, sigmaY, borderType):
+            """@brief Return deterministic no-op blur tensor."""
+
+            del ksize, sigmaX, sigmaY
+            assert borderType == _FixtureCv2Module.BORDER_REFLECT
+            return image
+
+        def imwrite(self, path, payload):
+            """@brief Capture output tensor metadata and persist artifact."""
+
+            self.written_payloads.append(
+                {
+                    "path": Path(path).name,
+                    "dtype": str(payload.dtype),
+                    "shape": payload.shape,
+                    "min": int(payload.min()),
+                    "max": int(payload.max()),
+                }
+            )
+            Path(path).write_text("auto-adjust-output", encoding="utf-8")
+            return True
+
+    input_tiff = tmp_path / "postprocessed_input.tif"
+    input_tiff.write_text("payload", encoding="utf-8")
+    output_default = tmp_path / "auto_adjust_output_default.tif"
+    output_custom = tmp_path / "auto_adjust_output_custom.tif"
+    fake_cv2_module = _FixtureCv2Module()
+
+    dng2hdr2jpg._apply_validated_auto_adjust_pipeline_opencv(
+        input_file=input_tiff,
+        output_file=output_default,
+        cv2_module=fake_cv2_module,
+        np_module=numpy_module,
+        auto_adjust_options=dng2hdr2jpg.AutoAdjustOptions(),
+    )
+    dng2hdr2jpg._apply_validated_auto_adjust_pipeline_opencv(
+        input_file=input_tiff,
+        output_file=output_custom,
+        cv2_module=fake_cv2_module,
+        np_module=numpy_module,
+        auto_adjust_options=dng2hdr2jpg.AutoAdjustOptions(
+            blur_sigma=1.3,
+            blur_threshold_pct=7.0,
+            level_low_pct=0.5,
+            level_high_pct=98.0,
+            sigmoid_contrast=2.5,
+            sigmoid_midpoint=0.45,
+            saturation_gamma=0.9,
+            highpass_blur_sigma=1.9,
+        ),
+    )
+
+    assert len(fake_cv2_module.written_payloads) == 2
+    for payload in fake_cv2_module.written_payloads:
+        assert payload["dtype"] == "uint16"
+        assert payload["shape"] == (2, 2, 3)
+        assert 0 <= payload["min"] <= 65535
+        assert 0 <= payload["max"] <= 65535
+    assert output_default.exists()
+    assert output_custom.exists()
 
 
 def test_dng2hdr2jpg_auto_adjust_uint16_output_is_normalized_before_fromarray(
@@ -3588,7 +3924,7 @@ def test_dng2hdr2jpg_auto_adjust_uint16_output_is_normalized_before_fromarray(
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-058, REQ-066, REQ-073
+    @satisfies TST-011, REQ-058, REQ-066, REQ-073, REQ-086
     """
 
     observed = {"jpg_save": None, "commands": []}

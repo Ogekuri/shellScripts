@@ -16,7 +16,7 @@ import tempfile
 import warnings
 import math
 from io import BytesIO
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +35,14 @@ DEFAULT_BRIGHTNESS = 1.0
 DEFAULT_CONTRAST = 1.0
 DEFAULT_SATURATION = 1.0
 DEFAULT_JPG_COMPRESSION = 15
+DEFAULT_AA_BLUR_SIGMA = 2.0
+DEFAULT_AA_BLUR_THRESHOLD_PCT = 10.0
+DEFAULT_AA_LEVEL_LOW_PCT = 0.1
+DEFAULT_AA_LEVEL_HIGH_PCT = 99.9
+DEFAULT_AA_SIGMOID_CONTRAST = 3.0
+DEFAULT_AA_SIGMOID_MIDPOINT = 0.5
+DEFAULT_AA_SATURATION_GAMMA = 0.8
+DEFAULT_AA_HIGHPASS_BLUR_SIGMA = 2.5
 DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "flat"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
@@ -61,6 +69,16 @@ _EXIF_TAG_DATETIME_ORIGINAL = 36867
 _EXIF_TAG_DATETIME_DIGITIZED = 36868
 _EXIF_VALID_ORIENTATIONS = (1, 2, 3, 4, 5, 6, 7, 8)
 _THUMBNAIL_MAX_SIZE = (256, 256)
+_AUTO_ADJUST_KNOB_OPTIONS = (
+    "--aa-blur-sigma",
+    "--aa-blur-threshold-pct",
+    "--aa-level-low-pct",
+    "--aa-level-high-pct",
+    "--aa-sigmoid-contrast",
+    "--aa-sigmoid-midpoint",
+    "--aa-saturation-gamma",
+    "--aa-highpass-blur-sigma",
+)
 _LUMINANCE_OPERATOR_TABLE_HEADERS = (
     "Operator",
     "Family / idea",
@@ -211,6 +229,35 @@ _LUMINANCE_CONTROL_TABLE_ROWS = (
 
 
 @dataclass(frozen=True)
+class AutoAdjustOptions:
+    """@brief Hold shared auto-adjust knob values used by ImageMagick and OpenCV.
+
+    @details Encapsulates validated knob values consumed by both auto-adjust
+    implementations so both pipelines remain numerically aligned and backward
+    compatible when no explicit overrides are provided.
+    @param blur_sigma {float} Selective blur Gaussian sigma (`> 0`).
+    @param blur_threshold_pct {float} Selective blur threshold percentage in `[0, 100]`.
+    @param level_low_pct {float} Low percentile for level normalization in `[0, 100]`.
+    @param level_high_pct {float} High percentile for level normalization in `[0, 100]`.
+    @param sigmoid_contrast {float} Sigmoidal contrast slope (`> 0`).
+    @param sigmoid_midpoint {float} Sigmoidal contrast midpoint in `[0, 1]`.
+    @param saturation_gamma {float} HSL saturation gamma denominator (`> 0`).
+    @param highpass_blur_sigma {float} High-pass Gaussian blur sigma (`> 0`).
+    @return {None} Immutable dataclass container.
+    @satisfies REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-086, REQ-087
+    """
+
+    blur_sigma: float = DEFAULT_AA_BLUR_SIGMA
+    blur_threshold_pct: float = DEFAULT_AA_BLUR_THRESHOLD_PCT
+    level_low_pct: float = DEFAULT_AA_LEVEL_LOW_PCT
+    level_high_pct: float = DEFAULT_AA_LEVEL_HIGH_PCT
+    sigmoid_contrast: float = DEFAULT_AA_SIGMOID_CONTRAST
+    sigmoid_midpoint: float = DEFAULT_AA_SIGMOID_MIDPOINT
+    saturation_gamma: float = DEFAULT_AA_SATURATION_GAMMA
+    highpass_blur_sigma: float = DEFAULT_AA_HIGHPASS_BLUR_SIGMA
+
+
+@dataclass(frozen=True)
 class PostprocessOptions:
     """@brief Hold deterministic postprocessing option values.
 
@@ -222,8 +269,9 @@ class PostprocessOptions:
     @param saturation {float} Saturation enhancement factor.
     @param jpg_compression {int} JPEG compression level in range `[0, 100]`.
     @param auto_adjust_mode {str|None} Optional auto-adjust implementation selector (`ImageMagick` or `OpenCV`).
+    @param auto_adjust_options {AutoAdjustOptions} Shared auto-adjust knobs for `ImageMagick` and `OpenCV` implementations.
     @return {None} Immutable dataclass container.
-    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075
+    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-086, REQ-087
     """
 
     post_gamma: float
@@ -232,6 +280,7 @@ class PostprocessOptions:
     saturation: float
     jpg_compression: int
     auto_adjust_mode: str | None = None
+    auto_adjust_options: AutoAdjustOptions = field(default_factory=AutoAdjustOptions)
 
 
 @dataclass(frozen=True)
@@ -348,7 +397,7 @@ def print_help(version):
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075
+    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084
     """
 
     print(
@@ -356,6 +405,10 @@ def print_help(version):
         f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
         f"[--jpg-compression=<0..100>] [--auto-adjust <ImageMagick|OpenCV>] "
+        "[--aa-blur-sigma=<value>] [--aa-blur-threshold-pct=<0..100>] "
+        "[--aa-level-low-pct=<0..100>] [--aa-level-high-pct=<0..100>] "
+        "[--aa-sigmoid-contrast=<value>] [--aa-sigmoid-midpoint=<0..1>] "
+        "[--aa-saturation-gamma=<value>] [--aa-highpass-blur-sigma=<value>] "
         f"(--enable-enfuse | --enable-luminance) "
         f"[--luminance-hdr-model=<name>] [--luminance-hdr-weight=<name>] "
         f"[--luminance-hdr-response-curve=<name>] [--luminance-tmo=<name>] "
@@ -393,6 +446,33 @@ def print_help(version):
     )
     print(
         "  --auto-adjust <name>     - Enable auto-adjust stage implementation (`ImageMagick` or `OpenCV`)."
+    )
+    print(
+        "  [auto-adjust knobs]      - Effective only when --auto-adjust is set; shared by ImageMagick and OpenCV."
+    )
+    print(
+        f"  --aa-blur-sigma=<value>  - Selective blur sigma > 0 (default: {DEFAULT_AA_BLUR_SIGMA:g})."
+    )
+    print(
+        f"  --aa-blur-threshold-pct=<0..100> - Selective blur threshold percent (default: {DEFAULT_AA_BLUR_THRESHOLD_PCT:g})."
+    )
+    print(
+        f"  --aa-level-low-pct=<0..100>  - Level low percentile; must be < --aa-level-high-pct (default: {DEFAULT_AA_LEVEL_LOW_PCT:g})."
+    )
+    print(
+        f"  --aa-level-high-pct=<0..100> - Level high percentile; must be > --aa-level-low-pct (default: {DEFAULT_AA_LEVEL_HIGH_PCT:g})."
+    )
+    print(
+        f"  --aa-sigmoid-contrast=<value> - Sigmoidal contrast slope > 0 (default: {DEFAULT_AA_SIGMOID_CONTRAST:g})."
+    )
+    print(
+        f"  --aa-sigmoid-midpoint=<0..1> - Sigmoidal midpoint in [0,1] (default: {DEFAULT_AA_SIGMOID_MIDPOINT:g})."
+    )
+    print(
+        f"  --aa-saturation-gamma=<value> - HSL saturation gamma > 0 (default: {DEFAULT_AA_SATURATION_GAMMA:g})."
+    )
+    print(
+        f"  --aa-highpass-blur-sigma=<value> - High-pass blur sigma > 0 (default: {DEFAULT_AA_HIGHPASS_BLUR_SIGMA:g})."
     )
     print("  --enable-enfuse")
     print(
@@ -787,6 +867,139 @@ def _parse_jpg_compression_option(compression_raw):
     return compression_value
 
 
+def _parse_float_in_range_option(option_name, option_raw, min_value, max_value):
+    """@brief Parse and validate one float option constrained to inclusive range.
+
+    @details Converts option token to `float`, validates inclusive bounds, and
+    emits deterministic parse errors on malformed or out-of-range values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @param min_value {float} Inclusive minimum bound.
+    @param max_value {float} Inclusive maximum bound.
+    @return {float|None} Parsed bounded float value when valid; `None` otherwise.
+    @satisfies REQ-082, REQ-084
+    """
+
+    try:
+        option_value = float(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+
+    if option_value < min_value or option_value > max_value:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error(f"Allowed range: {min_value:g}..{max_value:g}")
+        return None
+    return option_value
+
+
+def _parse_auto_adjust_options(auto_adjust_raw_values):
+    """@brief Parse and validate shared auto-adjust knobs for both implementations.
+
+    @details Applies defaults for omitted knobs, validates scalar/range
+    constraints, and enforces level percentile ordering contract.
+    @param auto_adjust_raw_values {dict[str, str]} Raw `--aa-*` option values keyed by long option name.
+    @return {AutoAdjustOptions|None} Parsed shared auto-adjust options or `None` on validation error.
+    @satisfies REQ-082, REQ-083, REQ-084
+    """
+
+    options = AutoAdjustOptions()
+    blur_sigma = options.blur_sigma
+    blur_threshold_pct = options.blur_threshold_pct
+    level_low_pct = options.level_low_pct
+    level_high_pct = options.level_high_pct
+    sigmoid_contrast = options.sigmoid_contrast
+    sigmoid_midpoint = options.sigmoid_midpoint
+    saturation_gamma = options.saturation_gamma
+    highpass_blur_sigma = options.highpass_blur_sigma
+
+    if "--aa-blur-sigma" in auto_adjust_raw_values:
+        parsed = _parse_positive_float_option(
+            "--aa-blur-sigma", auto_adjust_raw_values["--aa-blur-sigma"]
+        )
+        if parsed is None:
+            return None
+        blur_sigma = parsed
+    if "--aa-blur-threshold-pct" in auto_adjust_raw_values:
+        parsed = _parse_float_in_range_option(
+            "--aa-blur-threshold-pct",
+            auto_adjust_raw_values["--aa-blur-threshold-pct"],
+            0.0,
+            100.0,
+        )
+        if parsed is None:
+            return None
+        blur_threshold_pct = parsed
+    if "--aa-level-low-pct" in auto_adjust_raw_values:
+        parsed = _parse_float_in_range_option(
+            "--aa-level-low-pct",
+            auto_adjust_raw_values["--aa-level-low-pct"],
+            0.0,
+            100.0,
+        )
+        if parsed is None:
+            return None
+        level_low_pct = parsed
+    if "--aa-level-high-pct" in auto_adjust_raw_values:
+        parsed = _parse_float_in_range_option(
+            "--aa-level-high-pct",
+            auto_adjust_raw_values["--aa-level-high-pct"],
+            0.0,
+            100.0,
+        )
+        if parsed is None:
+            return None
+        level_high_pct = parsed
+    if level_low_pct >= level_high_pct:
+        print_error(
+            "Invalid auto-adjust levels: --aa-level-low-pct must be lower than --aa-level-high-pct"
+        )
+        return None
+    if "--aa-sigmoid-contrast" in auto_adjust_raw_values:
+        parsed = _parse_positive_float_option(
+            "--aa-sigmoid-contrast", auto_adjust_raw_values["--aa-sigmoid-contrast"]
+        )
+        if parsed is None:
+            return None
+        sigmoid_contrast = parsed
+    if "--aa-sigmoid-midpoint" in auto_adjust_raw_values:
+        parsed = _parse_float_in_range_option(
+            "--aa-sigmoid-midpoint",
+            auto_adjust_raw_values["--aa-sigmoid-midpoint"],
+            0.0,
+            1.0,
+        )
+        if parsed is None:
+            return None
+        sigmoid_midpoint = parsed
+    if "--aa-saturation-gamma" in auto_adjust_raw_values:
+        parsed = _parse_positive_float_option(
+            "--aa-saturation-gamma", auto_adjust_raw_values["--aa-saturation-gamma"]
+        )
+        if parsed is None:
+            return None
+        saturation_gamma = parsed
+    if "--aa-highpass-blur-sigma" in auto_adjust_raw_values:
+        parsed = _parse_positive_float_option(
+            "--aa-highpass-blur-sigma",
+            auto_adjust_raw_values["--aa-highpass-blur-sigma"],
+        )
+        if parsed is None:
+            return None
+        highpass_blur_sigma = parsed
+
+    return AutoAdjustOptions(
+        blur_sigma=blur_sigma,
+        blur_threshold_pct=blur_threshold_pct,
+        level_low_pct=level_low_pct,
+        level_high_pct=level_high_pct,
+        sigmoid_contrast=sigmoid_contrast,
+        sigmoid_midpoint=sigmoid_midpoint,
+        saturation_gamma=saturation_gamma,
+        highpass_blur_sigma=highpass_blur_sigma,
+    )
+
+
 def _parse_auto_adjust_mode_option(auto_adjust_raw):
     """@brief Parse auto-adjust implementation selector option value.
 
@@ -852,14 +1065,14 @@ def _parse_run_options(args):
     @details Supports positional file arguments, required mutually exclusive
     exposure selectors (`--ev=<value>`/`--ev <value>` or
     `--auto-ev[=<1|true|yes|on>]`), optional `--gamma=<a,b>` or `--gamma <a,b>`,
-    optional postprocess controls, required backend selector
+    optional postprocess controls, optional shared auto-adjust knobs, required backend selector
     (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls
     including explicit `--tmo*` passthrough options and optional auto-adjust
     implementation selector (`--auto-adjust <ImageMagick|OpenCV>`); rejects
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087
     """
 
     positional = []
@@ -876,6 +1089,7 @@ def _parse_run_options(args):
     contrast_set = False
     saturation_set = False
     auto_adjust_mode = None
+    auto_adjust_raw_values = {}
     enable_enfuse = False
     enable_luminance = False
     luminance_hdr_model = DEFAULT_LUMINANCE_HDR_MODEL
@@ -920,6 +1134,29 @@ def _parse_run_options(args):
                 return None
             auto_adjust_mode = parsed_auto_adjust_mode
             idx += 1
+            continue
+
+        if token.startswith("--aa-"):
+            option_name = token
+            option_value = None
+            consume_count = 1
+            if "=" in token:
+                option_name, option_value = token.split("=", 1)
+            else:
+                if idx + 1 >= len(args):
+                    print_error(f"Missing value for {token}")
+                    return None
+                option_value = args[idx + 1]
+                if option_value.startswith("--"):
+                    print_error(f"Missing value for {token}")
+                    return None
+                consume_count = 2
+
+            if option_name not in _AUTO_ADJUST_KNOB_OPTIONS:
+                print_error(f"Unknown option: {option_name}")
+                return None
+            auto_adjust_raw_values[option_name] = option_value
+            idx += consume_count
             continue
 
         if token == "--luminance-hdr-model":
@@ -1247,6 +1484,13 @@ def _parse_run_options(args):
         print_error("Luminance options require --enable-luminance")
         return None
 
+    if auto_adjust_mode is None and auto_adjust_raw_values:
+        invalid_knob = next(iter(auto_adjust_raw_values))
+        print_error(
+            f"Auto-adjust knob {invalid_knob} requires --auto-adjust <ImageMagick|OpenCV>"
+        )
+        return None
+
     (
         backend_post_gamma,
         backend_brightness,
@@ -1261,6 +1505,9 @@ def _parse_run_options(args):
         contrast = backend_contrast
     if not saturation_set:
         saturation = backend_saturation
+    auto_adjust_options = _parse_auto_adjust_options(auto_adjust_raw_values)
+    if auto_adjust_options is None:
+        return None
 
     return (
         Path(positional[0]),
@@ -1275,6 +1522,7 @@ def _parse_run_options(args):
             saturation=saturation,
             jpg_compression=jpg_compression,
             auto_adjust_mode=auto_adjust_mode,
+            auto_adjust_options=auto_adjust_options,
         ),
         enable_luminance,
         LuminanceOptions(
@@ -1957,19 +2205,21 @@ def _resolve_auto_adjust_opencv_dependencies():
 
 
 def _apply_validated_auto_adjust_pipeline(
-    postprocessed_input, auto_adjust_output, imagemagick_command
+    postprocessed_input, auto_adjust_output, imagemagick_command, auto_adjust_options
 ):
     """@brief Execute validated auto-adjust pipeline over temporary lossless 16-bit TIFF files.
 
     @details Uses ImageMagick to normalize source data to 16-bit-per-channel TIFF,
     applies deterministic denoise/level/sigmoidal/vibrance/high-pass overlay
-    stages, and writes lossless auto-adjust output artifact consumed by JPG encoder.
+    stages parameterized by shared auto-adjust knobs, and writes lossless
+    auto-adjust output artifact consumed by JPG encoder.
     @param postprocessed_input {Path} Temporary postprocess image input path.
     @param auto_adjust_output {Path} Temporary auto-adjust output TIFF path.
     @param imagemagick_command {str} Resolved ImageMagick executable token.
+    @param auto_adjust_options {AutoAdjustOptions} Shared auto-adjust knob values.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when ImageMagick returns non-zero.
-    @satisfies REQ-073, REQ-077
+    @satisfies REQ-073, REQ-077, REQ-086
     """
 
     auto_adjust_input_16 = auto_adjust_output.parent / "auto_adjust_input_16.tif"
@@ -1992,20 +2242,20 @@ def _apply_validated_auto_adjust_pipeline(
         "-depth",
         "16",
         "-selective-blur",
-        "0x2+10%",
+        f"0x{auto_adjust_options.blur_sigma:g}+{auto_adjust_options.blur_threshold_pct:g}%",
         "-channel",
         "RGB",
         "-level",
-        "0.1%,99.9%",
+        f"{auto_adjust_options.level_low_pct:g}%,{auto_adjust_options.level_high_pct:g}%",
         "+channel",
         "-sigmoidal-contrast",
-        "3x50%",
+        f"{auto_adjust_options.sigmoid_contrast:g}x{(auto_adjust_options.sigmoid_midpoint * 100.0):g}%",
         "-colorspace",
         "HSL",
         "-channel",
         "G",
         "-gamma",
-        "0.8",
+        f"{auto_adjust_options.saturation_gamma:g}",
         "+channel",
         "-colorspace",
         "sRGB",
@@ -2015,7 +2265,7 @@ def _apply_validated_auto_adjust_pipeline(
         "-clone",
         "0",
         "-blur",
-        "0x2.5",
+        f"0x{auto_adjust_options.highpass_blur_sigma:g}",
         "-compose",
         "mathematics",
         "-define",
@@ -2366,7 +2616,7 @@ def _overlay_composite(np_module, base_rgb, overlay_gray):
 
 
 def _apply_validated_auto_adjust_pipeline_opencv(
-    input_file, output_file, cv2_module, np_module
+    input_file, output_file, cv2_module, np_module, auto_adjust_options
 ):
     """@brief Execute validated auto-adjust pipeline using OpenCV and numpy.
 
@@ -2375,15 +2625,16 @@ def _apply_validated_auto_adjust_pipeline_opencv(
     then explicit 16-bit-to-float normalization is applied. Executes selective
     blur, adaptive levels, sigmoidal contrast, HSL saturation gamma,
     high-pass/overlay stages, then restores float payload to 16-bit-per-channel
-    RGB TIFF output.
+    RGB TIFF output, parameterized by shared auto-adjust knobs.
     @param input_file {Path} Source TIFF path.
     @param output_file {Path} Output TIFF path.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
+    @param auto_adjust_options {AutoAdjustOptions} Shared auto-adjust knob values.
     @return {None} Side effects only.
     @exception OSError Raised when source file is missing.
     @exception RuntimeError Raised when OpenCV read/write fails or input dtype is unsupported.
-    @satisfies REQ-073, REQ-075, REQ-077
+    @satisfies REQ-073, REQ-075, REQ-077, REQ-087
     """
 
     if not input_file.exists():
@@ -2409,15 +2660,31 @@ def _apply_validated_auto_adjust_pipeline_opencv(
         / 65535.0
     )
     rgb_float = _selective_blur_contrast_gated_vectorized(
-        np_module, rgb_float, sigma=2.0, threshold_percent=10.0
+        np_module,
+        rgb_float,
+        sigma=auto_adjust_options.blur_sigma,
+        threshold_percent=auto_adjust_options.blur_threshold_pct,
     )
     rgb_float = _level_per_channel_adaptive(
-        np_module, rgb_float, low_pct=0.1, high_pct=99.9
+        np_module,
+        rgb_float,
+        low_pct=auto_adjust_options.level_low_pct,
+        high_pct=auto_adjust_options.level_high_pct,
     )
-    rgb_float = _sigmoidal_contrast(np_module, rgb_float, contrast=3.0, midpoint=0.5)
-    rgb_float = _vibrance_hsl_gamma(np_module, rgb_float, saturation_gamma=0.8)
+    rgb_float = _sigmoidal_contrast(
+        np_module,
+        rgb_float,
+        contrast=auto_adjust_options.sigmoid_contrast,
+        midpoint=auto_adjust_options.sigmoid_midpoint,
+    )
+    rgb_float = _vibrance_hsl_gamma(
+        np_module, rgb_float, saturation_gamma=auto_adjust_options.saturation_gamma
+    )
     high_pass_gray = _high_pass_math_gray(
-        cv2_module, np_module, rgb_float, blur_sigma=2.5
+        cv2_module,
+        np_module,
+        rgb_float,
+        blur_sigma=auto_adjust_options.highpass_blur_sigma,
     )
     rgb_float = _overlay_composite(np_module, rgb_float, high_pass_gray)
     output_rgb_u16 = np_module.clip(
@@ -2479,7 +2746,7 @@ def _encode_jpg(
     @param source_orientation {int} Source EXIF orientation value in range `1..8`.
     @return {None} Side effects only.
     @exception RuntimeError Raised when auto-adjust mode dependencies are missing or auto-adjust mode value is unsupported.
-    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078
+    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-086, REQ-087
     """
 
     merged_data = imageio_module.imread(str(merged_tiff))
@@ -2554,6 +2821,7 @@ def _encode_jpg(
                     postprocessed_input=postprocessed_input,
                     auto_adjust_output=auto_adjust_output,
                     imagemagick_command=imagemagick_command,
+                    auto_adjust_options=postprocess_options.auto_adjust_options,
                 )
             elif postprocess_options.auto_adjust_mode == "OpenCV":
                 if auto_adjust_opencv_dependencies is None:
@@ -2566,6 +2834,7 @@ def _encode_jpg(
                     output_file=auto_adjust_output,
                     cv2_module=cv2_module,
                     np_module=np_module,
+                    auto_adjust_options=postprocess_options.auto_adjust_options,
                 )
             else:
                 raise RuntimeError(
