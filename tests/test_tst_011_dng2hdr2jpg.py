@@ -454,6 +454,40 @@ def test_dng2hdr2jpg_rejects_invalid_auto_ev_value(tmp_path):
     )
 
 
+def test_detect_dng_bits_per_color_prefers_raw_container_bit_depth():
+    """
+    @brief Validate DNG bit-depth detection prefers RAW sample container depth.
+    @details Reproduces a DNG metadata profile where `white_level` indicates
+      effective sensor dynamic range (`4000`, ~12 bits) while RAW sample storage
+      uses 16-bit container depth. Asserts detector returns container depth.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-092, REQ-093
+    """
+
+    class _FakeDtype:
+        """@brief Provide deterministic dtype stub with 16-bit itemsize."""
+
+        itemsize = 2
+
+    class _FakeRawImage:
+        """@brief Provide deterministic RAW image stub with dtype metadata."""
+
+        dtype = _FakeDtype()
+
+    class _FakeRawHandle:
+        """@brief Provide fake RAW handle with conflicting metadata sources."""
+
+        raw_image_visible = _FakeRawImage()
+
+        @property
+        def white_level(self) -> int:
+            """@brief Return effective-range white level that implies 12-bit."""
+
+            return 4000
+
+    assert dng2hdr2jpg._detect_dng_bits_per_color(_FakeRawHandle()) == 16
+
+
 def test_compute_auto_ev_value_quantizes_supported_result():
     """
     @brief Validate adaptive EV computation returns supported quantized selector.

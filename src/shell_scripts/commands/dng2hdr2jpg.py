@@ -657,13 +657,28 @@ def _derive_supported_ev_values(bits_per_color):
 def _detect_dng_bits_per_color(raw_handle):
     """@brief Detect source DNG bits-per-color from RAW metadata.
 
-    @details Reads `raw_handle.white_level` and computes `bit_length` from its
-    maximum scalar value, supporting scalar and sequence representations.
+    @details Prefers RAW sample container bit depth from
+    `raw_handle.raw_image_visible.dtype.itemsize * 8` because the DNG white
+    level can represent effective sensor range (for example `4000`) while RAW
+    samples are still stored in a wider container (for example `uint16`).
+    Falls back to `raw_handle.white_level` `bit_length` when container metadata
+    is unavailable.
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
     @return {int} Detected source DNG bits per color.
     @exception ValueError Raised when metadata is missing, non-numeric, or non-positive.
     @satisfies REQ-057, REQ-081, REQ-092, REQ-093
     """
+
+    raw_visible = getattr(raw_handle, "raw_image_visible", None)
+    raw_dtype = getattr(raw_visible, "dtype", None)
+    raw_itemsize = getattr(raw_dtype, "itemsize", None)
+    if raw_itemsize is not None:
+        try:
+            container_bits = int(raw_itemsize) * 8
+        except (TypeError, ValueError):
+            container_bits = 0
+        if container_bits > 0:
+            return container_bits
 
     white_level_raw = getattr(raw_handle, "white_level", None)
     if white_level_raw is None:
