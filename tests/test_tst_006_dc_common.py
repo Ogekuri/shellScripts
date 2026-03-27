@@ -230,16 +230,17 @@ def test_get_req_profile_uses_runtime_override_and_default_fallback(monkeypatch)
     assert static_checks == defaults["static_checks"]
 
 
-def test_get_default_req_profile_uses_opencode_prompts_provider():
+def test_get_default_req_profile_uses_codex_skills_and_opencode_prompts_providers():
     """
-    @brief Validate default req provider contract for OpenCode.
-    @details Asserts default runtime req providers include `opencode:prompts`
-      and exclude legacy `opencode:agents` token.
+    @brief Validate default req provider contract for Codex and OpenCode.
+    @details Asserts default runtime req providers include `codex:skills` and
+      `opencode:prompts`, and exclude legacy `codex:prompts` token.
     @return {None} Assertions only.
     @satisfies TST-010, REQ-050
     """
 
     defaults = config.get_default_runtime_config()["req"]
 
+    assert "codex:skills" in defaults["providers"]
     assert "opencode:prompts" in defaults["providers"]
-    assert "opencode:agents" not in defaults["providers"]
+    assert "codex:prompts" not in defaults["providers"]
