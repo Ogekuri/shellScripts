@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
 @return {None} Pytest module scope.
 """
 
@@ -700,12 +700,12 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(
     @brief Validate luminance-hdr-cli backend execution with default parameters.
     @details Enables luminance mode and verifies command argv shape uses
       `luminance-hdr-cli -e <ev-list> --hdrModel debevec --hdrWeight flat`
-      `--hdrResponseCurve srgb --tmo reinhard02 --ldrTiff 16b -o <merged_hdr.tif>`
+      `--hdrResponseCurve srgb --tmo mantiuk08 --ldrTiff 16b -o <merged_hdr.tif>`
       plus three ordered bracket TIFF inputs.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-057, REQ-060, REQ-061, REQ-062, REQ-068, REQ-069
+    @satisfies TST-011, REQ-057, REQ-060, REQ-061, REQ-062, REQ-068, REQ-091
     """
 
     observed = {
@@ -804,7 +804,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(
         "--hdrResponseCurve",
         "srgb",
         "--tmo",
-        "reinhard02",
+        "mantiuk08",
         "--ldrTiff",
         "16b",
         "-o",
@@ -815,9 +815,7 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(
         "ev_zero.tif",
         "ev_plus.tif",
     ]
-    assert ("brightness", 1.25) in observed["postprocess_ops"]
-    assert ("contrast", 0.85) in observed["postprocess_ops"]
-    assert ("saturation", 0.55) in observed["postprocess_ops"]
+    assert ("contrast", 1.2) in observed["postprocess_ops"]
     assert output_jpg.exists()
     assert observed["tmp_dir"] is not None
     assert not observed["tmp_dir"].exists()
@@ -1008,11 +1006,11 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_custom_params(monkeypatch, tmp_
     ]
 
 
-def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(
+def test_dng2hdr2jpg_luminance_non_tuned_defaults_remain_neutral(
     monkeypatch, tmp_path
 ):
     """
-    @brief Validate neutral postprocess defaults for non-`reinhard02` luminance TMO.
+    @brief Validate neutral postprocess defaults for non-tuned luminance TMOs.
     @details Selects luminance backend with `--luminance-tmo=drago` and asserts
       no implicit postprocess enhancements are applied.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
@@ -1106,6 +1104,108 @@ def test_dng2hdr2jpg_luminance_non_reinhard_defaults_remain_neutral(
     tmo_index = observed["command"].index("--tmo")
     assert observed["command"][tmo_index + 1] == "drago"
     assert "postprocess_ops" not in observed
+
+
+def test_dng2hdr2jpg_luminance_reinhard02_defaults_remain_tuned(
+    monkeypatch, tmp_path
+):
+    """
+    @brief Validate reinhard02 tuned postprocess defaults remain unchanged.
+    @details Selects luminance backend with explicit `--luminance-tmo=reinhard02`
+      and asserts tuned defaults for brightness/contrast/saturation are applied.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-069
+    """
+
+    observed = {"command": []}
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake rawpy module for reinhard02 tuned defaults test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            """@brief Return fake RAW handle."""
+
+            return _FakeRawHandle(
+                {
+                    "brights": [],
+                    "output_bps": [],
+                    "use_camera_wb": [],
+                    "no_auto_bright": [],
+                    "gamma": [],
+                }
+            )
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for reinhard02 tuned defaults test."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            """@brief Materialize deterministic placeholder files."""
+
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for shared JPG encode stage."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    def _fake_subprocess_run(command, check):
+        """@brief Capture command and materialize luminance output."""
+
+        assert check is True
+        observed["command"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        output_index = command.index("-o") + 1
+        Path(command[output_index]).write_text("jpg", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
+    )
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--ev=2",
+            "--enable-luminance",
+            "--luminance-tmo=reinhard02",
+        ]
+    )
+
+    assert result == 0
+    assert "--tmo" in observed["command"]
+    tmo_index = observed["command"].index("--tmo")
+    assert observed["command"][tmo_index + 1] == "reinhard02"
+    assert ("brightness", 1.25) in observed["postprocess_ops"]
+    assert ("contrast", 0.85) in observed["postprocess_ops"]
+    assert ("saturation", 0.55) in observed["postprocess_ops"]
 
 
 def test_dng2hdr2jpg_returns_error_and_cleans_temp_on_enfuse_failure(
@@ -3595,7 +3695,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--luminance-hdr-weight=<name>" in output
     assert "--luminance-hdr-response-curve=<name>" in output
     assert "--luminance-tmo=<name>" in output
-    assert "default: reinhard02" in output
+    assert "default: mantiuk08" in output
     assert "Luminance operators:" in output
     assert "Luminance operator main CLI controls:" in output
     assert "┌" in output and "┬" in output and "┐" in output

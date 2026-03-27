@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090
+    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091
 """
 
 import os
@@ -52,10 +52,11 @@ DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT = 1.0
 DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "flat"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
-DEFAULT_LUMINANCE_TMO = "reinhard02"
+DEFAULT_LUMINANCE_TMO = "mantiuk08"
 DEFAULT_REINHARD02_BRIGHTNESS = 1.25
 DEFAULT_REINHARD02_CONTRAST = 0.85
 DEFAULT_REINHARD02_SATURATION = 0.55
+DEFAULT_MANTIUK08_CONTRAST = 1.2
 SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
 AUTO_EV_LOW_PERCENTILE = 0.1
 AUTO_EV_HIGH_PERCENTILE = 99.9
@@ -440,7 +441,7 @@ def print_help(version):
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-090
+    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-090, REQ-091
     """
 
     print(
@@ -565,7 +566,12 @@ def print_help(version):
         f"contrast={DEFAULT_REINHARD02_CONTRAST}, saturation={DEFAULT_REINHARD02_SATURATION}."
     )
     print(
-        "                   - --enable-luminance + other --luminance-tmo: "
+        "                   - --enable-luminance + --luminance-tmo=mantiuk08: "
+        f"post-gamma={DEFAULT_POST_GAMMA}, brightness={DEFAULT_BRIGHTNESS}, "
+        f"contrast={DEFAULT_MANTIUK08_CONTRAST}, saturation={DEFAULT_SATURATION}."
+    )
+    print(
+        "                   - --enable-luminance + other --luminance-tmo (except reinhard02,mantiuk08): "
         f"post-gamma={DEFAULT_POST_GAMMA}, brightness={DEFAULT_BRIGHTNESS}, "
         f"contrast={DEFAULT_CONTRAST}, saturation={DEFAULT_SATURATION}."
     )
@@ -1283,12 +1289,13 @@ def _parse_auto_adjust_mode_option(auto_adjust_raw):
 def _resolve_default_postprocess(enable_luminance, luminance_tmo):
     """@brief Resolve backend-specific postprocess defaults.
 
-    @details Selects neutral defaults for enfuse and non-`reinhard02` luminance
-    operators, and selects tuned defaults for luminance `reinhard02`.
+    @details Selects neutral defaults for enfuse and non-tuned luminance
+    operators, and selects tuned defaults for luminance `reinhard02` and
+    `mantiuk08`.
     @param enable_luminance {bool} Backend selector state.
     @param luminance_tmo {str} Selected luminance tone-mapping operator.
     @return {tuple[float, float, float, float]} Defaults in `(post_gamma, brightness, contrast, saturation)` order.
-    @satisfies REQ-069, REQ-071, REQ-072
+    @satisfies REQ-069, REQ-071, REQ-072, REQ-091
     """
 
     if not enable_luminance:
@@ -1305,6 +1312,13 @@ def _resolve_default_postprocess(enable_luminance, luminance_tmo):
             DEFAULT_REINHARD02_BRIGHTNESS,
             DEFAULT_REINHARD02_CONTRAST,
             DEFAULT_REINHARD02_SATURATION,
+        )
+    if luminance_tmo == "mantiuk08":
+        return (
+            DEFAULT_POST_GAMMA,
+            DEFAULT_BRIGHTNESS,
+            DEFAULT_MANTIUK08_CONTRAST,
+            DEFAULT_SATURATION,
         )
 
     return (
@@ -1329,7 +1343,7 @@ def _parse_run_options(args):
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
     """
 
     positional = []
@@ -3446,7 +3460,7 @@ def run(args):
     temporary artifact cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091
     """
 
     if not _is_supported_runtime_os():
