@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090
 @return {None} Pytest module scope.
 """
 
@@ -1441,6 +1441,169 @@ def test_dng2hdr2jpg_rejects_auto_adjust_knobs_without_auto_adjust(tmp_path):
         )
         == 1
     )
+
+
+def test_dng2hdr2jpg_rejects_auto_brightness_knobs_without_auto_brightness(tmp_path):
+    """
+    @brief Validate `--ab-*` knobs are rejected when `--auto-brightness` is omitted.
+    @details Exercises assignment and split knob forms without `--auto-brightness`
+      and asserts deterministic parser failure.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-065, REQ-089
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--ab-clip-limit=2.1",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--enable-enfuse",
+                "--ab-tile-grid-size",
+                "8,8",
+            ]
+        )
+        == 1
+    )
+
+
+def test_dng2hdr2jpg_rejects_invalid_auto_brightness_knob_values(tmp_path):
+    """
+    @brief Validate auto-brightness knob validation constraints.
+    @details Verifies positive-only, bounded-range, and formatting rules for
+      `--ab-*` options when auto-brightness mode is enabled.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-065, REQ-089
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+    base_args = [
+        str(input_dng),
+        str(output_jpg),
+        "--ev=1",
+        "--enable-enfuse",
+        "--auto-brightness",
+    ]
+
+    assert dng2hdr2jpg.run(base_args + ["--ab-clip-limit=0"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-tile-grid-size=0,8"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-tile-grid-size=8,0"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-tile-grid-size=8"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-target-mean=0"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-target-mean=1"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-mean-tolerance=-0.1"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-mean-tolerance=1.1"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-initial-clip-hist-percent=-1"]) == 1
+
+
+def test_dng2hdr2jpg_parses_auto_brightness_knob_assignment_and_split_forms():
+    """
+    @brief Validate parser handles `--ab-*` assignment and split forms.
+    @details Parses mixed-form auto-brightness knobs and verifies canonical
+      propagation into `PostprocessOptions.auto_brightness_options`.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-065, REQ-088, REQ-089
+    """
+
+    parsed = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--enable-enfuse",
+            "--auto-brightness=true",
+            "--ab-clip-limit=3.1",
+            "--ab-tile-grid-size",
+            "9,7",
+            "--ab-target-mean=0.48",
+            "--ab-mean-tolerance",
+            "0.04",
+            "--ab-initial-clip-hist-percent=0.8",
+        ]
+    )
+    assert parsed is not None
+    postprocess_options = parsed[5]
+    assert postprocess_options.auto_brightness_enabled is True
+    auto_brightness_options = postprocess_options.auto_brightness_options
+    assert auto_brightness_options.clip_limit == 3.1
+    assert auto_brightness_options.tile_grid_width == 9
+    assert auto_brightness_options.tile_grid_height == 7
+    assert auto_brightness_options.target_mean == 0.48
+    assert auto_brightness_options.mean_tolerance == 0.04
+    assert auto_brightness_options.initial_clip_hist_percent == 0.8
+
+
+def test_dng2hdr2jpg_auto_brightness_knobs_default_values_are_stable():
+    """
+    @brief Validate auto-brightness defaults remain stable.
+    @details Parses options with enabled auto-brightness and no explicit `--ab-*`
+      overrides, then asserts all default values match constants.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-088
+    """
+
+    parsed = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--enable-enfuse",
+            "--auto-brightness",
+        ]
+    )
+    assert parsed is not None
+    options = parsed[5].auto_brightness_options
+    assert options.clip_limit == dng2hdr2jpg.DEFAULT_AB_CLIP_LIMIT
+    assert options.tile_grid_width == dng2hdr2jpg.DEFAULT_AB_TILE_GRID_WIDTH
+    assert options.tile_grid_height == dng2hdr2jpg.DEFAULT_AB_TILE_GRID_HEIGHT
+    assert options.target_mean == dng2hdr2jpg.DEFAULT_AB_TARGET_MEAN
+    assert options.mean_tolerance == dng2hdr2jpg.DEFAULT_AB_MEAN_TOLERANCE
+    assert (
+        options.initial_clip_hist_percent
+        == dng2hdr2jpg.DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT
+    )
+
+
+def test_dng2hdr2jpg_auto_brightness_accepts_split_boolean_value():
+    """
+    @brief Validate `--auto-brightness` accepts split boolean value form.
+    @details Parses split form `--auto-brightness yes` and verifies enabled state.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-065
+    """
+
+    parsed = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--enable-enfuse",
+            "--auto-brightness",
+            "yes",
+        ]
+    )
+    assert parsed is not None
+    assert parsed[5].auto_brightness_enabled is True
 
 
 def test_dng2hdr2jpg_rejects_invalid_auto_adjust_knob_values(tmp_path):
@@ -3378,7 +3541,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084
+    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -3396,6 +3559,20 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--brightness=<value>" in output
     assert "--contrast=<value>" in output
     assert "--saturation=<value>" in output
+    assert "--auto-brightness" in output
+    assert "--ab-clip-limit=<value>" in output
+    assert "--ab-tile-grid-size=<w,h>" in output
+    assert "--ab-target-mean=<(0,1)>" in output
+    assert "--ab-mean-tolerance=<0..1>" in output
+    assert "--ab-initial-clip-hist-percent=<value>" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AB_CLIP_LIMIT:g}" in output
+    assert (
+        f"default: {dng2hdr2jpg.DEFAULT_AB_TILE_GRID_WIDTH},{dng2hdr2jpg.DEFAULT_AB_TILE_GRID_HEIGHT}"
+        in output
+    )
+    assert f"default: {dng2hdr2jpg.DEFAULT_AB_TARGET_MEAN:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AB_MEAN_TOLERANCE:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT:g}" in output
     assert "--jpg-compression=<0..100>" in output
     assert "--auto-adjust" in output
     assert "--aa-blur-sigma=<value>" in output
@@ -3715,6 +3892,108 @@ def test_dng2hdr2jpg_applies_opencv_auto_adjust_pipeline_when_selected(
         saturation_gamma=0.82,
         highpass_blur_sigma=2.8,
     )
+    assert observed["jpg_save"] is not None
+    assert observed["jpg_save"]["format"] == "JPEG"
+    assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_applies_auto_brightness_before_static_postprocess(monkeypatch, tmp_path):
+    """
+    @brief Validate auto-brightness runs before static postprocess operations.
+    @details Executes `_encode_jpg` with enabled auto-brightness, captures
+      dispatch call and static enhancement factors, and verifies static factors
+      are applied after auto-brightness output generation.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-090
+    """
+
+    observed = {"auto_brightness": None, "postprocess_ops": [], "jpg_save": None}
+
+    class _FakeImageIoModule:
+        """@brief Provide fake imageio module for auto-brightness encode assertions."""
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake payload for merged TIFF input."""
+
+            del path
+            numpy_module = __import__("numpy")
+            return numpy_module.zeros((2, 2, 3), dtype=numpy_module.uint16)
+
+    def _fake_apply_auto_brightness_rgb_uint8(
+        cv2_module, np_module, image_rgb_uint8, auto_brightness_options
+    ):
+        """@brief Capture auto-brightness invocation and return payload marker."""
+
+        observed["auto_brightness"] = {
+            "cv2": cv2_module,
+            "np": np_module,
+            "dtype": str(getattr(image_rgb_uint8, "dtype", "")),
+            "options": auto_brightness_options,
+        }
+
+        class _FakeAutoBrightnessOutput:
+            mode = "RGB"
+
+        return _FakeAutoBrightnessOutput()
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_apply_auto_brightness_rgb_uint8",
+        _fake_apply_auto_brightness_rgb_uint8,
+    )
+
+    merged_tiff = tmp_path / "merged_hdr.tif"
+    merged_tiff.write_text("merged", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+    pil_image_module, pil_enhance_module = _build_fake_pillow_modules(observed)
+    fake_cv2_module = object()
+    fake_numpy_module = __import__("numpy")
+
+    dng2hdr2jpg._encode_jpg(
+        imageio_module=_FakeImageIoModule,
+        pil_image_module=pil_image_module,
+        pil_enhance_module=pil_enhance_module,
+        merged_tiff=merged_tiff,
+        output_jpg=output_jpg,
+        postprocess_options=dng2hdr2jpg.PostprocessOptions(
+            post_gamma=1.0,
+            brightness=1.3,
+            contrast=0.9,
+            saturation=1.1,
+            jpg_compression=10,
+            auto_brightness_enabled=True,
+            auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(
+                clip_limit=2.6,
+                tile_grid_width=9,
+                tile_grid_height=7,
+                target_mean=0.5,
+                mean_tolerance=0.02,
+                initial_clip_hist_percent=0.7,
+            ),
+        ),
+        auto_adjust_opencv_dependencies=(fake_cv2_module, fake_numpy_module),
+    )
+
+    assert observed["auto_brightness"] is not None
+    assert observed["auto_brightness"]["cv2"] is fake_cv2_module
+    assert observed["auto_brightness"]["np"] is fake_numpy_module
+    assert observed["auto_brightness"]["dtype"] == "uint8"
+    assert observed["auto_brightness"]["options"] == dng2hdr2jpg.AutoBrightnessOptions(
+        clip_limit=2.6,
+        tile_grid_width=9,
+        tile_grid_height=7,
+        target_mean=0.5,
+        mean_tolerance=0.02,
+        initial_clip_hist_percent=0.7,
+    )
+    assert observed["postprocess_ops"] == [
+        ("brightness", 1.3),
+        ("contrast", 0.9),
+        ("saturation", 1.1),
+    ]
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()

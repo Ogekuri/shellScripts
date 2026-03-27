@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
+    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090
 """
 
 import os
@@ -43,6 +43,12 @@ DEFAULT_AA_SIGMOID_CONTRAST = 3.0
 DEFAULT_AA_SIGMOID_MIDPOINT = 0.5
 DEFAULT_AA_SATURATION_GAMMA = 0.8
 DEFAULT_AA_HIGHPASS_BLUR_SIGMA = 2.5
+DEFAULT_AB_CLIP_LIMIT = 2.0
+DEFAULT_AB_TILE_GRID_WIDTH = 8
+DEFAULT_AB_TILE_GRID_HEIGHT = 8
+DEFAULT_AB_TARGET_MEAN = 0.52
+DEFAULT_AB_MEAN_TOLERANCE = 0.03
+DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT = 1.0
 DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "flat"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
@@ -78,6 +84,13 @@ _AUTO_ADJUST_KNOB_OPTIONS = (
     "--aa-sigmoid-midpoint",
     "--aa-saturation-gamma",
     "--aa-highpass-blur-sigma",
+)
+_AUTO_BRIGHTNESS_KNOB_OPTIONS = (
+    "--ab-clip-limit",
+    "--ab-tile-grid-size",
+    "--ab-target-mean",
+    "--ab-mean-tolerance",
+    "--ab-initial-clip-hist-percent",
 )
 _LUMINANCE_OPERATOR_TABLE_HEADERS = (
     "Operator",
@@ -258,6 +271,30 @@ class AutoAdjustOptions:
 
 
 @dataclass(frozen=True)
+class AutoBrightnessOptions:
+    """@brief Hold `--auto-brightness` knob values.
+
+    @details Encapsulates validated OpenCV auto-brightness parameters consumed
+    by histogram clipping, CLAHE, and conditional gamma stages.
+    @param clip_limit {float} CLAHE clip limit (`> 0`).
+    @param tile_grid_width {int} CLAHE tile grid width (`> 0`).
+    @param tile_grid_height {int} CLAHE tile grid height (`> 0`).
+    @param target_mean {float} Target luminance mean in `(0, 1)`.
+    @param mean_tolerance {float} Mean tolerance before gamma in `[0, 1]`.
+    @param initial_clip_hist_percent {float} Histogram clipping percent (`>= 0`).
+    @return {None} Immutable dataclass container.
+    @satisfies REQ-065, REQ-088, REQ-089, REQ-090
+    """
+
+    clip_limit: float = DEFAULT_AB_CLIP_LIMIT
+    tile_grid_width: int = DEFAULT_AB_TILE_GRID_WIDTH
+    tile_grid_height: int = DEFAULT_AB_TILE_GRID_HEIGHT
+    target_mean: float = DEFAULT_AB_TARGET_MEAN
+    mean_tolerance: float = DEFAULT_AB_MEAN_TOLERANCE
+    initial_clip_hist_percent: float = DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT
+
+
+@dataclass(frozen=True)
 class PostprocessOptions:
     """@brief Hold deterministic postprocessing option values.
 
@@ -268,10 +305,12 @@ class PostprocessOptions:
     @param contrast {float} Contrast enhancement factor.
     @param saturation {float} Saturation enhancement factor.
     @param jpg_compression {int} JPEG compression level in range `[0, 100]`.
+    @param auto_brightness_enabled {bool} `True` when auto-brightness pre-stage is enabled.
+    @param auto_brightness_options {AutoBrightnessOptions} Auto-brightness stage knobs.
     @param auto_adjust_mode {str|None} Optional auto-adjust implementation selector (`ImageMagick` or `OpenCV`).
     @param auto_adjust_options {AutoAdjustOptions} Shared auto-adjust knobs for `ImageMagick` and `OpenCV` implementations.
     @return {None} Immutable dataclass container.
-    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-086, REQ-087
+    @satisfies REQ-065, REQ-066, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090
     """
 
     post_gamma: float
@@ -279,6 +318,10 @@ class PostprocessOptions:
     contrast: float
     saturation: float
     jpg_compression: int
+    auto_brightness_enabled: bool = False
+    auto_brightness_options: AutoBrightnessOptions = field(
+        default_factory=AutoBrightnessOptions
+    )
     auto_adjust_mode: str | None = None
     auto_adjust_options: AutoAdjustOptions = field(default_factory=AutoAdjustOptions)
 
@@ -397,13 +440,17 @@ def print_help(version):
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084
+    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-090
     """
 
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
         f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
+        "[--auto-brightness[=<1|true|yes|on>]] "
+        "[--ab-clip-limit=<value>] [--ab-tile-grid-size=<w,h>] "
+        "[--ab-target-mean=<(0,1)>] [--ab-mean-tolerance=<0..1>] "
+        "[--ab-initial-clip-hist-percent=<value>] "
         f"[--jpg-compression=<0..100>] [--auto-adjust <ImageMagick|OpenCV>] "
         "[--aa-blur-sigma=<value>] [--aa-blur-threshold-pct=<0..100>] "
         "[--aa-level-low-pct=<0..100>] [--aa-level-high-pct=<0..100>] "
@@ -440,6 +487,31 @@ def print_help(version):
     )
     print(
         "  --saturation=<value> - Postprocess saturation factor (backend-default when omitted)."
+    )
+    print(
+        "  --auto-brightness   - Enable auto-brightness pre-stage before static postprocess factors."
+    )
+    print(
+        "                     Optional value forms: --auto-brightness=1, --auto-brightness=true, --auto-brightness yes."
+    )
+    print(
+        "  [auto-brightness knobs] - Effective only when --auto-brightness is set."
+    )
+    print(
+        f"  --ab-clip-limit=<value> - CLAHE clip limit > 0 (default: {DEFAULT_AB_CLIP_LIMIT:g})."
+    )
+    print(
+        "  --ab-tile-grid-size=<w,h> - CLAHE tile grid size with integers > 0 "
+        f"(default: {DEFAULT_AB_TILE_GRID_WIDTH},{DEFAULT_AB_TILE_GRID_HEIGHT})."
+    )
+    print(
+        f"  --ab-target-mean=<(0,1)> - Target luminance mean in (0,1) (default: {DEFAULT_AB_TARGET_MEAN:g})."
+    )
+    print(
+        f"  --ab-mean-tolerance=<0..1> - Mean tolerance in [0,1] (default: {DEFAULT_AB_MEAN_TOLERANCE:g})."
+    )
+    print(
+        f"  --ab-initial-clip-hist-percent=<value> - Histogram clipping percent >= 0 (default: {DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT:g})."
     )
     print(
         f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION})."
@@ -572,6 +644,24 @@ def _parse_auto_ev_option(auto_ev_raw):
     if auto_ev_text in ("1", "true", "yes", "on"):
         return True
     print_error(f"Invalid --auto-ev value: {auto_ev_raw}")
+    print_error("Allowed values: 1, true, yes, on")
+    return None
+
+
+def _parse_auto_brightness_option(auto_brightness_raw):
+    """@brief Parse and validate one `--auto-brightness` option value.
+
+    @details Accepts only boolean-like activator tokens (`1`, `true`, `yes`,
+    `on`) and rejects all other values to keep deterministic CLI behavior.
+    @param auto_brightness_raw {str} Raw `--auto-brightness` value token from CLI args.
+    @return {bool|None} `True` when token enables auto-brightness; `None` on parse failure.
+    @satisfies REQ-065, REQ-089
+    """
+
+    auto_brightness_text = auto_brightness_raw.strip().lower()
+    if auto_brightness_text in ("1", "true", "yes", "on"):
+        return True
+    print_error(f"Invalid --auto-brightness value: {auto_brightness_raw}")
     print_error("Allowed values: 1, true, yes, on")
     return None
 
@@ -867,6 +957,101 @@ def _parse_jpg_compression_option(compression_raw):
     return compression_value
 
 
+def _parse_positive_int_option(option_name, option_raw):
+    """@brief Parse and validate one positive integer option value.
+
+    @details Converts option token to `int`, requires value greater than zero,
+    and emits deterministic parse errors on malformed values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @return {int|None} Parsed positive integer value when valid; `None` otherwise.
+    @satisfies REQ-065, REQ-089
+    """
+
+    try:
+        option_value = int(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+    if option_value <= 0:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error(f"{option_name} must be greater than zero.")
+        return None
+    return option_value
+
+
+def _parse_auto_brightness_tile_grid_size_option(option_raw):
+    """@brief Parse and validate `--ab-tile-grid-size` option value.
+
+    @details Parses `w,h` integer pair, requires exactly two positive integers,
+    and returns deterministic validation errors for malformed values.
+    @param option_raw {str} Raw `--ab-tile-grid-size` token value from CLI args.
+    @return {tuple[int, int]|None} Parsed `(width, height)` tile grid pair; `None` on validation failure.
+    @satisfies REQ-065, REQ-089
+    """
+
+    parts = [part.strip() for part in option_raw.split(",")]
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        print_error(f"Invalid --ab-tile-grid-size value: {option_raw}")
+        print_error("Expected format: --ab-tile-grid-size=<width,height>")
+        return None
+    width = _parse_positive_int_option("--ab-tile-grid-size width", parts[0])
+    if width is None:
+        return None
+    height = _parse_positive_int_option("--ab-tile-grid-size height", parts[1])
+    if height is None:
+        return None
+    return (width, height)
+
+
+def _parse_float_exclusive_range_option(option_name, option_raw, min_value, max_value):
+    """@brief Parse and validate one float option in an exclusive range.
+
+    @details Converts option token to `float`, validates `min < value < max`,
+    and emits deterministic parse errors on malformed or out-of-range values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @param min_value {float} Exclusive minimum bound.
+    @param max_value {float} Exclusive maximum bound.
+    @return {float|None} Parsed float value when valid; `None` otherwise.
+    @satisfies REQ-065, REQ-089
+    """
+
+    try:
+        option_value = float(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+    if option_value <= min_value or option_value >= max_value:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error(f"Allowed range: ({min_value:g},{max_value:g})")
+        return None
+    return option_value
+
+
+def _parse_non_negative_float_option(option_name, option_raw):
+    """@brief Parse and validate one non-negative float option value.
+
+    @details Converts option token to `float`, requires value greater than or
+    equal to zero, and emits deterministic parse errors on malformed values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @return {float|None} Parsed non-negative float value when valid; `None` otherwise.
+    @satisfies REQ-065, REQ-089
+    """
+
+    try:
+        option_value = float(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+    if option_value < 0.0:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error(f"{option_name} must be greater than or equal to zero.")
+        return None
+    return option_value
+
+
 def _parse_float_in_range_option(option_name, option_raw, min_value, max_value):
     """@brief Parse and validate one float option constrained to inclusive range.
 
@@ -891,6 +1076,77 @@ def _parse_float_in_range_option(option_name, option_raw, min_value, max_value):
         print_error(f"Allowed range: {min_value:g}..{max_value:g}")
         return None
     return option_value
+
+
+def _parse_auto_brightness_options(auto_brightness_raw_values):
+    """@brief Parse and validate auto-brightness knobs.
+
+    @details Applies defaults for omitted `--ab-*` knobs and validates scalar
+    constraints required by histogram clipping, CLAHE, and gamma mean balancing.
+    @param auto_brightness_raw_values {dict[str, str]} Raw `--ab-*` option values keyed by long option name.
+    @return {AutoBrightnessOptions|None} Parsed auto-brightness options or `None` on validation error.
+    @satisfies REQ-088, REQ-089
+    """
+
+    options = AutoBrightnessOptions()
+    clip_limit = options.clip_limit
+    tile_grid_width = options.tile_grid_width
+    tile_grid_height = options.tile_grid_height
+    target_mean = options.target_mean
+    mean_tolerance = options.mean_tolerance
+    initial_clip_hist_percent = options.initial_clip_hist_percent
+
+    if "--ab-clip-limit" in auto_brightness_raw_values:
+        parsed = _parse_positive_float_option(
+            "--ab-clip-limit", auto_brightness_raw_values["--ab-clip-limit"]
+        )
+        if parsed is None:
+            return None
+        clip_limit = parsed
+    if "--ab-tile-grid-size" in auto_brightness_raw_values:
+        parsed = _parse_auto_brightness_tile_grid_size_option(
+            auto_brightness_raw_values["--ab-tile-grid-size"]
+        )
+        if parsed is None:
+            return None
+        tile_grid_width, tile_grid_height = parsed
+    if "--ab-target-mean" in auto_brightness_raw_values:
+        parsed = _parse_float_exclusive_range_option(
+            "--ab-target-mean",
+            auto_brightness_raw_values["--ab-target-mean"],
+            0.0,
+            1.0,
+        )
+        if parsed is None:
+            return None
+        target_mean = parsed
+    if "--ab-mean-tolerance" in auto_brightness_raw_values:
+        parsed = _parse_float_in_range_option(
+            "--ab-mean-tolerance",
+            auto_brightness_raw_values["--ab-mean-tolerance"],
+            0.0,
+            1.0,
+        )
+        if parsed is None:
+            return None
+        mean_tolerance = parsed
+    if "--ab-initial-clip-hist-percent" in auto_brightness_raw_values:
+        parsed = _parse_non_negative_float_option(
+            "--ab-initial-clip-hist-percent",
+            auto_brightness_raw_values["--ab-initial-clip-hist-percent"],
+        )
+        if parsed is None:
+            return None
+        initial_clip_hist_percent = parsed
+
+    return AutoBrightnessOptions(
+        clip_limit=clip_limit,
+        tile_grid_width=tile_grid_width,
+        tile_grid_height=tile_grid_height,
+        target_mean=target_mean,
+        mean_tolerance=mean_tolerance,
+        initial_clip_hist_percent=initial_clip_hist_percent,
+    )
 
 
 def _parse_auto_adjust_options(auto_adjust_raw_values):
@@ -1065,14 +1321,15 @@ def _parse_run_options(args):
     @details Supports positional file arguments, required mutually exclusive
     exposure selectors (`--ev=<value>`/`--ev <value>` or
     `--auto-ev[=<1|true|yes|on>]`), optional `--gamma=<a,b>` or `--gamma <a,b>`,
-    optional postprocess controls, optional shared auto-adjust knobs, required backend selector
+    optional postprocess controls, optional auto-brightness stage and knobs,
+    optional shared auto-adjust knobs, required backend selector
     (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls
     including explicit `--tmo*` passthrough options and optional auto-adjust
     implementation selector (`--auto-adjust <ImageMagick|OpenCV>`); rejects
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090
     """
 
     positional = []
@@ -1088,6 +1345,8 @@ def _parse_run_options(args):
     brightness_set = False
     contrast_set = False
     saturation_set = False
+    auto_brightness_enabled = False
+    auto_brightness_raw_values = {}
     auto_adjust_mode = None
     auto_adjust_raw_values = {}
     enable_enfuse = False
@@ -1134,6 +1393,50 @@ def _parse_run_options(args):
                 return None
             auto_adjust_mode = parsed_auto_adjust_mode
             idx += 1
+            continue
+
+        if token == "--auto-brightness":
+            if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
+                parsed_auto_brightness = _parse_auto_brightness_option(args[idx + 1])
+                if parsed_auto_brightness is None:
+                    return None
+                auto_brightness_enabled = parsed_auto_brightness
+                idx += 2
+                continue
+            auto_brightness_enabled = True
+            idx += 1
+            continue
+
+        if token.startswith("--auto-brightness="):
+            parsed_auto_brightness = _parse_auto_brightness_option(
+                token.split("=", 1)[1]
+            )
+            if parsed_auto_brightness is None:
+                return None
+            auto_brightness_enabled = parsed_auto_brightness
+            idx += 1
+            continue
+
+        if token.startswith("--ab-"):
+            option_name = token
+            option_value = None
+            consume_count = 1
+            if "=" in token:
+                option_name, option_value = token.split("=", 1)
+            else:
+                if idx + 1 >= len(args):
+                    print_error(f"Missing value for {token}")
+                    return None
+                option_value = args[idx + 1]
+                if option_value.startswith("--"):
+                    print_error(f"Missing value for {token}")
+                    return None
+                consume_count = 2
+            if option_name not in _AUTO_BRIGHTNESS_KNOB_OPTIONS:
+                print_error(f"Unknown option: {option_name}")
+                return None
+            auto_brightness_raw_values[option_name] = option_value
+            idx += consume_count
             continue
 
         if token.startswith("--aa-"):
@@ -1490,6 +1793,12 @@ def _parse_run_options(args):
             f"Auto-adjust knob {invalid_knob} requires --auto-adjust <ImageMagick|OpenCV>"
         )
         return None
+    if not auto_brightness_enabled and auto_brightness_raw_values:
+        invalid_knob = next(iter(auto_brightness_raw_values))
+        print_error(
+            f"Auto-brightness knob {invalid_knob} requires --auto-brightness"
+        )
+        return None
 
     (
         backend_post_gamma,
@@ -1505,6 +1814,9 @@ def _parse_run_options(args):
         contrast = backend_contrast
     if not saturation_set:
         saturation = backend_saturation
+    auto_brightness_options = _parse_auto_brightness_options(auto_brightness_raw_values)
+    if auto_brightness_options is None:
+        return None
     auto_adjust_options = _parse_auto_adjust_options(auto_adjust_raw_values)
     if auto_adjust_options is None:
         return None
@@ -1521,6 +1833,8 @@ def _parse_run_options(args):
             contrast=contrast,
             saturation=saturation,
             jpg_compression=jpg_compression,
+            auto_brightness_enabled=auto_brightness_enabled,
+            auto_brightness_options=auto_brightness_options,
             auto_adjust_mode=auto_adjust_mode,
             auto_adjust_options=auto_adjust_options,
         ),
@@ -2181,12 +2495,13 @@ def _resolve_imagemagick_command():
 
 
 def _resolve_auto_adjust_opencv_dependencies():
-    """@brief Resolve OpenCV auto-adjust runtime dependencies.
+    """@brief Resolve OpenCV runtime dependencies for image-domain stages.
 
-    @details Imports `cv2` and `numpy` modules required by OpenCV auto-adjust pipeline
-    execution and returns `None` with deterministic error output when missing.
+    @details Imports `cv2` and `numpy` modules required by OpenCV auto-adjust
+    pipeline and auto-brightness pre-stage execution, and returns `None` with
+    deterministic error output when dependencies are missing.
     @return {tuple[ModuleType, ModuleType]|None} `(cv2_module, numpy_module)` when available; `None` on dependency failure.
-    @satisfies REQ-059, REQ-073, REQ-075
+    @satisfies REQ-059, REQ-073, REQ-075, REQ-090
     """
 
     try:
@@ -2202,6 +2517,177 @@ def _resolve_auto_adjust_opencv_dependencies():
         print_error("Install dependencies with: uv pip install opencv-python numpy")
         return None
     return (cv2, numpy_module)
+
+
+def _to_uint8_image_array(np_module, image_data):
+    """@brief Convert image tensor to `uint8` range `[0,255]`.
+
+    @details Normalizes integer or float image payloads into `uint8` preserving
+    relative brightness scale: `uint16` uses `/257`, normalized float arrays in
+    `[0,1]` use `*255`, and all paths clamp to inclusive byte range.
+    @param np_module {ModuleType} Imported numpy module.
+    @param image_data {object} Numeric image tensor.
+    @return {object} `uint8` image tensor.
+    @satisfies REQ-066, REQ-090
+    """
+
+    dtype_name = str(getattr(image_data, "dtype", ""))
+    if dtype_name == "uint8":
+        return image_data
+    if dtype_name == "uint16":
+        if all(
+            hasattr(np_module, attr) for attr in ("clip", "round", "uint8")
+        ) and hasattr(image_data, "shape"):
+            return np_module.clip(np_module.round(image_data / 257.0), 0, 255).astype(
+                np_module.uint8
+            )
+        scaled_data = image_data / 257.0
+        if hasattr(scaled_data, "clip"):
+            scaled_data = scaled_data.clip(0, 255)
+        if hasattr(scaled_data, "astype"):
+            return scaled_data.astype("uint8")
+        return scaled_data
+    if all(
+        hasattr(np_module, attr)
+        for attr in ("array", "float64", "min", "max", "clip", "round", "uint8")
+    ):
+        numeric_data = np_module.array(image_data, dtype=np_module.float64)
+        minimum_value = float(np_module.min(numeric_data)) if numeric_data.size else 0.0
+        maximum_value = float(np_module.max(numeric_data)) if numeric_data.size else 0.0
+        if minimum_value >= 0.0 and maximum_value <= 1.0:
+            numeric_data = numeric_data * 255.0
+        return np_module.clip(np_module.round(numeric_data), 0, 255).astype(
+            np_module.uint8
+        )
+    if hasattr(image_data, "astype"):
+        return image_data.astype("uint8")
+    return image_data
+
+
+def _clip_histogram_autolevel_channel(
+    cv2_module, np_module, channel, clip_hist_percent
+):
+    """@brief Clip histogram tails and rescale one luminance channel.
+
+    @details Removes low/high histogram outliers by clipping a symmetric percent
+    from cumulative histogram, then applies linear rescale to `[0,255]`.
+    @param cv2_module {ModuleType} Imported cv2 module.
+    @param np_module {ModuleType} Imported numpy module.
+    @param channel {object} Single-channel uint8 image tensor.
+    @param clip_hist_percent {float} Total histogram clipping percent (`>= 0`).
+    @return {object} Rescaled uint8 channel tensor.
+    @exception ValueError Raised when channel dtype is not `uint8`.
+    @satisfies REQ-090
+    """
+
+    if str(getattr(channel, "dtype", "")) != "uint8":
+        raise ValueError("Auto-brightness channel must be uint8")
+    histogram = cv2_module.calcHist([channel], [0], None, [256], [0, 256]).ravel()
+    cumulative = histogram.cumsum()
+    maximum = float(cumulative[-1]) if cumulative.size else 0.0
+    if maximum <= 0.0:
+        return channel.copy()
+    clip_amount = (clip_hist_percent / 100.0) * maximum / 2.0
+    minimum_gray = int(np_module.searchsorted(cumulative, clip_amount))
+    maximum_gray = int(np_module.searchsorted(cumulative, maximum - clip_amount))
+    if maximum_gray <= minimum_gray:
+        return channel.copy()
+    alpha = 255.0 / float(maximum_gray - minimum_gray)
+    beta = -float(minimum_gray) * alpha
+    return cv2_module.convertScaleAbs(channel, alpha=alpha, beta=beta)
+
+
+def _apply_mean_gamma_correction_channel(
+    cv2_module, np_module, channel, current_mean, target_mean
+):
+    """@brief Apply LUT gamma correction from current and target means.
+
+    @details Computes gamma with `log(target)/log(current)`, clamps gamma to
+    `[0.5,2.0]`, generates one 256-entry LUT, and applies vectorized channel
+    transform through OpenCV `LUT`.
+    @param cv2_module {ModuleType} Imported cv2 module.
+    @param np_module {ModuleType} Imported numpy module.
+    @param channel {object} Single-channel uint8 image tensor.
+    @param current_mean {float} Current normalized mean in `(0,1)`.
+    @param target_mean {float} Target normalized mean in `(0,1)`.
+    @return {object} Gamma-corrected uint8 channel tensor.
+    @satisfies REQ-090
+    """
+
+    if current_mean <= 0.01 or current_mean >= 0.99:
+        return channel
+    gamma = float(np_module.log(target_mean) / np_module.log(current_mean))
+    gamma = float(np_module.clip(gamma, 0.5, 2.0))
+    inv_gamma = 1.0 / gamma
+    table = np_module.array(
+        [((value / 255.0) ** inv_gamma) * 255.0 for value in range(256)]
+    ).astype(np_module.uint8)
+    return cv2_module.LUT(channel, table)
+
+
+def _apply_auto_brightness_rgb_uint8(
+    cv2_module, np_module, image_rgb_uint8, auto_brightness_options
+):
+    """@brief Apply auto-brightness algorithm on RGB uint8 tensor.
+
+    @details Executes luminance-channel pipeline `histogram-clip autolevel ->
+    CLAHE -> conditional gamma(mean,target,tolerance)`, then recomposes RGB
+    payload from corrected luminance and original chroma channels.
+    @param cv2_module {ModuleType} Imported cv2 module.
+    @param np_module {ModuleType} Imported numpy module.
+    @param image_rgb_uint8 {object} RGB uint8 image tensor.
+    @param auto_brightness_options {AutoBrightnessOptions} Parsed auto-brightness knobs.
+    @return {object} RGB uint8 image tensor corrected by auto-brightness pipeline.
+    @exception ValueError Raised when input tensor is not uint8.
+    @satisfies REQ-066, REQ-090
+    """
+
+    if str(getattr(image_rgb_uint8, "dtype", "")) != "uint8":
+        raise ValueError("Auto-brightness input image must be uint8")
+    if len(image_rgb_uint8.shape) == 2:
+        luminance_channel = image_rgb_uint8
+        chroma_channels = None
+    elif len(image_rgb_uint8.shape) == 3 and image_rgb_uint8.shape[2] == 1:
+        luminance_channel = image_rgb_uint8[:, :, 0]
+        chroma_channels = None
+    else:
+        lab_image = cv2_module.cvtColor(image_rgb_uint8, cv2_module.COLOR_RGB2LAB)
+        luminance_channel, chroma_a, chroma_b = cv2_module.split(lab_image)
+        chroma_channels = (chroma_a, chroma_b)
+
+    if auto_brightness_options.initial_clip_hist_percent > 0.0:
+        luminance_channel = _clip_histogram_autolevel_channel(
+            cv2_module=cv2_module,
+            np_module=np_module,
+            channel=luminance_channel,
+            clip_hist_percent=auto_brightness_options.initial_clip_hist_percent,
+        )
+    clahe = cv2_module.createCLAHE(
+        clipLimit=auto_brightness_options.clip_limit,
+        tileGridSize=(
+            auto_brightness_options.tile_grid_width,
+            auto_brightness_options.tile_grid_height,
+        ),
+    )
+    luminance_channel = clahe.apply(luminance_channel)
+    current_mean = float(np_module.mean(luminance_channel)) / 255.0
+    if (
+        abs(current_mean - auto_brightness_options.target_mean)
+        > auto_brightness_options.mean_tolerance
+    ):
+        luminance_channel = _apply_mean_gamma_correction_channel(
+            cv2_module=cv2_module,
+            np_module=np_module,
+            channel=luminance_channel,
+            current_mean=current_mean,
+            target_mean=auto_brightness_options.target_mean,
+        )
+    if chroma_channels is None:
+        if len(image_rgb_uint8.shape) == 2:
+            return luminance_channel
+        return luminance_channel[:, :, None]
+    corrected_lab = cv2_module.merge((luminance_channel, *chroma_channels))
+    return cv2_module.cvtColor(corrected_lab, cv2_module.COLOR_LAB2RGB)
 
 
 def _apply_validated_auto_adjust_pipeline(
@@ -2729,9 +3215,10 @@ def _encode_jpg(
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
     @details Loads merged image payload, down-converts to `uint8` when source
-    dynamic range exceeds JPEG-native depth, applies shared gamma/brightness/
-    contrast/saturation postprocessing, optionally executes auto-adjust stage over
-    temporary lossless 16-bit TIFF intermediates, and writes JPEG with
+    dynamic range exceeds JPEG-native depth, optionally executes auto-brightness
+    pre-stage, applies shared gamma/brightness/contrast/saturation
+    postprocessing over resulting image, optionally executes auto-adjust stage
+    over temporary lossless 16-bit TIFF intermediates, and writes JPEG with
     configured compression level for both HDR backends.
     @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
     @param pil_image_module {ModuleType} Imported Pillow image module.
@@ -2746,19 +3233,40 @@ def _encode_jpg(
     @param source_orientation {int} Source EXIF orientation value in range `1..8`.
     @return {None} Side effects only.
     @exception RuntimeError Raised when auto-adjust mode dependencies are missing or auto-adjust mode value is unsupported.
-    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-086, REQ-087
+    @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-086, REQ-087, REQ-090
     """
 
     merged_data = imageio_module.imread(str(merged_tiff))
-    dtype_name = str(getattr(merged_data, "dtype", ""))
-    if dtype_name and dtype_name != "uint8":
-        scaled = merged_data / 257.0
-        if hasattr(scaled, "clip"):
-            scaled = scaled.clip(0, 255)
-        if hasattr(scaled, "astype"):
-            merged_data = scaled.astype("uint8")
-        else:
-            merged_data = scaled
+    if (
+        postprocess_options.auto_brightness_enabled
+        or postprocess_options.auto_adjust_mode == "OpenCV"
+    ):
+        if auto_adjust_opencv_dependencies is None:
+            raise RuntimeError("Missing required dependencies: opencv-python and numpy")
+        cv2_module, np_module = auto_adjust_opencv_dependencies
+        merged_data = _to_uint8_image_array(np_module=np_module, image_data=merged_data)
+        if postprocess_options.auto_brightness_enabled:
+            if len(merged_data.shape) == 2:
+                merged_data = merged_data[:, :, None]
+            if len(merged_data.shape) == 3 and merged_data.shape[2] == 4:
+                merged_data = merged_data[:, :, :3]
+            if len(merged_data.shape) == 3 and merged_data.shape[2] == 3:
+                merged_data = _apply_auto_brightness_rgb_uint8(
+                    cv2_module=cv2_module,
+                    np_module=np_module,
+                    image_rgb_uint8=merged_data,
+                    auto_brightness_options=postprocess_options.auto_brightness_options,
+                )
+    else:
+        dtype_name = str(getattr(merged_data, "dtype", ""))
+        if dtype_name and dtype_name != "uint8":
+            scaled = merged_data / 257.0
+            if hasattr(scaled, "clip"):
+                scaled = scaled.clip(0, 255)
+            if hasattr(scaled, "astype"):
+                merged_data = scaled.astype("uint8")
+            else:
+                merged_data = scaled
 
     if hasattr(merged_data, "save") and hasattr(merged_data, "convert"):
         pil_image = merged_data
@@ -2938,7 +3446,7 @@ def run(args):
     temporary artifact cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090
     """
 
     if not _is_supported_runtime_os():
@@ -2982,16 +3490,19 @@ def run(args):
             return 1
     imagemagick_command = None
     auto_adjust_opencv_dependencies = None
+    if (
+        postprocess_options.auto_brightness_enabled
+        or postprocess_options.auto_adjust_mode == "OpenCV"
+    ):
+        auto_adjust_opencv_dependencies = _resolve_auto_adjust_opencv_dependencies()
+        if auto_adjust_opencv_dependencies is None:
+            return 1
     if postprocess_options.auto_adjust_mode == "ImageMagick":
         imagemagick_command = _resolve_imagemagick_command()
         if imagemagick_command is None:
             print_error(
                 "Missing required dependency: ImageMagick executable (magick or convert)"
             )
-            return 1
-    elif postprocess_options.auto_adjust_mode == "OpenCV":
-        auto_adjust_opencv_dependencies = _resolve_auto_adjust_opencv_dependencies()
-        if auto_adjust_opencv_dependencies is None:
             return 1
 
     dependencies = _load_image_dependencies()
@@ -3019,6 +3530,7 @@ def run(args):
         f"contrast={postprocess_options.contrast:g}, "
         f"saturation={postprocess_options.saturation:g}, "
         f"jpg-compression={postprocess_options.jpg_compression}, "
+        f"auto-brightness={'enabled' if postprocess_options.auto_brightness_enabled else 'disabled'}, "
         f"auto-adjust={postprocess_options.auto_adjust_mode or 'disabled'}"
     )
     if enable_luminance:
