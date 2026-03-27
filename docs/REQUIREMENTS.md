@@ -170,7 +170,7 @@ No explicit performance optimizations identified.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
 - **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
 - **REQ-056**: MUST require exactly one exposure selector in `dng2hdr2jpg` (`--ev` or `--auto-ev`) and MUST return `1` when both selectors are present or both selectors are absent.
-- **REQ-057**: MUST parse `--ev=<value>` and `--ev <value>` without default EV fallback and MUST reject unsupported or non-numeric EV values with return code `1`.
+- **REQ-057**: MUST parse `--ev=<value>` and `--ev <value>`, accept only `0.25..3.0` inclusive in `0.25` steps without fallback, and MUST reject non-numeric or unsupported values with return code `1`.
 - **REQ-058**: MUST execute HDR merge via `enfuse` over three generated exposure files when `--enable-enfuse` is selected, MUST persist an intermediate 16-bit TIFF, and MUST use lossless TIFF compression before JPG conversion.
 - **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving Linux temporary-file cleanup and dependency-failure behavior.
 - **REQ-060**: MUST require exactly one backend selector in `dng2hdr2jpg` (`--enable-enfuse` or `--enable-luminance`) and MUST return `1` when neither or both selectors are provided.
@@ -203,7 +203,7 @@ No explicit performance optimizations identified.
 - **REQ-078**: MUST refresh output JPG EXIF thumbnail after final JPG save using final JPG pixels while preserving source EXIF Orientation semantics and maintaining thumbnail metadata coherence with the saved JPG.
 - **REQ-079**: MUST execute static exposure pipeline `Options -> Fixed Multipliers -> Extraction -> Merge -> AutoAdjust -> Save` when `--ev` is selected.
 - **REQ-080**: MUST execute adaptive exposure pipeline `Options -> Fast RAW Preview -> Histogram Analysis -> Optimal Multipliers Calculation -> Extraction -> Merge -> AutoAdjust -> Save` when `--auto-ev` is selected.
-- **REQ-081**: MUST compute adaptive EV delta using linear preview luminance percentiles (`0.1%`, `99.9%`) and median-centered optimization, then apply `ev* = clamp(max(log2(T_shadow/p_low), log2(p_high/T_high)), ev_min, ev_max)` with tunable thresholds.
+- **REQ-081**: MUST compute adaptive EV delta using linear preview luminance percentiles (`0.1%`, `99.9%`) and median-centered optimization, clamp to `[0.25,3.0]`, then quantize to nearest `0.25` to produce bracketing EV.
 
 ## 4. Test Requirements
 

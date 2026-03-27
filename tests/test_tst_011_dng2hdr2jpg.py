@@ -340,7 +340,15 @@ def test_dng2hdr2jpg_rejects_invalid_ev_value(tmp_path):
     output_jpg = tmp_path / "result.jpg"
 
     assert (
-        dng2hdr2jpg.run([str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=3"])
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=3.25"]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [str(input_dng), str(output_jpg), "--enable-enfuse", "--ev=0.2"]
+        )
         == 1
     )
     assert (
@@ -469,6 +477,22 @@ def test_compute_auto_ev_value_quantizes_supported_result():
     computed_ev = dng2hdr2jpg._compute_auto_ev_value(_FakeRawHandle)
 
     assert computed_ev in dng2hdr2jpg.SUPPORTED_EV_VALUES
+    assert 0.25 <= computed_ev <= 3.0
+    assert computed_ev * 4 == pytest.approx(round(computed_ev * 4))
+
+
+def test_parse_ev_option_accepts_quarter_step_range():
+    """
+    @brief Validate `--ev` parser accepts full quarter-step range.
+    @details Asserts parser accepts lower bound, mid-range quarter-step, and
+      upper bound values from `0.25` to `3.0`.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-057
+    """
+
+    assert dng2hdr2jpg._parse_ev_option("0.25") == pytest.approx(0.25)
+    assert dng2hdr2jpg._parse_ev_option("1.75") == pytest.approx(1.75)
+    assert dng2hdr2jpg._parse_ev_option("3.0") == pytest.approx(3.0)
 
 
 def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
@@ -3654,6 +3678,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--enable-luminance" in output
     assert "--enable-enfuse" in output
     assert "--auto-ev" in output
+    assert "Fixed exposure bracket EV: 0.25 .. 3.0 in 0.25 steps" in output
     assert "--gamma=<a,b>" in output
     assert "--post-gamma=<value>" in output
     assert "--brightness=<value>" in output

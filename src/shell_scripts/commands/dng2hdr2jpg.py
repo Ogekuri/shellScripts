@@ -57,7 +57,7 @@ DEFAULT_REINHARD02_BRIGHTNESS = 1.25
 DEFAULT_REINHARD02_CONTRAST = 0.85
 DEFAULT_REINHARD02_SATURATION = 0.55
 DEFAULT_MANTIUK08_CONTRAST = 1.2
-SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)
+SUPPORTED_EV_VALUES = tuple(round(index * 0.25, 2) for index in range(1, 13))
 AUTO_EV_LOW_PERCENTILE = 0.1
 AUTO_EV_HIGH_PERCENTILE = 99.9
 AUTO_EV_MEDIAN_PERCENTILE = 50.0
@@ -467,7 +467,7 @@ def print_help(version):
     print("  <input.dng>      - Input DNG file (required).")
     print("  <output.jpg>     - Output JPG file (required).")
     print(
-        "  --ev=<value>     - Fixed exposure bracket EV: 0.5 | 1 | 1.5 | 2 (required unless --auto-ev is selected)."
+        "  --ev=<value>     - Fixed exposure bracket EV: 0.25 .. 3.0 in 0.25 steps (required unless --auto-ev is selected)."
     )
     print("  --auto-ev        - Adaptive EV mode (required unless --ev is selected).")
     print(
@@ -618,19 +618,19 @@ def _parse_ev_option(ev_raw):
     the supported EV value set used by bracket multiplier computation.
     @param ev_raw {str} EV token extracted from command arguments.
     @return {float|None} Parsed EV value when valid; `None` otherwise.
-    @satisfies REQ-056
+    @satisfies REQ-056, REQ-057
     """
 
     try:
         ev_value = float(ev_raw)
     except ValueError:
         print_error(f"Invalid --ev value: {ev_raw}")
-        print_error("Allowed values: 0.5, 1, 1.5, 2")
+        print_error("Allowed values: 0.25 .. 3.0 in 0.25 steps")
         return None
 
     if ev_value not in SUPPORTED_EV_VALUES:
         print_error(f"Unsupported --ev value: {ev_raw}")
-        print_error("Allowed values: 0.5, 1, 1.5, 2")
+        print_error("Allowed values: 0.25 .. 3.0 in 0.25 steps")
         return None
 
     return ev_value

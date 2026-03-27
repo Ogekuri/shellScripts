@@ -686,7 +686,7 @@ import piexif  # type: ignore
 - var `DEFAULT_REINHARD02_CONTRAST = 0.85` (L57)
 - var `DEFAULT_REINHARD02_SATURATION = 0.55` (L58)
 - var `DEFAULT_MANTIUK08_CONTRAST = 1.2` (L59)
-- var `SUPPORTED_EV_VALUES = (0.5, 1.0, 1.5, 2.0)` (L60)
+- var `SUPPORTED_EV_VALUES = tuple(round(index * 0.25, 2) for index in range(1, 13))` (L60)
 - var `AUTO_EV_LOW_PERCENTILE = 0.1` (L61)
 - var `AUTO_EV_HIGH_PERCENTILE = 99.9` (L62)
 - var `AUTO_EV_MEDIAN_PERCENTILE = 50.0` (L63)
@@ -801,7 +801,7 @@ prints aligned borders and cells using Unicode line-drawing glyphs.
 - @details Converts the raw token to `float` and validates membership against the supported EV value set used by bracket multiplier computation.
 - @param ev_raw {str} EV token extracted from command arguments.
 - @return {float|None} Parsed EV value when valid; `None` otherwise.
-- @satisfies REQ-056
+- @satisfies REQ-056, REQ-057
 
 ### fn `def _parse_auto_ev_option(auto_ev_raw)` `priv` (L639-656)
 - @brief Parse and validate one `--auto-ev` option value.
