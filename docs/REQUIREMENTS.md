@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.7.1"
+version: "0.6.5"
 date: "2026-03-27"
 author: "Auto-generated from repository evidence"
 scope:
@@ -89,7 +89,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ### 2.1 Project Functions
 - **PRJ-001**: MUST parse CLI arguments and route execution to management flags (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`) or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
-- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, ffmpeg-based video transcoding, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
+- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against GitHub releases with cooldown caching.
 - **PRJ-005**: MUST include a GitHub automation workflow script at `.github/workflows/release-uvx.yml`.
 
@@ -163,7 +163,7 @@ No explicit performance optimizations identified.
 - **REQ-047**: MUST determine and cache the runtime operating system at CLI startup before command dispatch.
 - **REQ-048**: MUST implement `req` command that removes predefined AI-integration directories and creates `guidelines`, `docs`, `tests`, `src`, `scripts`, and `.github/workflows` for each selected target directory.
 - **REQ-049**: MUST invoke external `req` once per target directory using hardcoded arguments `--base`, `--docs-dir`, `--guidelines-dir`, three `--src-dir`, `--tests-dir`, and `--upgrade-guidelines`.
-- **REQ-050**: MUST source repeated `--provider` and `--enable-static-check` arguments for `req` from runtime config and MUST use hardcoded default providers including `codex:skills` and `opencode:prompts` when config keys are missing or invalid.
+- **REQ-050**: MUST source repeated `--provider` and `--enable-static-check` arguments for `req` from runtime config and MUST use hardcoded defaults with OpenCode provider `opencode:prompts` when config keys are missing or invalid.
 - **REQ-051**: MUST target current directory when `req` is invoked without selector options.
 - **REQ-052**: MUST make `req --dirs` target only first-level child directories and MUST exclude the current directory.
 - **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.
@@ -202,15 +202,10 @@ No explicit performance optimizations identified.
 - **REQ-077**: MUST preserve orientation invariants across DNG extraction, HDR merge, auto-adjust processing, and JPG encoding; if any function rotates or transposes pixels for algorithmic constraints, it MUST restore source orientation before return.
 - **REQ-078**: MUST refresh output JPG EXIF thumbnail after final JPG save using final JPG pixels while preserving source EXIF Orientation semantics and maintaining thumbnail metadata coherence with the saved JPG.
 - **REQ-079**: MUST execute static exposure pipeline `Options -> Fixed Multipliers -> Extraction -> Merge -> AutoAdjust -> Save` when `--ev` is selected.
-- **REQ-080**: MUST execute adaptive exposure pipeline `Options -> DNG Metadata Detection -> Max EV Derivation -> Extraction -> Merge -> AutoAdjust -> Save` when `--auto-ev` is selected.
-- **REQ-081**: MUST set adaptive EV delta to `MAX=((bits_per_color-8)/2)` from source DNG metadata when `--auto-ev` is selected, without luminance analysis or preview image evaluation.
+- **REQ-080**: MUST execute adaptive exposure pipeline `Options -> Fast RAW Preview -> Histogram Analysis -> Optimal Multipliers Calculation -> Extraction -> Merge -> AutoAdjust -> Save` when `--auto-ev` is selected.
+- **REQ-081**: MUST compute adaptive EV delta using linear preview luminance percentiles (`0.1%`, `99.9%`) and median-centered optimization, clamp to `[0.25,MAX]` where `MAX=((bits_per_color-8)/2)`, then quantize to nearest `0.25`.
 - **REQ-092**: MUST print detected source DNG `bits_per_color` in command output for both `--ev` and `--auto-ev` execution paths.
 - **REQ-093**: MUST print bit-derived EV ceiling `MAX=((bits_per_color-8)/2)` in command output when `--auto-ev` is selected.
-- **REQ-094**: MUST extract center bracket image at brightness multiplier `1.0` (0 EV) in both `--ev` and `--auto-ev` modes.
-- **REQ-095**: MUST implement `video2h264` command accepting one input video path and MUST fail with non-zero return code when the required positional argument is missing.
-- **REQ-096**: MUST execute `ffmpeg -i <input> -c:v libx264 -profile:v high -level 4.1 -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k <input>.mp4` in `video2h264`, writing output beside input.
-- **REQ-097**: MUST implement `video2h265` command accepting one input video path and MUST fail with non-zero return code when the required positional argument is missing.
-- **REQ-098**: MUST execute `ffmpeg -i <input> -c:v libx265 -crf 23 -tag:v hvc1 -pix_fmt yuv420p -c:a aac -b:a 192k <input>.mp4` in `video2h265`, writing output beside input.
 
 ## 4. Test Requirements
 
@@ -230,8 +225,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-094 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, and HDR subprocess calls.
-- **TST-012**: MUST verify REQ-095 through REQ-098 by monkeypatching ffmpeg dependency checks and subprocess boundaries, passing only if argument validation, exact ffmpeg argv composition, and `<input>.mp4` output naming behavior match requirements.
+- **TST-011**: MUST verify REQ-055 through REQ-093 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, and HDR subprocess calls.
 
 ## 5. Evidence
 
@@ -269,5 +263,4 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | REQ-034, REQ-035 | `src/shell_scripts/commands/pdf_crop.py` | `run`, `_parse_page_range`, `_compute_auto_bbox` | Supports bbox/margins/analyze-pages/pages options and validates range syntax `N`, `N-`, `-N`, `N-M`. |
 | REQ-036, REQ-037 | `src/shell_scripts/commands/tests_cmd.py` | `run` | Creates `.venv` if missing, conditionally installs `requirements.txt`, runs pytest with `PYTHONPATH` prefixed by `src`. |
 | REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054 | `src/shell_scripts/commands/req_cmd.py`; `src/shell_scripts/config.py` | `run`, `_build_req_args`, `get_req_profile` | `req` command resolves targets by selector mode, applies cleanup/scaffold operations, and executes external `req` with hardcoded base args plus runtime-configured providers/static checks. |
-| REQ-095, REQ-096, REQ-097, REQ-098 | `src/shell_scripts/commands/video2h264.py`; `src/shell_scripts/commands/video2h265.py` | `run`, `_build_output_path`, `print_help` | Commands validate required input argument, derive output as `<input>.mp4` in same directory, and execute ffmpeg with exact codec-specific transcoding arguments. |
 | TST-001..TST-008 | `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py`; `tests/` | multiple | Existing code paths define verifiable behaviors; no unit test files currently exist under `tests/` directory. |

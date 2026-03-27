@@ -157,9 +157,12 @@
           - `dng2hdr2jpg._is_ev_value_on_supported_step(...)`: Validate quarter-step EV-grid membership using numeric tolerance guard [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._parse_ev_option(...)`: Validate EV value minimum and fixed `0.25` step while deferring bit-derived upper bound to RAW-metadata stage [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._parse_auto_ev_option(...)`: Validate `--auto-ev` assignment activator token for adaptive mode enablement [`src/shell_scripts/commands/dng2hdr2jpg.py`]
-        - `dng2hdr2jpg._resolve_ev_value(...)`: Resolve effective EV selector by choosing static `--ev` value or computing maximum bit-derived EV when `--auto-ev` is selected [`src/shell_scripts/commands/dng2hdr2jpg.py`]
-          - `dng2hdr2jpg._compute_auto_ev_value(...)`: Compute adaptive EV as `MAX=((bits_per_color-8)/2)` from DNG bit depth without luminance analysis [`src/shell_scripts/commands/dng2hdr2jpg.py`]
-            - `dng2hdr2jpg._calculate_max_ev_from_bits(...)`: Compute bit-derived EV ceiling using `MAX=((bits_per_color-8)/2)` and minimum supported bit-depth guard [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+        - `dng2hdr2jpg._resolve_ev_value(...)`: Resolve effective EV selector by choosing static `--ev` value or computing adaptive EV when `--auto-ev` is selected [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+          - `dng2hdr2jpg._compute_auto_ev_value(...)`: Decode linear RAW preview, compute luminance percentiles, and optimize adaptive EV selector [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+            - `dng2hdr2jpg._coerce_positive_luminance(...)`: Normalize luminance scalar inputs for logarithmic adaptive EV computation [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+            - `dng2hdr2jpg._optimize_adaptive_ev_delta(...)`: Compute constrained adaptive EV candidate from percentile-based shadow/highlight and median-centered terms [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+              - `dng2hdr2jpg._clamp_ev_to_supported(...)`: Clamp adaptive EV candidate to DNG-bit-derived numeric EV bounds [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+              - `dng2hdr2jpg._quantize_ev_to_supported(...)`: Quantize clamped adaptive EV value to nearest DNG-bit-derived supported `0.25`-step bracket selector [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._parse_gamma_option(...)`: Validate gamma pair option values and normalize them for RAW postprocess [`src/shell_scripts/commands/dng2hdr2jpg.py`]
 - `dng2hdr2jpg._parse_positive_float_option(...)`: Validate positive numeric values for post-gamma, brightness, contrast, and saturation options [`src/shell_scripts/commands/dng2hdr2jpg.py`]
 - `dng2hdr2jpg._parse_positive_int_option(...)`: Validate positive integer option values used by auto-brightness tile-grid parsing [`src/shell_scripts/commands/dng2hdr2jpg.py`]
@@ -280,21 +283,13 @@
           - `req_cmd._is_hidden_path(...)`: Filter hidden-path segments relative to current base directory [`src/shell_scripts/commands/req_cmd.py`]
         - `req_cmd._prepare_target_directory(...)`: Remove predefined integration directories (including OpenCode prompt path) and ensure required scaffold directories exist [`src/shell_scripts/commands/req_cmd.py`]
         - `req_cmd._build_req_args(...)`: Build external `req` argv with hardcoded base flags plus runtime-configured provider/static-check vectors [`src/shell_scripts/commands/req_cmd.py`]
-          - `get_req_profile(...)`: Resolve `req.providers` and `req.static_checks` runtime profile values with fallback to defaults where Codex provider default is skills-mode and OpenCode provider default is prompts-mode [`src/shell_scripts/config.py`]
+          - `get_req_profile(...)`: Resolve `req.providers` and `req.static_checks` runtime profile values with fallback to defaults where OpenCode provider default is prompts-mode [`src/shell_scripts/config.py`]
             - `_normalize_string_list(...)`: Validate provider/static-check vectors as non-empty string lists [`src/shell_scripts/config.py`]
       - `tests_cmd.run(...)`: Ensure `.venv`, optional dependency install, and execute pytest with project PYTHONPATH [`src/shell_scripts/commands/tests_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
       - `ubuntu_dark_theme.run(...)`: Apply GTK and Qt dark-theme command sequence [`src/shell_scripts/commands/ubuntu_dark_theme.py`]
         - `command_exists(...)`: Probe optional desktop utility availability before invocation [`src/shell_scripts/utils.py`]
-      - `video2h264.run(...)`: Transcode input video to H.264/AAC MP4 with deterministic ffmpeg options and output suffix append [`src/shell_scripts/commands/video2h264.py`]
-        - `require_commands(...)`: Validate required executable (`ffmpeg`) before transcoding [`src/shell_scripts/utils.py`]
-          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
-        - `video2h264._build_output_path(...)`: Build `<input>.mp4` output path in input parent directory [`src/shell_scripts/commands/video2h264.py`]
-      - `video2h265.run(...)`: Transcode input video to H.265/AAC MP4 with deterministic ffmpeg options and output suffix append [`src/shell_scripts/commands/video2h265.py`]
-        - `require_commands(...)`: Validate required executable (`ffmpeg`) before transcoding [`src/shell_scripts/utils.py`]
-          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
-        - `video2h265._build_output_path(...)`: Build `<input>.mp4` output path in input parent directory [`src/shell_scripts/commands/video2h265.py`]
       - `venv_cmd.run(...)`: Recreate `.venv` and optionally install requirements [`src/shell_scripts/commands/venv_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
@@ -306,7 +301,7 @@
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
 - External Boundaries:
   - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
-  - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, `ffmpeg`, Java invocations, desktop utilities).
+  - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
   - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `_dc_common.dispatch`).
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
