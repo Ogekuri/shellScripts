@@ -40,6 +40,8 @@ _COMMAND_MODULES = {
     "req": "shell_scripts.commands.req_cmd",
     "tests": "shell_scripts.commands.tests_cmd",
     "ubuntu-dark-theme": "shell_scripts.commands.ubuntu_dark_theme",
+    "video2h264": "shell_scripts.commands.video2h264",
+    "video2h265": "shell_scripts.commands.video2h265",
     "venv": "shell_scripts.commands.venv_cmd",
     "vscode": "shell_scripts.commands.vscode_cmd",
     "vsinsider": "shell_scripts.commands.vsinsider_cmd",

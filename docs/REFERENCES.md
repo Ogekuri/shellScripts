@@ -36,6 +36,8 @@
         │   ├── tests_cmd.py
         │   ├── ubuntu_dark_theme.py
         │   ├── venv_cmd.py
+        │   ├── video2h264.py
+        │   ├── video2h265.py
         │   ├── view_cmd.py
         │   ├── vscode_cmd.py
         │   └── vsinsider_cmd.py
@@ -88,7 +90,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 79L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 81L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -99,7 +101,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L49-64)
+### fn `def get_command(name: str) -> ModuleType | None` (L51-66)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -111,7 +113,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @satisfies PRJ-003, DES-001
 - @satisfies PRJ-001, DES-001, DES-008
 
-### fn `def get_all_commands() -> dict[str, str]` (L65-79)
+### fn `def get_all_commands() -> dict[str, str]` (L67-81)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
@@ -121,8 +123,8 @@ Removing an entry removes command discoverability and dispatch reachability.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|49-64|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|65-79|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|51-66|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|67-81|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -2068,6 +2070,102 @@ from shell_scripts.utils import require_project_root, print_info, print_success
 |`DESCRIPTION`|var|pub|10||
 |`print_help`|fn|pub|13-20|def print_help(version)|
 |`run`|fn|pub|21-59|def run(args)|
+
+
+---
+
+# video2h264.py | Python | 99L | 5 symbols | 4 imports | 5 comments
+> Path: `src/shell_scripts/commands/video2h264.py`
+
+## Imports
+```
+from __future__ import annotations
+import subprocess
+from pathlib import Path
+from shell_scripts.utils import print_error, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L17)
+- var `DESCRIPTION = "Convert a video to H.264/AAC MP4 using ffmpeg."` (L18)
+### fn `def _build_output_path(input_path: Path) -> Path` `priv` (L21-34)
+- @brief Derive output path for `video2h264`.
+- @details Appends literal `.mp4` suffix to full input token without removing existing suffixes, preserving parent directory and basename semantics (for example `input.mov -> input.mov.mp4`).
+- @param input_path {Path} Input video path argument.
+- @return {Path} Output path with appended `.mp4` suffix.
+- @satisfies REQ-096
+
+### fn `def print_help(version: str) -> None` (L35-53)
+- @brief Render command help for `video2h264`.
+- @details Prints usage contract with one required input path and deterministic output naming rule.
+- @param version {str} CLI version string appended to usage output.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-095, REQ-096
+
+### fn `def run(args: list[str]) -> int` (L54-99)
+- @brief Execute H.264 transcoding with ffmpeg.
+- @details Validates one positional input argument, checks ffmpeg dependency, verifies input file existence, computes `<input>.mp4` output path, and executes ffmpeg with fixed codec/pixel-format/bitrate options. Time complexity O(1) excluding external ffmpeg processing cost.
+- @param args {list[str]} Command arguments excluding command token.
+- @return {int} ffmpeg return code; `1` on argument or input validation error.
+- @satisfies REQ-095, REQ-096
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|17||
+|`DESCRIPTION`|var|pub|18||
+|`_build_output_path`|fn|priv|21-34|def _build_output_path(input_path: Path) -> Path|
+|`print_help`|fn|pub|35-53|def print_help(version: str) -> None|
+|`run`|fn|pub|54-99|def run(args: list[str]) -> int|
+
+
+---
+
+# video2h265.py | Python | 97L | 5 symbols | 4 imports | 5 comments
+> Path: `src/shell_scripts/commands/video2h265.py`
+
+## Imports
+```
+from __future__ import annotations
+import subprocess
+from pathlib import Path
+from shell_scripts.utils import print_error, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L17)
+- var `DESCRIPTION = "Convert a video to H.265/AAC MP4 using ffmpeg."` (L18)
+### fn `def _build_output_path(input_path: Path) -> Path` `priv` (L21-34)
+- @brief Derive output path for `video2h265`.
+- @details Appends literal `.mp4` suffix to full input token without removing existing suffixes, preserving parent directory and basename semantics (for example `input.mov -> input.mov.mp4`).
+- @param input_path {Path} Input video path argument.
+- @return {Path} Output path with appended `.mp4` suffix.
+- @satisfies REQ-098
+
+### fn `def print_help(version: str) -> None` (L35-53)
+- @brief Render command help for `video2h265`.
+- @details Prints usage contract with one required input path and deterministic output naming rule.
+- @param version {str} CLI version string appended to usage output.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-097, REQ-098
+
+### fn `def run(args: list[str]) -> int` (L54-97)
+- @brief Execute H.265 transcoding with ffmpeg.
+- @details Validates one positional input argument, checks ffmpeg dependency, verifies input file existence, computes `<input>.mp4` output path, and executes ffmpeg with fixed codec/pixel-format/bitrate options. Time complexity O(1) excluding external ffmpeg processing cost.
+- @param args {list[str]} Command arguments excluding command token.
+- @return {int} ffmpeg return code; `1` on argument or input validation error.
+- @satisfies REQ-097, REQ-098
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|17||
+|`DESCRIPTION`|var|pub|18||
+|`_build_output_path`|fn|priv|21-34|def _build_output_path(input_path: Path) -> Path|
+|`print_help`|fn|pub|35-53|def print_help(version: str) -> None|
+|`run`|fn|pub|54-97|def run(args: list[str]) -> int|
 
 
 ---

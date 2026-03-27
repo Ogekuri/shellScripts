@@ -287,6 +287,14 @@
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
       - `ubuntu_dark_theme.run(...)`: Apply GTK and Qt dark-theme command sequence [`src/shell_scripts/commands/ubuntu_dark_theme.py`]
         - `command_exists(...)`: Probe optional desktop utility availability before invocation [`src/shell_scripts/utils.py`]
+      - `video2h264.run(...)`: Transcode input video to H.264/AAC MP4 with deterministic ffmpeg options and output suffix append [`src/shell_scripts/commands/video2h264.py`]
+        - `require_commands(...)`: Validate required executable (`ffmpeg`) before transcoding [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+        - `video2h264._build_output_path(...)`: Build `<input>.mp4` output path in input parent directory [`src/shell_scripts/commands/video2h264.py`]
+      - `video2h265.run(...)`: Transcode input video to H.265/AAC MP4 with deterministic ffmpeg options and output suffix append [`src/shell_scripts/commands/video2h265.py`]
+        - `require_commands(...)`: Validate required executable (`ffmpeg`) before transcoding [`src/shell_scripts/utils.py`]
+          - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
+        - `video2h265._build_output_path(...)`: Build `<input>.mp4` output path in input parent directory [`src/shell_scripts/commands/video2h265.py`]
       - `venv_cmd.run(...)`: Recreate `.venv` and optionally install requirements [`src/shell_scripts/commands/venv_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
@@ -298,7 +306,7 @@
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
 - External Boundaries:
   - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
-  - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
+  - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, `ffmpeg`, Java invocations, desktop utilities).
   - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `_dc_common.dispatch`).
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
