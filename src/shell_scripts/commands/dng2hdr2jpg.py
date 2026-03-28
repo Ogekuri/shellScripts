@@ -76,6 +76,10 @@ AUTO_ZERO_SCENE_KEY_LOW_THRESHOLD = 0.35
 AUTO_ZERO_SCENE_KEY_HIGH_THRESHOLD = 0.65
 AUTO_ZERO_TARGET_LOW_KEY = 0.35
 AUTO_ZERO_TARGET_HIGH_KEY = 0.65
+AUTO_BRIGHTNESS_SCENE_KEY_LOW_THRESHOLD = 0.35
+AUTO_BRIGHTNESS_SCENE_KEY_HIGH_THRESHOLD = 0.65
+AUTO_BRIGHTNESS_TARGET_LOW_KEY = 0.35
+AUTO_BRIGHTNESS_TARGET_HIGH_KEY = 0.65
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
     "darwin": "MacOS",
@@ -286,11 +290,12 @@ class AutoBrightnessOptions:
     """@brief Hold `--auto-brightness` knob values.
 
     @details Encapsulates validated OpenCV auto-brightness parameters consumed
-    by histogram clipping, CLAHE, and conditional gamma stages.
+    by histogram clipping, CLAHE, and conditional gamma stages. Gamma target
+    derivation applies scene-key-preserving low/mid/high classification.
     @param clip_limit {float} CLAHE clip limit (`> 0`).
     @param tile_grid_width {int} CLAHE tile grid width (`> 0`).
     @param tile_grid_height {int} CLAHE tile grid height (`> 0`).
-    @param target_mean {float} Target luminance mean in `(0, 1)`.
+    @param target_mean {float} Mid-key luminance target in `(0, 1)`.
     @param mean_tolerance {float} Mean tolerance before gamma in `[0, 1]`.
     @param initial_clip_hist_percent {float} Histogram clipping percent (`>= 0`).
     @return {None} Immutable dataclass container.
@@ -529,7 +534,7 @@ def print_help(version):
         f"(default: {DEFAULT_AB_TILE_GRID_WIDTH},{DEFAULT_AB_TILE_GRID_HEIGHT})."
     )
     print(
-        f"  --ab-target-mean=<(0,1)> - Target luminance mean in (0,1) (default: {DEFAULT_AB_TARGET_MEAN:g})."
+        f"  --ab-target-mean=<(0,1)> - Mid-key target luminance mean in (0,1) used by scene-key-preserving auto-brightness gamma (default: {DEFAULT_AB_TARGET_MEAN:g})."
     )
     print(
         f"  --ab-mean-tolerance=<0..1> - Mean tolerance in [0,1] (default: {DEFAULT_AB_MEAN_TOLERANCE:g})."
@@ -3107,21 +3112,44 @@ def _apply_mean_gamma_correction_channel(
     return cv2_module.LUT(channel, table)
 
 
+def _derive_scene_key_preserving_auto_brightness_target(
+    current_mean, mid_key_target
+):
+    """@brief Derive scene-key-preserving gamma target for auto-brightness.
+
+    @details Classifies scene key from luminance-channel mean and maps the
+    gamma target to low/mid/high classes. Low-key maps to bounded low-key
+    target, high-key maps to bounded high-key target, and mid-key preserves
+    configured `mid_key_target`.
+    @param current_mean {float} Current normalized luminance mean in `(0,1)`.
+    @param mid_key_target {float} Configured mid-key luminance target in `(0,1)`.
+    @return {float} Scene-key-preserving luminance target in `(0,1)`.
+    @satisfies REQ-090, REQ-099
+    """
+
+    if current_mean <= AUTO_BRIGHTNESS_SCENE_KEY_LOW_THRESHOLD:
+        return min(mid_key_target, AUTO_BRIGHTNESS_TARGET_LOW_KEY)
+    if current_mean >= AUTO_BRIGHTNESS_SCENE_KEY_HIGH_THRESHOLD:
+        return max(mid_key_target, AUTO_BRIGHTNESS_TARGET_HIGH_KEY)
+    return mid_key_target
+
+
 def _apply_auto_brightness_rgb_uint8(
     cv2_module, np_module, image_rgb_uint8, auto_brightness_options
 ):
     """@brief Apply auto-brightness algorithm on RGB uint8 tensor.
 
     @details Executes luminance-channel pipeline `histogram-clip autolevel ->
-    CLAHE -> conditional gamma(mean,target,tolerance)`, then recomposes RGB
-    payload from corrected luminance and original chroma channels.
+    CLAHE -> conditional gamma(mean,target,tolerance)` using scene-key-preserving
+    low/mid/high target derivation, then recomposes RGB payload from corrected
+    luminance and original chroma channels.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
     @param image_rgb_uint8 {object} RGB uint8 image tensor.
     @param auto_brightness_options {AutoBrightnessOptions} Parsed auto-brightness knobs.
     @return {object} RGB uint8 image tensor corrected by auto-brightness pipeline.
     @exception ValueError Raised when input tensor is not uint8.
-    @satisfies REQ-066, REQ-090
+    @satisfies REQ-066, REQ-090, REQ-099
     """
 
     if str(getattr(image_rgb_uint8, "dtype", "")) != "uint8":
@@ -3153,8 +3181,12 @@ def _apply_auto_brightness_rgb_uint8(
     )
     luminance_channel = clahe.apply(luminance_channel)
     current_mean = float(np_module.mean(luminance_channel)) / 255.0
+    scene_key_target = _derive_scene_key_preserving_auto_brightness_target(
+        current_mean=current_mean,
+        mid_key_target=auto_brightness_options.target_mean,
+    )
     if (
-        abs(current_mean - auto_brightness_options.target_mean)
+        abs(current_mean - scene_key_target)
         > auto_brightness_options.mean_tolerance
     ):
         luminance_channel = _apply_mean_gamma_correction_channel(
@@ -3162,7 +3194,7 @@ def _apply_auto_brightness_rgb_uint8(
             np_module=np_module,
             channel=luminance_channel,
             current_mean=current_mean,
-            target_mean=auto_brightness_options.target_mean,
+            target_mean=scene_key_target,
         )
     if chroma_channels is None:
         if len(image_rgb_uint8.shape) == 2:

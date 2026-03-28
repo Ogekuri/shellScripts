@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-    @satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098
+    @satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098, REQ-099
 @return {None} Pytest module scope.
 """
 
@@ -5245,6 +5245,145 @@ def test_dng2hdr2jpg_applies_auto_brightness_before_static_postprocess(monkeypat
     assert observed["jpg_save"] is not None
     assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()
+
+
+def test_derive_scene_key_preserving_auto_brightness_target_preserves_scene_class():
+    """
+    @brief Validate scene-key-preserving auto-brightness target derivation.
+    @details Verifies low-key and high-key means map to corresponding bounded
+      low/high targets while mid-key means preserve configured target value.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-090, REQ-099
+    """
+
+    assert (
+        dng2hdr2jpg._derive_scene_key_preserving_auto_brightness_target(
+            current_mean=0.20,
+            mid_key_target=0.52,
+        )
+        == pytest.approx(dng2hdr2jpg.AUTO_BRIGHTNESS_TARGET_LOW_KEY)
+    )
+    assert (
+        dng2hdr2jpg._derive_scene_key_preserving_auto_brightness_target(
+            current_mean=0.80,
+            mid_key_target=0.52,
+        )
+        == pytest.approx(dng2hdr2jpg.AUTO_BRIGHTNESS_TARGET_HIGH_KEY)
+    )
+    assert (
+        dng2hdr2jpg._derive_scene_key_preserving_auto_brightness_target(
+            current_mean=0.50,
+            mid_key_target=0.52,
+        )
+        == pytest.approx(0.52)
+    )
+
+
+def test_dng2hdr2jpg_auto_brightness_uses_scene_key_preserving_target(monkeypatch):
+    """
+    @brief Validate auto-brightness gamma uses scene-key-preserving target.
+    @details Replaces gamma stage with a capture stub and asserts low-key
+      luminance correction uses low-key target instead of fixed mid-key target.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-090, REQ-099
+    """
+
+    numpy_module = __import__("numpy")
+    observed = {"target_mean": None}
+
+    class _FakeClahe:
+        """@brief Emit deterministic low-key luminance channel."""
+
+        @staticmethod
+        def apply(channel):
+            """@brief Return fixed low-key channel."""
+
+            del channel
+            return numpy_module.full((2, 2), 26, dtype=numpy_module.uint8)
+
+    class _FakeCv2Module:
+        """@brief Provide minimal cv2 surface for auto-brightness target test."""
+
+        COLOR_RGB2LAB = 0
+        COLOR_LAB2RGB = 1
+
+        @staticmethod
+        def cvtColor(image, code):
+            """@brief Convert between fake RGB and fake LAB."""
+
+            if code == _FakeCv2Module.COLOR_RGB2LAB:
+                return image
+            if code == _FakeCv2Module.COLOR_LAB2RGB:
+                return image
+            raise ValueError("Unexpected color conversion code")
+
+        @staticmethod
+        def split(image):
+            """@brief Split fake LAB image channels."""
+
+            return image[:, :, 0], image[:, :, 1], image[:, :, 2]
+
+        @staticmethod
+        def merge(channels):
+            """@brief Merge fake LAB channels."""
+
+            return numpy_module.stack(channels, axis=2)
+
+        @staticmethod
+        def createCLAHE(clipLimit, tileGridSize):
+            """@brief Return deterministic CLAHE stub."""
+
+            del clipLimit, tileGridSize
+            return _FakeClahe()
+
+    def _fake_clip_histogram_autolevel_channel(
+        cv2_module, np_module, channel, clip_hist_percent
+    ):
+        """@brief Bypass histogram clipping while preserving signature."""
+
+        del cv2_module, np_module, clip_hist_percent
+        return channel
+
+    def _fake_apply_mean_gamma_correction_channel(
+        cv2_module, np_module, channel, current_mean, target_mean
+    ):
+        """@brief Capture scene-key-preserving target used for gamma stage."""
+
+        del cv2_module, np_module, channel, current_mean
+        observed["target_mean"] = target_mean
+        return numpy_module.full((2, 2), 30, dtype=numpy_module.uint8)
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_clip_histogram_autolevel_channel",
+        _fake_clip_histogram_autolevel_channel,
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_apply_mean_gamma_correction_channel",
+        _fake_apply_mean_gamma_correction_channel,
+    )
+
+    input_image = numpy_module.full((2, 2, 3), 26, dtype=numpy_module.uint8)
+    output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
+        cv2_module=_FakeCv2Module,
+        np_module=numpy_module,
+        image_rgb_uint8=input_image,
+        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(
+            clip_limit=2.0,
+            tile_grid_width=8,
+            tile_grid_height=8,
+            target_mean=0.52,
+            mean_tolerance=0.03,
+            initial_clip_hist_percent=0.0,
+        ),
+    )
+
+    assert observed["target_mean"] == pytest.approx(
+        dng2hdr2jpg.AUTO_BRIGHTNESS_TARGET_LOW_KEY
+    )
+    assert output_image.shape == input_image.shape
 
 
 def test_dng2hdr2jpg_opencv_auto_adjust_accepts_uint8_input_by_upconverting(tmp_path):
