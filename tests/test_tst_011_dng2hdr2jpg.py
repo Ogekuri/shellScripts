@@ -633,13 +633,14 @@ def test_parse_ev_zero_option_accepts_negative_and_positive_quarter_steps():
 
 def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
     """
-    @brief Validate adaptive EV pipeline computes EV and reuses static merge path.
-    @details Mocks adaptive EV resolver to deterministic value and asserts
-      bracket multipliers and luminance backend EV list use the computed value.
+    @brief Validate adaptive EV pipeline applies default auto-ev percentage scaling.
+    @details Mocks adaptive EV solver to deterministic `1.5` and verifies default
+      `--auto-ev-pct=50` rescales bracket delta to `0.75` before bracket export
+      and luminance merge EV list generation.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-056, REQ-080, REQ-081, REQ-092, REQ-093
+    @satisfies TST-011, REQ-056, REQ-080, REQ-081, REQ-092, REQ-093, REQ-094
     """
 
     observed = {
@@ -725,9 +726,9 @@ def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
     )
 
     assert result == 0
-    assert observed["brights"] == pytest.approx([2 ** (-1.5), 1.0, 2**1.5])
+    assert observed["brights"] == pytest.approx([2 ** (-0.75), 1.0, 2**0.75])
     assert observed["luminance_cmd"][0] == "luminance-hdr-cli"
-    assert observed["luminance_cmd"][2] == "-1.5,0,1.5"
+    assert observed["luminance_cmd"][2] == "-0.75,0,0.75"
     assert "Detected DNG bits per color: 14" in observed["infos"]
     assert any(
         "Bit-derived EV ceilings: BASE_MAX=3 (formula: (bits_per_color-8)/2), SAFE_ZERO_MAX=2 (formula: BASE_MAX-1), MAX_BRACKET=3 (formula: BASE_MAX-abs(ev_zero))"
@@ -1640,9 +1641,9 @@ def test_dng2hdr2jpg_auto_zero_resolves_center_and_recenters_luminance_merge(
 ):
     """
     @brief Validate `--auto-zero` resolves EV center and keeps merge EV list centered on zero.
-    @details Runs static mode with `--ev=2` and `--auto-zero`, stubs preview stats
-      to resolve `ev_zero=-1`, verifies extraction multipliers are centered on
-      `-1` while luminance merge EV list is `-2,0,2`.
+    @details Runs static mode with `--ev=2` and `--auto-zero`, stubs auto-zero
+      optimization to `-1`, verifies default `--auto-zero-pct=50` rescales center
+      to `-0.5`, and verifies luminance merge EV list remains zero-centered.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -1743,9 +1744,9 @@ def test_dng2hdr2jpg_auto_zero_resolves_center_and_recenters_luminance_merge(
     )
 
     assert result == 0
-    assert observed["brights"] == pytest.approx([2**-3, 2**-1, 2**1])
+    assert observed["brights"] == pytest.approx([2 ** -2.5, 2**-0.5, 2**1.5])
     assert observed["luminance_cmd"][2] == "-2,0,2"
-    assert observed["encode_ev_zero"] == pytest.approx(-1.0)
+    assert observed["encode_ev_zero"] == pytest.approx(-0.5)
     assert "Using EV center mode: auto-zero" in observed["infos"]
 
 
@@ -2636,9 +2637,9 @@ def test_dng2hdr2jpg_auto_brightness_accepts_split_boolean_value():
 
 def test_dng2hdr2jpg_parse_run_options_defaults_ev_zero_to_zero():
     """
-    @brief Validate parser defaults `ev_zero` to `0.0` when omitted.
-    @details Parses minimal valid static selector argv and verifies returned
-      parser tuple contains deterministic `ev_zero=0.0`.
+    @brief Validate parser defaults EV center and percentage scaling knobs.
+    @details Parses minimal valid static selector argv and verifies deterministic
+      defaults for `ev_zero`, `auto_zero_enabled`, `auto_zero_pct`, and `auto_ev_pct`.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-094
     """
@@ -2654,6 +2655,66 @@ def test_dng2hdr2jpg_parse_run_options_defaults_ev_zero_to_zero():
     assert parsed is not None
     assert parsed[8] == pytest.approx(0.0)
     assert parsed[9] is False
+    assert parsed[10] == pytest.approx(50.0)
+    assert parsed[11] == pytest.approx(50.0)
+
+
+def test_dng2hdr2jpg_parse_run_options_accepts_auto_percentage_overrides():
+    """
+    @brief Validate parser accepts auto percentage scaling options.
+    @details Parses explicit `--auto-zero-pct` and `--auto-ev-pct` values and
+      verifies returned tuple stores deterministic numeric percentages.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094
+    """
+
+    parsed = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--auto-ev",
+            "--auto-zero",
+            "--auto-zero-pct=75",
+            "--auto-ev-pct",
+            "25",
+            "--enable-enfuse",
+        ]
+    )
+    assert parsed is not None
+    assert parsed[10] == pytest.approx(75.0)
+    assert parsed[11] == pytest.approx(25.0)
+
+
+def test_dng2hdr2jpg_parse_run_options_rejects_invalid_auto_percentage_overrides():
+    """
+    @brief Validate parser rejects invalid auto percentage scaling options.
+    @details Verifies malformed and out-of-range percentage values fail parsing
+      deterministically for both auto-zero and auto-ev percentage options.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094
+    """
+
+    parsed_invalid_text = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--auto-zero-pct=bad",
+            "--enable-enfuse",
+        ]
+    )
+    assert parsed_invalid_text is None
+
+    parsed_invalid_range = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--auto-ev",
+            "--auto-ev-pct=101",
+            "--enable-enfuse",
+        ]
+    )
+    assert parsed_invalid_range is None
 
 
 def test_dng2hdr2jpg_parse_run_options_accepts_ev_zero_split_and_assignment_forms():
@@ -4744,6 +4805,10 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--auto-ev" in output
     assert "--ev-zero=<value>" in output
     assert "--auto-zero" in output
+    assert "--auto-zero-pct=<0..100>" in output
+    assert "--auto-ev-pct=<0..100>" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AUTO_ZERO_PCT:g}" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AUTO_EV_PCT:g}" in output
     assert "Fixed exposure bracket EV: 0.25 .. MAX_BRACKET in 0.25 steps" in output
     assert "MAX_BRACKET = ((bits_per_color-8)/2)-abs(ev_zero) from input DNG" in output
     assert "-SAFE_ZERO_MAX .. +SAFE_ZERO_MAX in 0.25 steps" in output

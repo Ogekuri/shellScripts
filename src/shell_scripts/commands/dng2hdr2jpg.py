@@ -35,6 +35,8 @@ DEFAULT_BRIGHTNESS = 1.0
 DEFAULT_CONTRAST = 1.0
 DEFAULT_SATURATION = 1.0
 DEFAULT_JPG_COMPRESSION = 15
+DEFAULT_AUTO_ZERO_PCT = 50.0
+DEFAULT_AUTO_EV_PCT = 50.0
 DEFAULT_AA_BLUR_SIGMA = 2.0
 DEFAULT_AA_BLUR_THRESHOLD_PCT = 10.0
 DEFAULT_AA_LEVEL_LOW_PCT = 0.1
@@ -463,6 +465,7 @@ def print_help(version):
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
         f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--ev-zero=<value> | --auto-zero[=<1|true|yes|on>]] [--gamma=<a,b>] [--post-gamma=<value>] "
+        "[--auto-zero-pct=<0..100>] [--auto-ev-pct=<0..100>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
         "[--auto-brightness[=<1|true|yes|on>]] "
         "[--ab-clip-limit=<value>] [--ab-tile-grid-size=<w,h>] "
@@ -500,6 +503,12 @@ def print_help(version):
     )
     print(
         "                     Optional value forms: --auto-zero=1, --auto-zero=true, --auto-zero yes."
+    )
+    print(
+        f"  --auto-zero-pct=<0..100> - Scale auto-resolved EV center by percentage before 0.25-step quantization toward zero (default: {DEFAULT_AUTO_ZERO_PCT:g})."
+    )
+    print(
+        f"  --auto-ev-pct=<0..100>   - Scale adaptive EV bracket by percentage before 0.25-step quantization toward zero (default: {DEFAULT_AUTO_EV_PCT:g})."
     )
     print(
         f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]})."
@@ -876,6 +885,29 @@ def _parse_auto_zero_option(auto_zero_raw):
     return None
 
 
+def _parse_percentage_option(option_name, option_raw):
+    """@brief Parse and validate one percentage option value.
+
+    @details Converts option token to `float`, requires inclusive range
+    `[0, 100]`, and emits deterministic parse errors on malformed values.
+    @param option_name {str} Long-option identifier used in error messages.
+    @param option_raw {str} Raw option token value from CLI args.
+    @return {float|None} Parsed percentage value when valid; `None` otherwise.
+    @satisfies REQ-081, REQ-094, REQ-097
+    """
+
+    try:
+        option_value = float(option_raw)
+    except ValueError:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        return None
+    if option_value < 0.0 or option_value > 100.0:
+        print_error(f"Invalid {option_name} value: {option_raw}")
+        print_error("Allowed range: 0..100")
+        return None
+    return option_value
+
+
 def _parse_auto_brightness_option(auto_brightness_raw):
     """@brief Parse and validate one `--auto-brightness` option value.
 
@@ -928,6 +960,43 @@ def _quantize_ev_to_supported(ev_value, ev_values):
             nearest_ev = candidate
             smallest_distance = distance
     return nearest_ev
+
+
+def _quantize_ev_toward_zero_step(ev_value, step=EV_STEP):
+    """@brief Quantize one EV value toward zero using fixed step size.
+
+    @details Converts EV value to step units, truncates fractional remainder
+    toward zero, and reconstructs signed EV value using deterministic `0.25`
+    precision rounding.
+    @param ev_value {float} EV value to quantize.
+    @param step {float} Quantization step size.
+    @return {float} Quantized EV value with truncation toward zero.
+    @satisfies REQ-081, REQ-097
+    """
+
+    if math.isclose(ev_value, 0.0, rel_tol=0.0, abs_tol=1e-9):
+        return 0.0
+    step_units = abs(ev_value) / step
+    quantized_units = int(math.floor(step_units + 1e-9))
+    quantized_abs = round(quantized_units * step, 2)
+    if ev_value >= 0.0:
+        return quantized_abs
+    return -quantized_abs
+
+
+def _apply_auto_percentage_scaling(ev_value, percentage):
+    """@brief Apply percentage scaling to EV value with downward 0.25 quantization.
+
+    @details Multiplies EV value by percentage in `[0,100]` and quantizes
+    scaled result toward zero with fixed `0.25` step.
+    @param ev_value {float} EV value before scaling.
+    @param percentage {float} Percentage scaling factor in `[0,100]`.
+    @return {float} Scaled EV value quantized toward zero.
+    @satisfies REQ-081, REQ-097
+    """
+
+    scaled_value = ev_value * (percentage / 100.0)
+    return _quantize_ev_toward_zero_step(scaled_value)
 
 
 def _extract_normalized_preview_luminance_stats(raw_handle):
@@ -1148,6 +1217,7 @@ def _resolve_ev_zero(
     raw_handle,
     ev_zero,
     auto_zero_enabled,
+    auto_zero_pct,
     base_max_ev,
     supported_ev_values_for_auto_zero,
     preview_luminance_stats=None,
@@ -1161,6 +1231,7 @@ def _resolve_ev_zero(
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
     @param ev_zero {float} Parsed manual EV-zero candidate.
     @param auto_zero_enabled {bool} Auto-zero selector state.
+    @param auto_zero_pct {float} Percentage scaler applied to computed auto-zero result.
     @param base_max_ev {float} Bit-derived `BASE_MAX` limit.
     @param supported_ev_values_for_auto_zero {tuple[float, ...]} Supported non-negative EV-zero magnitudes for quantization.
     @param preview_luminance_stats {tuple[float, float, float]|None} Optional precomputed `(p_low, p_median, p_high)` tuple to avoid duplicate preview extraction.
@@ -1186,6 +1257,9 @@ def _resolve_ev_zero(
             ev_values=supported_ev_values_for_auto_zero,
         )
         resolved_ev_zero = _optimize_auto_zero(auto_zero_inputs)
+        resolved_ev_zero = _apply_auto_percentage_scaling(
+            resolved_ev_zero, auto_zero_pct
+        )
     safe_ev_zero_max = _calculate_safe_ev_zero_max(base_max_ev)
     if abs(resolved_ev_zero) > (safe_ev_zero_max + 1e-9):
         raise ValueError(
@@ -1201,6 +1275,7 @@ def _resolve_ev_value(
     raw_handle,
     ev_value,
     auto_ev_enabled,
+    auto_ev_pct,
     supported_ev_values=None,
     ev_zero=0.0,
     preview_luminance_stats=None,
@@ -1213,6 +1288,7 @@ def _resolve_ev_value(
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
     @param ev_value {float|None} Parsed static EV option value.
     @param auto_ev_enabled {bool} Adaptive mode selector state.
+    @param auto_ev_pct {float} Percentage scaler applied to computed adaptive EV delta.
     @param supported_ev_values {tuple[float, ...]|None} Optional bit-derived EV selector tuple.
     @param ev_zero {float} Resolved EV-zero center used for adaptive EV solver anchoring.
     @param preview_luminance_stats {tuple[float, float, float]|None} Optional precomputed `(p_low, p_median, p_high)` tuple to avoid duplicate preview extraction.
@@ -1226,20 +1302,24 @@ def _resolve_ev_value(
         bits_per_color = _detect_dng_bits_per_color(raw_handle)
         effective_supported_values = _derive_supported_ev_values(bits_per_color)
     if auto_ev_enabled:
+        computed_auto_ev = None
         if preview_luminance_stats is not None:
             p_low, p_median, p_high = preview_luminance_stats
-            return _compute_auto_ev_value_from_stats(
+            computed_auto_ev = _compute_auto_ev_value_from_stats(
                 p_low=p_low,
                 p_median=p_median,
                 p_high=p_high,
                 supported_ev_values=effective_supported_values,
                 ev_zero=ev_zero,
             )
-        return _compute_auto_ev_value(
-            raw_handle,
-            supported_ev_values=effective_supported_values,
-            ev_zero=ev_zero,
-        )
+        else:
+            computed_auto_ev = _compute_auto_ev_value(
+                raw_handle,
+                supported_ev_values=effective_supported_values,
+                ev_zero=ev_zero,
+            )
+        scaled_auto_ev = _apply_auto_percentage_scaling(computed_auto_ev, auto_ev_pct)
+        return _clamp_ev_to_supported(scaled_auto_ev, effective_supported_values)
     if ev_value is None:
         raise ValueError("Missing static EV value")
     if ev_value not in effective_supported_values:
@@ -1746,6 +1826,7 @@ def _parse_run_options(args):
     exposure selectors (`--ev=<value>`/`--ev <value>` or
     `--auto-ev[=<1|true|yes|on>]`), optional `--ev-zero=<value>` or
     `--ev-zero <value>`, optional `--auto-zero[=<1|true|yes|on>]`,
+    optional `--auto-zero-pct=<0..100>`, optional `--auto-ev-pct=<0..100>`,
     optional `--gamma=<a,b>` or `--gamma <a,b>`,
     optional postprocess controls, optional auto-brightness stage and knobs,
     optional shared auto-adjust knobs, required backend selector
@@ -1754,7 +1835,7 @@ def _parse_run_options(args):
     implementation selector (`--auto-adjust <ImageMagick|OpenCV>`); rejects
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, float, bool]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options, ev_zero, auto_zero_enabled)` tuple; `None` on parse failure.
+    @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, float, bool, float, float]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options, ev_zero, auto_zero_enabled, auto_zero_pct, auto_ev_pct)` tuple; `None` on parse failure.
     @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-097
     """
 
@@ -1764,6 +1845,8 @@ def _parse_run_options(args):
     ev_zero = 0.0
     ev_zero_specified = False
     auto_zero_enabled = False
+    auto_zero_pct = DEFAULT_AUTO_ZERO_PCT
+    auto_ev_pct = DEFAULT_AUTO_EV_PCT
     gamma_value = DEFAULT_GAMMA
     post_gamma = DEFAULT_POST_GAMMA
     brightness = DEFAULT_BRIGHTNESS
@@ -2071,6 +2154,50 @@ def _parse_run_options(args):
             idx += 1
             continue
 
+        if token == "--auto-zero-pct":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --auto-zero-pct")
+                return None
+            parsed_auto_zero_pct = _parse_percentage_option(
+                "--auto-zero-pct", args[idx + 1]
+            )
+            if parsed_auto_zero_pct is None:
+                return None
+            auto_zero_pct = parsed_auto_zero_pct
+            idx += 2
+            continue
+
+        if token.startswith("--auto-zero-pct="):
+            parsed_auto_zero_pct = _parse_percentage_option(
+                "--auto-zero-pct", token.split("=", 1)[1]
+            )
+            if parsed_auto_zero_pct is None:
+                return None
+            auto_zero_pct = parsed_auto_zero_pct
+            idx += 1
+            continue
+
+        if token == "--auto-ev-pct":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --auto-ev-pct")
+                return None
+            parsed_auto_ev_pct = _parse_percentage_option("--auto-ev-pct", args[idx + 1])
+            if parsed_auto_ev_pct is None:
+                return None
+            auto_ev_pct = parsed_auto_ev_pct
+            idx += 2
+            continue
+
+        if token.startswith("--auto-ev-pct="):
+            parsed_auto_ev_pct = _parse_percentage_option(
+                "--auto-ev-pct", token.split("=", 1)[1]
+            )
+            if parsed_auto_ev_pct is None:
+                return None
+            auto_ev_pct = parsed_auto_ev_pct
+            idx += 1
+            continue
+
         if token == "--ev-zero":
             if idx + 1 >= len(args):
                 print_error("Missing value for --ev-zero")
@@ -2322,6 +2449,8 @@ def _parse_run_options(args):
         ),
         ev_zero,
         auto_zero_enabled,
+        auto_zero_pct,
+        auto_ev_pct,
     )
 
 
@@ -3986,6 +4115,8 @@ def run(args):
         luminance_options,
         ev_zero,
         auto_zero_enabled,
+        auto_zero_pct,
+        auto_ev_pct,
     ) = parsed
 
     if input_dng.suffix.lower() != ".dng":
@@ -4090,6 +4221,7 @@ def run(args):
                     raw_handle=raw_handle,
                     ev_zero=ev_zero,
                     auto_zero_enabled=auto_zero_enabled,
+                    auto_zero_pct=auto_zero_pct,
                     base_max_ev=base_max_ev,
                     supported_ev_values_for_auto_zero=auto_zero_supported_values,
                     preview_luminance_stats=preview_luminance_stats,
@@ -4118,6 +4250,7 @@ def run(args):
                     raw_handle=raw_handle,
                     ev_value=ev_value,
                     auto_ev_enabled=auto_ev_enabled,
+                    auto_ev_pct=auto_ev_pct,
                     supported_ev_values=supported_ev_values,
                     ev_zero=resolved_ev_zero,
                     preview_luminance_stats=preview_luminance_stats,
