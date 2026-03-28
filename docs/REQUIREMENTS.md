@@ -209,7 +209,8 @@ No explicit performance optimizations identified.
 - **REQ-094**: MUST parse optional `--ev-zero=<value>`/`--ev-zero <value>` and optional `--auto-zero[=<1|true|yes|on>]`, enforce mutual exclusivity and `0.25` granularity, default to `0.0` when omitted, and constrain resolved `ev_zero` to `[-SAFE_ZERO_MAX,+SAFE_ZERO_MAX]`.
 - **REQ-095**: MUST export bracket exposures centered on resolved `ev_zero` (manual or auto-zero), generating EV triplet `<ev_zero-ev_delta, ev_zero, ev_zero+ev_delta>` for `ev_minus`, `ev_zero`, and `ev_plus`, and MUST keep merged HDR luminance aligned to that center as reference exposure.
 - **REQ-096**: MUST return `1` when `MAX_BRACKET=((bits_per_color-8)/2)-abs(ev_zero)` is less than `1.0`, and MUST reject `--ev` values above `MAX_BRACKET` with return code `1`.
-- **REQ-097**: MUST compute `--auto-zero` as `ev_zero=log2(0.5/p50)` from RAW linear preview median luminance `p50`, then clamp to `[-SAFE_ZERO_MAX,+SAFE_ZERO_MAX]` and quantize to nearest `0.25` before deriving `MAX_BRACKET`.
+- **REQ-097**: MUST compute `--auto-zero` from RAW linear preview `p50` using a scene-key-preserving target derived from shadow/median/highlight preview percentiles, then clamp to `[-SAFE_ZERO_MAX,+SAFE_ZERO_MAX]` and quantize to nearest `0.25` before deriving `MAX_BRACKET`.
+- **REQ-098**: MUST NOT force `--auto-zero` toward fixed `p50_target=0.5`; EV-zero assignment MUST preserve original low-key/high-key scene classification while correcting exposure.
 
 ## 4. Test Requirements
 
@@ -229,7 +230,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-097 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, manual/automatic EV-zero resolution, centered bracketing export, merged-HDR center preservation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, and HDR subprocess calls.
+- **TST-011**: MUST verify REQ-055 through REQ-098 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, manual/automatic EV-zero resolution, centered bracketing export, merged-HDR center preservation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, and HDR subprocess calls.
 
 ## 5. Evidence
 

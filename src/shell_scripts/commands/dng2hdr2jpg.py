@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097
+    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098
 """
 
 import os
@@ -72,6 +72,10 @@ AUTO_EV_MEDIAN_PERCENTILE = 50.0
 AUTO_EV_TARGET_SHADOW = 0.05
 AUTO_EV_TARGET_HIGHLIGHT = 0.90
 AUTO_EV_MEDIAN_TARGET = 0.5
+AUTO_ZERO_SCENE_KEY_LOW_THRESHOLD = 0.35
+AUTO_ZERO_SCENE_KEY_HIGH_THRESHOLD = 0.65
+AUTO_ZERO_TARGET_LOW_KEY = 0.35
+AUTO_ZERO_TARGET_HIGH_KEY = 0.65
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
     "darwin": "MacOS",
@@ -371,7 +375,7 @@ class AutoEvInputs:
     @param ev_zero {float} Resolved EV-zero center used as adaptive solver anchor.
     @param ev_values {tuple[float, ...]} Supported EV selector values derived from source DNG bit depth.
     @return {None} Immutable scalar container.
-    @satisfies REQ-080, REQ-081, REQ-092, REQ-093, REQ-095
+    @satisfies REQ-080, REQ-081, REQ-092, REQ-093, REQ-095, REQ-098
     """
 
     p_low: float
@@ -1001,19 +1005,40 @@ def _coerce_positive_luminance(value, fallback):
     return numeric_value
 
 
-def _optimize_auto_zero(auto_ev_inputs):
-    """@brief Compute optimal EV-zero center from normalized median luminance.
+def _derive_scene_key_preserving_median_target(p_median):
+    """@brief Derive scene-key-preserving median target for auto-zero optimization.
 
-    @details Solves `ev_zero=log2(median_target/p_median)`, clamps result to
+    @details Classifies scene key from normalized preview median luminance and maps
+    it to a bounded median target preserving low-key/high-key intent while enabling
+    exposure correction. Low-key medians map to a low-key target, high-key medians map
+    to a high-key target, and mid-key medians map to neutral target `0.5`.
+    @param p_median {float} Normalized median luminance in `(0.0, 1.0)`.
+    @return {float} Scene-key-preserving median target in `(0.0, 1.0)`.
+    @satisfies REQ-097, REQ-098
+    """
+
+    if p_median <= AUTO_ZERO_SCENE_KEY_LOW_THRESHOLD:
+        return AUTO_ZERO_TARGET_LOW_KEY
+    if p_median >= AUTO_ZERO_SCENE_KEY_HIGH_THRESHOLD:
+        return AUTO_ZERO_TARGET_HIGH_KEY
+    return AUTO_EV_MEDIAN_TARGET
+
+
+def _optimize_auto_zero(auto_ev_inputs):
+    """@brief Compute optimal EV-zero center from normalized luminance statistics.
+
+    @details Solves `ev_zero=log2(target_median/p_median)` using a scene-key-preserving
+    target derived from preview median luminance, clamps result to
     `[-SAFE_ZERO_MAX,+SAFE_ZERO_MAX]` where `SAFE_ZERO_MAX=max(ev_values)`, and quantizes to
     nearest quarter-step represented by `ev_values` with sign preservation.
     @param auto_ev_inputs {AutoEvInputs} Adaptive EV scalar inputs.
     @return {float} Quantized EV-zero center.
-    @satisfies REQ-094, REQ-095, REQ-097
+    @satisfies REQ-094, REQ-095, REQ-097, REQ-098
     """
 
     base_max = auto_ev_inputs.ev_values[-1]
-    ev_zero_candidate = math.log2(auto_ev_inputs.median_target / auto_ev_inputs.p_median)
+    target_median = _derive_scene_key_preserving_median_target(auto_ev_inputs.p_median)
+    ev_zero_candidate = math.log2(target_median / auto_ev_inputs.p_median)
     ev_zero_clamped = max(-base_max, min(base_max, ev_zero_candidate))
     if math.isclose(ev_zero_clamped, 0.0, rel_tol=0.0, abs_tol=1e-9):
         return 0.0
@@ -1136,7 +1161,7 @@ def _resolve_ev_zero(
     @param preview_luminance_stats {tuple[float, float, float]|None} Optional precomputed `(p_low, p_median, p_high)` tuple to avoid duplicate preview extraction.
     @return {float} Resolved EV-zero center.
     @exception ValueError Raised when resolved EV-zero is outside bit-derived safe range.
-    @satisfies REQ-094, REQ-095, REQ-097
+    @satisfies REQ-094, REQ-095, REQ-097, REQ-098
     """
 
     resolved_ev_zero = ev_zero
@@ -3908,7 +3933,7 @@ def run(args):
     guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098
     """
 
     if not _is_supported_runtime_os():

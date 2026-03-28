@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-    @satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097
+    @satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098
 @return {None} Pytest module scope.
 """
 
@@ -529,6 +529,78 @@ def test_compute_auto_ev_value_quantizes_supported_result():
     assert computed_ev in expected_ev_values
     assert 0.25 <= computed_ev <= expected_ev_values[-1]
     assert computed_ev * 4 == pytest.approx(round(computed_ev * 4))
+
+
+def test_derive_scene_key_preserving_median_target_preserves_low_mid_high_key():
+    """
+    @brief Validate scene-key target derivation preserves low/mid/high classification.
+    @details Verifies median target mapping for low-key, mid-key, and high-key input
+      medians, ensuring low/high scenes are not forced toward `0.5`.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-097, REQ-098
+    """
+
+    assert dng2hdr2jpg._derive_scene_key_preserving_median_target(0.2) == pytest.approx(
+        0.35
+    )
+    assert dng2hdr2jpg._derive_scene_key_preserving_median_target(0.5) == pytest.approx(
+        0.5
+    )
+    assert dng2hdr2jpg._derive_scene_key_preserving_median_target(0.8) == pytest.approx(
+        0.65
+    )
+
+
+def test_optimize_auto_zero_preserves_scene_key_for_low_key_scene():
+    """
+    @brief Validate low-key scenes are corrected without forcing neutral key.
+    @details Builds auto-zero inputs with low median luminance and verifies solved
+      EV-zero uses low-key target (`0.35`) instead of neutral (`0.5`).
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094, REQ-097, REQ-098
+    """
+
+    auto_ev_inputs = dng2hdr2jpg.AutoEvInputs(
+        p_low=0.01,
+        p_median=0.2,
+        p_high=0.8,
+        target_shadow=dng2hdr2jpg.AUTO_EV_TARGET_SHADOW,
+        target_highlight=dng2hdr2jpg.AUTO_EV_TARGET_HIGHLIGHT,
+        median_target=dng2hdr2jpg.AUTO_EV_MEDIAN_TARGET,
+        ev_zero=0.0,
+        ev_values=(0.25, 0.5, 0.75, 1.0, 1.25, 1.5),
+    )
+
+    resolved = dng2hdr2jpg._optimize_auto_zero(auto_ev_inputs)
+
+    # log2(0.35/0.2)=0.807... quantized to 0.75 on supported quarter-step grid.
+    assert resolved == pytest.approx(0.75)
+
+
+def test_optimize_auto_zero_preserves_scene_key_for_high_key_scene():
+    """
+    @brief Validate high-key scenes are corrected without forcing neutral key.
+    @details Builds auto-zero inputs with high median luminance and verifies solved
+      EV-zero uses high-key target (`0.65`) instead of neutral (`0.5`).
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094, REQ-097, REQ-098
+    """
+
+    auto_ev_inputs = dng2hdr2jpg.AutoEvInputs(
+        p_low=0.2,
+        p_median=0.8,
+        p_high=0.99,
+        target_shadow=dng2hdr2jpg.AUTO_EV_TARGET_SHADOW,
+        target_highlight=dng2hdr2jpg.AUTO_EV_TARGET_HIGHLIGHT,
+        median_target=dng2hdr2jpg.AUTO_EV_MEDIAN_TARGET,
+        ev_zero=0.0,
+        ev_values=(0.25, 0.5, 0.75, 1.0, 1.25, 1.5),
+    )
+
+    resolved = dng2hdr2jpg._optimize_auto_zero(auto_ev_inputs)
+
+    # log2(0.65/0.8)=-0.299... quantized to -0.25 on supported quarter-step grid.
+    assert resolved == pytest.approx(-0.25)
 
 
 def test_parse_ev_option_accepts_quarter_step_range():
