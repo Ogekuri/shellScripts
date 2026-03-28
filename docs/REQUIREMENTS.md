@@ -170,13 +170,13 @@ No explicit performance optimizations identified.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
 - **REQ-055**: MUST expose a Linux-only `dng2hdr2jpg` command that accepts `dng2hdr2jpg <input.dng> <output.jpg>` and returns non-zero when required positional arguments are missing.
 - **REQ-056**: MUST require exactly one exposure selector in `dng2hdr2jpg` (`--ev` or `--auto-ev`) and MUST return `1` when both selectors are present or both selectors are absent.
-- **REQ-057**: MUST parse `--ev=<value>` and `--ev <value>`, enforce `0.25` granularity, and accept only values in `0.25..MAX` where `MAX=((bits_per_color-8)/2)` from source DNG metadata, rejecting unsupported values with return code `1`.
+- **REQ-057**: MUST parse `--ev=<value>` and `--ev <value>`, enforce `0.25` granularity, and accept only values in `0.25..MAX_BRACKET` where `MAX_BRACKET=((bits_per_color-8)/2)-abs(ev_zero)`; unsupported values MUST return `1`.
 - **REQ-058**: MUST execute HDR merge via `enfuse` over three generated exposure files when `--enable-enfuse` is selected, MUST persist an intermediate 16-bit TIFF, and MUST use lossless TIFF compression before JPG conversion.
 - **REQ-059**: MUST print a non-Linux unavailability message that includes target OS label (`Windows` or `MacOS`) in `dng2hdr2jpg`, and MUST return non-zero while preserving Linux temporary-file cleanup and dependency-failure behavior.
 - **REQ-060**: MUST require exactly one backend selector in `dng2hdr2jpg` (`--enable-enfuse` or `--enable-luminance`) and MUST return `1` when neither or both selectors are provided.
 - **REQ-061**: MUST parse `--luminance-hdr-model`, `--luminance-hdr-weight`, `--luminance-hdr-response-curve`, and `--luminance-tmo` in assignment or split form, default `--luminance-hdr-weight` to `flat` and `--luminance-tmo` to `mantiuk08`, and return `1` for malformed values.
-- **REQ-062**: MUST execute `luminance-hdr-cli` with `-e <-ev_delta,0,+ev_delta>`, `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, `--ldrTiff 16b`, and ordered inputs `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` writing `<merged_hdr.tif>`.
-- **REQ-063**: MUST document required mutually exclusive backend selectors (`--enable-enfuse`, `--enable-luminance`), required mutually exclusive exposure selectors (`--ev`, `--auto-ev`), luminance controls, generic passthrough `--tmo*` options, `--gamma`, shared postprocess options, optional `--auto-brightness` with `--ab-*` knobs, optional `--auto-adjust`, shared `--aa-*` knobs, and control-table rows for operators with exposed CLI controls.
+- **REQ-062**: MUST execute `luminance-hdr-cli` with `-e <ev_minus,ev_zero,ev_plus>`, `--hdrModel`, `--hdrWeight`, `--hdrResponseCurve`, `--tmo`, `--ldrTiff 16b`, and ordered inputs `<ev_minus.tif> <ev_zero.tif> <ev_plus.tif>` writing `<merged_hdr.tif>`.
+- **REQ-063**: MUST document required mutually exclusive backend selectors (`--enable-enfuse`, `--enable-luminance`), required mutually exclusive exposure selectors (`--ev`, `--auto-ev`), optional `--ev-zero`, luminance controls, generic passthrough `--tmo*` options, `--gamma`, shared postprocess options, optional `--auto-brightness` with `--ab-*` knobs, optional `--auto-adjust`, shared `--aa-*` knobs, and control-table rows for operators with exposed CLI controls.
 - **REQ-070**: MUST render in `dng2hdr2jpg` help two aligned Unicode box-drawing tables where the operators table uses three columns, two-line headers, and two physical lines per operator row.
 - **REQ-064**: MUST parse optional `--gamma=<a,b>` and `--gamma <a,b>` in `dng2hdr2jpg`, default gamma to `(2.222,4.5)`, and reject malformed, non-numeric, or non-positive gamma values with return code `1`.
 - **REQ-065**: MUST parse optional `--post-gamma`, `--brightness`, `--contrast`, `--saturation`, `--jpg-compression`, `--auto-brightness`, `--ab-*` knobs, and `--auto-adjust` in assignment or split form; MUST default `--jpg-compression` to `15`; and MUST disable auto-brightness and auto-adjust when omitted.
@@ -201,11 +201,14 @@ No explicit performance optimizations identified.
 - **REQ-074**: MUST set output JPG filesystem access and modification timestamps from source DNG EXIF datetime (priority: `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`) after JPG encoding and EXIF copy when a parseable datetime exists.
 - **REQ-077**: MUST preserve orientation invariants across DNG extraction, HDR merge, auto-adjust processing, and JPG encoding; if any function rotates or transposes pixels for algorithmic constraints, it MUST restore source orientation before return.
 - **REQ-078**: MUST refresh output JPG EXIF thumbnail after final JPG save using final JPG pixels while preserving source EXIF Orientation semantics and maintaining thumbnail metadata coherence with the saved JPG.
-- **REQ-079**: MUST execute static exposure pipeline `Options -> Fixed Multipliers -> Extraction -> Merge -> AutoAdjust -> Save` when `--ev` is selected.
-- **REQ-080**: MUST execute adaptive exposure pipeline `Options -> Fast RAW Preview -> Histogram Analysis -> Optimal Multipliers Calculation -> Extraction -> Merge -> AutoAdjust -> Save` when `--auto-ev` is selected.
-- **REQ-081**: MUST compute adaptive EV delta using linear preview luminance percentiles (`0.1%`, `99.9%`) and median-centered optimization, clamp to `[0.25,MAX]` where `MAX=((bits_per_color-8)/2)`, then quantize to nearest `0.25`.
+- **REQ-079**: MUST execute static exposure pipeline `Options -> EV-Zero Resolution -> Fixed Multipliers -> Extraction -> Merge -> AutoAdjust -> Save` when `--ev` is selected.
+- **REQ-080**: MUST execute adaptive exposure pipeline `Options -> EV-Zero Resolution -> Fast RAW Preview -> Histogram Analysis -> Optimal Multipliers Calculation -> Extraction -> Merge -> AutoAdjust -> Save` when `--auto-ev` is selected.
+- **REQ-081**: MUST compute adaptive EV delta using linear preview luminance percentiles (`0.1%`, `99.9%`) and median-centered optimization, clamp to `[0.25,MAX_BRACKET]` where `MAX_BRACKET=((bits_per_color-8)/2)-abs(ev_zero)`, then quantize to nearest `0.25`.
 - **REQ-092**: MUST print detected source DNG `bits_per_color` in command output for both `--ev` and `--auto-ev` execution paths.
-- **REQ-093**: MUST print bit-derived EV ceiling `MAX=((bits_per_color-8)/2)` in command output when `--auto-ev` is selected.
+- **REQ-093**: MUST print bit-derived EV ceilings `BASE_MAX=((bits_per_color-8)/2)` and `MAX_BRACKET=(BASE_MAX-abs(ev_zero))` in command output when `--auto-ev` is selected.
+- **REQ-094**: MUST parse optional `--ev-zero=<value>` and `--ev-zero <value>`, enforce `0.25` granularity, default to `0.0` when omitted, and accept only values in `-BASE_MAX..+BASE_MAX` where `BASE_MAX=((bits_per_color-8)/2)`.
+- **REQ-095**: MUST export bracket exposures centered on `ev_zero`, generating EV triplet `<ev_zero-ev_delta, ev_zero, ev_zero+ev_delta>` for `ev_minus`, `ev_zero`, and `ev_plus`.
+- **REQ-096**: MUST return `1` when `MAX_BRACKET=((bits_per_color-8)/2)-abs(ev_zero)` is less than `1.0`, and MUST reject `--ev` values above `MAX_BRACKET` with return code `1`.
 
 ## 4. Test Requirements
 
@@ -225,7 +228,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-093 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, and HDR subprocess calls.
+- **TST-011**: MUST verify REQ-055 through REQ-096 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, `--ev-zero` parsing/validation, centered bracketing export, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, and HDR subprocess calls.
 
 ## 5. Evidence
 

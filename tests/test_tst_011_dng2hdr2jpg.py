@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093
+@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096
 @return {None} Pytest module scope.
 """
 
@@ -545,6 +545,20 @@ def test_parse_ev_option_accepts_quarter_step_range():
     assert dng2hdr2jpg._parse_ev_option("3.25") == pytest.approx(3.25)
 
 
+def test_parse_ev_zero_option_accepts_negative_and_positive_quarter_steps():
+    """
+    @brief Validate `--ev-zero` parser accepts quarter-step signed values.
+    @details Asserts parser accepts negative, zero, and positive quarter-step
+      values while preserving deterministic rounding behavior.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094
+    """
+
+    assert dng2hdr2jpg._parse_ev_zero_option("-1.25") == pytest.approx(-1.25)
+    assert dng2hdr2jpg._parse_ev_zero_option("0") == pytest.approx(0.0)
+    assert dng2hdr2jpg._parse_ev_zero_option("2.5") == pytest.approx(2.5)
+
+
 def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
     """
     @brief Validate adaptive EV pipeline computes EV and reuses static merge path.
@@ -635,7 +649,8 @@ def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
     assert observed["luminance_cmd"][2] == "-1.5,0,1.5"
     assert "Detected DNG bits per color: 14" in observed["infos"]
     assert any(
-        "Bit-derived EV ceiling: MAX=3 (formula: (bits_per_color-8)/2)" in line
+        "Bit-derived EV ceilings: BASE_MAX=3 (formula: (bits_per_color-8)/2), MAX_BRACKET=3 (formula: BASE_MAX-abs(ev_zero))"
+        in line
         for line in observed["infos"]
     )
 
@@ -748,6 +763,369 @@ def test_dng2hdr2jpg_rejects_static_ev_above_bit_derived_max(monkeypatch, tmp_pa
     assert "Detected DNG bits per color: 12" in observed["infos"]
     assert any(
         "allowed range for input DNG is 0.25..2 in 0.25 steps" in line
+        for line in observed["errors"]
+    )
+
+
+def test_dng2hdr2jpg_rejects_static_ev_above_bit_derived_max_with_ev_zero(
+    monkeypatch, tmp_path
+):
+    """
+    @brief Validate static EV ceiling shrinks when `--ev-zero` is set.
+    @details Uses fake RAW metadata with 16-bit container (`BASE_MAX=4`) and
+      `--ev-zero=-1` (`MAX_BRACKET=3`), then asserts `--ev=3.25` is rejected.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-057, REQ-094, REQ-096
+    """
+
+    observed = {
+        "brights": [],
+        "output_bps": [],
+        "use_camera_wb": [],
+        "no_auto_bright": [],
+        "gamma": [],
+        "infos": [],
+        "errors": [],
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(
+        dng2hdr2jpg, "print_info", lambda message: observed["infos"].append(message)
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg, "print_error", lambda message: observed["errors"].append(message)
+    )
+
+    class _FakeDtype:
+        """@brief Provide deterministic dtype stub with 16-bit itemsize."""
+
+        itemsize = 2
+
+    class _FakeRawImage:
+        """@brief Provide fake raw_image_visible metadata container."""
+
+        dtype = _FakeDtype()
+
+    class _FakeRawHandle16Bit:
+        """@brief Provide fake RAW handle exposing 16-bit container metadata."""
+
+        raw_image_visible = _FakeRawImage()
+
+        def __init__(self, observed_state):
+            """@brief Store shared observation map for deterministic extraction."""
+
+            self._observed_state = observed_state
+
+        def __enter__(self):
+            """@brief Enter context-manager boundary."""
+
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            """@brief Exit context-manager boundary and propagate exceptions."""
+
+            del exc_type, exc, tb
+            return False
+
+        @property
+        def white_level(self) -> int:
+            """@brief Return deterministic white level fallback metadata."""
+
+            return 16383
+
+        def postprocess(
+            self, bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
+        ):
+            """@brief Mirror base fake RAW extraction behavior for compatibility."""
+
+            self._observed_state["brights"].append(bright)
+            self._observed_state["output_bps"].append(output_bps)
+            self._observed_state["use_camera_wb"].append(use_camera_wb)
+            self._observed_state["no_auto_bright"].append(no_auto_bright)
+            self._observed_state["gamma"].append(gamma)
+            self._observed_state.setdefault("user_flip", []).append(user_flip)
+            return f"rgb-{bright}"
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module for EV-zero-adjusted max test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            return _FakeRawHandle16Bit(observed)
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for EV rejection path."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--enable-enfuse",
+            "--ev=3.25",
+            "--ev-zero=-1",
+        ]
+    )
+
+    assert result == 1
+    assert "Detected DNG bits per color: 16" in observed["infos"]
+    assert "Using EV center (ev_zero): -1" in observed["infos"]
+    assert any(
+        "allowed range for input DNG is 0.25..3 in 0.25 steps" in line
+        for line in observed["errors"]
+    )
+
+
+def test_dng2hdr2jpg_rejects_ev_zero_out_of_base_range(monkeypatch, tmp_path):
+    """
+    @brief Validate `--ev-zero` range is bounded by base bit-derived maximum.
+    @details Uses 16-bit RAW metadata (`BASE_MAX=4`) and asserts `--ev-zero=-4.25`
+      triggers deterministic runtime validation error.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094
+    """
+
+    observed = {
+        "infos": [],
+        "errors": [],
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(
+        dng2hdr2jpg, "print_info", lambda message: observed["infos"].append(message)
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg, "print_error", lambda message: observed["errors"].append(message)
+    )
+
+    class _FakeDtype:
+        """@brief Provide deterministic dtype stub with 16-bit itemsize."""
+
+        itemsize = 2
+
+    class _FakeRawImage:
+        """@brief Provide fake raw_image_visible metadata container."""
+
+        dtype = _FakeDtype()
+
+    class _FakeRawHandle16Bit:
+        """@brief Provide fake RAW handle exposing 16-bit container metadata."""
+
+        raw_image_visible = _FakeRawImage()
+
+        def __enter__(self):
+            """@brief Enter context-manager boundary."""
+
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            """@brief Exit context-manager boundary and propagate exceptions."""
+
+            del exc_type, exc, tb
+            return False
+
+        @property
+        def white_level(self) -> int:
+            """@brief Return deterministic white level fallback metadata."""
+
+            return 16383
+
+        @staticmethod
+        def postprocess(
+            bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
+        ):
+            """@brief Provide deterministic payload for possible extraction path."""
+
+            del bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip
+            return "rgb"
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module for EV-zero range test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            return _FakeRawHandle16Bit()
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for EV-zero range test."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, {"postprocess_ops": []}
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--enable-enfuse",
+            "--ev=1",
+            "--ev-zero=-4.25",
+        ]
+    )
+
+    assert result == 1
+    assert any("Unsupported --ev-zero value: -4.25" in line for line in observed["errors"])
+
+
+def test_dng2hdr2jpg_rejects_when_ev_zero_reduces_max_bracket_below_one(
+    monkeypatch, tmp_path
+):
+    """
+    @brief Validate runtime rejection when `MAX_BRACKET` becomes lower than `1.0`.
+    @details Uses 12-bit RAW metadata (`BASE_MAX=2`) with `--ev-zero=1.25`,
+      yielding `MAX_BRACKET=0.75`, and asserts deterministic error path.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-096
+    """
+
+    observed = {
+        "infos": [],
+        "errors": [],
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(
+        dng2hdr2jpg, "print_info", lambda message: observed["infos"].append(message)
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg, "print_error", lambda message: observed["errors"].append(message)
+    )
+
+    class _FakeRawHandle12Bit:
+        """@brief Provide fake RAW handle with 12-bit white level metadata."""
+
+        @property
+        def white_level(self) -> int:
+            """@brief Return deterministic white level for 12-bit RAW range."""
+
+            return 4095
+
+        def __enter__(self):
+            """@brief Enter context-manager boundary."""
+
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            """@brief Exit context-manager boundary and propagate exceptions."""
+
+            del exc_type, exc, tb
+            return False
+
+        @staticmethod
+        def postprocess(
+            bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
+        ):
+            """@brief Provide deterministic payload for possible extraction path."""
+
+            del bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip
+            return "rgb"
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module for low `MAX_BRACKET` test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            return _FakeRawHandle12Bit()
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for low `MAX_BRACKET` test."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, {"postprocess_ops": []}
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
+    )
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--enable-enfuse",
+            "--ev=1",
+            "--ev-zero=1.25",
+        ]
+    )
+
+    assert result == 1
+    assert any(
+        "Bit-derived bracket EV ceiling is too small for selector generation: 0.75"
+        in line
         for line in observed["errors"]
     )
 
@@ -1015,6 +1393,101 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(
     assert output_jpg.exists()
     assert observed["tmp_dir"] is not None
     assert not observed["tmp_dir"].exists()
+
+
+def test_dng2hdr2jpg_uses_ev_zero_to_center_static_bracketing(monkeypatch, tmp_path):
+    """
+    @brief Validate `--ev-zero` recenters static bracketing triplet.
+    @details Runs static mode with `--ev=2` and `--ev-zero=-1` and verifies
+      extracted brightness multipliers and luminance EV list match `-3,-1,1`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-062, REQ-094, REQ-095
+    """
+
+    observed = {
+        "brights": [],
+        "output_bps": [],
+        "use_camera_wb": [],
+        "no_auto_bright": [],
+        "gamma": [],
+        "luminance_cmd": None,
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module surface for EV-zero centering test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            """@brief Return fake RAW context manager for the provided path."""
+
+            return _FakeRawHandle(observed)
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for bracket TIFF extraction only."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            """@brief Materialize deterministic intermediate files."""
+
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for shared JPG encode stage."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    def _fake_subprocess_run(command, check):
+        """@brief Capture luminance-hdr-cli invocation and materialize output JPG."""
+
+        assert check is True
+        observed["luminance_cmd"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        output_index = command.index("-o") + 1
+        Path(command[output_index]).write_text("jpg", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
+    )
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--enable-luminance",
+            "--ev=2",
+            "--ev-zero=-1",
+        ]
+    )
+
+    assert result == 0
+    assert observed["brights"] == pytest.approx([2**-3, 2**-1, 2**1])
+    assert observed["luminance_cmd"][2] == "-3,-1,1"
 
 
 def test_write_bracket_images_disables_raw_orientation_auto_flip(tmp_path):
@@ -1900,6 +2373,101 @@ def test_dng2hdr2jpg_auto_brightness_accepts_split_boolean_value():
     )
     assert parsed is not None
     assert parsed[5].auto_brightness_enabled is True
+
+
+def test_dng2hdr2jpg_parse_run_options_defaults_ev_zero_to_zero():
+    """
+    @brief Validate parser defaults `ev_zero` to `0.0` when omitted.
+    @details Parses minimal valid static selector argv and verifies returned
+      parser tuple contains deterministic `ev_zero=0.0`.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094
+    """
+
+    parsed = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--enable-enfuse",
+        ]
+    )
+    assert parsed is not None
+    assert parsed[8] == pytest.approx(0.0)
+
+
+def test_dng2hdr2jpg_parse_run_options_accepts_ev_zero_split_and_assignment_forms():
+    """
+    @brief Validate parser accepts `--ev-zero` split and assignment forms.
+    @details Parses both forms and verifies tuple field stores requested center.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094
+    """
+
+    parsed_split = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--ev-zero",
+            "-0.75",
+            "--enable-enfuse",
+        ]
+    )
+    assert parsed_split is not None
+    assert parsed_split[8] == pytest.approx(-0.75)
+
+    parsed_assignment = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--auto-ev",
+            "--ev-zero=1.25",
+            "--enable-enfuse",
+        ]
+    )
+    assert parsed_assignment is not None
+    assert parsed_assignment[8] == pytest.approx(1.25)
+
+
+def test_dng2hdr2jpg_rejects_invalid_ev_zero_value(tmp_path):
+    """
+    @brief Validate `--ev-zero` parser rejects unsupported values.
+    @details Provides malformed and non-quarter-step `--ev-zero` values with
+      valid selectors and asserts deterministic parse failure.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--ev-zero=bad",
+                "--enable-enfuse",
+            ]
+        )
+        == 1
+    )
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--ev-zero=0.1",
+                "--enable-enfuse",
+            ]
+        )
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_rejects_invalid_auto_adjust_knob_values(tmp_path):
@@ -3837,7 +4405,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-093
+    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-093, REQ-094
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -3850,8 +4418,9 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--enable-luminance" in output
     assert "--enable-enfuse" in output
     assert "--auto-ev" in output
-    assert "Fixed exposure bracket EV: 0.25 .. MAX in 0.25 steps" in output
-    assert "MAX = (bits_per_color-8)/2 from input DNG" in output
+    assert "--ev-zero=<value>" in output
+    assert "Fixed exposure bracket EV: 0.25 .. MAX_BRACKET in 0.25 steps" in output
+    assert "MAX_BRACKET = ((bits_per_color-8)/2)-abs(ev_zero) from input DNG" in output
     assert "--gamma=<a,b>" in output
     assert "--post-gamma=<value>" in output
     assert "--brightness=<value>" in output

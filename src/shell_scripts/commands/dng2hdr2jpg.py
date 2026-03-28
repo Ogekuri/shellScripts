@@ -2,11 +2,11 @@
 """@brief Convert one DNG file into one HDR-merged JPG output.
 
 @details Implements bracketed RAW extraction with three synthetic exposures
-(`-ev`, `0`, `+ev`), merges them through selected `enfuse` or selected
+(`ev_zero-ev`, `ev_zero`, `ev_zero+ev`), merges them through selected `enfuse` or selected
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093
+    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096
 """
 
 import os
@@ -441,16 +441,17 @@ def print_help(version):
 
     @details Documents required positional arguments, required mutually
     exclusive exposure selectors (`--ev` or `--auto-ev`), optional RAW gamma
-    controls, shared postprocessing controls, backend selection, and
+    controls, optional `--ev-zero` selector, shared postprocessing controls,
+    backend selection, and
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-090, REQ-091
+    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094
     """
 
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
-        f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--gamma=<a,b>] [--post-gamma=<value>] "
+        f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--ev-zero=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
         "[--auto-brightness[=<1|true|yes|on>]] "
         "[--ab-clip-limit=<value>] [--ab-tile-grid-size=<w,h>] "
@@ -471,11 +472,16 @@ def print_help(version):
     print("  <input.dng>      - Input DNG file (required).")
     print("  <output.jpg>     - Output JPG file (required).")
     print(
-        "  --ev=<value>     - Fixed exposure bracket EV: 0.25 .. MAX in 0.25 steps (MAX = (bits_per_color-8)/2 from input DNG)."
+        "  --ev=<value>     - Fixed exposure bracket EV: 0.25 .. MAX_BRACKET in 0.25 steps"
+        " (MAX_BRACKET = ((bits_per_color-8)/2)-abs(ev_zero) from input DNG)."
     )
     print("  --auto-ev        - Adaptive EV mode (required unless --ev is selected).")
     print(
         "                     Optional value forms: --auto-ev=1, --auto-ev=true, --auto-ev yes."
+    )
+    print(
+        "  --ev-zero=<value> - Central EV for bracket export: -BASE_MAX .. +BASE_MAX in 0.25 steps"
+        " (BASE_MAX = (bits_per_color-8)/2 from input DNG, default: 0)."
     )
     print(
         f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]})."
@@ -624,7 +630,7 @@ def _calculate_max_ev_from_bits(bits_per_color):
     @param bits_per_color {int} Detected source DNG bits per color.
     @return {float} Bit-derived EV ceiling.
     @exception ValueError Raised when bit depth is below supported minimum.
-    @satisfies REQ-057, REQ-081, REQ-093
+    @satisfies REQ-057, REQ-081, REQ-093, REQ-094, REQ-096
     """
 
     if bits_per_color < MIN_SUPPORTED_BITS_PER_COLOR:
@@ -634,22 +640,31 @@ def _calculate_max_ev_from_bits(bits_per_color):
     return (bits_per_color - 8) / 2.0
 
 
-def _derive_supported_ev_values(bits_per_color):
-    """@brief Derive valid EV selector set from detected DNG bit depth.
+def _derive_supported_ev_values(bits_per_color, ev_zero=0.0):
+    """@brief Derive valid bracket EV selector set from bit depth and `ev_zero`.
 
     @details Builds deterministic EV selector tuple with fixed `0.25` step in
-    closed range `[0.25, MAX]`, where `MAX=((bits_per_color-8)/2)`.
+    closed range `[0.25, MAX_BRACKET]`, where
+    `MAX_BRACKET=((bits_per_color-8)/2)-abs(ev_zero)`.
     @param bits_per_color {int} Detected source DNG bits per color.
-    @return {tuple[float, ...]} Supported EV selector tuple.
-    @exception ValueError Raised when bit-derived EV ceiling cannot produce any selector values.
-    @satisfies REQ-057, REQ-081, REQ-093
+    @param ev_zero {float} Central EV selector.
+    @return {tuple[float, ...]} Supported bracket EV selector tuple.
+    @exception ValueError Raised when bit-derived bracket EV ceiling cannot produce any selector values.
+    @satisfies REQ-057, REQ-081, REQ-093, REQ-094, REQ-096
     """
 
-    max_ev = _calculate_max_ev_from_bits(bits_per_color)
-    max_steps = int(math.floor((max_ev / EV_STEP) + 1e-9))
+    base_max_ev = _calculate_max_ev_from_bits(bits_per_color)
+    max_bracket = base_max_ev - abs(ev_zero)
+    if max_bracket < (1.0 - 1e-9):
+        raise ValueError(
+            "Bit-derived bracket EV ceiling is too small for selector generation: "
+            f"{max_bracket:g} (formula: ((bits_per_color-8)/2)-abs(ev_zero))"
+        )
+    max_steps = int(math.floor((max_bracket / EV_STEP) + 1e-9))
     if max_steps < 1:
         raise ValueError(
-            f"Bit-derived EV ceiling is too small for selector generation: {max_ev:g}"
+            "Bit-derived bracket EV ceiling cannot produce selector values: "
+            f"{max_bracket:g} (formula: ((bits_per_color-8)/2)-abs(ev_zero))"
         )
     return tuple(round(index * EV_STEP, 2) for index in range(1, max_steps + 1))
 
@@ -730,18 +745,51 @@ def _parse_ev_option(ev_raw):
     except ValueError:
         print_error(f"Invalid --ev value: {ev_raw}")
         print_error(
-            "Allowed values: 0.25 .. MAX in 0.25 steps (MAX = (bits_per_color-8)/2)"
+            "Allowed values: 0.25 .. MAX_BRACKET in 0.25 steps "
+            "(MAX_BRACKET = ((bits_per_color-8)/2)-abs(ev_zero))"
         )
         return None
 
     if ev_value < EV_STEP or not _is_ev_value_on_supported_step(ev_value):
         print_error(f"Unsupported --ev value: {ev_raw}")
         print_error(
-            "Allowed values: 0.25 .. MAX in 0.25 steps (MAX = (bits_per_color-8)/2)"
+            "Allowed values: 0.25 .. MAX_BRACKET in 0.25 steps "
+            "(MAX_BRACKET = ((bits_per_color-8)/2)-abs(ev_zero))"
         )
         return None
 
     return round(ev_value, 2)
+
+
+def _parse_ev_zero_option(ev_zero_raw):
+    """@brief Parse and validate one `--ev-zero` option value.
+
+    @details Converts token to `float`, enforces fixed `0.25` granularity, and
+    defers bit-depth bound validation to RAW-metadata runtime stage.
+    @param ev_zero_raw {str} EV-zero token extracted from command arguments.
+    @return {float|None} Parsed EV-zero value when valid; `None` otherwise.
+    @satisfies REQ-094
+    """
+
+    try:
+        ev_zero_value = float(ev_zero_raw)
+    except ValueError:
+        print_error(f"Invalid --ev-zero value: {ev_zero_raw}")
+        print_error(
+            "Allowed values: -BASE_MAX .. +BASE_MAX in 0.25 steps "
+            "(BASE_MAX = (bits_per_color-8)/2)"
+        )
+        return None
+
+    if not _is_ev_value_on_supported_step(ev_zero_value):
+        print_error(f"Unsupported --ev-zero value: {ev_zero_raw}")
+        print_error(
+            "Allowed values: -BASE_MAX .. +BASE_MAX in 0.25 steps "
+            "(BASE_MAX = (bits_per_color-8)/2)"
+        )
+        return None
+
+    return round(ev_zero_value, 2)
 
 
 def _parse_auto_ev_option(auto_ev_raw):
@@ -868,7 +916,7 @@ def _compute_auto_ev_value(raw_handle, supported_ev_values=None):
     @param supported_ev_values {tuple[float, ...]|None} Optional bit-derived EV selector tuple.
     @return {float} Adaptive EV selector value from bit-depth-derived selector set.
     @exception ValueError Raised when preview luminance extraction cannot produce valid values.
-    @satisfies REQ-080, REQ-081, REQ-092, REQ-093
+    @satisfies REQ-080, REQ-081, REQ-092, REQ-093, REQ-096
     """
 
     linear_preview = raw_handle.postprocess(
@@ -943,7 +991,7 @@ def _resolve_ev_value(raw_handle, ev_value, auto_ev_enabled, supported_ev_values
     @param supported_ev_values {tuple[float, ...]|None} Optional bit-derived EV selector tuple.
     @return {float} Effective EV selector value used for bracket multipliers.
     @exception ValueError Raised when no static EV is provided while adaptive mode is disabled.
-    @satisfies REQ-056, REQ-057, REQ-080, REQ-081, REQ-092, REQ-093
+    @satisfies REQ-056, REQ-057, REQ-080, REQ-081, REQ-092, REQ-093, REQ-096
     """
 
     effective_supported_values = supported_ev_values
@@ -960,6 +1008,7 @@ def _resolve_ev_value(raw_handle, ev_value, auto_ev_enabled, supported_ev_values
         max_ev = effective_supported_values[-1]
         raise ValueError(
             f"Unsupported --ev value: {ev_value:g}; allowed range for input DNG is 0.25..{max_ev:g} in 0.25 steps"
+            " (MAX_BRACKET = ((bits_per_color-8)/2)-abs(ev_zero))"
         )
     return ev_value
 
@@ -1457,7 +1506,8 @@ def _parse_run_options(args):
 
     @details Supports positional file arguments, required mutually exclusive
     exposure selectors (`--ev=<value>`/`--ev <value>` or
-    `--auto-ev[=<1|true|yes|on>]`), optional `--gamma=<a,b>` or `--gamma <a,b>`,
+    `--auto-ev[=<1|true|yes|on>]`), optional `--ev-zero=<value>` or
+    `--ev-zero <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`,
     optional postprocess controls, optional auto-brightness stage and knobs,
     optional shared auto-adjust knobs, required backend selector
     (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls
@@ -1465,13 +1515,14 @@ def _parse_run_options(args):
     implementation selector (`--auto-adjust <ImageMagick|OpenCV>`); rejects
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
+    @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, float]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options, ev_zero)` tuple; `None` on parse failure.
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094
     """
 
     positional = []
     ev_value = None
     auto_ev_enabled = False
+    ev_zero = 0.0
     gamma_value = DEFAULT_GAMMA
     post_gamma = DEFAULT_POST_GAMMA
     brightness = DEFAULT_BRIGHTNESS
@@ -1759,6 +1810,25 @@ def _parse_run_options(args):
             idx += 1
             continue
 
+        if token == "--ev-zero":
+            if idx + 1 >= len(args):
+                print_error("Missing value for --ev-zero")
+                return None
+            parsed_ev_zero = _parse_ev_zero_option(args[idx + 1])
+            if parsed_ev_zero is None:
+                return None
+            ev_zero = parsed_ev_zero
+            idx += 2
+            continue
+
+        if token.startswith("--ev-zero="):
+            parsed_ev_zero = _parse_ev_zero_option(token.split("=", 1)[1])
+            if parsed_ev_zero is None:
+                return None
+            ev_zero = parsed_ev_zero
+            idx += 1
+            continue
+
         if token == "--gamma":
             if idx + 1 >= len(args):
                 print_error("Missing value for --gamma")
@@ -1904,7 +1974,8 @@ def _parse_run_options(args):
 
     if len(positional) != 2:
         print_error(
-            "Usage: dng2hdr2jpg <input.dng> <output.jpg> (--ev=<value> | --auto-ev) [--gamma=<a,b>]"
+            "Usage: dng2hdr2jpg <input.dng> <output.jpg> "
+            "(--ev=<value> | --auto-ev) [--ev-zero=<value>] [--gamma=<a,b>]"
         )
         return None
 
@@ -1983,6 +2054,7 @@ def _parse_run_options(args):
             tmo=luminance_tmo,
             tmo_extra_args=tuple(luminance_tmo_extra_args),
         ),
+        ev_zero,
     )
 
 
@@ -2462,17 +2534,23 @@ def _sync_output_file_timestamps_from_exif(output_jpg, exif_timestamp):
     _set_output_file_timestamps(output_jpg=output_jpg, exif_timestamp=exif_timestamp)
 
 
-def _build_exposure_multipliers(ev_value):
-    """@brief Compute bracketing brightness multipliers from EV value.
+def _build_exposure_multipliers(ev_value, ev_zero=0.0):
+    """@brief Compute bracketing brightness multipliers from EV delta and center.
 
     @details Produces exactly three multipliers mapped to exposure stops
-    `[-ev, 0, +ev]` as powers of two for RAW postprocess brightness control.
+    `[ev_zero-ev, ev_zero, ev_zero+ev]` as powers of two for RAW postprocess
+    brightness control.
     @param ev_value {float} Exposure bracket EV delta.
+    @param ev_zero {float} Central bracket EV value.
     @return {tuple[float, float, float]} Multipliers in order `(under, base, over)`.
-    @satisfies REQ-057, REQ-077, REQ-079, REQ-080, REQ-092, REQ-093
+    @satisfies REQ-057, REQ-077, REQ-079, REQ-080, REQ-092, REQ-093, REQ-095
     """
 
-    return (2 ** (-ev_value), 1.0, 2**ev_value)
+    return (
+        2 ** (ev_zero - ev_value),
+        2**ev_zero,
+        2 ** (ev_zero + ev_value),
+    )
 
 
 def _write_bracket_images(
@@ -2560,7 +2638,9 @@ def _run_enfuse(bracket_paths, merged_tiff):
     subprocess.run(command, check=True)
 
 
-def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_options):
+def _run_luminance_hdr_cli(
+    bracket_paths, output_hdr_tiff, ev_value, ev_zero, luminance_options
+):
     """@brief Merge bracket TIFF files into one HDR TIFF via `luminance-hdr-cli`.
 
     @details Builds deterministic luminance-hdr-cli argv using EV sequence,
@@ -2571,17 +2651,18 @@ def _run_luminance_hdr_cli(bracket_paths, output_hdr_tiff, ev_value, luminance_o
     @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
     @param output_hdr_tiff {Path} Output HDR TIFF target path.
     @param ev_value {float} EV bracket delta used to generate exposure files.
+    @param ev_zero {float} Central EV used to generate exposure files.
     @param luminance_options {LuminanceOptions} Luminance backend command controls.
     @return {None} Side effects only.
     @exception subprocess.CalledProcessError Raised when `luminance-hdr-cli` returns non-zero exit status.
-    @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068, REQ-077, REQ-080
+    @satisfies REQ-060, REQ-061, REQ-062, REQ-067, REQ-068, REQ-077, REQ-080, REQ-095
     """
 
     ordered_paths = _order_bracket_paths(bracket_paths)
     command = [
         "luminance-hdr-cli",
         "-e",
-        f"{-ev_value:g},0,{ev_value:g}",
+        f"{(ev_zero-ev_value):g},{ev_zero:g},{(ev_zero+ev_value):g}",
         "--hdrModel",
         luminance_options.hdr_model,
         "--hdrWeight",
@@ -3579,12 +3660,13 @@ def run(args):
 
     @details Parses command options, validates dependencies, detects source DNG
     bits-per-color from RAW metadata, resolves static or adaptive EV selector
-    using bit-derived EV ceiling, extracts three RAW brackets, executes selected
+    with optional `ev_zero` center using bit-derived EV ceilings, extracts three RAW
+    brackets, executes selected
     `enfuse` flow or selected luminance-hdr-cli flow, writes JPG output, and
     guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096
     """
 
     if not _is_supported_runtime_os():
@@ -3603,6 +3685,7 @@ def run(args):
         postprocess_options,
         enable_luminance,
         luminance_options,
+        ev_zero,
     ) = parsed
 
     if input_dng.suffix.lower() != ".dng":
@@ -3696,13 +3779,25 @@ def run(args):
         try:
             with rawpy_module.imread(str(input_dng)) as raw_handle:
                 bits_per_color = _detect_dng_bits_per_color(raw_handle)
-                supported_ev_values = _derive_supported_ev_values(bits_per_color)
-                max_ev = _calculate_max_ev_from_bits(bits_per_color)
+                base_max_ev = _calculate_max_ev_from_bits(bits_per_color)
+                if abs(ev_zero) > (base_max_ev + 1e-9):
+                    raise ValueError(
+                        "Unsupported --ev-zero value: "
+                        f"{ev_zero:g}; allowed range for input DNG is "
+                        f"{-base_max_ev:g}..{base_max_ev:g} in 0.25 steps"
+                    )
+                supported_ev_values = _derive_supported_ev_values(
+                    bits_per_color, ev_zero=ev_zero
+                )
+                max_bracket = supported_ev_values[-1]
                 print_info(f"Detected DNG bits per color: {bits_per_color}")
+                print_info(f"Using EV center (ev_zero): {ev_zero:g}")
                 if auto_ev_enabled:
                     print_info(
-                        "Bit-derived EV ceiling: "
-                        f"MAX={max_ev:g} (formula: (bits_per_color-8)/2)"
+                        "Bit-derived EV ceilings: "
+                        f"BASE_MAX={base_max_ev:g} (formula: (bits_per_color-8)/2), "
+                        f"MAX_BRACKET={max_bracket:g} "
+                        "(formula: BASE_MAX-abs(ev_zero))"
                     )
                 effective_ev_value = _resolve_ev_value(
                     raw_handle=raw_handle,
@@ -3711,10 +3806,16 @@ def run(args):
                     supported_ev_values=supported_ev_values,
                 )
                 print_info(
-                    f"Using EV bracket: {effective_ev_value}"
+                    f"Using EV bracket delta: {effective_ev_value}"
                     + (" (adaptive)" if auto_ev_enabled else " (static)")
                 )
-                multipliers = _build_exposure_multipliers(effective_ev_value)
+                print_info(
+                    "Export EV triplet: "
+                    f"{(ev_zero-effective_ev_value):g}, {ev_zero:g}, {(ev_zero+effective_ev_value):g}"
+                )
+                multipliers = _build_exposure_multipliers(
+                    effective_ev_value, ev_zero=ev_zero
+                )
                 bracket_paths = _write_bracket_images(
                     raw_handle=raw_handle,
                     imageio_module=imageio_module,
@@ -3727,6 +3828,7 @@ def run(args):
                     bracket_paths=bracket_paths,
                     output_hdr_tiff=merged_tiff,
                     ev_value=effective_ev_value,
+                    ev_zero=ev_zero,
                     luminance_options=luminance_options,
                 )
             else:
