@@ -708,31 +708,18 @@ def _derive_supported_ev_values(bits_per_color, ev_zero=0.0):
     return tuple(round(index * EV_STEP, 2) for index in range(1, max_steps + 1))
 
 
-def _detect_dng_bits_per_color(raw_handle):
-    """@brief Detect source DNG bits-per-color from RAW metadata.
+def _extract_raw_white_level_int(raw_handle):
+    """@brief Extract one positive integer RAW white-level scalar.
 
-    @details Prefers RAW sample container bit depth from
-    `raw_handle.raw_image_visible.dtype.itemsize * 8` because the DNG white
-    level can represent effective sensor range (for example `4000`) while RAW
-    samples are still stored in a wider container (for example `uint16`).
-    Falls back to `raw_handle.white_level` `bit_length` when container metadata
-    is unavailable.
+    @details Reads `raw_handle.white_level`, supports scalar and sequence
+    payloads, converts to integer, validates positivity, and returns
+    deterministic scalar for bit-depth and preview-normalization constraints.
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
-    @return {int} Detected source DNG bits per color.
-    @exception ValueError Raised when metadata is missing, non-numeric, or non-positive.
-    @satisfies REQ-057, REQ-081, REQ-092, REQ-093
+    @return {int} Positive integer white-level scalar.
+    @exception ValueError Raised when white-level metadata is missing,
+    non-numeric, empty, or non-positive.
+    @satisfies REQ-081, REQ-092, REQ-093, REQ-097
     """
-
-    raw_visible = getattr(raw_handle, "raw_image_visible", None)
-    raw_dtype = getattr(raw_visible, "dtype", None)
-    raw_itemsize = getattr(raw_dtype, "itemsize", None)
-    if raw_itemsize is not None:
-        try:
-            container_bits = int(raw_itemsize) * 8
-        except (TypeError, ValueError):
-            container_bits = 0
-        if container_bits > 0:
-            return container_bits
 
     white_level_raw = getattr(raw_handle, "white_level", None)
     if white_level_raw is None:
@@ -751,7 +738,39 @@ def _detect_dng_bits_per_color(raw_handle):
         ) from None
     if white_level_int <= 0:
         raise ValueError(f"RAW metadata white_level must be positive: {white_level_int}")
-    return white_level_int.bit_length()
+    return white_level_int
+
+
+def _detect_dng_bits_per_color(raw_handle):
+    """@brief Detect source DNG bits-per-color from RAW metadata.
+
+    @details Prefers RAW sample container bit depth from
+    `raw_handle.raw_image_visible.dtype.itemsize * 8`, then clamps inflated
+    container depth with white-level evidence by enforcing upper bound
+    `white_level.bit_length()+2` to avoid overestimating effective dynamic range
+    in auto-zero/adaptive EV bounds. Falls back to `white_level.bit_length()`
+    when container metadata is unavailable.
+    @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
+    @return {int} Detected source DNG bits per color.
+    @exception ValueError Raised when metadata is missing, non-numeric, or non-positive.
+    @satisfies REQ-057, REQ-081, REQ-092, REQ-093
+    """
+
+    white_level_int = _extract_raw_white_level_int(raw_handle)
+    white_level_bits = white_level_int.bit_length()
+    raw_visible = getattr(raw_handle, "raw_image_visible", None)
+    raw_dtype = getattr(raw_visible, "dtype", None)
+    raw_itemsize = getattr(raw_dtype, "itemsize", None)
+    if raw_itemsize is not None:
+        try:
+            container_bits = int(raw_itemsize) * 8
+        except (TypeError, ValueError):
+            container_bits = 0
+        if container_bits > 0:
+            capped_container_bits = min(container_bits, white_level_bits + 2)
+            return max(white_level_bits, capped_container_bits)
+
+    return white_level_bits
 
 
 def _is_ev_value_on_supported_step(ev_value):
@@ -902,9 +921,10 @@ def _clamp_ev_to_supported(ev_candidate, ev_values):
 def _quantize_ev_to_supported(ev_value, ev_values):
     """@brief Quantize one EV value to nearest supported selector value.
 
-    @details Chooses nearest value from `ev_values` to preserve
-    deterministic three-bracket behavior in downstream static multiplier and HDR
-    command construction paths.
+    @details Chooses nearest value from `ev_values` to preserve deterministic
+    three-bracket behavior in downstream static multiplier and HDR command
+    construction paths. Midpoint or near-midpoint values affected by floating
+    rounding residue resolve to lower selector to avoid EV inflation.
     @param ev_value {float} Clamped EV value.
     @param ev_values {tuple[float, ...]} Sorted supported EV selector values.
     @return {float} Nearest supported EV selector value.
@@ -913,9 +933,17 @@ def _quantize_ev_to_supported(ev_value, ev_values):
 
     nearest_ev = ev_values[0]
     smallest_distance = abs(ev_value - nearest_ev)
+    tie_tolerance = 1e-12
     for candidate in ev_values[1:]:
         distance = abs(ev_value - candidate)
-        if distance < smallest_distance:
+        if distance < (smallest_distance - tie_tolerance):
+            nearest_ev = candidate
+            smallest_distance = distance
+            continue
+        if (
+            math.isclose(distance, smallest_distance, rel_tol=0.0, abs_tol=tie_tolerance)
+            and candidate < nearest_ev
+        ):
             nearest_ev = candidate
             smallest_distance = distance
     return nearest_ev
@@ -927,7 +955,8 @@ def _extract_normalized_preview_luminance_stats(raw_handle):
     @details Generates one deterministic linear preview (`bright=1.0`,
     `output_bps=16`, camera white balance, no auto-bright, linear gamma,
     `user_flip=0`), computes luminance for each pixel, then returns normalized
-    low/median/high percentiles by dividing with preview maximum luminance.
+    low/median/high percentiles by dividing with capped reference luminance
+    `min(preview_max_luminance, raw_white_level)`.
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
     @return {tuple[float, float, float]} Normalized `(p_low, p_median, p_high)` in `(0,1)`.
     @exception ValueError Raised when preview extraction cannot produce valid luminance values.
@@ -973,11 +1002,15 @@ def _extract_normalized_preview_luminance_stats(raw_handle):
     max_luminance = max(flat_luminance)
     if max_luminance <= 0.0:
         raise ValueError("Adaptive preview maximum luminance is not positive")
+    white_level_reference = float(_extract_raw_white_level_int(raw_handle))
+    normalization_reference = min(max_luminance, white_level_reference)
+    if normalization_reference <= 0.0:
+        raise ValueError("Adaptive preview normalization reference is not positive")
 
     epsilon = 1e-9
-    p_low = max(epsilon, min(1.0 - epsilon, p_low_raw / max_luminance))
-    p_high = max(epsilon, min(1.0 - epsilon, p_high_raw / max_luminance))
-    p_median = max(epsilon, min(1.0 - epsilon, p_median_raw / max_luminance))
+    p_low = max(epsilon, min(1.0 - epsilon, p_low_raw / normalization_reference))
+    p_high = max(epsilon, min(1.0 - epsilon, p_high_raw / normalization_reference))
+    p_median = max(epsilon, min(1.0 - epsilon, p_median_raw / normalization_reference))
     return (p_low, p_median, p_high)
 
 

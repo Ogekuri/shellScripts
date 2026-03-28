@@ -454,12 +454,12 @@ def test_dng2hdr2jpg_rejects_invalid_auto_ev_value(tmp_path):
     )
 
 
-def test_detect_dng_bits_per_color_prefers_raw_container_bit_depth():
+def test_detect_dng_bits_per_color_clamps_container_depth_from_white_level():
     """
-    @brief Validate DNG bit-depth detection prefers RAW sample container depth.
-    @details Reproduces a DNG metadata profile where `white_level` indicates
-      effective sensor dynamic range (`4000`, ~12 bits) while RAW sample storage
-      uses 16-bit container depth. Asserts detector returns container depth.
+    @brief Validate DNG bit-depth detection clamps container depth using white-level evidence.
+    @details Reproduces a metadata profile where RAW sample container is `uint16`
+      while `white_level=4000` (~12 bits). The detector must cap inflated
+      container depth and return `14` as safe bit-derived ceiling input.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-092, REQ-093
     """
@@ -485,7 +485,66 @@ def test_detect_dng_bits_per_color_prefers_raw_container_bit_depth():
 
             return 4000
 
-    assert dng2hdr2jpg._detect_dng_bits_per_color(_FakeRawHandle()) == 16
+    assert dng2hdr2jpg._detect_dng_bits_per_color(_FakeRawHandle()) == 14
+
+
+def test_quantize_ev_to_supported_prefers_lower_value_on_float_midpoint():
+    """
+    @brief Validate EV quantization avoids midpoint inflation from floating noise.
+    @details Reproduces a midpoint value represented with positive floating
+      rounding residue (`0.37500000000000006`) and asserts quantization resolves
+      to the lower EV selector to avoid unnecessary correction inflation.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-081, REQ-097
+    """
+
+    supported_values = (0.25, 0.5, 0.75)
+    assert dng2hdr2jpg._quantize_ev_to_supported(0.37500000000000006, supported_values) == pytest.approx(
+        0.25
+    )
+
+
+def test_extract_normalized_preview_luminance_stats_caps_reference_with_white_level():
+    """
+    @brief Validate luminance normalization caps denominator by RAW white-level.
+    @details Reproduces a sparse hot-pixel outlier in preview luminance where
+      max preview value is far above white-level. The median percentile must be
+      normalized against capped reference to prevent auto-zero overcorrection.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-080, REQ-081, REQ-097
+    """
+
+    class _FakeRawHandle:
+        """@brief Provide fake RAW handle with outlier-heavy preview data."""
+
+        @staticmethod
+        def postprocess(
+            bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
+        ):
+            assert bright == 1.0
+            assert output_bps == 16
+            assert use_camera_wb is True
+            assert no_auto_bright is True
+            assert gamma == (1.0, 1.0)
+            assert user_flip == 0
+            return [
+                [[4096.0, 4096.0, 4096.0]],
+                [[4096.0, 4096.0, 4096.0]],
+                [[4096.0, 4096.0, 4096.0]],
+                [[65535.0, 65535.0, 65535.0]],
+            ]
+
+        @property
+        def white_level(self) -> int:
+            """@brief Return deterministic 14-bit white-level limit."""
+
+            return 16383
+
+    _p_low, p_median, _p_high = dng2hdr2jpg._extract_normalized_preview_luminance_stats(
+        _FakeRawHandle()
+    )
+
+    assert p_median == pytest.approx(4096.0 / 16383.0, abs=1e-6)
 
 
 def test_compute_auto_ev_value_quantizes_supported_result():
