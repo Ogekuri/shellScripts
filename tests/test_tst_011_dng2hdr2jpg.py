@@ -1398,8 +1398,9 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(
 def test_dng2hdr2jpg_uses_ev_zero_to_center_static_bracketing(monkeypatch, tmp_path):
     """
     @brief Validate `--ev-zero` recenters static bracketing triplet.
-    @details Runs static mode with `--ev=2` and `--ev-zero=-1` and verifies
-      extracted brightness multipliers and luminance EV list match `-3,-1,1`.
+    @details Runs static mode with `--ev=2` and `--ev-zero=-1`, verifies
+      extracted brightness multipliers and luminance EV list match `-3,-1,1`,
+      and verifies shared JPG-encode stage receives `ev_zero=-1`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -1470,6 +1471,14 @@ def test_dng2hdr2jpg_uses_ev_zero_to_center_static_bracketing(monkeypatch, tmp_p
         ),
     )
     monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_encode_jpg",
+        lambda **kwargs: (
+            observed.__setitem__("encode_ev_zero", kwargs["ev_zero"]),
+            Path(kwargs["output_jpg"]).write_text("jpg", encoding="utf-8"),
+        )[-1],
+    )
 
     input_dng = tmp_path / "scene.dng"
     input_dng.write_text("dng", encoding="utf-8")
@@ -1488,6 +1497,7 @@ def test_dng2hdr2jpg_uses_ev_zero_to_center_static_bracketing(monkeypatch, tmp_p
     assert result == 0
     assert observed["brights"] == pytest.approx([2**-3, 2**-1, 2**1])
     assert observed["luminance_cmd"][2] == "-3,-1,1"
+    assert observed["encode_ev_zero"] == pytest.approx(-1.0)
 
 
 def test_write_bracket_images_disables_raw_orientation_auto_flip(tmp_path):
@@ -4567,6 +4577,61 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(
     assert observed["refresh_calls"][0]["output_jpg"] == output_jpg
     assert observed["refresh_calls"][0]["source_exif_payload"] == b"source-exif"
     assert observed["refresh_calls"][0]["source_orientation"] == 3
+    assert output_jpg.exists()
+
+
+def test_dng2hdr2jpg_applies_ev_zero_compensation_before_static_postprocess(tmp_path):
+    """
+    @brief Validate merged-HDR `ev_zero` compensation precedes static postprocess factors.
+    @details Executes `_encode_jpg` with `ev_zero=-1` and non-default static factors,
+      then verifies compensation gain `2^(ev_zero)=0.5` is applied first through
+      brightness enhancer before static brightness/contrast/saturation factors.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-066, REQ-095
+    """
+
+    observed = {"postprocess_ops": [], "jpg_save": None}
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for ev-zero compensation assertions."""
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for merged HDR source."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    merged_tiff = tmp_path / "merged_hdr.tif"
+    merged_tiff.write_text("merged", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+    pil_image_module, pil_enhance_module = _build_fake_pillow_modules(observed)
+
+    dng2hdr2jpg._encode_jpg(
+        imageio_module=_FakeImageIoModule,
+        pil_image_module=pil_image_module,
+        pil_enhance_module=pil_enhance_module,
+        merged_tiff=merged_tiff,
+        output_jpg=output_jpg,
+        postprocess_options=dng2hdr2jpg.PostprocessOptions(
+            post_gamma=1.0,
+            brightness=1.2,
+            contrast=0.9,
+            saturation=1.1,
+            jpg_compression=10,
+        ),
+        ev_zero=-1.0,
+    )
+
+    assert observed["postprocess_ops"] == [
+        ("brightness", 0.5),
+        ("brightness", 1.2),
+        ("contrast", 0.9),
+        ("saturation", 1.1),
+    ]
+    assert observed["jpg_save"] is not None
+    assert observed["jpg_save"]["format"] == "JPEG"
     assert output_jpg.exists()
 
 

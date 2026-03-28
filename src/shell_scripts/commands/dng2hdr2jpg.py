@@ -3429,12 +3429,14 @@ def _encode_jpg(
     piexif_module=None,
     source_exif_payload=None,
     source_orientation=1,
+    ev_zero=0.0,
 ):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
     @details Loads merged image payload, down-converts to `uint8` when source
     dynamic range exceeds JPEG-native depth, optionally executes auto-brightness
-    pre-stage, applies shared gamma/brightness/contrast/saturation
+    pre-stage, applies `ev_zero` compensation gain `2^(ev_zero)` when
+    `ev_zero != 0`, applies shared gamma/brightness/contrast/saturation
     postprocessing over resulting image, optionally executes auto-adjust stage
     over temporary lossless 16-bit TIFF intermediates, and writes JPEG with
     configured compression level for both HDR backends.
@@ -3449,6 +3451,7 @@ def _encode_jpg(
     @param piexif_module {ModuleType|None} Optional piexif module for EXIF thumbnail refresh.
     @param source_exif_payload {bytes|None} Serialized EXIF payload copied from input DNG.
     @param source_orientation {int} Source EXIF orientation value in range `1..8`.
+    @param ev_zero {float} Selected EV center used for merged-HDR luminance compensation.
     @return {None} Side effects only.
     @exception RuntimeError Raised when auto-adjust mode dependencies are missing or auto-adjust mode value is unsupported.
     @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-086, REQ-087, REQ-090
@@ -3493,6 +3496,10 @@ def _encode_jpg(
 
     if getattr(pil_image, "mode", "") == "RGBA":
         pil_image = pil_image.convert("RGB")
+
+    if abs(ev_zero) > 1e-9:
+        compensation_gain = 2.0 ** ev_zero
+        pil_image = pil_enhance_module.Brightness(pil_image).enhance(compensation_gain)
 
     if postprocess_options.post_gamma != 1.0:
         lut = [
@@ -3845,6 +3852,7 @@ def run(args):
                 piexif_module=piexif_module,
                 source_exif_payload=source_exif_payload,
                 source_orientation=source_orientation,
+                ev_zero=ev_zero,
             )
             _sync_output_file_timestamps_from_exif(
                 output_jpg=output_jpg,

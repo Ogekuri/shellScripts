@@ -628,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# dng2hdr2jpg.py | Python | 3858L | 123 symbols | 19 imports | 81 comments
+# dng2hdr2jpg.py | Python | 3866L | 123 symbols | 19 imports | 81 comments
 > Path: `src/shell_scripts/commands/dng2hdr2jpg.py`
 
 ## Imports
@@ -1417,14 +1417,15 @@ RGB TIFF output, parameterized by shared auto-adjust knobs.
 - @satisfies REQ-073, REQ-075, REQ-077, REQ-087
 - @satisfies REQ-059, REQ-078
 
-### fn `def _encode_jpg(` `priv` (L3420-3431)
+### fn `def _encode_jpg(` `priv` (L3420-3432)
 
-### fn `def _collect_processing_errors(rawpy_module)` `priv` (L3609-3637)
+### fn `def _collect_processing_errors(rawpy_module)` `priv` (L3616-3644)
 - @brief Encode merged HDR TIFF payload into final JPG output.
 - @brief Build deterministic tuple of recoverable processing exceptions.
 - @details Loads merged image payload, down-converts to `uint8` when source
 dynamic range exceeds JPEG-native depth, optionally executes auto-brightness
-pre-stage, applies shared gamma/brightness/contrast/saturation
+pre-stage, applies `ev_zero` compensation gain `2^(ev_zero)` when
+`ev_zero != 0`, applies shared gamma/brightness/contrast/saturation
 postprocessing over resulting image, optionally executes auto-adjust stage
 over temporary lossless 16-bit TIFF intermediates, and writes JPEG with
 configured compression level for both HDR backends.
@@ -1440,6 +1441,7 @@ configured compression level for both HDR backends.
 - @param piexif_module {ModuleType|None} Optional piexif module for EXIF thumbnail refresh.
 - @param source_exif_payload {bytes|None} Serialized EXIF payload copied from input DNG.
 - @param source_orientation {int} Source EXIF orientation value in range `1..8`.
+- @param ev_zero {float} Selected EV center used for merged-HDR luminance compensation.
 - @param rawpy_module {ModuleType} Imported rawpy module.
 - @return {None} Side effects only.
 - @return {tuple[type[BaseException], ...]} Ordered deduplicated exception class tuple.
@@ -1447,13 +1449,13 @@ configured compression level for both HDR backends.
 - @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-086, REQ-087, REQ-090
 - @satisfies REQ-059
 
-### fn `def _is_supported_runtime_os()` `priv` (L3638-3657)
+### fn `def _is_supported_runtime_os()` `priv` (L3645-3664)
 - @brief Validate runtime platform support for `dng2hdr2jpg`.
 - @details Accepts Linux runtime only; emits explicit non-Linux unsupported message that includes OS label (`Windows` or `MacOS`) for deterministic UX.
 - @return {bool} `True` when runtime OS is Linux; `False` otherwise.
 - @satisfies REQ-055, REQ-059
 
-### fn `def run(args)` (L3658-3857)
+### fn `def run(args)` (L3665-3864)
 - @brief Execute `dng2hdr2jpg` command pipeline.
 - @details Parses command options, validates dependencies, detects source DNG bits-per-color from RAW metadata, resolves static or adaptive EV selector with optional `ev_zero` center using bit-derived EV ceilings, extracts three RAW brackets, executes selected `enfuse` flow or selected luminance-hdr-cli flow, writes JPG output, and guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
 - @param args {list[str]} Command argument vector excluding command token.
@@ -1582,10 +1584,10 @@ configured compression level for both HDR backends.
 |`_overlay_composite`|fn|priv|3300-3321|def _overlay_composite(np_module, base_rgb, overlay_gray)|
 |`_apply_validated_auto_adjust_pipeline_opencv`|fn|priv|3322-3323|def _apply_validated_auto_adjust_pipeline_opencv(|
 |`_load_piexif_dependency`|fn|priv|3402-3419|def _load_piexif_dependency()|
-|`_encode_jpg`|fn|priv|3420-3431|def _encode_jpg(|
-|`_collect_processing_errors`|fn|priv|3609-3637|def _collect_processing_errors(rawpy_module)|
-|`_is_supported_runtime_os`|fn|priv|3638-3657|def _is_supported_runtime_os()|
-|`run`|fn|pub|3658-3857|def run(args)|
+|`_encode_jpg`|fn|priv|3420-3432|def _encode_jpg(|
+|`_collect_processing_errors`|fn|priv|3616-3644|def _collect_processing_errors(rawpy_module)|
+|`_is_supported_runtime_os`|fn|priv|3645-3664|def _is_supported_runtime_os()|
+|`run`|fn|pub|3665-3864|def run(args)|
 
 
 ---
