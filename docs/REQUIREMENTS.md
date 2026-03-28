@@ -205,11 +205,11 @@ No explicit performance optimizations identified.
 - **REQ-080**: MUST execute adaptive exposure pipeline `Options -> EV-Zero Resolution (manual or auto-zero) -> Fast RAW Preview -> Histogram Analysis -> EV-Zero Solve -> EV-Delta Solve -> Extraction -> Merge -> AutoAdjust -> Save` when `--auto-ev` is selected.
 - **REQ-081**: MUST compute adaptive EV delta after EV-zero resolution using linear preview luminance percentiles (`0.1%`, `99.9%`) and median-aware optimization, clamp to `[0.25,MAX_BRACKET]` where `MAX_BRACKET=((bits_per_color-8)/2)-abs(ev_zero)`, then quantize to nearest `0.25`.
 - **REQ-092**: MUST print detected source DNG `bits_per_color` in command output for both `--ev` and `--auto-ev` execution paths.
-- **REQ-093**: MUST print bit-derived EV ceilings `BASE_MAX=((bits_per_color-8)/2)` and `MAX_BRACKET=(BASE_MAX-abs(ev_zero))` in command output when `--auto-ev` or `--auto-zero` is selected.
-- **REQ-094**: MUST parse optional `--ev-zero=<value>`/`--ev-zero <value>` and optional `--auto-zero[=<1|true|yes|on>]`, enforce mutual exclusivity, enforce `0.25` granularity for manual values, default to `0.0` when omitted, and constrain resolved `ev_zero` to `-BASE_MAX..+BASE_MAX`.
+- **REQ-093**: MUST print bit-derived EV ceilings `BASE_MAX=((bits_per_color-8)/2)`, `SAFE_ZERO_MAX=(BASE_MAX-1)`, and `MAX_BRACKET=(BASE_MAX-abs(ev_zero))` in command output when `--auto-ev` or `--auto-zero` is selected.
+- **REQ-094**: MUST parse optional `--ev-zero=<value>`/`--ev-zero <value>` and optional `--auto-zero[=<1|true|yes|on>]`, enforce mutual exclusivity and `0.25` granularity, default to `0.0` when omitted, and constrain resolved `ev_zero` to `[-SAFE_ZERO_MAX,+SAFE_ZERO_MAX]`.
 - **REQ-095**: MUST export bracket exposures centered on resolved `ev_zero` (manual or auto-zero), generating EV triplet `<ev_zero-ev_delta, ev_zero, ev_zero+ev_delta>` for `ev_minus`, `ev_zero`, and `ev_plus`, and MUST keep merged HDR luminance aligned to that center as reference exposure.
 - **REQ-096**: MUST return `1` when `MAX_BRACKET=((bits_per_color-8)/2)-abs(ev_zero)` is less than `1.0`, and MUST reject `--ev` values above `MAX_BRACKET` with return code `1`.
-- **REQ-097**: MUST compute `--auto-zero` as `ev_zero=log2(0.5/p50)` from RAW linear preview median luminance `p50`, then clamp to `[-BASE_MAX,+BASE_MAX]` and quantize to nearest `0.25` before deriving `MAX_BRACKET`.
+- **REQ-097**: MUST compute `--auto-zero` as `ev_zero=log2(0.5/p50)` from RAW linear preview median luminance `p50`, then clamp to `[-SAFE_ZERO_MAX,+SAFE_ZERO_MAX]` and quantize to nearest `0.25` before deriving `MAX_BRACKET`.
 
 ## 4. Test Requirements
 

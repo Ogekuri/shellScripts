@@ -3,7 +3,7 @@
 @details Verifies argument validation, static/adaptive EV selector behavior,
   three-bracket extraction multipliers, dual-backend HDR merge behavior,
   shared postprocessing options, and temporary artifact cleanup semantics.
-@satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096
+    @satisfies TST-011, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-086, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097
 @return {None} Pytest module scope.
 """
 
@@ -658,7 +658,7 @@ def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
     assert observed["luminance_cmd"][2] == "-1.5,0,1.5"
     assert "Detected DNG bits per color: 14" in observed["infos"]
     assert any(
-        "Bit-derived EV ceilings: BASE_MAX=3 (formula: (bits_per_color-8)/2), MAX_BRACKET=3 (formula: BASE_MAX-abs(ev_zero))"
+        "Bit-derived EV ceilings: BASE_MAX=3 (formula: (bits_per_color-8)/2), SAFE_ZERO_MAX=2 (formula: BASE_MAX-1), MAX_BRACKET=3 (formula: BASE_MAX-abs(ev_zero))"
         in line
         for line in observed["infos"]
     )
@@ -913,11 +913,11 @@ def test_dng2hdr2jpg_rejects_static_ev_above_bit_derived_max_with_ev_zero(
     )
 
 
-def test_dng2hdr2jpg_rejects_ev_zero_out_of_base_range(monkeypatch, tmp_path):
+def test_dng2hdr2jpg_rejects_ev_zero_out_of_safe_range(monkeypatch, tmp_path):
     """
-    @brief Validate `--ev-zero` range is bounded by base bit-derived maximum.
-    @details Uses 16-bit RAW metadata (`BASE_MAX=4`) and asserts `--ev-zero=-4.25`
-      triggers deterministic runtime validation error.
+    @brief Validate `--ev-zero` range is bounded by safe EV-zero ceiling.
+    @details Uses 16-bit RAW metadata (`BASE_MAX=4`, `SAFE_ZERO_MAX=3`) and
+      asserts `--ev-zero=-3.25` triggers deterministic runtime validation error.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -1021,21 +1021,20 @@ def test_dng2hdr2jpg_rejects_ev_zero_out_of_base_range(monkeypatch, tmp_path):
             str(output_jpg),
             "--enable-enfuse",
             "--ev=1",
-            "--ev-zero=-4.25",
+            "--ev-zero=-3.25",
         ]
     )
 
     assert result == 1
-    assert any("Unsupported --ev-zero value: -4.25" in line for line in observed["errors"])
+    assert any("Unsupported --ev-zero value: -3.25" in line for line in observed["errors"])
 
 
-def test_dng2hdr2jpg_rejects_when_ev_zero_reduces_max_bracket_below_one(
-    monkeypatch, tmp_path
-):
+def test_dng2hdr2jpg_accepts_ev_zero_at_safe_bound(monkeypatch, tmp_path):
     """
-    @brief Validate runtime rejection when `MAX_BRACKET` becomes lower than `1.0`.
-    @details Uses 12-bit RAW metadata (`BASE_MAX=2`) with `--ev-zero=1.25`,
-      yielding `MAX_BRACKET=0.75`, and asserts deterministic error path.
+    @brief Validate safe EV-zero bound preserves at least `±1EV` bracket.
+    @details Uses 12-bit RAW metadata (`BASE_MAX=2`, `SAFE_ZERO_MAX=1`) with
+      `--ev-zero=1` and verifies successful static pipeline execution with
+      deterministic `MAX_BRACKET=1`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -1045,6 +1044,21 @@ def test_dng2hdr2jpg_rejects_when_ev_zero_reduces_max_bracket_below_one(
     observed = {
         "infos": [],
         "errors": [],
+        "brights": [],
+        "output_bps": [],
+        "use_camera_wb": [],
+        "no_auto_bright": [],
+        "gamma": [],
+        "writes": [],
+        "enfuse_cmd": None,
+        "tmp_dir": None,
+        "copy_calls": [],
+        "output_exists_after_copy": None,
+        "output_exists_before_copy": None,
+        "tiff_reads": [],
+        "raw_handles": [],
+        "output_mode_before_convert": [],
+        "output_jpg_compression": [],
     }
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
     monkeypatch.setattr(
@@ -1074,14 +1088,29 @@ def test_dng2hdr2jpg_rejects_when_ev_zero_reduces_max_bracket_below_one(
             del exc_type, exc, tb
             return False
 
-        @staticmethod
-        def postprocess(
-            bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip=None
-        ):
-            """@brief Provide deterministic payload for possible extraction path."""
+        def __init__(self, observed_state):
+            """@brief Store shared observation map for deterministic extraction."""
 
-            del bright, output_bps, use_camera_wb, no_auto_bright, gamma, user_flip
-            return "rgb"
+            self._observed_state = observed_state
+
+        def postprocess(
+            self,
+            bright,
+            output_bps,
+            use_camera_wb,
+            no_auto_bright,
+            gamma,
+            user_flip=None,
+        ):
+            """@brief Capture extraction arguments and return deterministic payload."""
+
+            self._observed_state["brights"].append(bright)
+            self._observed_state["output_bps"].append(output_bps)
+            self._observed_state["use_camera_wb"].append(use_camera_wb)
+            self._observed_state["no_auto_bright"].append(no_auto_bright)
+            self._observed_state["gamma"].append(gamma)
+            self._observed_state.setdefault("user_flip", []).append(user_flip)
+            return f"rgb-{bright}"
 
     class _FakeRawPyModule:
         """@brief Provide fake `rawpy` module for low `MAX_BRACKET` test."""
@@ -1090,7 +1119,7 @@ def test_dng2hdr2jpg_rejects_when_ev_zero_reduces_max_bracket_below_one(
 
         @staticmethod
         def imread(_path):
-            return _FakeRawHandle12Bit()
+            return _FakeRawHandle12Bit(observed)
 
     class _FakeImageIoModule:
         """@brief Provide fake `imageio` module for low `MAX_BRACKET` test."""
@@ -1116,6 +1145,31 @@ def test_dng2hdr2jpg_rejects_when_ev_zero_reduces_max_bracket_below_one(
         "which",
         lambda cmd: "/usr/bin/enfuse" if cmd == "enfuse" else None,
     )
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_run_enfuse",
+        lambda bracket_paths, merged_tiff: Path(merged_tiff).write_text(
+            "merged", encoding="utf-8"
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_sync_output_file_timestamps_from_exif",
+        lambda output_jpg, exif_timestamp: None,
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "tempfile",
+        type(
+            "_FakeTempfile",
+            (),
+            {
+                "TemporaryDirectory": lambda *args, **kwargs: _TrackingTemporaryDirectory(
+                    observed, *args, **kwargs
+                )
+            },
+        ),
+    )
 
     input_dng = tmp_path / "scene.dng"
     input_dng.write_text("dng", encoding="utf-8")
@@ -1127,15 +1181,14 @@ def test_dng2hdr2jpg_rejects_when_ev_zero_reduces_max_bracket_below_one(
             str(output_jpg),
             "--enable-enfuse",
             "--ev=1",
-            "--ev-zero=1.25",
+            "--ev-zero=1",
         ]
     )
 
-    assert result == 1
+    assert result == 0
+    assert "Using EV center (ev_zero): 1" in observed["infos"]
     assert any(
-        "Bit-derived bracket EV ceiling is too small for selector generation: 0.75"
-        in line
-        for line in observed["errors"]
+        "Using EV bracket delta: 1 (static)" in line for line in observed["infos"]
     )
 
 
@@ -4621,6 +4674,8 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--auto-zero" in output
     assert "Fixed exposure bracket EV: 0.25 .. MAX_BRACKET in 0.25 steps" in output
     assert "MAX_BRACKET = ((bits_per_color-8)/2)-abs(ev_zero) from input DNG" in output
+    assert "-SAFE_ZERO_MAX .. +SAFE_ZERO_MAX in 0.25 steps" in output
+    assert "SAFE_ZERO_MAX = ((bits_per_color-8)/2)-1 from input DNG" in output
     assert "--gamma=<a,b>" in output
     assert "--post-gamma=<value>" in output
     assert "--brightness=<value>" in output

@@ -6,7 +6,7 @@
 `luminance-hdr-cli` flow with deterministic HDR model parameters, then writes
 final JPG to user-selected output path. Temporary artifacts are isolated in a
 temporary directory and removed automatically on success and failure.
-    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096
+    @satisfies PRJ-003, DES-008, REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-063, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097
 """
 
 import os
@@ -482,8 +482,8 @@ def print_help(version):
         "                     Optional value forms: --auto-ev=1, --auto-ev=true, --auto-ev yes."
     )
     print(
-        "  --ev-zero=<value> - Central EV for bracket export: -BASE_MAX .. +BASE_MAX in 0.25 steps"
-        " (BASE_MAX = (bits_per_color-8)/2 from input DNG, default: 0)."
+        "  --ev-zero=<value> - Central EV for bracket export: -SAFE_ZERO_MAX .. +SAFE_ZERO_MAX in 0.25 steps"
+        " (SAFE_ZERO_MAX = ((bits_per_color-8)/2)-1 from input DNG, default: 0)."
     )
     print(
         "  --auto-zero      - Auto-resolve EV center from RAW median luminance"
@@ -649,6 +649,36 @@ def _calculate_max_ev_from_bits(bits_per_color):
     return (bits_per_color - 8) / 2.0
 
 
+def _calculate_safe_ev_zero_max(base_max_ev):
+    """@brief Compute safe absolute EV-zero ceiling preserving at least `±1EV` bracket.
+
+    @details Derives `SAFE_ZERO_MAX=(BASE_MAX-1)` where `BASE_MAX=((bits_per_color-8)/2)`.
+    Safe range guarantees `MAX_BRACKET=(BASE_MAX-abs(ev_zero)) >= 1`.
+    @param base_max_ev {float} Bit-derived `BASE_MAX` value.
+    @return {float} Safe absolute EV-zero ceiling.
+    @satisfies REQ-093, REQ-094, REQ-096, REQ-097
+    """
+
+    return max(0.0, base_max_ev - 1.0)
+
+
+def _derive_supported_ev_zero_values(base_max_ev):
+    """@brief Derive non-negative EV-zero quantization set preserving `±1EV` bracket.
+
+    @details Generates deterministic quarter-step tuple in `[0, SAFE_ZERO_MAX]`,
+    where `SAFE_ZERO_MAX=max(0, BASE_MAX-1)` and `BASE_MAX=((bits_per_color-8)/2)`.
+    @param base_max_ev {float} Bit-derived `BASE_MAX` value.
+    @return {tuple[float, ...]} Supported non-negative EV-zero magnitudes including `0.0`.
+    @satisfies REQ-093, REQ-094, REQ-096, REQ-097
+    """
+
+    safe_ev_zero_max = _calculate_safe_ev_zero_max(base_max_ev)
+    if safe_ev_zero_max < (EV_STEP - 1e-9):
+        return (0.0,)
+    max_steps = int(math.floor((safe_ev_zero_max / EV_STEP) + 1e-9))
+    return tuple(round(index * EV_STEP, 2) for index in range(0, max_steps + 1))
+
+
 def _derive_supported_ev_values(bits_per_color, ev_zero=0.0):
     """@brief Derive valid bracket EV selector set from bit depth and `ev_zero`.
 
@@ -785,16 +815,16 @@ def _parse_ev_zero_option(ev_zero_raw):
     except ValueError:
         print_error(f"Invalid --ev-zero value: {ev_zero_raw}")
         print_error(
-            "Allowed values: -BASE_MAX .. +BASE_MAX in 0.25 steps "
-            "(BASE_MAX = (bits_per_color-8)/2)"
+            "Allowed values: -SAFE_ZERO_MAX .. +SAFE_ZERO_MAX in 0.25 steps "
+            "(SAFE_ZERO_MAX = ((bits_per_color-8)/2)-1)"
         )
         return None
 
     if not _is_ev_value_on_supported_step(ev_zero_value):
         print_error(f"Unsupported --ev-zero value: {ev_zero_raw}")
         print_error(
-            "Allowed values: -BASE_MAX .. +BASE_MAX in 0.25 steps "
-            "(BASE_MAX = (bits_per_color-8)/2)"
+            "Allowed values: -SAFE_ZERO_MAX .. +SAFE_ZERO_MAX in 0.25 steps "
+            "(SAFE_ZERO_MAX = ((bits_per_color-8)/2)-1)"
         )
         return None
 
@@ -975,7 +1005,7 @@ def _optimize_auto_zero(auto_ev_inputs):
     """@brief Compute optimal EV-zero center from normalized median luminance.
 
     @details Solves `ev_zero=log2(median_target/p_median)`, clamps result to
-    `[-BASE_MAX,+BASE_MAX]` where `BASE_MAX=max(ev_values)`, and quantizes to
+    `[-SAFE_ZERO_MAX,+SAFE_ZERO_MAX]` where `SAFE_ZERO_MAX=max(ev_values)`, and quantizes to
     nearest quarter-step represented by `ev_values` with sign preservation.
     @param auto_ev_inputs {AutoEvInputs} Adaptive EV scalar inputs.
     @return {float} Quantized EV-zero center.
@@ -985,9 +1015,12 @@ def _optimize_auto_zero(auto_ev_inputs):
     base_max = auto_ev_inputs.ev_values[-1]
     ev_zero_candidate = math.log2(auto_ev_inputs.median_target / auto_ev_inputs.p_median)
     ev_zero_clamped = max(-base_max, min(base_max, ev_zero_candidate))
+    if math.isclose(ev_zero_clamped, 0.0, rel_tol=0.0, abs_tol=1e-9):
+        return 0.0
+    quantized_abs = _quantize_ev_to_supported(abs(ev_zero_clamped), auto_ev_inputs.ev_values)
     if ev_zero_clamped >= 0.0:
-        return _quantize_ev_to_supported(ev_zero_clamped, auto_ev_inputs.ev_values)
-    return -_quantize_ev_to_supported(abs(ev_zero_clamped), auto_ev_inputs.ev_values)
+        return quantized_abs
+    return -quantized_abs
 
 
 def _optimize_adaptive_ev_delta(auto_ev_inputs):
@@ -1093,15 +1126,16 @@ def _resolve_ev_zero(
 
     @details Uses manual `--ev-zero` unless `--auto-zero` is enabled. In
     automatic mode computes EV-zero from normalized median luminance and
-    quantizes to supported quarter-step values. Applies final base-range clamp.
+    quantizes to supported quarter-step values. Applies final safe-range clamp
+    preserving at least `±1EV` bracket margin.
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
     @param ev_zero {float} Parsed manual EV-zero candidate.
     @param auto_zero_enabled {bool} Auto-zero selector state.
     @param base_max_ev {float} Bit-derived `BASE_MAX` limit.
-    @param supported_ev_values_for_auto_zero {tuple[float, ...]} Supported positive EV values for quantization.
+    @param supported_ev_values_for_auto_zero {tuple[float, ...]} Supported non-negative EV-zero magnitudes for quantization.
     @param preview_luminance_stats {tuple[float, float, float]|None} Optional precomputed `(p_low, p_median, p_high)` tuple to avoid duplicate preview extraction.
     @return {float} Resolved EV-zero center.
-    @exception ValueError Raised when resolved EV-zero is outside bit-derived base range.
+    @exception ValueError Raised when resolved EV-zero is outside bit-derived safe range.
     @satisfies REQ-094, REQ-095, REQ-097
     """
 
@@ -1122,11 +1156,13 @@ def _resolve_ev_zero(
             ev_values=supported_ev_values_for_auto_zero,
         )
         resolved_ev_zero = _optimize_auto_zero(auto_zero_inputs)
-    if abs(resolved_ev_zero) > (base_max_ev + 1e-9):
+    safe_ev_zero_max = _calculate_safe_ev_zero_max(base_max_ev)
+    if abs(resolved_ev_zero) > (safe_ev_zero_max + 1e-9):
         raise ValueError(
             "Unsupported --ev-zero value: "
             f"{resolved_ev_zero:g}; allowed range for input DNG is "
-            f"{-base_max_ev:g}..{base_max_ev:g} in 0.25 steps"
+            f"{-safe_ev_zero_max:g}..{safe_ev_zero_max:g} in 0.25 steps "
+            "(SAFE_ZERO_MAX = ((bits_per_color-8)/2)-1)"
         )
     return round(resolved_ev_zero, 2)
 
@@ -3992,9 +4028,7 @@ def run(args):
                     preview_luminance_stats = _extract_normalized_preview_luminance_stats(
                         raw_handle
                     )
-                auto_zero_supported_values = _derive_supported_ev_values(
-                    bits_per_color, ev_zero=0.0
-                )
+                auto_zero_supported_values = _derive_supported_ev_zero_values(base_max_ev)
                 resolved_ev_zero = _resolve_ev_zero(
                     raw_handle=raw_handle,
                     ev_zero=ev_zero,
@@ -4014,9 +4048,12 @@ def run(args):
                     print_info("Using EV center mode: manual")
                 print_info(f"Using EV center (ev_zero): {resolved_ev_zero:g}")
                 if auto_ev_enabled or auto_zero_enabled:
+                    safe_zero_max = _calculate_safe_ev_zero_max(base_max_ev)
                     print_info(
                         "Bit-derived EV ceilings: "
                         f"BASE_MAX={base_max_ev:g} (formula: (bits_per_color-8)/2), "
+                        f"SAFE_ZERO_MAX={safe_zero_max:g} "
+                        "(formula: BASE_MAX-1), "
                         f"MAX_BRACKET={max_bracket:g} "
                         "(formula: BASE_MAX-abs(ev_zero))"
                     )
@@ -4029,7 +4066,7 @@ def run(args):
                     preview_luminance_stats=preview_luminance_stats,
                 )
                 print_info(
-                    f"Using EV bracket delta: {effective_ev_value}"
+                    f"Using EV bracket delta: {effective_ev_value:g}"
                     + (" (adaptive)" if auto_ev_enabled else " (static)")
                 )
                 print_info(
