@@ -368,9 +368,10 @@ class AutoEvInputs:
     @param target_shadow {float} Target lower luminance guardrail in `(0.0, 1.0)`.
     @param target_highlight {float} Target upper luminance guardrail in `(0.0, 1.0)`.
     @param median_target {float} Preferred median-centered luminance target in `(0.0, 1.0)`.
+    @param ev_zero {float} Resolved EV-zero center used as adaptive solver anchor.
     @param ev_values {tuple[float, ...]} Supported EV selector values derived from source DNG bit depth.
     @return {None} Immutable scalar container.
-    @satisfies REQ-080, REQ-081, REQ-092, REQ-093
+    @satisfies REQ-080, REQ-081, REQ-092, REQ-093, REQ-095
     """
 
     p_low: float
@@ -379,6 +380,7 @@ class AutoEvInputs:
     target_shadow: float
     target_highlight: float
     median_target: float
+    ev_zero: float
     ev_values: tuple[float, ...]
 
 
@@ -441,17 +443,17 @@ def print_help(version):
 
     @details Documents required positional arguments, required mutually
     exclusive exposure selectors (`--ev` or `--auto-ev`), optional RAW gamma
-    controls, optional `--ev-zero` selector, shared postprocessing controls,
+    controls, optional `--ev-zero` and `--auto-zero` selectors, shared postprocessing controls,
     backend selection, and
     luminance-hdr-cli tone-mapping options.
     @param version {str} CLI version label to append in usage output.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094
+    @satisfies DES-008, REQ-056, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-075, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-097
     """
 
     print(
         f"Usage: {PROGRAM} dng2hdr2jpg <input.dng> <output.jpg> "
-        f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--ev-zero=<value>] [--gamma=<a,b>] [--post-gamma=<value>] "
+        f"(--ev=<value> | --auto-ev[=<1|true|yes|on>]) [--ev-zero=<value> | --auto-zero[=<1|true|yes|on>]] [--gamma=<a,b>] [--post-gamma=<value>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
         "[--auto-brightness[=<1|true|yes|on>]] "
         "[--ab-clip-limit=<value>] [--ab-tile-grid-size=<w,h>] "
@@ -482,6 +484,13 @@ def print_help(version):
     print(
         "  --ev-zero=<value> - Central EV for bracket export: -BASE_MAX .. +BASE_MAX in 0.25 steps"
         " (BASE_MAX = (bits_per_color-8)/2 from input DNG, default: 0)."
+    )
+    print(
+        "  --auto-zero      - Auto-resolve EV center from RAW median luminance"
+        " (mutually exclusive with --ev-zero)."
+    )
+    print(
+        "                     Optional value forms: --auto-zero=1, --auto-zero=true, --auto-zero yes."
     )
     print(
         f"  --gamma=<a,b>    - RAW extraction gamma pair (default: {DEFAULT_GAMMA[0]},{DEFAULT_GAMMA[1]})."
@@ -810,6 +819,24 @@ def _parse_auto_ev_option(auto_ev_raw):
     return None
 
 
+def _parse_auto_zero_option(auto_zero_raw):
+    """@brief Parse and validate one `--auto-zero` option value.
+
+    @details Accepts only boolean-like activator tokens (`1`, `true`, `yes`,
+    `on`) and rejects all other values to keep deterministic CLI behavior.
+    @param auto_zero_raw {str} Raw `--auto-zero` value token from CLI args.
+    @return {bool|None} `True` when token enables automatic EV-zero mode; `None` on parse failure.
+    @satisfies REQ-094
+    """
+
+    auto_zero_text = auto_zero_raw.strip().lower()
+    if auto_zero_text in ("1", "true", "yes", "on"):
+        return True
+    print_error(f"Invalid --auto-zero value: {auto_zero_raw}")
+    print_error("Allowed values: 1, true, yes, on")
+    return None
+
+
 def _parse_auto_brightness_option(auto_brightness_raw):
     """@brief Parse and validate one `--auto-brightness` option value.
 
@@ -864,59 +891,17 @@ def _quantize_ev_to_supported(ev_value, ev_values):
     return nearest_ev
 
 
-def _coerce_positive_luminance(value, fallback):
-    """@brief Coerce luminance scalar to positive range for logarithmic math.
+def _extract_normalized_preview_luminance_stats(raw_handle):
+    """@brief Extract normalized preview luminance percentiles from RAW handle.
 
-    @details Converts input to float and enforces a strictly positive minimum.
-    Returns fallback when conversion fails or result is non-positive.
-    @param value {object} Candidate luminance scalar.
-    @param fallback {float} Fallback positive luminance scalar.
-    @return {float} Positive luminance value suitable for `log2`.
-    @satisfies REQ-081
-    """
-
-    try:
-        numeric_value = float(value)
-    except (TypeError, ValueError):
-        return fallback
-    if numeric_value <= 0.0:
-        return fallback
-    return numeric_value
-
-
-def _optimize_adaptive_ev_delta(auto_ev_inputs):
-    """@brief Compute adaptive EV delta from preview luminance statistics.
-
-    @details Computes `ev_shadow=log2(target_shadow/p_low)` and
-    `ev_high=log2(p_high/target_highlight)`, applies median-centering tie-break
-    candidate `ev_median=abs(log2(median_target/p_median))`, clamps by
-    `[min(ev_values), max(ev_values)]`, and quantizes to nearest supported EV value.
-    @param auto_ev_inputs {AutoEvInputs} Adaptive EV scalar inputs.
-    @return {float} Quantized adaptive EV delta.
-    @satisfies REQ-080, REQ-081, REQ-093
-    """
-
-    ev_shadow = math.log2(auto_ev_inputs.target_shadow / auto_ev_inputs.p_low)
-    ev_high = math.log2(auto_ev_inputs.p_high / auto_ev_inputs.target_highlight)
-    ev_median = abs(math.log2(auto_ev_inputs.median_target / auto_ev_inputs.p_median))
-    ev_candidate = max(ev_shadow, ev_high, ev_median)
-    clamped_candidate = _clamp_ev_to_supported(ev_candidate, auto_ev_inputs.ev_values)
-    return _quantize_ev_to_supported(clamped_candidate, auto_ev_inputs.ev_values)
-
-
-def _compute_auto_ev_value(raw_handle, supported_ev_values=None):
-    """@brief Compute adaptive EV selector from RAW linear preview histogram.
-
-    @details Generates one linear RAW preview using camera white balance,
-    `no_auto_bright=True`, `gamma=(1.0, 1.0)`, and `user_flip=0`; computes
-    luminance map and percentiles (`0.1`, `50.0`, `99.9`); then derives adaptive
-    EV delta through constrained logarithmic optimization and quantization to
-    bit-depth-derived EV selector bounds.
+    @details Generates one deterministic linear preview (`bright=1.0`,
+    `output_bps=16`, camera white balance, no auto-bright, linear gamma,
+    `user_flip=0`), computes luminance for each pixel, then returns normalized
+    low/median/high percentiles by dividing with preview maximum luminance.
     @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
-    @param supported_ev_values {tuple[float, ...]|None} Optional bit-derived EV selector tuple.
-    @return {float} Adaptive EV selector value from bit-depth-derived selector set.
-    @exception ValueError Raised when preview luminance extraction cannot produce valid values.
-    @satisfies REQ-080, REQ-081, REQ-092, REQ-093, REQ-096
+    @return {tuple[float, float, float]} Normalized `(p_low, p_median, p_high)` in `(0,1)`.
+    @exception ValueError Raised when preview extraction cannot produce valid luminance values.
+    @satisfies REQ-080, REQ-081, REQ-092, REQ-093, REQ-097
     """
 
     linear_preview = raw_handle.postprocess(
@@ -963,9 +948,97 @@ def _compute_auto_ev_value(raw_handle, supported_ev_values=None):
     p_low = max(epsilon, min(1.0 - epsilon, p_low_raw / max_luminance))
     p_high = max(epsilon, min(1.0 - epsilon, p_high_raw / max_luminance))
     p_median = max(epsilon, min(1.0 - epsilon, p_median_raw / max_luminance))
-    if supported_ev_values is None:
-        bits_per_color = _detect_dng_bits_per_color(raw_handle)
-        supported_ev_values = _derive_supported_ev_values(bits_per_color)
+    return (p_low, p_median, p_high)
+
+
+def _coerce_positive_luminance(value, fallback):
+    """@brief Coerce luminance scalar to positive range for logarithmic math.
+
+    @details Converts input to float and enforces a strictly positive minimum.
+    Returns fallback when conversion fails or result is non-positive.
+    @param value {object} Candidate luminance scalar.
+    @param fallback {float} Fallback positive luminance scalar.
+    @return {float} Positive luminance value suitable for `log2`.
+    @satisfies REQ-081
+    """
+
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    if numeric_value <= 0.0:
+        return fallback
+    return numeric_value
+
+
+def _optimize_auto_zero(auto_ev_inputs):
+    """@brief Compute optimal EV-zero center from normalized median luminance.
+
+    @details Solves `ev_zero=log2(median_target/p_median)`, clamps result to
+    `[-BASE_MAX,+BASE_MAX]` where `BASE_MAX=max(ev_values)`, and quantizes to
+    nearest quarter-step represented by `ev_values` with sign preservation.
+    @param auto_ev_inputs {AutoEvInputs} Adaptive EV scalar inputs.
+    @return {float} Quantized EV-zero center.
+    @satisfies REQ-094, REQ-095, REQ-097
+    """
+
+    base_max = auto_ev_inputs.ev_values[-1]
+    ev_zero_candidate = math.log2(auto_ev_inputs.median_target / auto_ev_inputs.p_median)
+    ev_zero_clamped = max(-base_max, min(base_max, ev_zero_candidate))
+    if ev_zero_clamped >= 0.0:
+        return _quantize_ev_to_supported(ev_zero_clamped, auto_ev_inputs.ev_values)
+    return -_quantize_ev_to_supported(abs(ev_zero_clamped), auto_ev_inputs.ev_values)
+
+
+def _optimize_adaptive_ev_delta(auto_ev_inputs):
+    """@brief Compute adaptive EV delta from preview luminance statistics.
+
+    @details Computes symmetric delta constraints around resolved EV-zero:
+    `ev_shadow=max(0, log2(target_shadow/p_low)-ev_zero)` and
+    `ev_high=max(0, ev_zero-log2(target_highlight/p_high))`, chooses maximum as
+    safe symmetric bracket half-width, then clamps and quantizes to supported
+    EV selector set.
+    @param auto_ev_inputs {AutoEvInputs} Adaptive EV scalar inputs.
+    @return {float} Quantized adaptive EV delta.
+    @satisfies REQ-080, REQ-081, REQ-093, REQ-095
+    """
+
+    ev_shadow = max(
+        0.0,
+        math.log2(auto_ev_inputs.target_shadow / auto_ev_inputs.p_low)
+        - auto_ev_inputs.ev_zero,
+    )
+    ev_high = max(
+        0.0,
+        auto_ev_inputs.ev_zero
+        - math.log2(auto_ev_inputs.target_highlight / auto_ev_inputs.p_high),
+    )
+    ev_candidate = max(ev_shadow, ev_high)
+    if ev_candidate <= 0.0:
+        ev_candidate = EV_STEP
+    clamped_candidate = _clamp_ev_to_supported(ev_candidate, auto_ev_inputs.ev_values)
+    return _quantize_ev_to_supported(clamped_candidate, auto_ev_inputs.ev_values)
+
+
+def _compute_auto_ev_value_from_stats(
+    p_low,
+    p_median,
+    p_high,
+    supported_ev_values,
+    ev_zero=0.0,
+):
+    """@brief Compute adaptive EV selector from normalized preview luminance stats.
+
+    @details Builds adaptive-EV input container from already extracted normalized
+    percentiles and solves symmetric EV delta around resolved `ev_zero`.
+    @param p_low {float} Normalized low percentile luminance.
+    @param p_median {float} Normalized median percentile luminance.
+    @param p_high {float} Normalized high percentile luminance.
+    @param supported_ev_values {tuple[float, ...]} Bit-depth-derived supported EV selector tuple.
+    @param ev_zero {float} Resolved EV-zero center used as adaptive solver anchor.
+    @return {float} Adaptive EV selector value from bit-depth-derived selector set.
+    @satisfies REQ-080, REQ-081, REQ-093, REQ-095
+    """
 
     auto_ev_inputs = AutoEvInputs(
         p_low=p_low,
@@ -974,12 +1047,98 @@ def _compute_auto_ev_value(raw_handle, supported_ev_values=None):
         target_shadow=AUTO_EV_TARGET_SHADOW,
         target_highlight=AUTO_EV_TARGET_HIGHLIGHT,
         median_target=AUTO_EV_MEDIAN_TARGET,
+        ev_zero=ev_zero,
         ev_values=supported_ev_values,
     )
     return _optimize_adaptive_ev_delta(auto_ev_inputs)
 
 
-def _resolve_ev_value(raw_handle, ev_value, auto_ev_enabled, supported_ev_values=None):
+def _compute_auto_ev_value(raw_handle, supported_ev_values=None, ev_zero=0.0):
+    """@brief Compute adaptive EV selector from RAW linear preview histogram.
+
+    @details Extracts normalized luminance percentiles (`0.1`, `50.0`, `99.9`)
+    from one linear RAW preview and computes symmetric adaptive EV delta around
+    resolved `ev_zero`, then clamps and quantizes to bit-depth-derived selector
+    bounds.
+    @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
+    @param supported_ev_values {tuple[float, ...]|None} Optional bit-derived EV selector tuple.
+    @param ev_zero {float} Resolved EV-zero center used as adaptive solver anchor.
+    @return {float} Adaptive EV selector value from bit-depth-derived selector set.
+    @exception ValueError Raised when preview luminance extraction cannot produce valid values.
+    @satisfies REQ-080, REQ-081, REQ-092, REQ-093, REQ-095, REQ-096
+    """
+
+    p_low, p_median, p_high = _extract_normalized_preview_luminance_stats(raw_handle)
+    if supported_ev_values is None:
+        bits_per_color = _detect_dng_bits_per_color(raw_handle)
+        supported_ev_values = _derive_supported_ev_values(bits_per_color)
+    return _compute_auto_ev_value_from_stats(
+        p_low=p_low,
+        p_median=p_median,
+        p_high=p_high,
+        supported_ev_values=supported_ev_values,
+        ev_zero=ev_zero,
+    )
+
+
+def _resolve_ev_zero(
+    raw_handle,
+    ev_zero,
+    auto_zero_enabled,
+    base_max_ev,
+    supported_ev_values_for_auto_zero,
+    preview_luminance_stats=None,
+):
+    """@brief Resolve EV-zero center from manual or automatic selector.
+
+    @details Uses manual `--ev-zero` unless `--auto-zero` is enabled. In
+    automatic mode computes EV-zero from normalized median luminance and
+    quantizes to supported quarter-step values. Applies final base-range clamp.
+    @param raw_handle {Any} Opened RAW handle from `rawpy.imread`.
+    @param ev_zero {float} Parsed manual EV-zero candidate.
+    @param auto_zero_enabled {bool} Auto-zero selector state.
+    @param base_max_ev {float} Bit-derived `BASE_MAX` limit.
+    @param supported_ev_values_for_auto_zero {tuple[float, ...]} Supported positive EV values for quantization.
+    @param preview_luminance_stats {tuple[float, float, float]|None} Optional precomputed `(p_low, p_median, p_high)` tuple to avoid duplicate preview extraction.
+    @return {float} Resolved EV-zero center.
+    @exception ValueError Raised when resolved EV-zero is outside bit-derived base range.
+    @satisfies REQ-094, REQ-095, REQ-097
+    """
+
+    resolved_ev_zero = ev_zero
+    if auto_zero_enabled:
+        if preview_luminance_stats is None:
+            p_low, p_median, p_high = _extract_normalized_preview_luminance_stats(raw_handle)
+        else:
+            p_low, p_median, p_high = preview_luminance_stats
+        auto_zero_inputs = AutoEvInputs(
+            p_low=p_low,
+            p_median=p_median,
+            p_high=p_high,
+            target_shadow=AUTO_EV_TARGET_SHADOW,
+            target_highlight=AUTO_EV_TARGET_HIGHLIGHT,
+            median_target=AUTO_EV_MEDIAN_TARGET,
+            ev_zero=0.0,
+            ev_values=supported_ev_values_for_auto_zero,
+        )
+        resolved_ev_zero = _optimize_auto_zero(auto_zero_inputs)
+    if abs(resolved_ev_zero) > (base_max_ev + 1e-9):
+        raise ValueError(
+            "Unsupported --ev-zero value: "
+            f"{resolved_ev_zero:g}; allowed range for input DNG is "
+            f"{-base_max_ev:g}..{base_max_ev:g} in 0.25 steps"
+        )
+    return round(resolved_ev_zero, 2)
+
+
+def _resolve_ev_value(
+    raw_handle,
+    ev_value,
+    auto_ev_enabled,
+    supported_ev_values=None,
+    ev_zero=0.0,
+    preview_luminance_stats=None,
+):
     """@brief Resolve effective EV selector for static or adaptive mode.
 
     @details Returns explicit static `--ev` value when adaptive mode is not
@@ -989,9 +1148,11 @@ def _resolve_ev_value(raw_handle, ev_value, auto_ev_enabled, supported_ev_values
     @param ev_value {float|None} Parsed static EV option value.
     @param auto_ev_enabled {bool} Adaptive mode selector state.
     @param supported_ev_values {tuple[float, ...]|None} Optional bit-derived EV selector tuple.
+    @param ev_zero {float} Resolved EV-zero center used for adaptive EV solver anchoring.
+    @param preview_luminance_stats {tuple[float, float, float]|None} Optional precomputed `(p_low, p_median, p_high)` tuple to avoid duplicate preview extraction.
     @return {float} Effective EV selector value used for bracket multipliers.
     @exception ValueError Raised when no static EV is provided while adaptive mode is disabled.
-    @satisfies REQ-056, REQ-057, REQ-080, REQ-081, REQ-092, REQ-093, REQ-096
+    @satisfies REQ-056, REQ-057, REQ-080, REQ-081, REQ-092, REQ-093, REQ-095, REQ-096
     """
 
     effective_supported_values = supported_ev_values
@@ -999,8 +1160,19 @@ def _resolve_ev_value(raw_handle, ev_value, auto_ev_enabled, supported_ev_values
         bits_per_color = _detect_dng_bits_per_color(raw_handle)
         effective_supported_values = _derive_supported_ev_values(bits_per_color)
     if auto_ev_enabled:
+        if preview_luminance_stats is not None:
+            p_low, p_median, p_high = preview_luminance_stats
+            return _compute_auto_ev_value_from_stats(
+                p_low=p_low,
+                p_median=p_median,
+                p_high=p_high,
+                supported_ev_values=effective_supported_values,
+                ev_zero=ev_zero,
+            )
         return _compute_auto_ev_value(
-            raw_handle, supported_ev_values=effective_supported_values
+            raw_handle,
+            supported_ev_values=effective_supported_values,
+            ev_zero=ev_zero,
         )
     if ev_value is None:
         raise ValueError("Missing static EV value")
@@ -1507,7 +1679,8 @@ def _parse_run_options(args):
     @details Supports positional file arguments, required mutually exclusive
     exposure selectors (`--ev=<value>`/`--ev <value>` or
     `--auto-ev[=<1|true|yes|on>]`), optional `--ev-zero=<value>` or
-    `--ev-zero <value>`, optional `--gamma=<a,b>` or `--gamma <a,b>`,
+    `--ev-zero <value>`, optional `--auto-zero[=<1|true|yes|on>]`,
+    optional `--gamma=<a,b>` or `--gamma <a,b>`,
     optional postprocess controls, optional auto-brightness stage and knobs,
     optional shared auto-adjust knobs, required backend selector
     (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls
@@ -1515,14 +1688,16 @@ def _parse_run_options(args):
     implementation selector (`--auto-adjust <ImageMagick|OpenCV>`); rejects
     unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
-    @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, float]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options, ev_zero)` tuple; `None` on parse failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094
+    @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, float, bool]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options, ev_zero, auto_zero_enabled)` tuple; `None` on parse failure.
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-097
     """
 
     positional = []
     ev_value = None
     auto_ev_enabled = False
     ev_zero = 0.0
+    ev_zero_specified = False
+    auto_zero_enabled = False
     gamma_value = DEFAULT_GAMMA
     post_gamma = DEFAULT_POST_GAMMA
     brightness = DEFAULT_BRIGHTNESS
@@ -1810,6 +1985,26 @@ def _parse_run_options(args):
             idx += 1
             continue
 
+        if token == "--auto-zero":
+            if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
+                parsed_auto_zero = _parse_auto_zero_option(args[idx + 1])
+                if parsed_auto_zero is None:
+                    return None
+                auto_zero_enabled = parsed_auto_zero
+                idx += 2
+                continue
+            auto_zero_enabled = True
+            idx += 1
+            continue
+
+        if token.startswith("--auto-zero="):
+            parsed_auto_zero = _parse_auto_zero_option(token.split("=", 1)[1])
+            if parsed_auto_zero is None:
+                return None
+            auto_zero_enabled = parsed_auto_zero
+            idx += 1
+            continue
+
         if token == "--ev-zero":
             if idx + 1 >= len(args):
                 print_error("Missing value for --ev-zero")
@@ -1818,6 +2013,7 @@ def _parse_run_options(args):
             if parsed_ev_zero is None:
                 return None
             ev_zero = parsed_ev_zero
+            ev_zero_specified = True
             idx += 2
             continue
 
@@ -1826,6 +2022,7 @@ def _parse_run_options(args):
             if parsed_ev_zero is None:
                 return None
             ev_zero = parsed_ev_zero
+            ev_zero_specified = True
             idx += 1
             continue
 
@@ -1984,6 +2181,9 @@ def _parse_run_options(args):
     ):
         print_error("Exactly one exposure selector is required: --ev or --auto-ev")
         return None
+    if auto_zero_enabled and ev_zero_specified:
+        print_error("Exactly one EV-zero selector is allowed: --ev-zero or --auto-zero")
+        return None
 
     if enable_enfuse == enable_luminance:
         print_error(
@@ -2055,6 +2255,7 @@ def _parse_run_options(args):
             tmo_extra_args=tuple(luminance_tmo_extra_args),
         ),
         ev_zero,
+        auto_zero_enabled,
     )
 
 
@@ -2643,7 +2844,9 @@ def _run_luminance_hdr_cli(
 ):
     """@brief Merge bracket TIFF files into one HDR TIFF via `luminance-hdr-cli`.
 
-    @details Builds deterministic luminance-hdr-cli argv using EV sequence,
+    @details Builds deterministic luminance-hdr-cli argv using EV sequence
+    centered around zero-reference (`-ev_value,0,+ev_value`) even when extraction
+    uses non-zero `ev_zero`,
     HDR model controls, tone-mapper controls, mandatory `--ldrTiff 16b`,
     optional explicit `--tmo*` passthrough arguments, and ordered exposure
     inputs (`ev_minus`, `ev_zero`, `ev_plus`), then writes to TIFF output path
@@ -2662,7 +2865,7 @@ def _run_luminance_hdr_cli(
     command = [
         "luminance-hdr-cli",
         "-e",
-        f"{(ev_zero-ev_value):g},{ev_zero:g},{(ev_zero+ev_value):g}",
+        f"{-ev_value:g},0,{ev_value:g}",
         "--hdrModel",
         luminance_options.hdr_model,
         "--hdrWeight",
@@ -3435,8 +3638,8 @@ def _encode_jpg(
 
     @details Loads merged image payload, down-converts to `uint8` when source
     dynamic range exceeds JPEG-native depth, optionally executes auto-brightness
-    pre-stage, applies `ev_zero` compensation gain `2^(ev_zero)` when
-    `ev_zero != 0`, applies shared gamma/brightness/contrast/saturation
+    pre-stage, preserves resolved `ev_zero` as extraction/merge reference only
+    without additional brightness compensation at encode stage, then applies shared gamma/brightness/contrast/saturation
     postprocessing over resulting image, optionally executes auto-adjust stage
     over temporary lossless 16-bit TIFF intermediates, and writes JPEG with
     configured compression level for both HDR backends.
@@ -3451,7 +3654,7 @@ def _encode_jpg(
     @param piexif_module {ModuleType|None} Optional piexif module for EXIF thumbnail refresh.
     @param source_exif_payload {bytes|None} Serialized EXIF payload copied from input DNG.
     @param source_orientation {int} Source EXIF orientation value in range `1..8`.
-    @param ev_zero {float} Selected EV center used for merged-HDR luminance compensation.
+    @param ev_zero {float} Selected EV center used for extraction and merge reference.
     @return {None} Side effects only.
     @exception RuntimeError Raised when auto-adjust mode dependencies are missing or auto-adjust mode value is unsupported.
     @satisfies REQ-058, REQ-066, REQ-069, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-086, REQ-087, REQ-090
@@ -3496,10 +3699,6 @@ def _encode_jpg(
 
     if getattr(pil_image, "mode", "") == "RGBA":
         pil_image = pil_image.convert("RGB")
-
-    if abs(ev_zero) > 1e-9:
-        compensation_gain = 2.0 ** ev_zero
-        pil_image = pil_enhance_module.Brightness(pil_image).enhance(compensation_gain)
 
     if postprocess_options.post_gamma != 1.0:
         lut = [
@@ -3666,14 +3865,14 @@ def run(args):
     """@brief Execute `dng2hdr2jpg` command pipeline.
 
     @details Parses command options, validates dependencies, detects source DNG
-    bits-per-color from RAW metadata, resolves static or adaptive EV selector
-    with optional `ev_zero` center using bit-derived EV ceilings, extracts three RAW
-    brackets, executes selected
+    bits-per-color from RAW metadata, resolves manual or automatic EV-zero center,
+    resolves static or adaptive EV selector around resolved center using
+    bit-derived EV ceilings, extracts three RAW brackets, executes selected
     `enfuse` flow or selected luminance-hdr-cli flow, writes JPG output, and
     guarantees temporary artifact cleanup through isolated temporary directory lifecycle.
     @param args {list[str]} Command argument vector excluding command token.
     @return {int} `0` on success; `1` on parse/validation/dependency/processing failure.
-    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096
+    @satisfies REQ-055, REQ-056, REQ-057, REQ-058, REQ-059, REQ-060, REQ-061, REQ-062, REQ-064, REQ-065, REQ-066, REQ-067, REQ-068, REQ-069, REQ-071, REQ-072, REQ-073, REQ-074, REQ-075, REQ-077, REQ-078, REQ-079, REQ-080, REQ-081, REQ-088, REQ-089, REQ-090, REQ-091, REQ-092, REQ-093, REQ-094, REQ-095, REQ-096, REQ-097
     """
 
     if not _is_supported_runtime_os():
@@ -3693,6 +3892,7 @@ def run(args):
         enable_luminance,
         luminance_options,
         ev_zero,
+        auto_zero_enabled,
     ) = parsed
 
     if input_dng.suffix.lower() != ".dng":
@@ -3787,19 +3987,33 @@ def run(args):
             with rawpy_module.imread(str(input_dng)) as raw_handle:
                 bits_per_color = _detect_dng_bits_per_color(raw_handle)
                 base_max_ev = _calculate_max_ev_from_bits(bits_per_color)
-                if abs(ev_zero) > (base_max_ev + 1e-9):
-                    raise ValueError(
-                        "Unsupported --ev-zero value: "
-                        f"{ev_zero:g}; allowed range for input DNG is "
-                        f"{-base_max_ev:g}..{base_max_ev:g} in 0.25 steps"
+                preview_luminance_stats = None
+                if auto_zero_enabled or auto_ev_enabled:
+                    preview_luminance_stats = _extract_normalized_preview_luminance_stats(
+                        raw_handle
                     )
+                auto_zero_supported_values = _derive_supported_ev_values(
+                    bits_per_color, ev_zero=0.0
+                )
+                resolved_ev_zero = _resolve_ev_zero(
+                    raw_handle=raw_handle,
+                    ev_zero=ev_zero,
+                    auto_zero_enabled=auto_zero_enabled,
+                    base_max_ev=base_max_ev,
+                    supported_ev_values_for_auto_zero=auto_zero_supported_values,
+                    preview_luminance_stats=preview_luminance_stats,
+                )
                 supported_ev_values = _derive_supported_ev_values(
-                    bits_per_color, ev_zero=ev_zero
+                    bits_per_color, ev_zero=resolved_ev_zero
                 )
                 max_bracket = supported_ev_values[-1]
                 print_info(f"Detected DNG bits per color: {bits_per_color}")
-                print_info(f"Using EV center (ev_zero): {ev_zero:g}")
-                if auto_ev_enabled:
+                if auto_zero_enabled:
+                    print_info("Using EV center mode: auto-zero")
+                else:
+                    print_info("Using EV center mode: manual")
+                print_info(f"Using EV center (ev_zero): {resolved_ev_zero:g}")
+                if auto_ev_enabled or auto_zero_enabled:
                     print_info(
                         "Bit-derived EV ceilings: "
                         f"BASE_MAX={base_max_ev:g} (formula: (bits_per_color-8)/2), "
@@ -3811,6 +4025,8 @@ def run(args):
                     ev_value=ev_value,
                     auto_ev_enabled=auto_ev_enabled,
                     supported_ev_values=supported_ev_values,
+                    ev_zero=resolved_ev_zero,
+                    preview_luminance_stats=preview_luminance_stats,
                 )
                 print_info(
                     f"Using EV bracket delta: {effective_ev_value}"
@@ -3818,10 +4034,10 @@ def run(args):
                 )
                 print_info(
                     "Export EV triplet: "
-                    f"{(ev_zero-effective_ev_value):g}, {ev_zero:g}, {(ev_zero+effective_ev_value):g}"
+                    f"{(resolved_ev_zero-effective_ev_value):g}, {resolved_ev_zero:g}, {(resolved_ev_zero+effective_ev_value):g}"
                 )
                 multipliers = _build_exposure_multipliers(
-                    effective_ev_value, ev_zero=ev_zero
+                    effective_ev_value, ev_zero=resolved_ev_zero
                 )
                 bracket_paths = _write_bracket_images(
                     raw_handle=raw_handle,
@@ -3835,7 +4051,7 @@ def run(args):
                     bracket_paths=bracket_paths,
                     output_hdr_tiff=merged_tiff,
                     ev_value=effective_ev_value,
-                    ev_zero=ev_zero,
+                    ev_zero=resolved_ev_zero,
                     luminance_options=luminance_options,
                 )
             else:
@@ -3852,7 +4068,7 @@ def run(args):
                 piexif_module=piexif_module,
                 source_exif_payload=source_exif_payload,
                 source_orientation=source_orientation,
-                ev_zero=ev_zero,
+                ev_zero=resolved_ev_zero,
             )
             _sync_output_file_timestamps_from_exif(
                 output_jpg=output_jpg,

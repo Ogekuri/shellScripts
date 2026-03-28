@@ -580,7 +580,16 @@ def test_dng2hdr2jpg_runs_auto_ev_pipeline(monkeypatch, tmp_path):
         "infos": [],
     }
     monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
-    monkeypatch.setattr(dng2hdr2jpg, "_compute_auto_ev_value", lambda _raw_handle, supported_ev_values=None: 1.5)
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_extract_normalized_preview_luminance_stats",
+        lambda _raw_handle: (0.05, 0.5, 0.95),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_compute_auto_ev_value_from_stats",
+        lambda p_low, p_median, p_high, supported_ev_values, ev_zero=0.0: 1.5,
+    )
     monkeypatch.setattr(dng2hdr2jpg, "print_info", lambda message: observed["infos"].append(message))
 
     class _FakeRawPyModule:
@@ -1399,7 +1408,8 @@ def test_dng2hdr2jpg_uses_ev_zero_to_center_static_bracketing(monkeypatch, tmp_p
     """
     @brief Validate `--ev-zero` recenters static bracketing triplet.
     @details Runs static mode with `--ev=2` and `--ev-zero=-1`, verifies
-      extracted brightness multipliers and luminance EV list match `-3,-1,1`,
+      extracted brightness multipliers match center `-1` and luminance EV list
+      is centered at `0` with the same delta (`-2,0,2`),
       and verifies shared JPG-encode stage receives `ev_zero=-1`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
@@ -1496,8 +1506,122 @@ def test_dng2hdr2jpg_uses_ev_zero_to_center_static_bracketing(monkeypatch, tmp_p
 
     assert result == 0
     assert observed["brights"] == pytest.approx([2**-3, 2**-1, 2**1])
-    assert observed["luminance_cmd"][2] == "-3,-1,1"
+    assert observed["luminance_cmd"][2] == "-2,0,2"
     assert observed["encode_ev_zero"] == pytest.approx(-1.0)
+
+
+def test_dng2hdr2jpg_auto_zero_resolves_center_and_recenters_luminance_merge(
+    monkeypatch, tmp_path
+):
+    """
+    @brief Validate `--auto-zero` resolves EV center and keeps merge EV list centered on zero.
+    @details Runs static mode with `--ev=2` and `--auto-zero`, stubs preview stats
+      to resolve `ev_zero=-1`, verifies extraction multipliers are centered on
+      `-1` while luminance merge EV list is `-2,0,2`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094, REQ-095, REQ-097
+    """
+
+    observed = {
+        "brights": [],
+        "output_bps": [],
+        "use_camera_wb": [],
+        "no_auto_bright": [],
+        "gamma": [],
+        "luminance_cmd": None,
+        "infos": [],
+    }
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(
+        dng2hdr2jpg, "print_info", lambda message: observed["infos"].append(message)
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_extract_normalized_preview_luminance_stats",
+        lambda _raw_handle: (0.01, 1.0, 0.99),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_optimize_auto_zero",
+        lambda _auto_ev_inputs: -1.0,
+    )
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module for auto-zero center resolution test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            return _FakeRawHandle(observed)
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for auto-zero center resolution test."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    def _fake_subprocess_run(command, check):
+        assert check is True
+        observed["luminance_cmd"] = command
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("magick", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        output_index = command.index("-o") + 1
+        Path(command[output_index]).write_text("jpg", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
+    )
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_encode_jpg",
+        lambda **kwargs: (
+            observed.__setitem__("encode_ev_zero", kwargs["ev_zero"]),
+            Path(kwargs["output_jpg"]).write_text("jpg", encoding="utf-8"),
+        )[-1],
+    )
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [
+            str(input_dng),
+            str(output_jpg),
+            "--enable-luminance",
+            "--ev=2",
+            "--auto-zero",
+        ]
+    )
+
+    assert result == 0
+    assert observed["brights"] == pytest.approx([2**-3, 2**-1, 2**1])
+    assert observed["luminance_cmd"][2] == "-2,0,2"
+    assert observed["encode_ev_zero"] == pytest.approx(-1.0)
+    assert "Using EV center mode: auto-zero" in observed["infos"]
 
 
 def test_write_bracket_images_disables_raw_orientation_auto_flip(tmp_path):
@@ -2404,6 +2528,7 @@ def test_dng2hdr2jpg_parse_run_options_defaults_ev_zero_to_zero():
     )
     assert parsed is not None
     assert parsed[8] == pytest.approx(0.0)
+    assert parsed[9] is False
 
 
 def test_dng2hdr2jpg_parse_run_options_accepts_ev_zero_split_and_assignment_forms():
@@ -2426,6 +2551,7 @@ def test_dng2hdr2jpg_parse_run_options_accepts_ev_zero_split_and_assignment_form
     )
     assert parsed_split is not None
     assert parsed_split[8] == pytest.approx(-0.75)
+    assert parsed_split[9] is False
 
     parsed_assignment = dng2hdr2jpg._parse_run_options(
         [
@@ -2438,6 +2564,69 @@ def test_dng2hdr2jpg_parse_run_options_accepts_ev_zero_split_and_assignment_form
     )
     assert parsed_assignment is not None
     assert parsed_assignment[8] == pytest.approx(1.25)
+    assert parsed_assignment[9] is False
+
+
+def test_dng2hdr2jpg_parse_run_options_accepts_auto_zero_split_and_assignment_forms():
+    """
+    @brief Validate parser accepts `--auto-zero` split and assignment forms.
+    @details Parses both forms and verifies tuple field stores deterministic
+      `auto_zero_enabled=True`.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094, REQ-097
+    """
+
+    parsed_split = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--ev=1",
+            "--auto-zero",
+            "--enable-enfuse",
+        ]
+    )
+    assert parsed_split is not None
+    assert parsed_split[9] is True
+
+    parsed_assignment = dng2hdr2jpg._parse_run_options(
+        [
+            "input.dng",
+            "output.jpg",
+            "--auto-ev",
+            "--auto-zero=true",
+            "--enable-enfuse",
+        ]
+    )
+    assert parsed_assignment is not None
+    assert parsed_assignment[9] is True
+
+
+def test_dng2hdr2jpg_rejects_mixed_ev_zero_and_auto_zero(tmp_path):
+    """
+    @brief Validate parser rejects simultaneous manual and auto EV-zero selectors.
+    @details Provides both `--ev-zero` and `--auto-zero` with valid remaining
+      arguments and expects deterministic parse failure.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-094
+    """
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "result.jpg"
+    assert (
+        dng2hdr2jpg.run(
+            [
+                str(input_dng),
+                str(output_jpg),
+                "--ev=1",
+                "--ev-zero=-0.5",
+                "--auto-zero",
+                "--enable-enfuse",
+            ]
+        )
+        == 1
+    )
 
 
 def test_dng2hdr2jpg_rejects_invalid_ev_zero_value(tmp_path):
@@ -4415,7 +4604,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
       simplified luminance selectors, and postprocess selectors.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-093, REQ-094
+    @satisfies TST-011, REQ-063, REQ-069, REQ-070, REQ-071, REQ-072, REQ-073, REQ-082, REQ-083, REQ-084, REQ-088, REQ-089, REQ-093, REQ-094, REQ-097
     """
 
     dng2hdr2jpg.print_help("0.0.0")
@@ -4429,6 +4618,7 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--enable-enfuse" in output
     assert "--auto-ev" in output
     assert "--ev-zero=<value>" in output
+    assert "--auto-zero" in output
     assert "Fixed exposure bracket EV: 0.25 .. MAX_BRACKET in 0.25 steps" in output
     assert "MAX_BRACKET = ((bits_per_color-8)/2)-abs(ev_zero) from input DNG" in output
     assert "--gamma=<a,b>" in output
@@ -4580,12 +4770,12 @@ def test_dng2hdr2jpg_applies_postprocess_controls_and_quality_mapping(
     assert output_jpg.exists()
 
 
-def test_dng2hdr2jpg_applies_ev_zero_compensation_before_static_postprocess(tmp_path):
+def test_dng2hdr2jpg_keeps_static_postprocess_independent_from_ev_zero(tmp_path):
     """
-    @brief Validate merged-HDR `ev_zero` compensation precedes static postprocess factors.
-    @details Executes `_encode_jpg` with `ev_zero=-1` and non-default static factors,
-      then verifies compensation gain `2^(ev_zero)=0.5` is applied first through
-      brightness enhancer before static brightness/contrast/saturation factors.
+    @brief Validate static postprocess factors are not modified by `ev_zero`.
+    @details Executes `_encode_jpg` with `ev_zero=-1` and non-default static
+      factors, then verifies only configured static brightness/contrast/
+      saturation factors are applied.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-066, REQ-095
@@ -4594,7 +4784,7 @@ def test_dng2hdr2jpg_applies_ev_zero_compensation_before_static_postprocess(tmp_
     observed = {"postprocess_ops": [], "jpg_save": None}
 
     class _FakeImageIoModule:
-        """@brief Provide fake `imageio` module for ev-zero compensation assertions."""
+        """@brief Provide fake `imageio` module for ev-zero postprocess assertions."""
 
         @staticmethod
         def imread(path):
@@ -4625,7 +4815,6 @@ def test_dng2hdr2jpg_applies_ev_zero_compensation_before_static_postprocess(tmp_
     )
 
     assert observed["postprocess_ops"] == [
-        ("brightness", 0.5),
         ("brightness", 1.2),
         ("contrast", 0.9),
         ("saturation", 1.1),
