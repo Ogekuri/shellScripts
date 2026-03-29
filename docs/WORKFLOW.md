@@ -185,7 +185,7 @@
 - `dng2hdr2jpg._parse_float_in_range_option(...)`: Validate inclusive floating-point range constraints used by shared `--aa-*` option parsing [`src/shell_scripts/commands/dng2hdr2jpg.py`]
 - `dng2hdr2jpg._parse_auto_brightness_options(...)`: Validate and materialize auto-brightness knob values, including default injection and per-knob range constraints [`src/shell_scripts/commands/dng2hdr2jpg.py`]
 - `dng2hdr2jpg._parse_auto_adjust_mode_option(...)`: Validate auto-adjust implementation selector value and normalize to canonical dispatch mode (`ImageMagick` or `OpenCV`) [`src/shell_scripts/commands/dng2hdr2jpg.py`]
-- `dng2hdr2jpg._parse_auto_adjust_options(...)`: Validate and materialize shared auto-adjust knob values, including default injection, range constraints, and `low < high` level ordering [`src/shell_scripts/commands/dng2hdr2jpg.py`]
+- `dng2hdr2jpg._parse_auto_adjust_options(...)`: Validate and materialize shared auto-adjust knob values, including default injection (`0.9`, `5.0`, `0.1`, `99.9`, `1.8`, `0.5`, `0.8`, `2.0`), range constraints, and `low < high` level ordering [`src/shell_scripts/commands/dng2hdr2jpg.py`]
 - `dng2hdr2jpg._resolve_default_postprocess(...)`: Resolve backend- and TMO-dependent postprocess default factors before final option materialization [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._parse_luminance_text_option(...)`: Validate luminance text option values (`hdr-model`, `hdr-weight`, `hdr-response-curve`, `tmo`) [`src/shell_scripts/commands/dng2hdr2jpg.py`]
           - `dng2hdr2jpg._parse_tmo_passthrough_value(...)`: Validate explicit `--tmo*` passthrough option values before forwarding to luminance backend [`src/shell_scripts/commands/dng2hdr2jpg.py`]
