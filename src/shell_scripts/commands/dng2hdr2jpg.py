@@ -3180,11 +3180,58 @@ def _to_uint8_image_array(np_module, image_data):
         maximum_value = float(np_module.max(numeric_data)) if numeric_data.size else 0.0
         if minimum_value >= 0.0 and maximum_value <= 1.0:
             numeric_data = numeric_data * 255.0
+        elif minimum_value >= 0.0 and maximum_value <= 65535.0 and maximum_value > 255.0:
+            numeric_data = numeric_data / 257.0
         return np_module.clip(np_module.round(numeric_data), 0, 255).astype(
             np_module.uint8
         )
     if hasattr(image_data, "astype"):
         return image_data.astype("uint8")
+    return image_data
+
+
+def _to_uint16_image_array(np_module, image_data):
+    """@brief Convert image tensor to `uint16` range `[0,65535]`.
+
+    @details Normalizes integer or float image payloads into `uint16` preserving
+    relative brightness scale: `uint8` uses `*257`, normalized float arrays in
+    `[0,1]` use `*65535`, and all paths clamp to inclusive 16-bit range.
+    @param np_module {ModuleType} Imported numpy module.
+    @param image_data {object} Numeric image tensor.
+    @return {object} `uint16` image tensor.
+    @satisfies REQ-066, REQ-090
+    """
+
+    dtype_name = str(getattr(image_data, "dtype", ""))
+    if dtype_name == "uint16":
+        return image_data
+    if dtype_name == "uint8":
+        if all(
+            hasattr(np_module, attr) for attr in ("clip", "round", "uint16")
+        ) and hasattr(image_data, "shape"):
+            return np_module.clip(np_module.round(image_data * 257.0), 0, 65535).astype(
+                np_module.uint16
+            )
+        scaled_data = image_data * 257.0
+        if hasattr(scaled_data, "clip"):
+            scaled_data = scaled_data.clip(0, 65535)
+        if hasattr(scaled_data, "astype"):
+            return scaled_data.astype("uint16")
+        return scaled_data
+    if all(
+        hasattr(np_module, attr)
+        for attr in ("array", "float64", "min", "max", "clip", "round", "uint16")
+    ):
+        numeric_data = np_module.array(image_data, dtype=np_module.float64)
+        minimum_value = float(np_module.min(numeric_data)) if numeric_data.size else 0.0
+        maximum_value = float(np_module.max(numeric_data)) if numeric_data.size else 0.0
+        if minimum_value >= 0.0 and maximum_value <= 1.0:
+            numeric_data = numeric_data * 65535.0
+        return np_module.clip(np_module.round(numeric_data), 0, 65535).astype(
+            np_module.uint16
+        )
+    if hasattr(image_data, "astype"):
+        return image_data.astype("uint16")
     return image_data
 
 
@@ -3194,19 +3241,31 @@ def _clip_histogram_autolevel_channel(
     """@brief Clip histogram tails and rescale one luminance channel.
 
     @details Removes low/high histogram outliers by clipping a symmetric percent
-    from cumulative histogram, then applies linear rescale to `[0,255]`.
+    from cumulative histogram, then applies linear rescale to native channel
+    range (`[0,255]` or `[0,65535]`) using clamp-only mapping.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
-    @param channel {object} Single-channel uint8 image tensor.
+    @param channel {object} Single-channel uint8/uint16 image tensor.
     @param clip_hist_percent {float} Total histogram clipping percent (`>= 0`).
-    @return {object} Rescaled uint8 channel tensor.
-    @exception ValueError Raised when channel dtype is not `uint8`.
+    @return {object} Rescaled channel tensor preserving input dtype.
+    @exception ValueError Raised when channel dtype is not `uint8`/`uint16`.
     @satisfies REQ-090
     """
 
-    if str(getattr(channel, "dtype", "")) != "uint8":
-        raise ValueError("Auto-brightness channel must be uint8")
-    histogram = cv2_module.calcHist([channel], [0], None, [256], [0, 256]).ravel()
+    dtype_name = str(getattr(channel, "dtype", ""))
+    if dtype_name == "uint8":
+        histogram_bins = 256
+        histogram_range = [0, 256]
+        channel_max = 255.0
+    elif dtype_name == "uint16":
+        histogram_bins = 65536
+        histogram_range = [0, 65536]
+        channel_max = 65535.0
+    else:
+        raise ValueError("Auto-brightness channel must be uint8 or uint16")
+    histogram = cv2_module.calcHist(
+        [channel], [0], None, [histogram_bins], histogram_range
+    ).ravel()
     cumulative = histogram.cumsum()
     maximum = float(cumulative[-1]) if cumulative.size else 0.0
     if maximum <= 0.0:
@@ -3216,9 +3275,12 @@ def _clip_histogram_autolevel_channel(
     maximum_gray = int(np_module.searchsorted(cumulative, maximum - clip_amount))
     if maximum_gray <= minimum_gray:
         return channel.copy()
-    alpha = 255.0 / float(maximum_gray - minimum_gray)
+    alpha = channel_max / float(maximum_gray - minimum_gray)
     beta = -float(minimum_gray) * alpha
-    return cv2_module.convertScaleAbs(channel, alpha=alpha, beta=beta)
+    shifted = channel.astype(np_module.float64) * alpha + beta
+    return np_module.clip(np_module.round(shifted), 0.0, channel_max).astype(
+        channel.dtype
+    )
 
 
 def _apply_mean_gamma_correction_channel(
@@ -3227,26 +3289,34 @@ def _apply_mean_gamma_correction_channel(
     """@brief Apply LUT gamma correction from current and target means.
 
     @details Computes gamma with `log(target)/log(current)`, clamps gamma to
-    `[0.5,2.0]`, generates one 256-entry LUT, and applies vectorized channel
-    transform through OpenCV `LUT`.
+    `[0.5,2.0]`, and applies vectorized power mapping over native channel range
+    (`[0,255]` or `[0,65535]`) while preserving dtype.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
-    @param channel {object} Single-channel uint8 image tensor.
+    @param channel {object} Single-channel uint8/uint16 image tensor.
     @param current_mean {float} Current normalized mean in `(0,1)`.
     @param target_mean {float} Target normalized mean in `(0,1)`.
-    @return {object} Gamma-corrected uint8 channel tensor.
+    @return {object} Gamma-corrected channel tensor preserving input dtype.
     @satisfies REQ-090
     """
 
+    dtype_name = str(getattr(channel, "dtype", ""))
+    if dtype_name == "uint8":
+        channel_max = 255.0
+    elif dtype_name == "uint16":
+        channel_max = 65535.0
+    else:
+        raise ValueError("Auto-brightness gamma channel must be uint8 or uint16")
     if current_mean <= 0.01 or current_mean >= 0.99:
         return channel
     gamma = float(np_module.log(target_mean) / np_module.log(current_mean))
     gamma = float(np_module.clip(gamma, 0.5, 2.0))
     inv_gamma = 1.0 / gamma
-    table = np_module.array(
-        [((value / 255.0) ** inv_gamma) * 255.0 for value in range(256)]
-    ).astype(np_module.uint8)
-    return cv2_module.LUT(channel, table)
+    normalized = channel.astype(np_module.float64) / channel_max
+    corrected = (np_module.clip(normalized, 0.0, 1.0) ** inv_gamma) * channel_max
+    return np_module.clip(np_module.round(corrected), 0.0, channel_max).astype(
+        channel.dtype
+    )
 
 
 def _derive_scene_key_preserving_auto_brightness_target(
@@ -3274,33 +3344,39 @@ def _derive_scene_key_preserving_auto_brightness_target(
 def _apply_auto_brightness_rgb_uint8(
     cv2_module, np_module, image_rgb_uint8, auto_brightness_options
 ):
-    """@brief Apply auto-brightness algorithm on RGB uint8 tensor.
+    """@brief Apply auto-brightness algorithm on RGB uint16 tensor.
 
-    @details Executes luminance-channel pipeline `histogram-clip autolevel ->
-    CLAHE -> conditional gamma(mean,target,tolerance)` using scene-key-preserving
-    low/mid/high target derivation, then recomposes RGB payload from corrected
-    luminance and original chroma channels.
+    @details Executes luminance-only pipeline `histogram-clip autolevel -> CLAHE
+    -> conditional gamma(mean,target,tolerance)` on 16-bit luminance derived from
+    RGB, then applies per-pixel gain `g=L'/L` equally to R,G,B with anti-clipping
+    cap to preserve chromatic ratios for non-clipped pixels.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
-    @param image_rgb_uint8 {object} RGB uint8 image tensor.
+    @param image_rgb_uint8 {object} RGB uint16 image tensor.
     @param auto_brightness_options {AutoBrightnessOptions} Parsed auto-brightness knobs.
-    @return {object} RGB uint8 image tensor corrected by auto-brightness pipeline.
-    @exception ValueError Raised when input tensor is not uint8.
+    @return {object} RGB float tensor in `[0,65535]` corrected by auto-brightness pipeline.
+    @exception ValueError Raised when input tensor is not uint16.
     @satisfies REQ-066, REQ-090, REQ-099
     """
 
-    if str(getattr(image_rgb_uint8, "dtype", "")) != "uint8":
-        raise ValueError("Auto-brightness input image must be uint8")
+    if str(getattr(image_rgb_uint8, "dtype", "")) != "uint16":
+        raise ValueError("Auto-brightness input image must be uint16")
     if len(image_rgb_uint8.shape) == 2:
         luminance_channel = image_rgb_uint8
-        chroma_channels = None
+        original_luminance = luminance_channel
+        rgb_image = None
     elif len(image_rgb_uint8.shape) == 3 and image_rgb_uint8.shape[2] == 1:
         luminance_channel = image_rgb_uint8[:, :, 0]
-        chroma_channels = None
+        original_luminance = luminance_channel
+        rgb_image = None
     else:
-        lab_image = cv2_module.cvtColor(image_rgb_uint8, cv2_module.COLOR_RGB2LAB)
-        luminance_channel, chroma_a, chroma_b = cv2_module.split(lab_image)
-        chroma_channels = (chroma_a, chroma_b)
+        rgb_image = image_rgb_uint8.astype(np_module.float64)
+        original_luminance = np_module.round(
+            0.2126 * rgb_image[..., 0]
+            + 0.7152 * rgb_image[..., 1]
+            + 0.0722 * rgb_image[..., 2]
+        ).astype(np_module.uint16)
+        luminance_channel = original_luminance
 
     if auto_brightness_options.initial_clip_hist_percent > 0.0:
         luminance_channel = _clip_histogram_autolevel_channel(
@@ -3317,7 +3393,7 @@ def _apply_auto_brightness_rgb_uint8(
         ),
     )
     luminance_channel = clahe.apply(luminance_channel)
-    current_mean = float(np_module.mean(luminance_channel)) / 255.0
+    current_mean = float(np_module.mean(luminance_channel)) / 65535.0
     scene_key_target = _derive_scene_key_preserving_auto_brightness_target(
         current_mean=current_mean,
         mid_key_target=auto_brightness_options.target_mean,
@@ -3333,12 +3409,17 @@ def _apply_auto_brightness_rgb_uint8(
             current_mean=current_mean,
             target_mean=scene_key_target,
         )
-    if chroma_channels is None:
+    if rgb_image is None:
         if len(image_rgb_uint8.shape) == 2:
             return luminance_channel
         return luminance_channel[:, :, None]
-    corrected_lab = cv2_module.merge((luminance_channel, *chroma_channels))
-    return cv2_module.cvtColor(corrected_lab, cv2_module.COLOR_LAB2RGB)
+    source_luminance = np_module.maximum(original_luminance.astype(np_module.float64), 1.0)
+    gain = luminance_channel.astype(np_module.float64) / source_luminance
+    peak_channel = np_module.maximum(np_module.max(rgb_image, axis=2), 1.0)
+    anti_clip_cap = 65535.0 / peak_channel
+    gain = np_module.minimum(gain, anti_clip_cap)
+    corrected_rgb = rgb_image * gain[..., None]
+    return np_module.clip(corrected_rgb, 0.0, 65535.0)
 
 
 def _apply_validated_auto_adjust_pipeline(
@@ -3866,8 +3947,9 @@ def _encode_jpg(
 ):
     """@brief Encode merged HDR TIFF payload into final JPG output.
 
-    @details Loads merged image payload, down-converts to `uint8` when source
-    dynamic range exceeds JPEG-native depth, optionally executes auto-brightness
+    @details Loads merged image payload, keeps 16-bit depth when source
+    dynamic range exceeds JPEG-native depth if auto-brightness is enabled,
+    optionally executes auto-brightness
     pre-stage, preserves resolved `ev_zero` as extraction/merge reference only
     without additional brightness compensation at encode stage, then applies shared gamma/brightness/contrast/saturation
     postprocessing over resulting image, optionally executes auto-adjust stage
@@ -3898,19 +3980,45 @@ def _encode_jpg(
         if auto_adjust_opencv_dependencies is None:
             raise RuntimeError("Missing required dependencies: opencv-python and numpy")
         cv2_module, np_module = auto_adjust_opencv_dependencies
-        merged_data = _to_uint8_image_array(np_module=np_module, image_data=merged_data)
         if postprocess_options.auto_brightness_enabled:
-            if len(merged_data.shape) == 2:
-                merged_data = merged_data[:, :, None]
-            if len(merged_data.shape) == 3 and merged_data.shape[2] == 4:
-                merged_data = merged_data[:, :, :3]
-            if len(merged_data.shape) == 3 and merged_data.shape[2] == 3:
-                merged_data = _apply_auto_brightness_rgb_uint8(
+            merged_data_for_ab = _to_uint16_image_array(
+                np_module=np_module, image_data=merged_data
+            )
+            if len(merged_data_for_ab.shape) == 2:
+                merged_data_for_ab = merged_data_for_ab[:, :, None]
+            if (
+                len(merged_data_for_ab.shape) == 3
+                and merged_data_for_ab.shape[2] == 4
+            ):
+                merged_data_for_ab = merged_data_for_ab[:, :, :3]
+            if (
+                len(merged_data_for_ab.shape) == 3
+                and merged_data_for_ab.shape[2] == 3
+            ):
+                merged_data_for_ab = _apply_auto_brightness_rgb_uint8(
                     cv2_module=cv2_module,
                     np_module=np_module,
-                    image_rgb_uint8=merged_data,
+                    image_rgb_uint8=merged_data_for_ab,
                     auto_brightness_options=postprocess_options.auto_brightness_options,
                 )
+            if hasattr(merged_data_for_ab, "save") and hasattr(
+                merged_data_for_ab, "convert"
+            ):
+                merged_data = merged_data_for_ab
+            elif not (
+                hasattr(merged_data_for_ab, "shape")
+                or hasattr(merged_data_for_ab, "dtype")
+                or hasattr(merged_data_for_ab, "astype")
+            ):
+                merged_data = merged_data_for_ab
+            else:
+                merged_data = _to_uint8_image_array(
+                    np_module=np_module, image_data=merged_data_for_ab
+                )
+        elif postprocess_options.auto_adjust_mode == "OpenCV":
+            merged_data = _to_uint8_image_array(
+                np_module=np_module, image_data=merged_data
+            )
     else:
         dtype_name = str(getattr(merged_data, "dtype", ""))
         if dtype_name and dtype_name != "uint8":

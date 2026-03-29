@@ -5393,7 +5393,7 @@ def test_dng2hdr2jpg_applies_auto_brightness_before_static_postprocess(monkeypat
     assert observed["auto_brightness"] is not None
     assert observed["auto_brightness"]["cv2"] is fake_cv2_module
     assert observed["auto_brightness"]["np"] is fake_numpy_module
-    assert observed["auto_brightness"]["dtype"] == "uint8"
+    assert observed["auto_brightness"]["dtype"] == "uint16"
     assert observed["auto_brightness"]["options"] == dng2hdr2jpg.AutoBrightnessOptions(
         clip_limit=2.6,
         tile_grid_width=9,
@@ -5465,35 +5465,10 @@ def test_dng2hdr2jpg_auto_brightness_uses_scene_key_preserving_target(monkeypatc
             """@brief Return fixed low-key channel."""
 
             del channel
-            return numpy_module.full((2, 2), 26, dtype=numpy_module.uint8)
+            return numpy_module.full((2, 2), 2600, dtype=numpy_module.uint16)
 
     class _FakeCv2Module:
         """@brief Provide minimal cv2 surface for auto-brightness target test."""
-
-        COLOR_RGB2LAB = 0
-        COLOR_LAB2RGB = 1
-
-        @staticmethod
-        def cvtColor(image, code):
-            """@brief Convert between fake RGB and fake LAB."""
-
-            if code == _FakeCv2Module.COLOR_RGB2LAB:
-                return image
-            if code == _FakeCv2Module.COLOR_LAB2RGB:
-                return image
-            raise ValueError("Unexpected color conversion code")
-
-        @staticmethod
-        def split(image):
-            """@brief Split fake LAB image channels."""
-
-            return image[:, :, 0], image[:, :, 1], image[:, :, 2]
-
-        @staticmethod
-        def merge(channels):
-            """@brief Merge fake LAB channels."""
-
-            return numpy_module.stack(channels, axis=2)
 
         @staticmethod
         def createCLAHE(clipLimit, tileGridSize):
@@ -5517,7 +5492,7 @@ def test_dng2hdr2jpg_auto_brightness_uses_scene_key_preserving_target(monkeypatc
 
         del cv2_module, np_module, channel, current_mean
         observed["target_mean"] = target_mean
-        return numpy_module.full((2, 2), 30, dtype=numpy_module.uint8)
+        return numpy_module.full((2, 2), 3000, dtype=numpy_module.uint16)
 
     monkeypatch.setattr(
         dng2hdr2jpg,
@@ -5530,7 +5505,7 @@ def test_dng2hdr2jpg_auto_brightness_uses_scene_key_preserving_target(monkeypatc
         _fake_apply_mean_gamma_correction_channel,
     )
 
-    input_image = numpy_module.full((2, 2, 3), 26, dtype=numpy_module.uint8)
+    input_image = numpy_module.full((2, 2, 3), 2600, dtype=numpy_module.uint16)
     output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
         cv2_module=_FakeCv2Module,
         np_module=numpy_module,
@@ -5549,6 +5524,95 @@ def test_dng2hdr2jpg_auto_brightness_uses_scene_key_preserving_target(monkeypatc
         dng2hdr2jpg.AUTO_BRIGHTNESS_TARGET_LOW_KEY
     )
     assert output_image.shape == input_image.shape
+
+
+def test_dng2hdr2jpg_auto_brightness_preserves_rgb_ratios_for_non_clipped_pixels(
+    monkeypatch,
+):
+    """
+    @brief Validate auto-brightness preserves chroma via equal per-pixel RGB gain.
+    @details Runs auto-brightness on deterministic 16-bit RGB input, forces
+      luminance pipeline to scale only luminance, and verifies per-pixel channel
+      ratios remain invariant for non-clipped output pixels.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-090, REQ-099
+    """
+
+    numpy_module = __import__("numpy")
+
+    class _FakeClahe:
+        """@brief Provide deterministic identity CLAHE for test."""
+
+        @staticmethod
+        def apply(channel):
+            """@brief Return channel unchanged."""
+
+            return channel
+
+    class _FakeCv2Module:
+        """@brief Provide minimal cv2 surface for luminance-only pipeline test."""
+
+        @staticmethod
+        def calcHist(images, channels, mask, bins, ranges):
+            """@brief Return deterministic histogram for uint16 channel."""
+
+            del channels, mask, bins, ranges
+            channel = images[0]
+            histogram = numpy_module.bincount(channel.ravel(), minlength=65536)
+            return histogram.reshape((65536, 1)).astype(numpy_module.float32)
+
+        @staticmethod
+        def createCLAHE(clipLimit, tileGridSize):
+            """@brief Return deterministic no-op CLAHE object."""
+
+            del clipLimit, tileGridSize
+            return _FakeClahe()
+
+    def _fake_apply_mean_gamma_correction_channel(
+        cv2_module, np_module, channel, current_mean, target_mean
+    ):
+        """@brief Force deterministic luminance scaling by a fixed factor."""
+
+        del cv2_module, current_mean, target_mean
+        scaled = np_module.round(channel.astype(np_module.float64) * 1.1)
+        return np_module.clip(scaled, 0.0, 65535.0).astype(np_module.uint16)
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_apply_mean_gamma_correction_channel",
+        _fake_apply_mean_gamma_correction_channel,
+    )
+
+    input_image = numpy_module.array(
+        [
+            [[10000, 20000, 30000], [12000, 24000, 36000]],
+            [[8000, 16000, 24000], [14000, 28000, 42000]],
+        ],
+        dtype=numpy_module.uint16,
+    )
+    output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
+        cv2_module=_FakeCv2Module,
+        np_module=numpy_module,
+        image_rgb_uint8=input_image,
+        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(
+            clip_limit=2.0,
+            tile_grid_width=8,
+            tile_grid_height=8,
+            target_mean=0.52,
+            mean_tolerance=0.0,
+            initial_clip_hist_percent=0.0,
+        ),
+    )
+
+    input_rgb = input_image.astype(numpy_module.float64)
+    output_rgb = output_image.astype(numpy_module.float64)
+    input_ratio_rg = input_rgb[..., 0] / input_rgb[..., 1]
+    input_ratio_rb = input_rgb[..., 0] / input_rgb[..., 2]
+    output_ratio_rg = output_rgb[..., 0] / output_rgb[..., 1]
+    output_ratio_rb = output_rgb[..., 0] / output_rgb[..., 2]
+    assert numpy_module.max(numpy_module.abs(input_ratio_rg - output_ratio_rg)) < 2e-5
+    assert numpy_module.max(numpy_module.abs(input_ratio_rb - output_ratio_rb)) < 2e-5
 
 
 def test_dng2hdr2jpg_opencv_auto_adjust_accepts_uint8_input_by_upconverting(tmp_path):
