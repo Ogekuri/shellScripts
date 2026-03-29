@@ -245,7 +245,7 @@
           - `req_cmd._is_hidden_path(...)`: Filter hidden-path segments relative to current base directory [`src/shell_scripts/commands/req_cmd.py`]
         - `req_cmd._prepare_target_directory(...)`: Remove predefined integration directories (including OpenCode prompt path) and ensure required scaffold directories exist [`src/shell_scripts/commands/req_cmd.py`]
         - `req_cmd._build_req_args(...)`: Build external `req` argv with hardcoded base flags plus runtime-configured provider/static-check vectors [`src/shell_scripts/commands/req_cmd.py`]
-          - `get_req_profile(...)`: Resolve `req.providers` and `req.static_checks` runtime profile values with fallback to defaults where OpenCode provider default is prompts-mode [`src/shell_scripts/config.py`]
+          - `get_req_profile(...)`: Resolve `req.providers` and `req.static_checks` runtime profile values with fallback to defaults where Codex provider default is skills-mode [`src/shell_scripts/config.py`]
             - `_normalize_string_list(...)`: Validate provider/static-check vectors as non-empty string lists [`src/shell_scripts/config.py`]
       - `tests_cmd.run(...)`: Ensure `.venv`, optional dependency install, and execute pytest with project PYTHONPATH [`src/shell_scripts/commands/tests_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
