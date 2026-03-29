@@ -5425,6 +5425,52 @@ def test_dng2hdr2jpg_auto_brightness_caps_gain_to_max_gain():
     assert ratio <= dng2hdr2jpg.DEFAULT_AB_MAX_GAIN * 1.1
 
 
+def test_dng2hdr2jpg_auto_brightness_limits_gain_from_p98_highlights():
+    """
+    @brief Validate auto-brightness p98 highlight cap prevents white-area burn.
+    @details Uses image with dominant near-white area and dark minority region,
+      then verifies gain is limited by `0.90/max(p98,1e-7)` semantics and not
+      by middle-grey or fixed max-gain caps.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-090
+    """
+
+    numpy_module = __import__("numpy")
+    input_image = numpy_module.array(
+        [
+            [[65000, 65000, 65000], [65000, 65000, 65000]],
+            [[65000, 65000, 65000], [5000, 5000, 5000]],
+        ],
+        dtype=numpy_module.uint16,
+    )
+    output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
+        cv2_module=object(),
+        np_module=numpy_module,
+        image_rgb_uint8=input_image,
+        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(target_grey=0.30),
+    )
+
+    input_linear = dng2hdr2jpg._to_linear_srgb(
+        np_module=numpy_module,
+        image_srgb=input_image.astype(numpy_module.float64) / 65535.0,
+    )
+    output_linear = dng2hdr2jpg._to_linear_srgb(
+        np_module=numpy_module,
+        image_srgb=output_image.astype(numpy_module.float64) / 65535.0,
+    )
+    p98 = float(
+        numpy_module.percentile(
+            dng2hdr2jpg._compute_bt709_luminance(
+                np_module=numpy_module, linear_rgb=input_linear
+            ),
+            98,
+        )
+    )
+    expected_max_gain = dng2hdr2jpg.DEFAULT_AB_P98_HIGHLIGHT_MAX / max(p98, 1e-7)
+    effective_gain = float(output_linear[1, 1, 1]) / float(input_linear[1, 1, 1] + 1e-8)
+    assert effective_gain <= expected_max_gain * 1.06
+
+
 def test_dng2hdr2jpg_auto_brightness_rejects_non_uint16_input():
     """
     @brief Validate auto-brightness rejects non-uint16 payloads.

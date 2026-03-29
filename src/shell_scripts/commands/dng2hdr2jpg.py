@@ -47,6 +47,7 @@ DEFAULT_AA_SATURATION_GAMMA = 0.8
 DEFAULT_AA_HIGHPASS_BLUR_SIGMA = 2.0
 DEFAULT_AB_TARGET_GREY = 0.18
 DEFAULT_AB_MAX_GAIN = 4.0
+DEFAULT_AB_P98_HIGHLIGHT_MAX = 0.90
 DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "flat"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
@@ -3183,8 +3184,9 @@ def _apply_auto_brightness_rgb_uint8(
 
     @details Executes pipeline: uint16 normalization to `[0,1]` in float64,
     sRGB linearization, BT.709 luminance extraction, percentile statistics
-    (`p50`, `p98`), global gain `target_grey/p50` with cap `4.0`, highlight
-    rolloff, inverse sRGB transfer, and uint16 restoration.
+    (`p50`, `p98`), global gain `target_grey/p50` constrained by fixed gain cap
+    `4.0` and highlight cap `0.90/max(p98,1e-7)`, highlight rolloff, inverse
+    sRGB transfer, and uint16 restoration.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
     @param image_rgb_uint8 {object} RGB uint16 image tensor.
@@ -3205,10 +3207,14 @@ def _apply_auto_brightness_rgb_uint8(
 
     linear_luminance = _compute_bt709_luminance(np_module=np_module, linear_rgb=image_linear)
     p50 = float(np_module.percentile(linear_luminance, 50))
-    _ = float(np_module.percentile(linear_luminance, 98))
+    p98 = float(np_module.percentile(linear_luminance, 98))
 
     gain = auto_brightness_options.target_grey / (p50 + 1e-7)
-    gain = min(gain, DEFAULT_AB_MAX_GAIN)
+    gain = min(
+        gain,
+        DEFAULT_AB_MAX_GAIN,
+        DEFAULT_AB_P98_HIGHLIGHT_MAX / max(p98, 1e-7),
+    )
 
     bright_linear = image_linear * gain
     bright_linear = _apply_highlight_rolloff(np_module=np_module, linear_rgb=bright_linear)
