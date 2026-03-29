@@ -3045,7 +3045,9 @@ def _run_luminance_hdr_cli(
     HDR model controls, tone-mapper controls, mandatory `--ldrTiff 16b`,
     optional explicit `--tmo*` passthrough arguments, and ordered exposure
     inputs (`ev_minus`, `ev_zero`, `ev_plus`), then writes to TIFF output path
-    used by shared postprocess conversion.
+    used by shared postprocess conversion. Executes subprocess in output-TIFF
+    parent directory to isolate backend-generated sidecar artifacts (e.g. `.pp3`)
+    inside command temporary workspace lifecycle.
     @param bracket_paths {list[Path]} Ordered intermediate exposure TIFF paths.
     @param output_hdr_tiff {Path} Output HDR TIFF target path.
     @param ev_value {float} EV bracket delta used to generate exposure files.
@@ -3076,7 +3078,13 @@ def _run_luminance_hdr_cli(
         str(output_hdr_tiff),
         *[str(path) for path in ordered_paths],
     ]
-    subprocess.run(command, check=True)
+    original_working_directory = Path.cwd()
+    backend_working_directory = output_hdr_tiff.parent
+    try:
+        os.chdir(backend_working_directory)
+        subprocess.run(command, check=True)
+    finally:
+        os.chdir(original_working_directory)
 
 
 def _convert_compression_to_quality(jpg_compression):

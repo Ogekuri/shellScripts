@@ -1530,6 +1530,106 @@ def test_dng2hdr2jpg_runs_luminance_backend_with_default_operator(
     assert not observed["tmp_dir"].exists()
 
 
+def test_dng2hdr2jpg_luminance_sidecar_pp3_isolated_from_caller_cwd(
+    monkeypatch, tmp_path
+):
+    """
+    @brief Validate luminance execution does not leave `.pp3` sidecars in caller CWD.
+    @details Simulates `luminance-hdr-cli` sidecar generation in current working
+      directory and verifies the command pipeline isolates backend execution so
+      sidecar artifacts are removed with temporary intermediates.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-059, REQ-062
+    """
+
+    observed = {"luminance_cmd": None}
+    monkeypatch.setattr(dng2hdr2jpg, "get_runtime_os", lambda: "linux")
+
+    class _FakeRawPyModule:
+        """@brief Provide fake `rawpy` module surface for sidecar cleanup test."""
+
+        LibRawError = RuntimeError
+
+        @staticmethod
+        def imread(_path):
+            """@brief Return fake RAW context manager for the provided path."""
+
+            return _FakeRawHandle(
+                {
+                    "brights": [],
+                    "output_bps": [],
+                    "use_camera_wb": [],
+                    "no_auto_bright": [],
+                    "gamma": [],
+                }
+            )
+
+    class _FakeImageIoModule:
+        """@brief Provide fake `imageio` module for deterministic TIFF I/O."""
+
+        @staticmethod
+        def imwrite(path, _data):
+            """@brief Materialize deterministic bracket TIFF placeholder."""
+
+            Path(path).write_text("payload", encoding="utf-8")
+
+        @staticmethod
+        def imread(path):
+            """@brief Return fake 16-bit payload for shared JPG encode stage."""
+
+            assert Path(path).name == "merged_hdr.tif"
+            return _FakeImage16()
+
+    sidecar_name = "luminance-hdr-cli-sidecar.pp3"
+    sidecar_path = tmp_path / sidecar_name
+
+    def _fake_subprocess_run(command, check):
+        """@brief Simulate luminance backend writing `.pp3` in process CWD."""
+
+        assert check is True
+        if command and command[0] == "luminance-hdr-cli":
+            observed["luminance_cmd"] = command
+            Path(sidecar_name).write_text("pp3", encoding="utf-8")
+            output_index = command.index("-o") + 1
+            Path(command[output_index]).write_text("hdr", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        if command and command[0] == "magick":
+            Path(command[-1]).write_text("jpg", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0)
+        raise AssertionError(f"Unexpected command: {command!r}")
+
+    monkeypatch.setattr(
+        dng2hdr2jpg,
+        "_load_image_dependencies",
+        lambda: _build_fake_dependencies(
+            _FakeRawPyModule, _FakeImageIoModule, observed
+        ),
+    )
+    monkeypatch.setattr(
+        dng2hdr2jpg.shutil,
+        "which",
+        lambda cmd: (
+            "/usr/bin/luminance-hdr-cli" if cmd == "luminance-hdr-cli" else None
+        ),
+    )
+    monkeypatch.setattr(dng2hdr2jpg.subprocess, "run", _fake_subprocess_run)
+    monkeypatch.chdir(tmp_path)
+
+    input_dng = tmp_path / "scene.dng"
+    input_dng.write_text("dng", encoding="utf-8")
+    output_jpg = tmp_path / "scene.jpg"
+
+    result = dng2hdr2jpg.run(
+        [str(input_dng), str(output_jpg), "--enable-luminance", "--ev=1"]
+    )
+
+    assert result == 0
+    assert observed["luminance_cmd"] is not None
+    assert not sidecar_path.exists()
+
+
 def test_dng2hdr2jpg_uses_ev_zero_to_center_static_bracketing(monkeypatch, tmp_path):
     """
     @brief Validate `--ev-zero` recenters static bracketing triplet.
