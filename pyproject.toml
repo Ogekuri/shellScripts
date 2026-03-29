@@ -23,14 +23,7 @@ classifiers = [
   "Topic :: Software Development :: Configuration Management",
 ]
 
-dependencies = [
-  "rawpy; platform_system == 'Linux'",
-  "imageio; platform_system == 'Linux'",
-  "pillow; platform_system == 'Linux'",
-  "piexif; platform_system == 'Linux'",
-  "numpy; platform_system == 'Linux'",
-  "opencv-python; platform_system == 'Linux'",
-]
+dependencies = []
 
 [dependency-groups]
 dev = ["pytest"]

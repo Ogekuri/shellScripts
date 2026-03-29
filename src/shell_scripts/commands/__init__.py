@@ -24,7 +24,6 @@ _COMMAND_MODULES = {
     "cli-kiro": "shell_scripts.commands.cli_kiro",
     "cli-opencode": "shell_scripts.commands.cli_opencode",
     "dicom2jpg": "shell_scripts.commands.dicom2jpg",
-    "dng2hdr2jpg": "shell_scripts.commands.dng2hdr2jpg",
     "dicomviewer": "shell_scripts.commands.dicomviewer",
     "diff": "shell_scripts.commands.diff_cmd",
     "edit": "shell_scripts.commands.edit_cmd",
