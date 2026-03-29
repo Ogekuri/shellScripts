@@ -47,7 +47,10 @@ DEFAULT_AA_SATURATION_GAMMA = 0.8
 DEFAULT_AA_HIGHPASS_BLUR_SIGMA = 2.0
 DEFAULT_AB_TARGET_GREY = 0.18
 DEFAULT_AB_MAX_GAIN = 4.0
+DEFAULT_AB_MIN_GAIN = 0.95
 DEFAULT_AB_P98_HIGHLIGHT_MAX = 0.90
+DEFAULT_AB_CORRECTION_STRENGTH = 0.35
+DEFAULT_AB_MAX_EV_CORRECTION = 0.5
 DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "flat"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
@@ -281,13 +284,18 @@ class AutoBrightnessOptions:
     """@brief Hold `--auto-brightness` knob values.
 
     @details Encapsulates validated auto-brightness parameters for the BT.709
-    linear-sRGB luminance pipeline with global gain and highlight rolloff.
+    linear-sRGB luminance pipeline with light EV-domain correction and
+    highlight-safe global gain cap.
     @param target_grey {float} Linear BT.709 middle-grey luminance target in `(0, 1)`.
+    @param correction_strength {float} EV-domain correction multiplier in `(0, +inf)`.
+    @param max_ev_correction {float} Positive EV correction clamp in `(0, +inf)`.
     @return {None} Immutable dataclass container.
     @satisfies REQ-065, REQ-088, REQ-089, REQ-090
     """
 
     target_grey: float = DEFAULT_AB_TARGET_GREY
+    correction_strength: float = DEFAULT_AB_CORRECTION_STRENGTH
+    max_ev_correction: float = DEFAULT_AB_MAX_EV_CORRECTION
 
 
 @dataclass(frozen=True)
@@ -3184,9 +3192,11 @@ def _apply_auto_brightness_rgb_uint8(
 
     @details Executes pipeline: uint16 normalization to `[0,1]` in float64,
     sRGB linearization, BT.709 luminance extraction, percentile statistics
-    (`p50`, `p98`), global gain `target_grey/p50` constrained by fixed gain cap
-    `4.0` and highlight cap `0.90/max(p98,1e-7)`, highlight rolloff, inverse
-    sRGB transfer, and uint16 restoration.
+    (`p50`, `p98`), raw gain `target_grey/p50`, EV-domain light correction
+    `clamp(log2(raw_gain)*correction_strength,0,+max_ev_correction)`,
+    global gain `2^ev` constrained by fixed gain cap `4.0` and highlight-safe
+    cap `max(0.95,0.90/max(p98,1e-7))`, highlight rolloff, inverse sRGB
+    transfer, and uint16 restoration.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
     @param image_rgb_uint8 {object} RGB uint16 image tensor.
@@ -3209,11 +3219,20 @@ def _apply_auto_brightness_rgb_uint8(
     p50 = float(np_module.percentile(linear_luminance, 50))
     p98 = float(np_module.percentile(linear_luminance, 98))
 
-    gain = auto_brightness_options.target_grey / (p50 + 1e-7)
+    raw_gain = auto_brightness_options.target_grey / (p50 + 1e-7)
+    raw_ev = math.log2(max(raw_gain, 1e-7))
+    light_ev = max(
+        0.0,
+        min(
+            raw_ev * auto_brightness_options.correction_strength,
+            auto_brightness_options.max_ev_correction,
+        ),
+    )
+    gain = 2.0**light_ev
     gain = min(
         gain,
         DEFAULT_AB_MAX_GAIN,
-        DEFAULT_AB_P98_HIGHLIGHT_MAX / max(p98, 1e-7),
+        max(DEFAULT_AB_MIN_GAIN, DEFAULT_AB_P98_HIGHLIGHT_MAX / max(p98, 1e-7)),
     )
 
     bright_linear = image_linear * gain

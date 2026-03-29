@@ -2686,6 +2686,8 @@ def test_dng2hdr2jpg_auto_brightness_knobs_default_values_are_stable():
     assert parsed is not None
     options = parsed[5].auto_brightness_options
     assert options.target_grey == dng2hdr2jpg.DEFAULT_AB_TARGET_GREY
+    assert options.correction_strength == dng2hdr2jpg.DEFAULT_AB_CORRECTION_STRENGTH
+    assert options.max_ev_correction == dng2hdr2jpg.DEFAULT_AB_MAX_EV_CORRECTION
 
 
 def test_dng2hdr2jpg_auto_brightness_accepts_split_boolean_value():
@@ -5468,7 +5470,76 @@ def test_dng2hdr2jpg_auto_brightness_limits_gain_from_p98_highlights():
     )
     expected_max_gain = dng2hdr2jpg.DEFAULT_AB_P98_HIGHLIGHT_MAX / max(p98, 1e-7)
     effective_gain = float(output_linear[1, 1, 1]) / float(input_linear[1, 1, 1] + 1e-8)
-    assert effective_gain <= expected_max_gain * 1.06
+    assert effective_gain <= max(
+        dng2hdr2jpg.DEFAULT_AB_MIN_GAIN, expected_max_gain
+    ) * 1.06
+
+
+def test_dng2hdr2jpg_auto_brightness_applies_light_ev_domain_correction():
+    """
+    @brief Validate auto-brightness uses light EV-domain correction strength.
+    @details Uses low-key input and verifies effective gain follows
+      `2^clamp(log2(target_grey/p50)*0.35,0,+0.5)` when non-highlight caps
+      are inactive.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-088, REQ-090
+    """
+
+    numpy_module = __import__("numpy")
+    input_image = numpy_module.full((2, 2, 3), 12000, dtype=numpy_module.uint16)
+    output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
+        cv2_module=object(),
+        np_module=numpy_module,
+        image_rgb_uint8=input_image,
+        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(target_grey=0.30),
+    )
+
+    input_linear = dng2hdr2jpg._to_linear_srgb(
+        np_module=numpy_module,
+        image_srgb=input_image.astype(numpy_module.float64) / 65535.0,
+    )
+    luminance = dng2hdr2jpg._compute_bt709_luminance(
+        np_module=numpy_module, linear_rgb=input_linear
+    )
+    p50 = float(numpy_module.percentile(luminance, 50))
+    raw_gain = 0.30 / (p50 + 1e-7)
+    expected_ev = max(
+        0.0,
+        min(
+            numpy_module.log2(max(raw_gain, 1e-7))
+            * dng2hdr2jpg.DEFAULT_AB_CORRECTION_STRENGTH,
+            dng2hdr2jpg.DEFAULT_AB_MAX_EV_CORRECTION,
+        ),
+    )
+    expected_gain = float(2.0**expected_ev)
+    output_linear = dng2hdr2jpg._to_linear_srgb(
+        np_module=numpy_module,
+        image_srgb=output_image.astype(numpy_module.float64) / 65535.0,
+    )
+    observed_gain = float(output_linear[0, 0, 1]) / float(input_linear[0, 0, 1] + 1e-8)
+    assert abs(observed_gain - expected_gain) <= 0.06
+
+
+def test_dng2hdr2jpg_auto_brightness_preserves_high_key_with_light_correction():
+    """
+    @brief Validate high-key scenes are not darkened by light correction stage.
+    @details Uses dominant high-key luminance input where raw gain is below `1`
+      and verifies resulting gain remains near unity because EV correction is
+      intentionally limited.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-090
+    """
+
+    numpy_module = __import__("numpy")
+    input_image = numpy_module.full((3, 3, 3), 62000, dtype=numpy_module.uint16)
+    output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
+        cv2_module=object(),
+        np_module=numpy_module,
+        image_rgb_uint8=input_image,
+        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(target_grey=0.18),
+    )
+    observed_gain = float(output_image[1, 1, 1]) / float(input_image[1, 1, 1])
+    assert observed_gain >= 0.88
 
 
 def test_dng2hdr2jpg_auto_brightness_rejects_non_uint16_input():
