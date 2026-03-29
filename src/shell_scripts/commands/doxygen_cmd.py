@@ -23,6 +23,7 @@ def print_help(version):
 
 
 def _supports_generate_markdown():
+    require_commands("doxygen")
     try:
         result = subprocess.run(
             ["doxygen", "-x"],
@@ -140,6 +141,7 @@ def run(args):
         from shell_scripts.utils import command_exists
 
         if command_exists("make") and command_exists("pdflatex"):
+            require_commands("make", "pdflatex")
             subprocess.run(["make", "-C", str(latex_dir)], stdout=subprocess.DEVNULL)
             refman = latex_dir / "refman.pdf"
             if refman.exists():

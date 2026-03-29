@@ -108,6 +108,7 @@ def test_install_npm_tool_uses_expected_command(
 
     monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
     monkeypatch.setattr(ai_install, "is_windows", lambda: False)
+    monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
 
     ai_install._install_npm_tool(tool_key)
 
@@ -139,6 +140,7 @@ def test_install_npm_tool_omits_sudo_on_windows(monkeypatch):
 
     monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
     monkeypatch.setattr(ai_install, "is_windows", lambda: True)
+    monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
 
     ai_install._install_npm_tool("copilot")
 
@@ -174,6 +176,7 @@ def test_install_npm_tool_uses_npm_cmd_on_windows(monkeypatch):
 
     monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
     monkeypatch.setattr(ai_install, "is_windows", lambda: True)
+    monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(
         ai_install.shutil,
         "which",

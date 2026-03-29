@@ -45,6 +45,7 @@ def test_tests_cmd_creates_venv_and_installs_requirements_when_present(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(tests_cmd, "require_project_root", lambda: tmp_path)
+    monkeypatch.setattr(tests_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(tests_cmd.subprocess, "run", _fake_run)
 
     result = tests_cmd.run(["-q"])
@@ -93,6 +94,7 @@ def test_tests_cmd_skips_requirements_install_when_absent(monkeypatch, tmp_path)
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(tests_cmd, "require_project_root", lambda: tmp_path)
+    monkeypatch.setattr(tests_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(tests_cmd.subprocess, "run", _fake_run)
 
     result = tests_cmd.run([])
@@ -149,6 +151,7 @@ def test_venv_cmd_recreates_existing_venv_and_installs_requirements(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(venv_cmd, "require_project_root", lambda: tmp_path)
+    monkeypatch.setattr(venv_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(venv_cmd.shutil, "rmtree", _fake_rmtree)
     monkeypatch.setattr(venv_cmd.subprocess, "run", _fake_run)
 
@@ -191,6 +194,7 @@ def test_venv_cmd_skips_pip_install_when_requirements_absent(monkeypatch, tmp_pa
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(venv_cmd, "require_project_root", lambda: tmp_path)
+    monkeypatch.setattr(venv_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(venv_cmd.subprocess, "run", _fake_run)
 
     result = venv_cmd.run([])

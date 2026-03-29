@@ -126,50 +126,68 @@ Removing an entry removes command discoverability and dispatch reachability.
 
 ---
 
-# _dc_common.py | Python | 99L | 9 symbols | 4 imports | 1 comments
+# _dc_common.py | Python | 137L | 9 symbols | 3 imports | 5 comments
 > Path: `src/shell_scripts/commands/_dc_common.py`
 
 ## Imports
 ```
 import os
-import sys
 import subprocess
-import shutil
+from shell_scripts.utils import is_executable_command, print_error
 ```
 
 ## Definitions
 
-- var `CODE_EXTENSIONS = {` (L7)
-- var `MARKDOWN_EXTENSIONS = {"md", "markdown", "mdown", "mkd"}` (L15)
-- var `HTML_EXTENSIONS = {"html", "htm", "xhtml"}` (L16)
-- var `IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "svg"}` (L17)
-### fn `def get_extension(filepath)` (L20-26)
+- var `CODE_EXTENSIONS = {` (L14)
+- var `MARKDOWN_EXTENSIONS = {"md", "markdown", "mdown", "mkd"}` (L22)
+- var `HTML_EXTENSIONS = {"html", "htm", "xhtml"}` (L23)
+- var `IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "svg"}` (L24)
+### fn `def get_extension(filepath)` (L27-33)
 
-### fn `def detect_mime(filepath)` (L27-44)
+### fn `def detect_mime(filepath)` (L34-60)
+- @brief Detect file MIME type with external tools.
+- @details Probes MIME by trying `mimetype` then `file --mime-type`, using executable availability checks before subprocess invocation.
+- @param filepath {str} Target file path.
+- @return {str} MIME type string or empty string on detection failure.
+- @satisfies REQ-024, REQ-056
 
-### fn `def categorize(filepath)` (L45-82)
+### fn `def categorize(filepath)` (L61-98)
 
-### fn `def pick_cmd(primary, fallback)` (L83-88)
+### fn `def pick_cmd(primary, fallback)` (L99-114)
+- @brief Select primary command when executable, else fallback.
+- @details Uses shared executable-check helper on first token of primary command vector.
+- @param primary {list[str]} Preferred command vector.
+- @param fallback {list[str]} Fallback command vector.
+- @return {list[str]} Selected executable command vector.
+- @satisfies REQ-024, REQ-055
 
-### fn `def dispatch(category_cmds, fallback_cmd, filepath, extra_args)` (L89-99)
+### fn `def dispatch(category_cmds, fallback_cmd, filepath, extra_args)` (L115-137)
+- @brief Dispatch diff/edit/view command by detected file category.
+- @details Resolves category-specific command vector, validates executable availability, and replaces process with selected command.
+- @param category_cmds {dict[str, list[str]]} Category-to-command mapping.
+- @param fallback_cmd {list[str]} Fallback command vector.
+- @param filepath {str} Target file path.
+- @param extra_args {list[str]} Additional arguments forwarded to executable.
+- @return {int} `1` when executable is unavailable; otherwise no return on exec.
+- @satisfies REQ-024, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`CODE_EXTENSIONS`|var|pub|7||
-|`MARKDOWN_EXTENSIONS`|var|pub|15||
-|`HTML_EXTENSIONS`|var|pub|16||
-|`IMAGE_EXTENSIONS`|var|pub|17||
-|`get_extension`|fn|pub|20-26|def get_extension(filepath)|
-|`detect_mime`|fn|pub|27-44|def detect_mime(filepath)|
-|`categorize`|fn|pub|45-82|def categorize(filepath)|
-|`pick_cmd`|fn|pub|83-88|def pick_cmd(primary, fallback)|
-|`dispatch`|fn|pub|89-99|def dispatch(category_cmds, fallback_cmd, filepath, extra...|
+|`CODE_EXTENSIONS`|var|pub|14||
+|`MARKDOWN_EXTENSIONS`|var|pub|22||
+|`HTML_EXTENSIONS`|var|pub|23||
+|`IMAGE_EXTENSIONS`|var|pub|24||
+|`get_extension`|fn|pub|27-33|def get_extension(filepath)|
+|`detect_mime`|fn|pub|34-60|def detect_mime(filepath)|
+|`categorize`|fn|pub|61-98|def categorize(filepath)|
+|`pick_cmd`|fn|pub|99-114|def pick_cmd(primary, fallback)|
+|`dispatch`|fn|pub|115-137|def dispatch(category_cmds, fallback_cmd, filepath, extra...|
 
 
 ---
 
-# ai_install.py | Python | 216L | 11 symbols | 9 imports | 7 comments
+# ai_install.py | Python | 224L | 11 symbols | 9 imports | 7 comments
 > Path: `src/shell_scripts/commands/ai_install.py`
 
 ## Imports
@@ -180,48 +198,48 @@ import shutil
 import zipfile
 import tempfile
 from pathlib import Path
-from shell_scripts.utils import is_windows, print_info, print_error, print_success
+from shell_scripts.utils import (
 import urllib.request
 import urllib.request
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L19)
-- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L20)
-- var `TOOLS = {` (L22)
-- var `CLAUDE_BUCKET = (` (L41)
-- var `KIRO_URL = (` (L45)
-### fn `def print_help(version)` (L50-72)
+- var `PROGRAM = "shellscripts"` (L25)
+- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L26)
+- var `TOOLS = {` (L28)
+- var `CLAUDE_BUCKET = (` (L47)
+- var `KIRO_URL = (` (L51)
+### fn `def print_help(version)` (L56-78)
 - @brief Render command help for `ai-install`.
 - @details Prints supported selectors and execution contract for installer dispatch.
 - @param version {str} CLI version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _install_npm_tool(tool_key)` `priv` (L73-101)
+### fn `def _install_npm_tool(tool_key)` `priv` (L79-109)
 - @brief Execute npm-based installer command for selected tool.
 - @details Resolves base npm command from static tool mapping, prepends `sudo` when runtime OS is not Windows, and uses resolved `npm.cmd` path on Windows when available to avoid process-launch failures. Executes subprocess and emits status messages.
 - @param tool_key {str} Tool identifier key from `TOOLS`.
 - @return {None} Executes side effects and prints result messages.
-- @satisfies DES-013, REQ-008, REQ-047
+- @satisfies DES-013, REQ-008, REQ-047, REQ-056
 
-### fn `def _install_claude()` `priv` (L102-134)
+### fn `def _install_claude()` `priv` (L110-142)
 - @brief Install Claude CLI by direct binary download.
 - @details Downloads latest version metadata and Linux binary from configured bucket, writes executable into `~/.claude/bin/claude`, and sets execute permissions.
 - @return {None} Executes side effects and prints result messages.
 - @throws {Exception} Handled internally and logged as installer failure.
 - @satisfies REQ-009
 
-### fn `def _install_kiro()` `priv` (L135-173)
+### fn `def _install_kiro()` `priv` (L143-181)
 - @brief Install Kiro CLI binaries by ZIP extraction flow.
 - @details Downloads platform ZIP package, extracts binaries, copies `kiro-cli*` executables into `~/.local/bin`, and applies executable mode.
 - @return {None} Executes side effects and prints result messages.
 - @throws {Exception} Handled internally and logged as installer failure.
 - @satisfies REQ-010
 
-- var `ALL_INSTALLERS = {` (L174)
-### fn `def run(args)` (L184-216)
+- var `ALL_INSTALLERS = {` (L182)
+### fn `def run(args)` (L192-224)
 - @brief Parse selectors and execute selected AI installer routines.
 - @details Accepts explicit selectors or defaults to full installer set when omitted; rejects unknown selectors with return code `1`.
 - @param args {list[str]} CLI selector tokens for installer filtering.
@@ -231,17 +249,17 @@ import urllib.request
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|19||
-|`DESCRIPTION`|var|pub|20||
-|`TOOLS`|var|pub|22||
-|`CLAUDE_BUCKET`|var|pub|41||
-|`KIRO_URL`|var|pub|45||
-|`print_help`|fn|pub|50-72|def print_help(version)|
-|`_install_npm_tool`|fn|priv|73-101|def _install_npm_tool(tool_key)|
-|`_install_claude`|fn|priv|102-134|def _install_claude()|
-|`_install_kiro`|fn|priv|135-173|def _install_kiro()|
-|`ALL_INSTALLERS`|var|pub|174||
-|`run`|fn|pub|184-216|def run(args)|
+|`PROGRAM`|var|pub|25||
+|`DESCRIPTION`|var|pub|26||
+|`TOOLS`|var|pub|28||
+|`CLAUDE_BUCKET`|var|pub|47||
+|`KIRO_URL`|var|pub|51||
+|`print_help`|fn|pub|56-78|def print_help(version)|
+|`_install_npm_tool`|fn|priv|79-109|def _install_npm_tool(tool_key)|
+|`_install_claude`|fn|priv|110-142|def _install_claude()|
+|`_install_kiro`|fn|priv|143-181|def _install_kiro()|
+|`ALL_INSTALLERS`|var|pub|182||
+|`run`|fn|pub|192-224|def run(args)|
 
 
 ---
@@ -307,43 +325,48 @@ from shell_scripts.utils import require_project_root, print_error
 
 ---
 
-# cli_claude.py | Python | 23L | 4 symbols | 3 imports | 1 comments
+# cli_claude.py | Python | 40L | 4 symbols | 3 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_claude.py`
 
 ## Imports
 ```
 import os
 from pathlib import Path
-from shell_scripts.utils import require_project_root
+from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L7)
-- var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L8)
-### fn `def print_help(version)` (L11-18)
+- var `PROGRAM = "shellscripts"` (L14)
+- var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L15)
+### fn `def print_help(version)` (L18-25)
 
-### fn `def run(args)` (L19-23)
+### fn `def run(args)` (L26-40)
+- @brief Launch Claude CLI after external executable validation.
+- @details Resolves project root, resolves user-local Claude executable path, validates executable availability, then replaces process image.
+- @param args {list[str]} Additional CLI args forwarded to Claude.
+- @return {None} Function does not return on successful `os.execvp`.
+- @satisfies REQ-017, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|7||
-|`DESCRIPTION`|var|pub|8||
-|`print_help`|fn|pub|11-18|def print_help(version)|
-|`run`|fn|pub|19-23|def run(args)|
+|`PROGRAM`|var|pub|14||
+|`DESCRIPTION`|var|pub|15||
+|`print_help`|fn|pub|18-25|def print_help(version)|
+|`run`|fn|pub|26-40|def run(args)|
 
 
 ---
 
-# cli_codex.py | Python | 99L | 6 symbols | 3 imports | 12 comments
+# cli_codex.py | Python | 100L | 6 symbols | 3 imports | 12 comments
 > Path: `src/shell_scripts/commands/cli_codex.py`
 
 ## Imports
 ```
 import os
 from pathlib import Path
-from shell_scripts.utils import print_info, require_project_root
+from shell_scripts.utils import print_info, require_project_root, require_commands
 ```
 
 ## Definitions
@@ -377,7 +400,7 @@ from shell_scripts.utils import print_info, require_project_root
 - @throws {OSError} If directory creation, unlink, or symlink creation fails.
 - @satisfies REQ-043, REQ-044
 
-### fn `def run(args: list[str]) -> None` (L82-99)
+### fn `def run(args: list[str]) -> None` (L82-100)
 - @brief Launch Codex CLI with project-scoped environment preparation.
 - @details Resolves project root, guarantees codex auth symlink compliance, sets `CODEX_HOME=<project-root>/.codex`, then replaces process image with `/usr/bin/codex --yolo` plus pass-through args.
 - @param args {list[str]} Additional CLI args forwarded to Codex.
@@ -394,125 +417,145 @@ from shell_scripts.utils import print_info, require_project_root
 |`print_help`|fn|pub|26-41|def print_help(version: str) -> None|
 |`_is_expected_auth_link`|fn|priv|42-57|def _is_expected_auth_link(link_path: Path, target_path: ...|
 |`_ensure_auth_symlink`|fn|priv|58-81|def _ensure_auth_symlink(project_root: Path) -> None|
-|`run`|fn|pub|82-99|def run(args: list[str]) -> None|
+|`run`|fn|pub|82-100|def run(args: list[str]) -> None|
 
 
 ---
 
-# cli_copilot.py | Python | 21L | 4 symbols | 2 imports | 1 comments
+# cli_copilot.py | Python | 38L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_copilot.py`
 
 ## Imports
 ```
 import os
-from shell_scripts.utils import require_project_root
+from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "Launch GitHub Copilot CLI in the project context."` (L7)
-### fn `def print_help(version)` (L10-17)
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "Launch GitHub Copilot CLI in the project context."` (L14)
+### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L18-21)
+### fn `def run(args)` (L25-38)
+- @brief Launch Copilot CLI after external executable validation.
+- @details Resolves project root, checks executable availability for `/usr/bin/copilot`, then replaces process image with pass-through args.
+- @param args {list[str]} Additional CLI args forwarded to Copilot.
+- @return {None} Function does not return on successful `os.execvp`.
+- @satisfies REQ-015, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`print_help`|fn|pub|10-17|def print_help(version)|
-|`run`|fn|pub|18-21|def run(args)|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`print_help`|fn|pub|17-24|def print_help(version)|
+|`run`|fn|pub|25-38|def run(args)|
 
 
 ---
 
-# cli_gemini.py | Python | 21L | 4 symbols | 2 imports | 1 comments
+# cli_gemini.py | Python | 38L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_gemini.py`
 
 ## Imports
 ```
 import os
-from shell_scripts.utils import require_project_root
+from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "Launch Google Gemini CLI in the project context."` (L7)
-### fn `def print_help(version)` (L10-17)
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "Launch Google Gemini CLI in the project context."` (L14)
+### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L18-21)
+### fn `def run(args)` (L25-38)
+- @brief Launch Gemini CLI after external executable validation.
+- @details Resolves project root, checks executable availability for `/usr/bin/gemini`, then replaces process image with pass-through args.
+- @param args {list[str]} Additional CLI args forwarded to Gemini.
+- @return {None} Function does not return on successful `os.execvp`.
+- @satisfies REQ-016, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`print_help`|fn|pub|10-17|def print_help(version)|
-|`run`|fn|pub|18-21|def run(args)|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`print_help`|fn|pub|17-24|def print_help(version)|
+|`run`|fn|pub|25-38|def run(args)|
 
 
 ---
 
-# cli_kiro.py | Python | 23L | 4 symbols | 3 imports | 1 comments
+# cli_kiro.py | Python | 40L | 4 symbols | 3 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_kiro.py`
 
 ## Imports
 ```
 import os
 from pathlib import Path
-from shell_scripts.utils import require_project_root
+from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L7)
-- var `DESCRIPTION = "Launch Kiro CLI in the project context."` (L8)
-### fn `def print_help(version)` (L11-18)
+- var `PROGRAM = "shellscripts"` (L14)
+- var `DESCRIPTION = "Launch Kiro CLI in the project context."` (L15)
+### fn `def print_help(version)` (L18-25)
 
-### fn `def run(args)` (L19-23)
+### fn `def run(args)` (L26-40)
+- @brief Launch Kiro CLI after external executable validation.
+- @details Resolves project root and user-local Kiro executable path, validates executable availability, then replaces process image.
+- @param args {list[str]} Additional CLI args forwarded to Kiro.
+- @return {None} Function does not return on successful `os.execvp`.
+- @satisfies REQ-019, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|7||
-|`DESCRIPTION`|var|pub|8||
-|`print_help`|fn|pub|11-18|def print_help(version)|
-|`run`|fn|pub|19-23|def run(args)|
+|`PROGRAM`|var|pub|14||
+|`DESCRIPTION`|var|pub|15||
+|`print_help`|fn|pub|18-25|def print_help(version)|
+|`run`|fn|pub|26-40|def run(args)|
 
 
 ---
 
-# cli_opencode.py | Python | 21L | 4 symbols | 2 imports | 1 comments
+# cli_opencode.py | Python | 38L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_opencode.py`
 
 ## Imports
 ```
 import os
-from shell_scripts.utils import require_project_root
+from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "Launch OpenCode CLI in the project context."` (L7)
-### fn `def print_help(version)` (L10-17)
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "Launch OpenCode CLI in the project context."` (L14)
+### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L18-21)
+### fn `def run(args)` (L25-38)
+- @brief Launch OpenCode CLI after external executable validation.
+- @details Resolves project root, checks executable availability for `/usr/bin/opencode`, then replaces process image with pass-through args.
+- @param args {list[str]} Additional CLI args forwarded to OpenCode.
+- @return {None} Function does not return on successful `os.execvp`.
+- @satisfies REQ-018, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`print_help`|fn|pub|10-17|def print_help(version)|
-|`run`|fn|pub|18-21|def run(args)|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`print_help`|fn|pub|17-24|def print_help(version)|
+|`run`|fn|pub|25-38|def run(args)|
 
 
 ---
 
-# dicom2jpg.py | Python | 81L | 7 symbols | 4 imports | 1 comments
+# dicom2jpg.py | Python | 98L | 7 symbols | 4 imports | 3 comments
 > Path: `src/shell_scripts/commands/dicom2jpg.py`
 
 ## Imports
@@ -520,37 +563,42 @@ from shell_scripts.utils import require_project_root
 import os
 import subprocess
 import shutil
-from shell_scripts.utils import print_error
+from shell_scripts.utils import print_error, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L8)
-- var `DESCRIPTION = "Convert DICOM images to JPEG using PixelMed."` (L9)
-- var `JAVA_WRAPPERS = "/usr/lib/java-wrappers/java-wrappers.sh"` (L11)
-### fn `def print_help(version)` (L14-22)
+- var `PROGRAM = "shellscripts"` (L15)
+- var `DESCRIPTION = "Convert DICOM images to JPEG using PixelMed."` (L16)
+- var `JAVA_WRAPPERS = "/usr/lib/java-wrappers/java-wrappers.sh"` (L18)
+### fn `def print_help(version)` (L21-29)
 
-### fn `def _find_java()` `priv` (L23-29)
+### fn `def _find_java()` `priv` (L30-36)
 
-### fn `def _find_jars(*jar_names)` `priv` (L30-41)
+### fn `def _find_jars(*jar_names)` `priv` (L37-48)
 
-### fn `def run(args)` (L42-81)
+### fn `def run(args)` (L49-98)
+- @brief Run PixelMed converter after executable validation.
+- @details Validates Java runtime availability and command executability for the selected Java binary before invoking conversion class.
+- @param args {list[str]} Expected `[input_dicom, output_jpeg]` arguments.
+- @return {int} Subprocess return code.
+- @satisfies REQ-026, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|8||
-|`DESCRIPTION`|var|pub|9||
-|`JAVA_WRAPPERS`|var|pub|11||
-|`print_help`|fn|pub|14-22|def print_help(version)|
-|`_find_java`|fn|priv|23-29|def _find_java()|
-|`_find_jars`|fn|priv|30-41|def _find_jars(*jar_names)|
-|`run`|fn|pub|42-81|def run(args)|
+|`PROGRAM`|var|pub|15||
+|`DESCRIPTION`|var|pub|16||
+|`JAVA_WRAPPERS`|var|pub|18||
+|`print_help`|fn|pub|21-29|def print_help(version)|
+|`_find_java`|fn|priv|30-36|def _find_java()|
+|`_find_jars`|fn|priv|37-48|def _find_jars(*jar_names)|
+|`run`|fn|pub|49-98|def run(args)|
 
 
 ---
 
-# dicomviewer.py | Python | 66L | 7 symbols | 4 imports | 1 comments
+# dicomviewer.py | Python | 83L | 7 symbols | 4 imports | 3 comments
 > Path: `src/shell_scripts/commands/dicomviewer.py`
 
 ## Imports
@@ -558,32 +606,37 @@ from shell_scripts.utils import print_error
 import os
 import subprocess
 import shutil
-from shell_scripts.utils import print_error
+from shell_scripts.utils import print_error, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L8)
-- var `DESCRIPTION = "Launch PixelMed DICOM image viewer."` (L9)
-- var `JAVA_WRAPPERS = "/usr/lib/java-wrappers/java-wrappers.sh"` (L11)
-### fn `def print_help(version)` (L14-21)
+- var `PROGRAM = "shellscripts"` (L15)
+- var `DESCRIPTION = "Launch PixelMed DICOM image viewer."` (L16)
+- var `JAVA_WRAPPERS = "/usr/lib/java-wrappers/java-wrappers.sh"` (L18)
+### fn `def print_help(version)` (L21-28)
 
-### fn `def _find_java()` `priv` (L22-28)
+### fn `def _find_java()` `priv` (L29-35)
 
-### fn `def _find_jars(*jar_names)` `priv` (L29-40)
+### fn `def _find_jars(*jar_names)` `priv` (L36-47)
 
-### fn `def run(args)` (L41-66)
+### fn `def run(args)` (L48-83)
+- @brief Run PixelMed DICOM viewer after executable validation.
+- @details Validates Java runtime availability and command executability for the selected Java binary before invoking the viewer class.
+- @param args {list[str]} DICOM file arguments forwarded to PixelMed viewer.
+- @return {int} Subprocess return code.
+- @satisfies REQ-025, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|8||
-|`DESCRIPTION`|var|pub|9||
-|`JAVA_WRAPPERS`|var|pub|11||
-|`print_help`|fn|pub|14-21|def print_help(version)|
-|`_find_java`|fn|priv|22-28|def _find_java()|
-|`_find_jars`|fn|priv|29-40|def _find_jars(*jar_names)|
-|`run`|fn|pub|41-66|def run(args)|
+|`PROGRAM`|var|pub|15||
+|`DESCRIPTION`|var|pub|16||
+|`JAVA_WRAPPERS`|var|pub|18||
+|`print_help`|fn|pub|21-28|def print_help(version)|
+|`_find_java`|fn|priv|29-35|def _find_java()|
+|`_find_jars`|fn|priv|36-47|def _find_jars(*jar_names)|
+|`run`|fn|pub|48-83|def run(args)|
 
 
 ---
@@ -627,7 +680,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# doxygen_cmd.py | Python | 157L | 7 symbols | 8 imports | 2 comments
+# doxygen_cmd.py | Python | 159L | 7 symbols | 8 imports | 2 comments
 > Path: `src/shell_scripts/commands/doxygen_cmd.py`
 
 ## Imports
@@ -648,13 +701,13 @@ from shell_scripts.utils import command_exists
 - var `DESCRIPTION = "Generate Doxygen documentation (HTML, PDF, Markdown)."` (L12)
 ### fn `def print_help(version)` (L15-24)
 
-### fn `def _supports_generate_markdown()` `priv` (L25-37)
+### fn `def _supports_generate_markdown()` `priv` (L25-38)
 
-### fn `def _write_doxyfile(path, project_root, src_dir, doxygen_dir, has_md)` `priv` (L38-39)
+### fn `def _write_doxyfile(path, project_root, src_dir, doxygen_dir, has_md)` `priv` (L39-40)
 
-### fn `def _generate_markdown_fallback(xml_dir, markdown_dir)` `priv` (L75-97)
+### fn `def _generate_markdown_fallback(xml_dir, markdown_dir)` `priv` (L76-98)
 
-### fn `def run(args)` (L98-157)
+### fn `def run(args)` (L99-159)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -662,10 +715,10 @@ from shell_scripts.utils import command_exists
 |`PROGRAM`|var|pub|11||
 |`DESCRIPTION`|var|pub|12||
 |`print_help`|fn|pub|15-24|def print_help(version)|
-|`_supports_generate_markdown`|fn|priv|25-37|def _supports_generate_markdown()|
-|`_write_doxyfile`|fn|priv|38-39|def _write_doxyfile(path, project_root, src_dir, doxygen_...|
-|`_generate_markdown_fallback`|fn|priv|75-97|def _generate_markdown_fallback(xml_dir, markdown_dir)|
-|`run`|fn|pub|98-157|def run(args)|
+|`_supports_generate_markdown`|fn|priv|25-38|def _supports_generate_markdown()|
+|`_write_doxyfile`|fn|priv|39-40|def _write_doxyfile(path, project_root, src_dir, doxygen_...|
+|`_generate_markdown_fallback`|fn|priv|76-98|def _generate_markdown_fallback(xml_dir, markdown_dir)|
+|`run`|fn|pub|99-159|def run(args)|
 
 
 ---
@@ -931,7 +984,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# pdf_tiler_090.py | Python | 49L | 4 symbols | 3 imports | 1 comments
+# pdf_tiler_090.py | Python | 50L | 4 symbols | 3 imports | 1 comments
 > Path: `src/shell_scripts/commands/pdf_tiler_090.py`
 
 ## Imports
@@ -947,7 +1000,7 @@ from shell_scripts.utils import require_commands, print_error
 - var `DESCRIPTION = "Tile PDF to A4 pages at 90% scale using plakativ."` (L8)
 ### fn `def print_help(version)` (L11-20)
 
-### fn `def run(args)` (L21-49)
+### fn `def run(args)` (L21-50)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -955,12 +1008,12 @@ from shell_scripts.utils import require_commands, print_error
 |`PROGRAM`|var|pub|7||
 |`DESCRIPTION`|var|pub|8||
 |`print_help`|fn|pub|11-20|def print_help(version)|
-|`run`|fn|pub|21-49|def run(args)|
+|`run`|fn|pub|21-50|def run(args)|
 
 
 ---
 
-# pdf_tiler_100.py | Python | 49L | 4 symbols | 3 imports | 1 comments
+# pdf_tiler_100.py | Python | 50L | 4 symbols | 3 imports | 1 comments
 > Path: `src/shell_scripts/commands/pdf_tiler_100.py`
 
 ## Imports
@@ -976,7 +1029,7 @@ from shell_scripts.utils import require_commands, print_error
 - var `DESCRIPTION = "Tile PDF to A4 pages at original A1 size using plakativ."` (L8)
 ### fn `def print_help(version)` (L11-20)
 
-### fn `def run(args)` (L21-49)
+### fn `def run(args)` (L21-50)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -984,7 +1037,7 @@ from shell_scripts.utils import require_commands, print_error
 |`PROGRAM`|var|pub|7||
 |`DESCRIPTION`|var|pub|8||
 |`print_help`|fn|pub|11-20|def print_help(version)|
-|`run`|fn|pub|21-49|def run(args)|
+|`run`|fn|pub|21-50|def run(args)|
 
 
 ---
@@ -1031,7 +1084,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# req_cmd.py | Python | 242L | 9 symbols | 6 imports | 9 comments
+# req_cmd.py | Python | 243L | 9 symbols | 6 imports | 9 comments
 > Path: `src/shell_scripts/commands/req_cmd.py`
 
 ## Imports
@@ -1041,7 +1094,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from shell_scripts.config import get_req_profile
-from shell_scripts.utils import print_error
+from shell_scripts.utils import print_error, require_commands
 ```
 
 ## Definitions
@@ -1091,13 +1144,13 @@ from shell_scripts.utils import print_error
 - @return {None} Performs filesystem side effects.
 - @satisfies REQ-048
 
-### fn `def run(args: list[str]) -> int` (L178-242)
+### fn `def run(args: list[str]) -> int` (L178-243)
 - @brief Execute `req` orchestration for selected directory targets.
 - @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options. Converts external `req` non-zero exits into explicit error output and propagated return codes.
 - @param args {list[str]} Command arguments excluding `req` token.
 - @return {int} `0` on success; non-zero for option or subprocess failures.
 - @exception {subprocess.CalledProcessError} Internally handled and converted to deterministic return code + error output.
-- @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054
+- @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1110,12 +1163,12 @@ from shell_scripts.utils import print_error
 |`_iter_descendant_dirs`|fn|priv|106-125|def _iter_descendant_dirs(base_dir: Path) -> list[Path]|
 |`_build_req_args`|fn|priv|126-161|def _build_req_args(target_dir: Path) -> list[str]|
 |`_prepare_target_directory`|fn|priv|162-177|def _prepare_target_directory(target_dir: Path) -> None|
-|`run`|fn|pub|178-242|def run(args: list[str]) -> int|
+|`run`|fn|pub|178-243|def run(args: list[str]) -> int|
 
 
 ---
 
-# tests_cmd.py | Python | 62L | 4 symbols | 4 imports | 1 comments
+# tests_cmd.py | Python | 87L | 4 symbols | 4 imports | 3 comments
 > Path: `src/shell_scripts/commands/tests_cmd.py`
 
 ## Imports
@@ -1123,58 +1176,68 @@ from shell_scripts.utils import print_error
 import os
 import sys
 import subprocess
-from shell_scripts.utils import require_project_root, print_info, print_success
+from shell_scripts.utils import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L8)
-- var `DESCRIPTION = "Run pytest test suite in a Python virtual environment."` (L9)
-### fn `def print_help(version)` (L12-19)
+- var `PROGRAM = "shellscripts"` (L20)
+- var `DESCRIPTION = "Run pytest test suite in a Python virtual environment."` (L21)
+### fn `def print_help(version)` (L24-31)
 
-### fn `def run(args)` (L20-62)
+### fn `def run(args)` (L32-87)
+- @brief Execute managed pytest workflow with executable pre-checks.
+- @details Validates `sys.executable` and flow-conditional executables (`pip`, `playwright`, `.venv/bin/python3`) before each subprocess invocation.
+- @param args {list[str]} Additional arguments forwarded to pytest.
+- @return {int} Subprocess return code from pytest execution.
+- @satisfies REQ-036, REQ-037, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|8||
-|`DESCRIPTION`|var|pub|9||
-|`print_help`|fn|pub|12-19|def print_help(version)|
-|`run`|fn|pub|20-62|def run(args)|
+|`PROGRAM`|var|pub|20||
+|`DESCRIPTION`|var|pub|21||
+|`print_help`|fn|pub|24-31|def print_help(version)|
+|`run`|fn|pub|32-87|def run(args)|
 
 
 ---
 
-# ubuntu_dark_theme.py | Python | 45L | 4 symbols | 3 imports | 1 comments
+# ubuntu_dark_theme.py | Python | 64L | 4 symbols | 3 imports | 3 comments
 > Path: `src/shell_scripts/commands/ubuntu_dark_theme.py`
 
 ## Imports
 ```
 import subprocess
-from shell_scripts.utils import print_info, command_exists, print_error
+from shell_scripts.utils import print_info, command_exists, print_error, require_commands
 import os
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "Apply GNOME and Qt dark theme settings."` (L7)
-### fn `def print_help(version)` (L10-19)
+- var `PROGRAM = "shellscripts"` (L12)
+- var `DESCRIPTION = "Apply GNOME and Qt dark theme settings."` (L13)
+### fn `def print_help(version)` (L16-25)
 
-### fn `def run(args)` (L20-45)
+### fn `def run(args)` (L26-64)
+- @brief Apply dark-theme settings with conditional executable checks.
+- @details For each available theme tool (`gsettings`, `gtk-chtheme`, `qt5ct`, `qt6ct`), validates command executability before subprocess invocation.
+- @param args {list[str]} Unused command arguments.
+- @return {int} `0` on completion.
+- @satisfies REQ-022, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`print_help`|fn|pub|10-19|def print_help(version)|
-|`run`|fn|pub|20-45|def run(args)|
+|`PROGRAM`|var|pub|12||
+|`DESCRIPTION`|var|pub|13||
+|`print_help`|fn|pub|16-25|def print_help(version)|
+|`run`|fn|pub|26-64|def run(args)|
 
 
 ---
 
-# venv_cmd.py | Python | 59L | 4 symbols | 5 imports | 1 comments
+# venv_cmd.py | Python | 82L | 4 symbols | 5 imports | 3 comments
 > Path: `src/shell_scripts/commands/venv_cmd.py`
 
 ## Imports
@@ -1183,24 +1246,29 @@ import os
 import sys
 import shutil
 import subprocess
-from shell_scripts.utils import require_project_root, print_info, print_success
+from shell_scripts.utils import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L9)
-- var `DESCRIPTION = "Create or recreate Python virtual environment with requirements."` (L10)
-### fn `def print_help(version)` (L13-20)
+- var `PROGRAM = "shellscripts"` (L21)
+- var `DESCRIPTION = "Create or recreate Python virtual environment with requirements."` (L22)
+### fn `def print_help(version)` (L25-32)
 
-### fn `def run(args)` (L21-59)
+### fn `def run(args)` (L33-82)
+- @brief Recreate virtual environment with executable pre-checks.
+- @details Validates `sys.executable` and flow-conditional `pip` executable before corresponding subprocess invocations.
+- @param args {list[str]} Command arguments (`--force` accepted).
+- @return {int} `0` on successful execution.
+- @satisfies REQ-038, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|9||
-|`DESCRIPTION`|var|pub|10||
-|`print_help`|fn|pub|13-20|def print_help(version)|
-|`run`|fn|pub|21-59|def run(args)|
+|`PROGRAM`|var|pub|21||
+|`DESCRIPTION`|var|pub|22||
+|`print_help`|fn|pub|25-32|def print_help(version)|
+|`run`|fn|pub|33-82|def run(args)|
 
 
 ---
@@ -1244,58 +1312,68 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# vscode_cmd.py | Python | 24L | 4 symbols | 2 imports | 1 comments
+# vscode_cmd.py | Python | 41L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/vscode_cmd.py`
 
 ## Imports
 ```
 import os
-from shell_scripts.utils import require_project_root
+from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "Open VS Code in the project root with Codex integration."` (L7)
-### fn `def print_help(version)` (L10-17)
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "Open VS Code in the project root with Codex integration."` (L14)
+### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L18-24)
+### fn `def run(args)` (L25-41)
+- @brief Launch VS Code after executable validation.
+- @details Changes current directory to project root, sets `CODEX_HOME`, validates executable availability for VS Code binary, and replaces process.
+- @param args {list[str]} Additional CLI args forwarded to VS Code.
+- @return {None} Function does not return on successful `os.execvp`.
+- @satisfies REQ-020, REQ-021, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`print_help`|fn|pub|10-17|def print_help(version)|
-|`run`|fn|pub|18-24|def run(args)|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`print_help`|fn|pub|17-24|def print_help(version)|
+|`run`|fn|pub|25-41|def run(args)|
 
 
 ---
 
-# vsinsider_cmd.py | Python | 24L | 4 symbols | 2 imports | 1 comments
+# vsinsider_cmd.py | Python | 41L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/vsinsider_cmd.py`
 
 ## Imports
 ```
 import os
-from shell_scripts.utils import require_project_root
+from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L6)
-- var `DESCRIPTION = "Open VS Code Insiders in the project root with Codex integration."` (L7)
-### fn `def print_help(version)` (L10-17)
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "Open VS Code Insiders in the project root with Codex integration."` (L14)
+### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L18-24)
+### fn `def run(args)` (L25-41)
+- @brief Launch VS Code Insiders after executable validation.
+- @details Changes current directory to project root, sets `CODEX_HOME`, validates executable availability for VS Code Insiders binary, and replaces process.
+- @param args {list[str]} Additional CLI args forwarded to VS Code Insiders.
+- @return {None} Function does not return on successful `os.execvp`.
+- @satisfies REQ-020, REQ-021, REQ-055, REQ-056
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|6||
-|`DESCRIPTION`|var|pub|7||
-|`print_help`|fn|pub|10-17|def print_help(version)|
-|`run`|fn|pub|18-24|def run(args)|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`print_help`|fn|pub|17-24|def print_help(version)|
+|`run`|fn|pub|25-41|def run(args)|
 
 
 ---
@@ -1414,7 +1492,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 181L | 6 symbols | 7 imports | 7 comments
+# core.py | Python | 189L | 6 symbols | 7 imports | 7 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1425,13 +1503,13 @@ from shell_scripts import __version__
 from shell_scripts.config import (
 from shell_scripts.version_check import check_for_updates
 from shell_scripts.commands import get_command, get_all_commands
-from shell_scripts.utils import detect_runtime_os, is_linux, print_error, print_info
+from shell_scripts.utils import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L23)
-### fn `def print_help(command_name=None)` (L26-69)
+- var `PROGRAM = "shellscripts"` (L29)
+### fn `def print_help(command_name=None)` (L32-75)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and all command descriptions sorted by registry key.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -1439,26 +1517,26 @@ from shell_scripts.utils import detect_runtime_os, is_linux, print_error, print_
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, REQ-001, REQ-002
 
-### fn `def do_upgrade()` (L70-91)
+### fn `def do_upgrade()` (L76-98)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
-- @satisfies REQ-004, REQ-045
+- @satisfies REQ-004, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L92-113)
+### fn `def do_uninstall()` (L99-121)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
-- @satisfies REQ-005, REQ-045
+- @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L114-128)
+### fn `def do_write_config()` (L122-136)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L129-181)
+### fn `def main()` (L137-189)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
@@ -1467,17 +1545,17 @@ from shell_scripts.utils import detect_runtime_os, is_linux, print_error, print_
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|23||
-|`print_help`|fn|pub|26-69|def print_help(command_name=None)|
-|`do_upgrade`|fn|pub|70-91|def do_upgrade()|
-|`do_uninstall`|fn|pub|92-113|def do_uninstall()|
-|`do_write_config`|fn|pub|114-128|def do_write_config()|
-|`main`|fn|pub|129-181|def main()|
+|`PROGRAM`|var|pub|29||
+|`print_help`|fn|pub|32-75|def print_help(command_name=None)|
+|`do_upgrade`|fn|pub|76-98|def do_upgrade()|
+|`do_uninstall`|fn|pub|99-121|def do_uninstall()|
+|`do_write_config`|fn|pub|122-136|def do_write_config()|
+|`main`|fn|pub|137-189|def main()|
 
 
 ---
 
-# utils.py | Python | 160L | 30 symbols | 5 imports | 11 comments
+# utils.py | Python | 290L | 35 symbols | 6 imports | 16 comments
 > Path: `src/shell_scripts/utils.py`
 
 ## Imports
@@ -1486,109 +1564,150 @@ import os
 import sys
 import subprocess
 import shutil
+import shlex
 from pathlib import Path
 ```
 
 ## Definitions
 
-- var `RESET = "\033[0m"` (L16)
-- var `BOLD = "\033[1m"` (L17)
-- var `RED = "\033[31m"` (L18)
-- var `GREEN = "\033[32m"` (L19)
-- var `YELLOW = "\033[33m"` (L20)
-- var `BLUE = "\033[34m"` (L21)
-- var `MAGENTA = "\033[35m"` (L22)
-- var `CYAN = "\033[36m"` (L23)
-- var `WHITE = "\033[37m"` (L24)
-- var `BRIGHT_RED = "\033[91m"` (L25)
-- var `BRIGHT_GREEN = "\033[92m"` (L26)
-- var `BRIGHT_YELLOW = "\033[93m"` (L27)
-- var `BRIGHT_BLUE = "\033[94m"` (L28)
-- var `BRIGHT_CYAN = "\033[96m"` (L29)
-- var `BRIGHT_WHITE = "\033[97m"` (L30)
-### fn `def color_enabled()` (L40-45)
+- var `RESET = "\033[0m"` (L17)
+- var `BOLD = "\033[1m"` (L18)
+- var `RED = "\033[31m"` (L19)
+- var `GREEN = "\033[32m"` (L20)
+- var `YELLOW = "\033[33m"` (L21)
+- var `BLUE = "\033[34m"` (L22)
+- var `MAGENTA = "\033[35m"` (L23)
+- var `CYAN = "\033[36m"` (L24)
+- var `WHITE = "\033[37m"` (L25)
+- var `BRIGHT_RED = "\033[91m"` (L26)
+- var `BRIGHT_GREEN = "\033[92m"` (L27)
+- var `BRIGHT_YELLOW = "\033[93m"` (L28)
+- var `BRIGHT_BLUE = "\033[94m"` (L29)
+- var `BRIGHT_CYAN = "\033[96m"` (L30)
+- var `BRIGHT_WHITE = "\033[97m"` (L31)
+### fn `def color_enabled()` (L41-46)
 - @brief Cached normalized runtime operating-system token.
 - @details Initialized on first detection and reused to guarantee stable
 startup-level OS semantics across command execution flow.
 - @satisfies DES-002, REQ-047
 
-### fn `def c(text, color)` (L46-51)
+### fn `def c(text, color)` (L47-52)
 
-### fn `def print_info(msg)` (L52-55)
+### fn `def print_info(msg)` (L53-56)
 
-### fn `def print_error(msg)` (L56-59)
+### fn `def print_error(msg)` (L57-60)
 
-### fn `def print_warn(msg)` (L60-63)
+### fn `def print_warn(msg)` (L61-64)
 
-### fn `def print_success(msg)` (L64-67)
+### fn `def print_success(msg)` (L65-68)
 
-### fn `def get_project_root()` (L68-80)
+### fn `def get_project_root()` (L69-81)
 
-### fn `def require_project_root()` (L81-88)
+### fn `def require_project_root()` (L82-90)
 
-### fn `def detect_runtime_os()` (L89-111)
+### fn `def detect_runtime_os()` (L91-113)
 - @brief Detect and cache runtime operating-system token.
 - @details Normalizes `sys.platform` into deterministic categories (`windows`, `linux`, `darwin`, `other`) and stores the result in module cache for subsequent calls. Time complexity O(1).
 - @return {str} Normalized runtime operating-system token.
 - @satisfies DES-002, REQ-047
 
-### fn `def get_runtime_os()` (L112-125)
+### fn `def get_runtime_os()` (L114-127)
 - @brief Return cached runtime operating-system token.
 - @details Lazily initializes the cache via `detect_runtime_os` when unset, preserving a single startup-consistent OS classification.
 - @return {str} Normalized runtime operating-system token.
 - @satisfies DES-002, REQ-047
 
-### fn `def is_windows()` (L126-136)
+### fn `def is_windows()` (L128-138)
 - @brief Check whether runtime operating system is Windows.
 - @details Evaluates cached runtime token from `get_runtime_os`.
 - @return {bool} `True` when runtime OS is Windows; otherwise `False`.
 - @satisfies DES-013, REQ-008, REQ-047
 
-### fn `def is_linux()` (L137-147)
+### fn `def is_linux()` (L139-149)
 - @brief Check whether runtime operating system is Linux.
 - @details Evaluates cached runtime token from `get_runtime_os`.
 - @return {bool} `True` when runtime OS is Linux; otherwise `False`.
 - @satisfies CTN-004, REQ-004, REQ-005, REQ-047
 
-### fn `def command_exists(cmd)` (L148-151)
+### fn `def _is_executable_file(path: Path)` `priv` (L150-178)
+- @brief Validate executable-file capability for a filesystem path.
+- @details Expands user-home markers, checks path kind, and applies platform executable checks. On Windows, missing-extension candidates are validated against `PATHEXT` suffixes.
+- @param path {Path} Candidate executable filesystem path.
+- @return {bool} `True` when the path resolves to an executable file.
+- @satisfies CTN-003, REQ-055
 
-### fn `def require_commands(*cmds)` (L152-158)
+### fn `def is_executable_command(command)` (L179-200)
+- @brief Determine whether an external command is executable on runtime OS.
+- @details Accepts command names or executable paths. Name-based checks use `PATH` resolution via `shutil.which`; path-based checks verify executable file metadata, including Windows `PATHEXT` variants.
+- @param command {str} Command token or filesystem path to executable.
+- @return {bool} `True` when command is executable; otherwise `False`.
+- @satisfies CTN-003, REQ-055
 
-### fn `def run_cmd(cmd, **kwargs)` (L159-160)
+### fn `def command_exists(cmd)` (L201-204)
+
+### fn `def require_commands(*cmds)` (L205-211)
+
+### fn `def _is_shell_assignment_token(token)` `priv` (L212-227)
+- @brief Check whether a token is a shell variable assignment.
+- @details Matches `NAME=value` form where `NAME` obeys shell identifier syntax and therefore does not represent an executable token.
+- @param token {str} Shell token candidate.
+- @return {bool} `True` when token is an assignment expression.
+- @satisfies REQ-056
+
+### fn `def extract_shell_executables(command_line)` (L228-271)
+- @brief Extract executable tokens from a shell command line.
+- @details Tokenizes command line using runtime-OS splitting mode and returns ordered unique executable candidates at command boundaries (`&&`, `||`, `;`, `|`) including wrapper commands such as `sudo`.
+- @param command_line {str} Raw shell command line.
+- @return {list[str]} Ordered executable token list.
+- @satisfies REQ-056
+
+### fn `def require_shell_command_executables(command_line)` (L272-288)
+- @brief Validate executable availability for a shell command line.
+- @details Extracts executable tokens from `command_line`, validates each token via `is_executable_command`, prints deterministic error with missing command name, and terminates process on first failure.
+- @param command_line {str} Raw shell command line.
+- @return {None} Process exits on validation failure.
+- @satisfies REQ-056
+
+### fn `def run_cmd(cmd, **kwargs)` (L289-290)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`RESET`|var|pub|16||
-|`BOLD`|var|pub|17||
-|`RED`|var|pub|18||
-|`GREEN`|var|pub|19||
-|`YELLOW`|var|pub|20||
-|`BLUE`|var|pub|21||
-|`MAGENTA`|var|pub|22||
-|`CYAN`|var|pub|23||
-|`WHITE`|var|pub|24||
-|`BRIGHT_RED`|var|pub|25||
-|`BRIGHT_GREEN`|var|pub|26||
-|`BRIGHT_YELLOW`|var|pub|27||
-|`BRIGHT_BLUE`|var|pub|28||
-|`BRIGHT_CYAN`|var|pub|29||
-|`BRIGHT_WHITE`|var|pub|30||
-|`color_enabled`|fn|pub|40-45|def color_enabled()|
-|`c`|fn|pub|46-51|def c(text, color)|
-|`print_info`|fn|pub|52-55|def print_info(msg)|
-|`print_error`|fn|pub|56-59|def print_error(msg)|
-|`print_warn`|fn|pub|60-63|def print_warn(msg)|
-|`print_success`|fn|pub|64-67|def print_success(msg)|
-|`get_project_root`|fn|pub|68-80|def get_project_root()|
-|`require_project_root`|fn|pub|81-88|def require_project_root()|
-|`detect_runtime_os`|fn|pub|89-111|def detect_runtime_os()|
-|`get_runtime_os`|fn|pub|112-125|def get_runtime_os()|
-|`is_windows`|fn|pub|126-136|def is_windows()|
-|`is_linux`|fn|pub|137-147|def is_linux()|
-|`command_exists`|fn|pub|148-151|def command_exists(cmd)|
-|`require_commands`|fn|pub|152-158|def require_commands(*cmds)|
-|`run_cmd`|fn|pub|159-160|def run_cmd(cmd, **kwargs)|
+|`RESET`|var|pub|17||
+|`BOLD`|var|pub|18||
+|`RED`|var|pub|19||
+|`GREEN`|var|pub|20||
+|`YELLOW`|var|pub|21||
+|`BLUE`|var|pub|22||
+|`MAGENTA`|var|pub|23||
+|`CYAN`|var|pub|24||
+|`WHITE`|var|pub|25||
+|`BRIGHT_RED`|var|pub|26||
+|`BRIGHT_GREEN`|var|pub|27||
+|`BRIGHT_YELLOW`|var|pub|28||
+|`BRIGHT_BLUE`|var|pub|29||
+|`BRIGHT_CYAN`|var|pub|30||
+|`BRIGHT_WHITE`|var|pub|31||
+|`color_enabled`|fn|pub|41-46|def color_enabled()|
+|`c`|fn|pub|47-52|def c(text, color)|
+|`print_info`|fn|pub|53-56|def print_info(msg)|
+|`print_error`|fn|pub|57-60|def print_error(msg)|
+|`print_warn`|fn|pub|61-64|def print_warn(msg)|
+|`print_success`|fn|pub|65-68|def print_success(msg)|
+|`get_project_root`|fn|pub|69-81|def get_project_root()|
+|`require_project_root`|fn|pub|82-90|def require_project_root()|
+|`detect_runtime_os`|fn|pub|91-113|def detect_runtime_os()|
+|`get_runtime_os`|fn|pub|114-127|def get_runtime_os()|
+|`is_windows`|fn|pub|128-138|def is_windows()|
+|`is_linux`|fn|pub|139-149|def is_linux()|
+|`_is_executable_file`|fn|priv|150-178|def _is_executable_file(path: Path)|
+|`is_executable_command`|fn|pub|179-200|def is_executable_command(command)|
+|`command_exists`|fn|pub|201-204|def command_exists(cmd)|
+|`require_commands`|fn|pub|205-211|def require_commands(*cmds)|
+|`_is_shell_assignment_token`|fn|priv|212-227|def _is_shell_assignment_token(token)|
+|`extract_shell_executables`|fn|pub|228-271|def extract_shell_executables(command_line)|
+|`require_shell_command_executables`|fn|pub|272-288|def require_shell_command_executables(command_line)|
+|`run_cmd`|fn|pub|289-290|def run_cmd(cmd, **kwargs)|
 
 
 ---

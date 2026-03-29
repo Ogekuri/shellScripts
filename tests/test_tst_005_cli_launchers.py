@@ -69,6 +69,7 @@ def test_cli_codex_creates_auth_symlink_sets_codex_home_and_executes_expected_co
     monkeypatch.setattr(cli_codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(cli_codex.Path, "home", lambda: fake_home)
     monkeypatch.setattr(cli_codex, "print_info", _fake_print_info)
+    monkeypatch.setattr(cli_codex, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(cli_codex.os, "execvp", _fake_execvp)
 
     try:
@@ -138,6 +139,7 @@ def test_cli_codex_keeps_existing_auth_symlink_without_creation_message(
     monkeypatch.setattr(cli_codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(cli_codex.Path, "home", lambda: fake_home)
     monkeypatch.setattr(cli_codex, "print_info", _fake_print_info)
+    monkeypatch.setattr(cli_codex, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(cli_codex.os, "execvp", _fake_execvp)
 
     try:
@@ -180,6 +182,7 @@ def test_cli_copilot_executes_expected_command(monkeypatch):
         raise SystemExit(0)
 
     monkeypatch.setattr(cli_copilot, "require_project_root", lambda: Path("/tmp/p"))
+    monkeypatch.setattr(cli_copilot, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(cli_copilot.os, "execvp", _fake_execvp)
 
     try:
@@ -223,6 +226,7 @@ def test_cli_gemini_executes_expected_command(monkeypatch):
         raise SystemExit(0)
 
     monkeypatch.setattr(cli_gemini, "require_project_root", lambda: Path("/tmp/p"))
+    monkeypatch.setattr(cli_gemini, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(cli_gemini.os, "execvp", _fake_execvp)
 
     try:
@@ -263,6 +267,7 @@ def test_cli_claude_executes_expected_command(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli_claude, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(cli_claude.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(cli_claude, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(cli_claude.os, "execvp", _fake_execvp)
 
     try:
@@ -306,6 +311,7 @@ def test_cli_opencode_executes_expected_command(monkeypatch):
         raise SystemExit(0)
 
     monkeypatch.setattr(cli_opencode, "require_project_root", lambda: Path("/tmp/p"))
+    monkeypatch.setattr(cli_opencode, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(cli_opencode.os, "execvp", _fake_execvp)
 
     try:
@@ -346,6 +352,7 @@ def test_cli_kiro_executes_expected_command(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli_kiro, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(cli_kiro.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(cli_kiro, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(cli_kiro.os, "execvp", _fake_execvp)
 
     try:
@@ -396,6 +403,7 @@ def test_vscode_appends_project_path_and_sets_codex_home(monkeypatch):
         raise SystemExit(0)
 
     monkeypatch.setattr(vscode_cmd, "require_project_root", lambda: project_root)
+    monkeypatch.setattr(vscode_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(vscode_cmd.os, "chdir", _fake_chdir)
     monkeypatch.setattr(vscode_cmd.os, "execvp", _fake_execvp)
 
@@ -448,6 +456,7 @@ def test_vsinsider_appends_project_path_and_sets_codex_home(monkeypatch):
         raise SystemExit(0)
 
     monkeypatch.setattr(vsinsider_cmd, "require_project_root", lambda: project_root)
+    monkeypatch.setattr(vsinsider_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(vsinsider_cmd.os, "chdir", _fake_chdir)
     monkeypatch.setattr(vsinsider_cmd.os, "execvp", _fake_execvp)
 

@@ -445,3 +445,47 @@ def test_pdf_crop_run_supports_required_options(monkeypatch, tmp_path):
     assert observed["convert"]["first"] == 2
     assert observed["convert"]["last"] == 4
     assert observed["convert"]["total"] == 3
+
+
+def test_pdf_tiler_090_checks_executable_before_exec(monkeypatch, tmp_path):
+    """
+    @brief Validate pre-exec command guard in pdf-tiler-090.
+    @details Captures require_commands calls and confirms `plakativ` executable
+      check occurs before process replacement.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {pathlib.Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-007, REQ-055, REQ-056
+    """
+
+    input_pdf = tmp_path / "doc.pdf"
+    input_pdf.write_text("dummy")
+    observed = []
+
+    def _fake_require_commands(*cmds):
+        """
+        @brief Mock require_commands for guard verification.
+        @details Records requested command tokens.
+        @param cmds {tuple[str, ...]} Command tokens under validation.
+        @return {None} Side effects only.
+        """
+
+        observed.append(cmds)
+
+    def _fake_execvp(_executable, _args):
+        """
+        @brief Mock os.execvp boundary.
+        @details Terminates execution flow to keep test deterministic.
+        @throws {SystemExit} Forced termination for test boundary.
+        @return {NoReturn} Function always raises.
+        """
+
+        raise SystemExit(0)
+
+    monkeypatch.setattr(pdf_tiler_090, "require_commands", _fake_require_commands)
+    monkeypatch.setattr(pdf_tiler_090.os, "execvp", _fake_execvp)
+
+    with pytest.raises(SystemExit):
+        pdf_tiler_090.run([str(input_pdf)])
+
+    assert observed == [("plakativ",), ("plakativ",)]

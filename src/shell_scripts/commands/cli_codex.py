@@ -11,7 +11,7 @@ and sets `CODEX_HOME` to `<project>/.codex` before delegating execution to
 import os
 from pathlib import Path
 
-from shell_scripts.utils import print_info, require_project_root
+from shell_scripts.utils import print_info, require_project_root, require_commands
 
 ## @var PROGRAM
 #  @brief Base CLI program name used in help output.
@@ -96,4 +96,5 @@ def run(args: list[str]) -> None:
     codex_home = str(project_root / ".codex")
     os.environ["CODEX_HOME"] = codex_home
     cmd = ["/usr/bin/codex", "--yolo"] + args
+    require_commands(cmd[0])
     os.execvp(cmd[0], cmd)

@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
+"""@brief PixelMed DICOM viewer launcher.
+
+@details Resolves Java runtime and classpath prerequisites and validates Java
+executable availability before subprocess invocation.
+@satisfies REQ-025, REQ-055, REQ-056
+"""
+
 import os
 import subprocess
 import shutil
 
-from shell_scripts.utils import print_error
+from shell_scripts.utils import print_error, require_commands
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Launch PixelMed DICOM image viewer."
@@ -39,6 +46,15 @@ def _find_jars(*jar_names):
 
 
 def run(args):
+    """@brief Run PixelMed DICOM viewer after executable validation.
+
+    @details Validates Java runtime availability and command executability for
+    the selected Java binary before invoking the viewer class.
+    @param args {list[str]} DICOM file arguments forwarded to PixelMed viewer.
+    @return {int} Subprocess return code.
+    @satisfies REQ-025, REQ-055, REQ-056
+    """
+
     if not os.path.exists(JAVA_WRAPPERS):
         print_error(
             "java-wrappers not found. Install the 'java-wrappers' package."
@@ -62,5 +78,6 @@ def run(args):
         "com.pixelmed.display.DicomImageViewer",
     ] + args
 
+    require_commands(cmd[0])
     result = subprocess.run(cmd)
     return result.returncode

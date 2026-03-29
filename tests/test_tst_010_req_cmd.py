@@ -52,6 +52,7 @@ def test_req_default_targets_current_directory(monkeypatch, tmp_path):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(
         req_cmd,
@@ -99,6 +100,7 @@ def test_req_dirs_targets_only_first_level_children(monkeypatch, tmp_path):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
 
@@ -141,6 +143,7 @@ def test_req_recursive_targets_descendants_only(monkeypatch, tmp_path):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
 
@@ -180,6 +183,7 @@ def test_req_rejects_dirs_and_recursive_together(monkeypatch):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
+    monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
 
     result = req_cmd.run(["--dirs", "--recursive"])
 
@@ -223,6 +227,7 @@ def test_req_returns_error_code_when_external_req_fails(monkeypatch, tmp_path):
         observed["error"] = message
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(req_cmd, "print_error", _fake_print_error)
     monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
@@ -260,6 +265,7 @@ def test_req_builds_hardcoded_and_configurable_args(monkeypatch, tmp_path):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(
         req_cmd,

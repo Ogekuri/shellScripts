@@ -4,7 +4,7 @@
 @details Provides selector-based installation flows for npm-distributed tools
 and direct-download installers. Npm command prefix is resolved from detected
 runtime OS, omitting `sudo` on Windows and using `sudo` on non-Windows.
-@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047
+@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-056
 """
 
 import os
@@ -14,7 +14,13 @@ import zipfile
 import tempfile
 from pathlib import Path
 
-from shell_scripts.utils import is_windows, print_info, print_error, print_success
+from shell_scripts.utils import (
+    is_windows,
+    print_info,
+    print_error,
+    print_success,
+    require_commands,
+)
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."
@@ -79,7 +85,7 @@ def _install_npm_tool(tool_key):
     and emits status messages.
     @param tool_key {str} Tool identifier key from `TOOLS`.
     @return {None} Executes side effects and prints result messages.
-    @satisfies DES-013, REQ-008, REQ-047
+    @satisfies DES-013, REQ-008, REQ-047, REQ-056
     """
 
     info = TOOLS[tool_key]
@@ -89,7 +95,9 @@ def _install_npm_tool(tool_key):
         if npm_cmd_path:
             command[0] = npm_cmd_path
     else:
+        require_commands("sudo")
         command = ["sudo"] + command
+    require_commands(command[0])
     print_info(f"Installing {info['name']}...")
     result = subprocess.run(command)
     if result.returncode != 0:

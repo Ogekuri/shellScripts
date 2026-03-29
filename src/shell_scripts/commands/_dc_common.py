@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
+"""@brief Shared MIME-based dispatcher primitives for diff/edit/view commands.
+
+@details Provides extension and MIME classification plus external executable
+resolution and process replacement for generic file tool wrappers.
+@satisfies DES-007, REQ-024, REQ-055, REQ-056
+"""
+
 import os
-import sys
 import subprocess
-import shutil
+
+from shell_scripts.utils import is_executable_command, print_error
 
 CODE_EXTENSIONS = {
     "c", "h", "cc", "cpp", "cxx", "hpp", "hh", "hxx", "rs", "go",
@@ -25,10 +32,19 @@ def get_extension(filepath):
 
 
 def detect_mime(filepath):
+    """@brief Detect file MIME type with external tools.
+
+    @details Probes MIME by trying `mimetype` then `file --mime-type`, using
+    executable availability checks before subprocess invocation.
+    @param filepath {str} Target file path.
+    @return {str} MIME type string or empty string on detection failure.
+    @satisfies REQ-024, REQ-056
+    """
+
     if not os.path.exists(filepath):
         return ""
     for cmd in ["mimetype", "file"]:
-        if shutil.which(cmd):
+        if is_executable_command(cmd):
             try:
                 result = subprocess.run(
                     [cmd if cmd == "mimetype" else "file", "-b", "--mime-type", filepath]
@@ -81,18 +97,40 @@ def categorize(filepath):
 
 
 def pick_cmd(primary, fallback):
-    if primary and shutil.which(primary[0]):
+    """@brief Select primary command when executable, else fallback.
+
+    @details Uses shared executable-check helper on first token of primary
+    command vector.
+    @param primary {list[str]} Preferred command vector.
+    @param fallback {list[str]} Fallback command vector.
+    @return {list[str]} Selected executable command vector.
+    @satisfies REQ-024, REQ-055
+    """
+
+    if primary and is_executable_command(primary[0]):
         return primary
     return fallback
 
 
 def dispatch(category_cmds, fallback_cmd, filepath, extra_args):
+    """@brief Dispatch diff/edit/view command by detected file category.
+
+    @details Resolves category-specific command vector, validates executable
+    availability, and replaces process with selected command.
+    @param category_cmds {dict[str, list[str]]} Category-to-command mapping.
+    @param fallback_cmd {list[str]} Fallback command vector.
+    @param filepath {str} Target file path.
+    @param extra_args {list[str]} Additional arguments forwarded to executable.
+    @return {int} `1` when executable is unavailable; otherwise no return on exec.
+    @satisfies REQ-024, REQ-055, REQ-056
+    """
+
     category = categorize(filepath)
     cmd_list = category_cmds.get(category, fallback_cmd)
     cmd = pick_cmd(cmd_list, fallback_cmd)
 
-    if not shutil.which(cmd[0]):
-        print(f"Error: command '{cmd[0]}' not found.", file=sys.stderr)
+    if not is_executable_command(cmd[0]):
+        print_error(f"Command not executable: {cmd[0]}")
         return 1
 
     full_cmd = cmd + [filepath] + extra_args

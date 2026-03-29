@@ -6,7 +6,7 @@ installation arguments for selected target directories. Target selection mode is
 current directory by default, first-level child directories with `--dirs`, or
 all descendant directories with `--recursive`. Provider/static-check argument
 lists are resolved from runtime config with hardcoded fallback defaults.
-@satisfies PRJ-003, DES-008, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
+@satisfies PRJ-003, DES-008, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 from shell_scripts.config import get_req_profile
-from shell_scripts.utils import print_error
+from shell_scripts.utils import print_error, require_commands
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Run useReq bootstrap on current or discovered directories."
@@ -187,12 +187,13 @@ def run(args: list[str]) -> int:
     @return {int} `0` on success; non-zero for option or subprocess failures.
     @exception {subprocess.CalledProcessError} Internally handled and converted
       to deterministic return code + error output.
-    @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054
+    @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056
     """
 
     mode_current = True
     mode_dirs = False
     mode_recursive = False
+    require_commands("req")
 
     for arg in args:
         if arg == "--dirs":

@@ -96,6 +96,11 @@ def test_do_upgrade_linux_runs_expected_uv_command(monkeypatch):
     monkeypatch.setattr(core, "is_linux", lambda: True)
     monkeypatch.setattr(
         core,
+        "require_shell_command_executables",
+        lambda command: observed.__setitem__("checked", command),
+    )
+    monkeypatch.setattr(
+        core,
         "get_management_command",
         lambda name: "custom-upgrade" if name == "upgrade" else "unused",
     )
@@ -106,6 +111,7 @@ def test_do_upgrade_linux_runs_expected_uv_command(monkeypatch):
     assert result == 17
     assert observed["shell"] is True
     assert observed["command"] == "custom-upgrade"
+    assert observed["checked"] == "custom-upgrade"
 
 
 def test_do_uninstall_linux_runs_expected_uv_command(monkeypatch):
@@ -137,6 +143,11 @@ def test_do_uninstall_linux_runs_expected_uv_command(monkeypatch):
     monkeypatch.setattr(core, "is_linux", lambda: True)
     monkeypatch.setattr(
         core,
+        "require_shell_command_executables",
+        lambda command: observed.__setitem__("checked", command),
+    )
+    monkeypatch.setattr(
+        core,
         "get_management_command",
         lambda name: "custom-uninstall" if name == "uninstall" else "unused",
     )
@@ -147,6 +158,7 @@ def test_do_uninstall_linux_runs_expected_uv_command(monkeypatch):
     assert result == 9
     assert observed["shell"] is True
     assert observed["command"] == "custom-uninstall"
+    assert observed["checked"] == "custom-uninstall"
 
 
 def test_main_loads_runtime_config_before_dispatch(monkeypatch):

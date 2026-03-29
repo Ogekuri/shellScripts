@@ -46,4 +46,5 @@ def run(args):
         str(output_file),
         str(input_file),
     ]
+    require_commands(cmd[0])
     os.execvp(cmd[0], cmd)

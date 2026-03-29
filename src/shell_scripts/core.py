@@ -4,7 +4,7 @@
 @details Provides global help rendering, management command execution
 (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`), runtime
 configuration bootstrap, and subcommand delegation to lazily imported modules.
-@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
+@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056
 """
 
 import sys
@@ -18,7 +18,13 @@ from shell_scripts.config import (
 )
 from shell_scripts.version_check import check_for_updates
 from shell_scripts.commands import get_command, get_all_commands
-from shell_scripts.utils import detect_runtime_os, is_linux, print_error, print_info
+from shell_scripts.utils import (
+    detect_runtime_os,
+    is_linux,
+    print_error,
+    print_info,
+    require_shell_command_executables,
+)
 
 PROGRAM = "shellscripts"
 
@@ -74,11 +80,12 @@ def do_upgrade():
     `management.upgrade`, executes it on Linux via shell invocation, and prints
     manual fallback command on non-Linux systems.
     @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
-    @satisfies REQ-004, REQ-045
+    @satisfies REQ-004, REQ-045, REQ-056
     """
 
     install_cmd = get_management_command("upgrade")
     if is_linux():
+        require_shell_command_executables(install_cmd)
         print(f"Upgrading {PROGRAM}...")
         result = subprocess.run(install_cmd, shell=True)
         return result.returncode
@@ -96,11 +103,12 @@ def do_uninstall():
     `management.uninstall`, executes it on Linux via shell invocation, and
     prints manual fallback command on non-Linux systems.
     @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
-    @satisfies REQ-005, REQ-045
+    @satisfies REQ-005, REQ-045, REQ-056
     """
 
     uninstall_cmd = get_management_command("uninstall")
     if is_linux():
+        require_shell_command_executables(uninstall_cmd)
         print(f"Uninstalling {PROGRAM}...")
         result = subprocess.run(uninstall_cmd, shell=True)
         return result.returncode

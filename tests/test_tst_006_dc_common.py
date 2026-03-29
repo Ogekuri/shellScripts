@@ -12,6 +12,7 @@ import shell_scripts.commands.diff_cmd as diff_cmd
 import shell_scripts.commands.edit_cmd as edit_cmd
 import shell_scripts.commands.view_cmd as view_cmd
 import shell_scripts.config as config
+import shell_scripts.utils as utils
 
 
 def test_diff_edit_view_wrappers_return_two_when_missing_file_argument():
@@ -82,7 +83,7 @@ def test_dispatch_selects_category_specific_command(monkeypatch):
         raise SystemExit(0)
 
     monkeypatch.setattr(dc_common, "categorize", lambda _path: "markdown")
-    monkeypatch.setattr(dc_common.shutil, "which", lambda _cmd: "/usr/bin/fake")
+    monkeypatch.setattr(dc_common, "is_executable_command", lambda _cmd: True)
     monkeypatch.setattr(dc_common.os, "execvp", _fake_execvp)
 
     category_cmds = {"markdown": ["typora"]}
@@ -243,3 +244,39 @@ def test_get_default_req_profile_uses_opencode_prompts_provider():
 
     assert "opencode:prompts" in defaults["providers"]
     assert "opencode:agents" not in defaults["providers"]
+
+
+def test_is_executable_command_checks_name_and_path(monkeypatch, tmp_path):
+    """
+    @brief Validate executable detection for command names and explicit paths.
+    @details Mocks PATH-based lookup and creates executable file fixture to
+      assert positive and negative outcomes for `is_executable_command`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {pathlib.Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-006, REQ-055
+    """
+
+    monkeypatch.setattr(utils.shutil, "which", lambda name: "/usr/bin/git" if name == "git" else None)
+    assert utils.is_executable_command("git") is True
+    assert utils.is_executable_command("missing-cmd") is False
+
+    local_bin = tmp_path / "local-tool"
+    local_bin.write_text("#!/bin/sh\nexit 0\n")
+    local_bin.chmod(0o755)
+    assert utils.is_executable_command(str(local_bin)) is True
+
+
+def test_extract_shell_executables_parses_pipeline_and_wrappers():
+    """
+    @brief Validate shell command executable extraction behavior.
+    @details Asserts parser extracts command tokens across shell separators and
+      wrapper commands with de-duplication.
+    @return {None} Assertions only.
+    @satisfies TST-006, REQ-056
+    """
+
+    result = utils.extract_shell_executables(
+        "FOO=1 sudo npm install && git status | grep ok"
+    )
+    assert result == ["sudo", "npm", "git", "grep"]

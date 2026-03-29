@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
+"""@brief PixelMed DICOM-to-JPEG converter launcher.
+
+@details Resolves Java runtime and classpath prerequisites and validates Java
+executable availability before subprocess invocation.
+@satisfies REQ-026, REQ-055, REQ-056
+"""
+
 import os
 import subprocess
 import shutil
 
-from shell_scripts.utils import print_error
+from shell_scripts.utils import print_error, require_commands
 
 PROGRAM = "shellscripts"
 DESCRIPTION = "Convert DICOM images to JPEG using PixelMed."
@@ -40,6 +47,15 @@ def _find_jars(*jar_names):
 
 
 def run(args):
+    """@brief Run PixelMed converter after executable validation.
+
+    @details Validates Java runtime availability and command executability for
+    the selected Java binary before invoking conversion class.
+    @param args {list[str]} Expected `[input_dicom, output_jpeg]` arguments.
+    @return {int} Subprocess return code.
+    @satisfies REQ-026, REQ-055, REQ-056
+    """
+
     if len(args) < 2:
         print_error("Usage: dicom2jpg <input.dcm> <output.jpg>")
         return 1
@@ -77,5 +93,6 @@ def run(args):
         output_file,
     ]
 
+    require_commands(cmd[0])
     result = subprocess.run(cmd)
     return result.returncode
