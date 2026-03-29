@@ -258,6 +258,10 @@
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
         - `require_commands(...)`: Validate flow-conditional executable set before each subprocess invocation [`src/shell_scripts/utils.py`]
+      - `video2h264.run(...)`: Transcode one input video to H.264/AAC MP4 via FFmpeg with fixed encoder profile/options [`src/shell_scripts/commands/video2h264.py`]
+        - `require_commands(...)`: Validate `ffmpeg` executable before process replacement [`src/shell_scripts/utils.py`]
+      - `video2h265.run(...)`: Transcode one input video to H.265/AAC MP4 via FFmpeg with fixed encoder profile/options [`src/shell_scripts/commands/video2h265.py`]
+        - `require_commands(...)`: Validate `ffmpeg` executable before process replacement [`src/shell_scripts/utils.py`]
       - `vscode_cmd.run(...)`: Launch VS Code in project root with CODEX_HOME set [`src/shell_scripts/commands/vscode_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
@@ -269,7 +273,7 @@
 - External Boundaries:
   - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
   - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
-  - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `_dc_common.dispatch`).
+  - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `video2h264`, `video2h265`, `_dc_common.dispatch`).
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
 

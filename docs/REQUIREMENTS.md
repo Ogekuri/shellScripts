@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.9"
+version: "0.6.10"
 date: "2026-03-29"
 author: "Auto-generated from repository evidence"
 scope:
@@ -92,6 +92,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against GitHub releases with cooldown caching.
 - **PRJ-005**: MUST include a GitHub automation workflow script at `.github/workflows/release-uvx.yml`.
+- **PRJ-006**: MUST expose video conversion subcommands that transcode one input video into H.264 or H.265 MP4 outputs using FFmpeg.
 
 ### 2.2 Project Constraints
 - **CTN-001**: MUST target Python runtime version 3.11 or newer.
@@ -170,13 +171,15 @@ No explicit performance optimizations identified.
 - **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
 - **REQ-055**: MUST provide a shared OS-aware executable-check function that returns `true` only when a command token or executable path is runnable on the current runtime platform and `false` otherwise.
 - **REQ-056**: MUST make each command runner validate all external executables required by the actually activated option path before execution, print `Command not executable: <command>` on failure, and terminate with non-zero status.
+- **REQ-057**: MUST implement `video2h264` using `ffmpeg -i <input> -c:v libx264 -profile:v high -level 4.1 -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k <input>.mp4` in the input file directory.
+- **REQ-058**: MUST implement `video2h265` using `ffmpeg -i <input> -c:v libx265 -crf 23 -tag:v hvc1 -pix_fmt yuv420p -c:a aac -b:a 192k <input>.mp4` in the input file directory.
 
 ## 4. Test Requirements
 
 ### 4.1 Coverage Summary
-No unit test source files were found under `tests/` at generation time.
+Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, AI installers, command dispatch wrappers, and PDF pipelines.
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
-High-risk areas without observed unit-test evidence are PDF transformation pipelines, TOC rewriting logic, and subprocess/`os.execvp` integrations with system tools.
+High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and subprocess/`os.execvp` process-replacement paths that depend on external binaries.
 
 ### 4.2 Verification Requirements
 - **TST-001**: MUST verify REQ-001, REQ-002, and REQ-047 by invoking `shell_scripts.core.main`, passing only if return codes, help/error outputs, and startup OS-detection invocation match specified behavior.
@@ -189,6 +192,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
+- **TST-011**: MUST verify REQ-057 and REQ-058 by monkeypatching executable checks and `os.execvp`, passing only if FFmpeg argv vectors and `<input>.mp4` output naming are exact.
 
 ## 5. Evidence
 
@@ -198,6 +202,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
 | PRJ-004, DES-002..DES-006 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_write_idle_config`, `_should_check` | Uses GitHub latest release API, 300s cooldown, 429/403 handling, cache path under `~/.cache/shellscripts`. |
 | PRJ-005 | `.github/workflows/release-uvx.yml` | `jobs.check-branch`, `jobs.build-release` | Workflow script is present at required path and defines release automation jobs. |
+| PRJ-006, REQ-057, REQ-058 | `src/shell_scripts/commands/video2h264.py`; `src/shell_scripts/commands/video2h265.py`; `src/shell_scripts/commands/__init__.py` | `run`, `_COMMAND_MODULES` | Command registry exposes `video2h264`/`video2h265`; runners build fixed FFmpeg argv vectors and output `<input>.mp4` in the input directory. |
 | CTN-001 | `pyproject.toml` | `[project].requires-python` | `requires-python = ">=3.11"`. |
 | CTN-002 | `pyproject.toml` | `[project.scripts]` | `shellscripts = "shell_scripts.core:main"`, `s = "shell_scripts.core:main"`. |
 | CTN-003 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/*.py` | `require_commands`, command `run` functions | Multiple commands call `require_commands(...)` and terminate on missing tools. |
@@ -226,4 +231,4 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 | REQ-034, REQ-035 | `src/shell_scripts/commands/pdf_crop.py` | `run`, `_parse_page_range`, `_compute_auto_bbox` | Supports bbox/margins/analyze-pages/pages options and validates range syntax `N`, `N-`, `-N`, `N-M`. |
 | REQ-036, REQ-037 | `src/shell_scripts/commands/tests_cmd.py` | `run` | Creates `.venv` if missing, conditionally installs `requirements.txt`, runs pytest with `PYTHONPATH` prefixed by `src`. |
 | REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054 | `src/shell_scripts/commands/req_cmd.py`; `src/shell_scripts/config.py` | `run`, `_build_req_args`, `get_req_profile` | `req` command resolves targets by selector mode, applies cleanup/scaffold operations, and executes external `req` with hardcoded base args plus runtime-configured providers/static checks. |
-| TST-001..TST-008 | `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py`; `tests/` | multiple | Existing code paths define verifiable behaviors; no unit test files currently exist under `tests/` directory. |
+| TST-001..TST-011 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |

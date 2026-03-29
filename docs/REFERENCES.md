@@ -35,6 +35,8 @@
         │   ├── tests_cmd.py
         │   ├── ubuntu_dark_theme.py
         │   ├── venv_cmd.py
+        │   ├── video2h264.py
+        │   ├── video2h265.py
         │   ├── view_cmd.py
         │   ├── vscode_cmd.py
         │   └── vsinsider_cmd.py
@@ -87,7 +89,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 78L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 80L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -98,7 +100,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L48-63)
+### fn `def get_command(name: str) -> ModuleType | None` (L50-65)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -108,20 +110,20 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @return {ModuleType|None} Imported command module for known token; `None` otherwise.
 - @throws {ImportError} If module path exists in map but import fails.
 - @satisfies PRJ-003, DES-001
-- @satisfies PRJ-001, DES-001, DES-008
+- @satisfies PRJ-001, DES-001, DES-008, REQ-057, REQ-058
 
-### fn `def get_all_commands() -> dict[str, str]` (L64-78)
+### fn `def get_all_commands() -> dict[str, str]` (L66-80)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
 - @throws {ImportError} If any mapped command module import fails.
-- @satisfies PRJ-002, DES-001, DES-008
+- @satisfies PRJ-002, DES-001, DES-008, REQ-057, REQ-058
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|48-63|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|64-78|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|50-65|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|66-80|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -1269,6 +1271,92 @@ from shell_scripts.utils import (
 |`DESCRIPTION`|var|pub|22||
 |`print_help`|fn|pub|25-32|def print_help(version)|
 |`run`|fn|pub|33-82|def run(args)|
+
+
+---
+
+# video2h264.py | Python | 88L | 4 symbols | 3 imports | 10 comments
+> Path: `src/shell_scripts/commands/video2h264.py`
+
+## Imports
+```
+import os
+from pathlib import Path
+from shell_scripts.utils import print_error, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L18)
+- @brief CLI program identifier used in usage text.
+- @satisfies DES-008
+- var `DESCRIPTION = "Convert one video to H.264 MP4 via ffmpeg."` (L22)
+- @brief Command description exposed in global help index.
+- @satisfies PRJ-002, DES-008, REQ-057
+### fn `def print_help(version)` (L25-43)
+- @brief Print command usage for `video2h264`.
+- @details Emits deterministic help text describing required positional input and output naming semantics.
+- @param version {str} CLI version string for usage suffix.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-057
+
+### fn `def run(args)` (L44-88)
+- @brief Execute H.264 transcode command with fixed FFmpeg parameters.
+- @details Validates input argument presence and file existence, then replaces current process with `ffmpeg` execution using required libx264 profile, level, CRF, pixel format, and AAC audio bitrate options.
+- @param args {list[str]} Expected single positional input-video path.
+- @return {int} `1` on argument/validation failure; otherwise no return on exec.
+- @satisfies REQ-057, REQ-055, REQ-056
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|18||
+|`DESCRIPTION`|var|pub|22||
+|`print_help`|fn|pub|25-43|def print_help(version)|
+|`run`|fn|pub|44-88|def run(args)|
+
+
+---
+
+# video2h265.py | Python | 86L | 4 symbols | 3 imports | 10 comments
+> Path: `src/shell_scripts/commands/video2h265.py`
+
+## Imports
+```
+import os
+from pathlib import Path
+from shell_scripts.utils import print_error, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L18)
+- @brief CLI program identifier used in usage text.
+- @satisfies DES-008
+- var `DESCRIPTION = "Convert one video to H.265 MP4 via ffmpeg."` (L22)
+- @brief Command description exposed in global help index.
+- @satisfies PRJ-002, DES-008, REQ-058
+### fn `def print_help(version)` (L25-43)
+- @brief Print command usage for `video2h265`.
+- @details Emits deterministic help text describing required positional input and output naming semantics.
+- @param version {str} CLI version string for usage suffix.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-058
+
+### fn `def run(args)` (L44-86)
+- @brief Execute H.265 transcode command with fixed FFmpeg parameters.
+- @details Validates input argument presence and file existence, then replaces current process with `ffmpeg` execution using required libx265 CRF, codec tag, pixel format, and AAC audio bitrate options.
+- @param args {list[str]} Expected single positional input-video path.
+- @return {int} `1` on argument/validation failure; otherwise no return on exec.
+- @satisfies REQ-058, REQ-055, REQ-056
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|18||
+|`DESCRIPTION`|var|pub|22||
+|`print_help`|fn|pub|25-43|def print_help(version)|
+|`run`|fn|pub|44-86|def run(args)|
 
 
 ---

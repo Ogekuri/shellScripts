@@ -3,7 +3,7 @@
 @details Defines a static command-to-module map consumed by the CLI dispatcher.
 Dictionary lookup enforces deterministic command availability; missing keys
 resolve to `None` to drive unknown-command error handling in the caller.
-@satisfies PRJ-001, PRJ-002, PRJ-003, DES-001, DES-008
+@satisfies PRJ-001, PRJ-002, PRJ-003, DES-001, DES-008, REQ-057, REQ-058
 """
 
 import importlib
@@ -40,6 +40,8 @@ _COMMAND_MODULES = {
     "tests": "shell_scripts.commands.tests_cmd",
     "ubuntu-dark-theme": "shell_scripts.commands.ubuntu_dark_theme",
     "venv": "shell_scripts.commands.venv_cmd",
+    "video2h264": "shell_scripts.commands.video2h264",
+    "video2h265": "shell_scripts.commands.video2h265",
     "vscode": "shell_scripts.commands.vscode_cmd",
     "vsinsider": "shell_scripts.commands.vsinsider_cmd",
 }
@@ -53,7 +55,7 @@ def get_command(name: str) -> ModuleType | None:
     @param name {str} CLI command token.
     @return {ModuleType|None} Imported command module for known token; `None` otherwise.
     @throws {ImportError} If module path exists in map but import fails.
-    @satisfies PRJ-001, DES-001, DES-008
+    @satisfies PRJ-001, DES-001, DES-008, REQ-057, REQ-058
     """
     module_path = _COMMAND_MODULES.get(name)
     if module_path is None:
@@ -69,7 +71,7 @@ def get_all_commands() -> dict[str, str]:
     Time complexity O(N log N) for N commands due to key sorting.
     @return {dict[str, str]} Mapping `command_name -> description`.
     @throws {ImportError} If any mapped command module import fails.
-    @satisfies PRJ-002, DES-001, DES-008
+    @satisfies PRJ-002, DES-001, DES-008, REQ-057, REQ-058
     """
     result: dict[str, str] = {}
     for name in sorted(_COMMAND_MODULES):
