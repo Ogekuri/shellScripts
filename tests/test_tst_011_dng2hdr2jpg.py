@@ -2593,7 +2593,7 @@ def test_dng2hdr2jpg_rejects_auto_brightness_knobs_without_auto_brightness(tmp_p
                 str(output_jpg),
                 "--ev=1",
                 "--enable-enfuse",
-                "--ab-clip-limit=2.1",
+                "--ab-target-grey=0.21",
             ]
         )
         == 1
@@ -2605,8 +2605,8 @@ def test_dng2hdr2jpg_rejects_auto_brightness_knobs_without_auto_brightness(tmp_p
                 str(output_jpg),
                 "--ev=1",
                 "--enable-enfuse",
-                "--ab-tile-grid-size",
-                "8,8",
+                "--ab-target-grey",
+                "0.21",
             ]
         )
         == 1
@@ -2617,7 +2617,7 @@ def test_dng2hdr2jpg_rejects_invalid_auto_brightness_knob_values(tmp_path):
     """
     @brief Validate auto-brightness knob validation constraints.
     @details Verifies positive-only, bounded-range, and formatting rules for
-      `--ab-*` options when auto-brightness mode is enabled.
+      `--ab-target-grey` option when auto-brightness mode is enabled.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-065, REQ-089
@@ -2634,20 +2634,14 @@ def test_dng2hdr2jpg_rejects_invalid_auto_brightness_knob_values(tmp_path):
         "--auto-brightness",
     ]
 
-    assert dng2hdr2jpg.run(base_args + ["--ab-clip-limit=0"]) == 1
-    assert dng2hdr2jpg.run(base_args + ["--ab-tile-grid-size=0,8"]) == 1
-    assert dng2hdr2jpg.run(base_args + ["--ab-tile-grid-size=8,0"]) == 1
-    assert dng2hdr2jpg.run(base_args + ["--ab-tile-grid-size=8"]) == 1
-    assert dng2hdr2jpg.run(base_args + ["--ab-target-mean=0"]) == 1
-    assert dng2hdr2jpg.run(base_args + ["--ab-target-mean=1"]) == 1
-    assert dng2hdr2jpg.run(base_args + ["--ab-mean-tolerance=-0.1"]) == 1
-    assert dng2hdr2jpg.run(base_args + ["--ab-mean-tolerance=1.1"]) == 1
-    assert dng2hdr2jpg.run(base_args + ["--ab-initial-clip-hist-percent=-1"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-target-grey=0"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-target-grey=1"]) == 1
+    assert dng2hdr2jpg.run(base_args + ["--ab-target-grey=bad"]) == 1
 
 
 def test_dng2hdr2jpg_parses_auto_brightness_knob_assignment_and_split_forms():
     """
-    @brief Validate parser handles `--ab-*` assignment and split forms.
+    @brief Validate parser handles `--ab-target-grey` assignment and split forms.
     @details Parses mixed-form auto-brightness knobs and verifies canonical
       propagation into `PostprocessOptions.auto_brightness_options`.
     @return {None} Assertions only.
@@ -2661,25 +2655,14 @@ def test_dng2hdr2jpg_parses_auto_brightness_knob_assignment_and_split_forms():
             "--ev=1",
             "--enable-enfuse",
             "--auto-brightness=true",
-            "--ab-clip-limit=3.1",
-            "--ab-tile-grid-size",
-            "9,7",
-            "--ab-target-mean=0.48",
-            "--ab-mean-tolerance",
-            "0.04",
-            "--ab-initial-clip-hist-percent=0.8",
+            "--ab-target-grey=0.23",
         ]
     )
     assert parsed is not None
     postprocess_options = parsed[5]
     assert postprocess_options.auto_brightness_enabled is True
     auto_brightness_options = postprocess_options.auto_brightness_options
-    assert auto_brightness_options.clip_limit == 3.1
-    assert auto_brightness_options.tile_grid_width == 9
-    assert auto_brightness_options.tile_grid_height == 7
-    assert auto_brightness_options.target_mean == 0.48
-    assert auto_brightness_options.mean_tolerance == 0.04
-    assert auto_brightness_options.initial_clip_hist_percent == 0.8
+    assert auto_brightness_options.target_grey == 0.23
 
 
 def test_dng2hdr2jpg_auto_brightness_knobs_default_values_are_stable():
@@ -2702,15 +2685,7 @@ def test_dng2hdr2jpg_auto_brightness_knobs_default_values_are_stable():
     )
     assert parsed is not None
     options = parsed[5].auto_brightness_options
-    assert options.clip_limit == dng2hdr2jpg.DEFAULT_AB_CLIP_LIMIT
-    assert options.tile_grid_width == dng2hdr2jpg.DEFAULT_AB_TILE_GRID_WIDTH
-    assert options.tile_grid_height == dng2hdr2jpg.DEFAULT_AB_TILE_GRID_HEIGHT
-    assert options.target_mean == dng2hdr2jpg.DEFAULT_AB_TARGET_MEAN
-    assert options.mean_tolerance == dng2hdr2jpg.DEFAULT_AB_MEAN_TOLERANCE
-    assert (
-        options.initial_clip_hist_percent
-        == dng2hdr2jpg.DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT
-    )
+    assert options.target_grey == dng2hdr2jpg.DEFAULT_AB_TARGET_GREY
 
 
 def test_dng2hdr2jpg_auto_brightness_accepts_split_boolean_value():
@@ -4919,19 +4894,8 @@ def test_dng2hdr2jpg_help_includes_luminance_options(capsys):
     assert "--contrast=<value>" in output
     assert "--saturation=<value>" in output
     assert "--auto-brightness" in output
-    assert "--ab-clip-limit=<value>" in output
-    assert "--ab-tile-grid-size=<w,h>" in output
-    assert "--ab-target-mean=<(0,1)>" in output
-    assert "--ab-mean-tolerance=<0..1>" in output
-    assert "--ab-initial-clip-hist-percent=<value>" in output
-    assert f"default: {dng2hdr2jpg.DEFAULT_AB_CLIP_LIMIT:g}" in output
-    assert (
-        f"default: {dng2hdr2jpg.DEFAULT_AB_TILE_GRID_WIDTH},{dng2hdr2jpg.DEFAULT_AB_TILE_GRID_HEIGHT}"
-        in output
-    )
-    assert f"default: {dng2hdr2jpg.DEFAULT_AB_TARGET_MEAN:g}" in output
-    assert f"default: {dng2hdr2jpg.DEFAULT_AB_MEAN_TOLERANCE:g}" in output
-    assert f"default: {dng2hdr2jpg.DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT:g}" in output
+    assert "--ab-target-grey=<(0,1)>" in output
+    assert f"default: {dng2hdr2jpg.DEFAULT_AB_TARGET_GREY:g}" in output
     assert "--jpg-compression=<0..100>" in output
     assert "--auto-adjust" in output
     assert "--aa-blur-sigma=<value>" in output
@@ -5378,14 +5342,7 @@ def test_dng2hdr2jpg_applies_auto_brightness_before_static_postprocess(monkeypat
             saturation=1.1,
             jpg_compression=10,
             auto_brightness_enabled=True,
-            auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(
-                clip_limit=2.6,
-                tile_grid_width=9,
-                tile_grid_height=7,
-                target_mean=0.5,
-                mean_tolerance=0.02,
-                initial_clip_hist_percent=0.7,
-            ),
+            auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(target_grey=0.22),
         ),
         auto_adjust_opencv_dependencies=(fake_cv2_module, fake_numpy_module),
     )
@@ -5394,14 +5351,7 @@ def test_dng2hdr2jpg_applies_auto_brightness_before_static_postprocess(monkeypat
     assert observed["auto_brightness"]["cv2"] is fake_cv2_module
     assert observed["auto_brightness"]["np"] is fake_numpy_module
     assert observed["auto_brightness"]["dtype"] == "uint16"
-    assert observed["auto_brightness"]["options"] == dng2hdr2jpg.AutoBrightnessOptions(
-        clip_limit=2.6,
-        tile_grid_width=9,
-        tile_grid_height=7,
-        target_mean=0.5,
-        mean_tolerance=0.02,
-        initial_clip_hist_percent=0.7,
-    )
+    assert observed["auto_brightness"]["options"] == dng2hdr2jpg.AutoBrightnessOptions(target_grey=0.22)
     assert observed["postprocess_ops"] == [
         ("brightness", 1.3),
         ("contrast", 0.9),
@@ -5412,207 +5362,87 @@ def test_dng2hdr2jpg_applies_auto_brightness_before_static_postprocess(monkeypat
     assert output_jpg.exists()
 
 
-def test_derive_scene_key_preserving_auto_brightness_target_preserves_scene_class():
+def test_dng2hdr2jpg_auto_brightness_uses_bt709_luminance_gain():
     """
-    @brief Validate scene-key-preserving auto-brightness target derivation.
-    @details Verifies low-key and high-key means map to corresponding bounded
-      low/high targets while mid-key means preserve configured target value.
-    @return {None} Assertions only.
-    @satisfies TST-011, REQ-090, REQ-099
-    """
-
-    assert (
-        dng2hdr2jpg._derive_scene_key_preserving_auto_brightness_target(
-            current_mean=0.20,
-            mid_key_target=0.52,
-        )
-        == pytest.approx(dng2hdr2jpg.AUTO_BRIGHTNESS_TARGET_LOW_KEY)
-    )
-    assert (
-        dng2hdr2jpg._derive_scene_key_preserving_auto_brightness_target(
-            current_mean=0.80,
-            mid_key_target=0.52,
-        )
-        == pytest.approx(dng2hdr2jpg.AUTO_BRIGHTNESS_TARGET_HIGH_KEY)
-    )
-    assert (
-        dng2hdr2jpg._derive_scene_key_preserving_auto_brightness_target(
-            current_mean=0.50,
-            mid_key_target=0.52,
-        )
-        == pytest.approx(0.52)
-    )
-
-
-def test_dng2hdr2jpg_auto_brightness_uses_scene_key_preserving_target(monkeypatch):
-    """
-    @brief Validate auto-brightness gamma uses scene-key-preserving target.
-    @details Replaces gamma stage with a capture stub and asserts low-key
-      luminance correction uses low-key target instead of fixed mid-key target.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @brief Validate auto-brightness applies one linear-domain global gain.
+    @details Runs auto-brightness on uint16 RGB input and verifies that decoded
+      linear-domain per-channel gains remain equal per pixel.
     @return {None} Assertions only.
     @satisfies TST-011, REQ-090, REQ-099
     """
 
     numpy_module = __import__("numpy")
-    observed = {"target_mean": None}
-
-    class _FakeClahe:
-        """@brief Emit deterministic low-key luminance channel."""
-
-        @staticmethod
-        def apply(channel):
-            """@brief Return fixed low-key channel."""
-
-            del channel
-            return numpy_module.full((2, 2), 2600, dtype=numpy_module.uint16)
-
-    class _FakeCv2Module:
-        """@brief Provide minimal cv2 surface for auto-brightness target test."""
-
-        @staticmethod
-        def createCLAHE(clipLimit, tileGridSize):
-            """@brief Return deterministic CLAHE stub."""
-
-            del clipLimit, tileGridSize
-            return _FakeClahe()
-
-    def _fake_clip_histogram_autolevel_channel(
-        cv2_module, np_module, channel, clip_hist_percent
-    ):
-        """@brief Bypass histogram clipping while preserving signature."""
-
-        del cv2_module, np_module, clip_hist_percent
-        return channel
-
-    def _fake_apply_mean_gamma_correction_channel(
-        cv2_module, np_module, channel, current_mean, target_mean
-    ):
-        """@brief Capture scene-key-preserving target used for gamma stage."""
-
-        del cv2_module, np_module, channel, current_mean
-        observed["target_mean"] = target_mean
-        return numpy_module.full((2, 2), 3000, dtype=numpy_module.uint16)
-
-    monkeypatch.setattr(
-        dng2hdr2jpg,
-        "_clip_histogram_autolevel_channel",
-        _fake_clip_histogram_autolevel_channel,
-    )
-    monkeypatch.setattr(
-        dng2hdr2jpg,
-        "_apply_mean_gamma_correction_channel",
-        _fake_apply_mean_gamma_correction_channel,
-    )
-
-    input_image = numpy_module.full((2, 2, 3), 2600, dtype=numpy_module.uint16)
-    output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
-        cv2_module=_FakeCv2Module,
-        np_module=numpy_module,
-        image_rgb_uint8=input_image,
-        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(
-            clip_limit=2.0,
-            tile_grid_width=8,
-            tile_grid_height=8,
-            target_mean=0.52,
-            mean_tolerance=0.03,
-            initial_clip_hist_percent=0.0,
-        ),
-    )
-
-    assert observed["target_mean"] == pytest.approx(
-        dng2hdr2jpg.AUTO_BRIGHTNESS_TARGET_LOW_KEY
-    )
-    assert output_image.shape == input_image.shape
-
-
-def test_dng2hdr2jpg_auto_brightness_preserves_rgb_ratios_for_non_clipped_pixels(
-    monkeypatch,
-):
-    """
-    @brief Validate auto-brightness preserves chroma via equal per-pixel RGB gain.
-    @details Runs auto-brightness on deterministic 16-bit RGB input, forces
-      luminance pipeline to scale only luminance, and verifies per-pixel channel
-      ratios remain invariant for non-clipped output pixels.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @return {None} Assertions only.
-    @satisfies TST-011, REQ-090, REQ-099
-    """
-
-    numpy_module = __import__("numpy")
-
-    class _FakeClahe:
-        """@brief Provide deterministic identity CLAHE for test."""
-
-        @staticmethod
-        def apply(channel):
-            """@brief Return channel unchanged."""
-
-            return channel
-
-    class _FakeCv2Module:
-        """@brief Provide minimal cv2 surface for luminance-only pipeline test."""
-
-        @staticmethod
-        def calcHist(images, channels, mask, bins, ranges):
-            """@brief Return deterministic histogram for uint16 channel."""
-
-            del channels, mask, bins, ranges
-            channel = images[0]
-            histogram = numpy_module.bincount(channel.ravel(), minlength=65536)
-            return histogram.reshape((65536, 1)).astype(numpy_module.float32)
-
-        @staticmethod
-        def createCLAHE(clipLimit, tileGridSize):
-            """@brief Return deterministic no-op CLAHE object."""
-
-            del clipLimit, tileGridSize
-            return _FakeClahe()
-
-    def _fake_apply_mean_gamma_correction_channel(
-        cv2_module, np_module, channel, current_mean, target_mean
-    ):
-        """@brief Force deterministic luminance scaling by a fixed factor."""
-
-        del cv2_module, current_mean, target_mean
-        scaled = np_module.round(channel.astype(np_module.float64) * 1.1)
-        return np_module.clip(scaled, 0.0, 65535.0).astype(np_module.uint16)
-
-    monkeypatch.setattr(
-        dng2hdr2jpg,
-        "_apply_mean_gamma_correction_channel",
-        _fake_apply_mean_gamma_correction_channel,
-    )
-
     input_image = numpy_module.array(
         [
-            [[10000, 20000, 30000], [12000, 24000, 36000]],
-            [[8000, 16000, 24000], [14000, 28000, 42000]],
+            [[8000, 16000, 24000], [10000, 20000, 30000]],
+            [[12000, 24000, 36000], [9000, 18000, 27000]],
         ],
         dtype=numpy_module.uint16,
     )
     output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
-        cv2_module=_FakeCv2Module,
+        cv2_module=object(),
         np_module=numpy_module,
         image_rgb_uint8=input_image,
-        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(
-            clip_limit=2.0,
-            tile_grid_width=8,
-            tile_grid_height=8,
-            target_mean=0.52,
-            mean_tolerance=0.0,
-            initial_clip_hist_percent=0.0,
-        ),
+        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(target_grey=0.22),
     )
+    assert output_image.dtype == numpy_module.uint16
+    assert output_image.shape == input_image.shape
 
-    input_rgb = input_image.astype(numpy_module.float64)
-    output_rgb = output_image.astype(numpy_module.float64)
-    input_ratio_rg = input_rgb[..., 0] / input_rgb[..., 1]
-    input_ratio_rb = input_rgb[..., 0] / input_rgb[..., 2]
-    output_ratio_rg = output_rgb[..., 0] / output_rgb[..., 1]
-    output_ratio_rb = output_rgb[..., 0] / output_rgb[..., 2]
-    assert numpy_module.max(numpy_module.abs(input_ratio_rg - output_ratio_rg)) < 2e-5
-    assert numpy_module.max(numpy_module.abs(input_ratio_rb - output_ratio_rb)) < 2e-5
+    input_linear = dng2hdr2jpg._to_linear_srgb(
+        np_module=numpy_module,
+        image_srgb=input_image.astype(numpy_module.float64) / 65535.0,
+    )
+    output_linear = dng2hdr2jpg._to_linear_srgb(
+        np_module=numpy_module,
+        image_srgb=output_image.astype(numpy_module.float64) / 65535.0,
+    )
+    epsilon = 1e-8
+    gain_r = output_linear[..., 0] / (input_linear[..., 0] + epsilon)
+    gain_g = output_linear[..., 1] / (input_linear[..., 1] + epsilon)
+    gain_b = output_linear[..., 2] / (input_linear[..., 2] + epsilon)
+    assert numpy_module.max(numpy_module.abs(gain_r - gain_g)) < 2e-2
+    assert numpy_module.max(numpy_module.abs(gain_r - gain_b)) < 2e-2
+
+
+def test_dng2hdr2jpg_auto_brightness_caps_gain_to_max_gain():
+    """
+    @brief Validate auto-brightness gain cap prevents over-amplification.
+    @details Uses very dark input and verifies effective amplification does not exceed
+      configured fixed cap `DEFAULT_AB_MAX_GAIN` before transfer and quantization.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-088, REQ-090
+    """
+
+    numpy_module = __import__("numpy")
+    input_image = numpy_module.full((2, 2, 3), 500, dtype=numpy_module.uint16)
+    output_image = dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
+        cv2_module=object(),
+        np_module=numpy_module,
+        image_rgb_uint8=input_image,
+        auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(target_grey=0.9),
+    )
+    ratio = float(output_image[0, 0, 1]) / float(input_image[0, 0, 1])
+    assert ratio <= dng2hdr2jpg.DEFAULT_AB_MAX_GAIN * 1.1
+
+
+def test_dng2hdr2jpg_auto_brightness_rejects_non_uint16_input():
+    """
+    @brief Validate auto-brightness rejects non-uint16 payloads.
+    @details Executes algorithm with uint8 tensor and verifies deterministic
+      validation error.
+    @return {None} Assertions only.
+    @satisfies TST-011, REQ-090
+    """
+
+    numpy_module = __import__("numpy")
+    input_image = numpy_module.zeros((2, 2, 3), dtype=numpy_module.uint8)
+    with pytest.raises(ValueError):
+        dng2hdr2jpg._apply_auto_brightness_rgb_uint8(
+            cv2_module=object(),
+            np_module=numpy_module,
+            image_rgb_uint8=input_image,
+            auto_brightness_options=dng2hdr2jpg.AutoBrightnessOptions(target_grey=0.18),
+        )
 
 
 def test_dng2hdr2jpg_opencv_auto_adjust_accepts_uint8_input_by_upconverting(tmp_path):

@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.6"
+version: "0.6.7"
 date: "2026-03-29"
 author: "Auto-generated from repository evidence"
 scope:
@@ -194,10 +194,10 @@ No explicit performance optimizations identified.
 - **REQ-085**: MUST reject any `--aa-*` knob when `--auto-adjust` is omitted, emit an explicit error naming the invalid knob, and return `1`.
 - **REQ-086**: MUST map shared auto-adjust knobs to ImageMagick as `-selective-blur 0x{blur_sigma}+{blur_threshold_pct}%`, `-level {level_low_pct}%,{level_high_pct}%`, `-sigmoidal-contrast {sigmoid_contrast}x{sigmoid_midpoint*100}%`, `-gamma {saturation_gamma}`, and `-blur 0x{highpass_blur_sigma}`.
 - **REQ-087**: MUST map the same shared auto-adjust knobs to OpenCV auto-adjust stages by passing parsed values to existing stage functions, without replacing stage order, orientation invariants, EXIF handling, thumbnail refresh, or timestamp synchronization behavior.
-- **REQ-088**: MUST default auto-brightness knobs to `clip-limit=2.0`, `tile-grid-size=8,8`, `target-mean=0.52`, `mean-tolerance=0.03`, and `initial-clip-hist-percent=1.0`, where `target-mean` is the mid-key balancing target.
-- **REQ-089**: MUST validate auto-brightness knobs with `clip-limit > 0`, `tile-grid-width > 0`, `tile-grid-height > 0`, `target-mean in (0,1)`, `mean-tolerance in [0,1]`, `initial-clip-hist-percent >= 0`, and MUST reject any `--ab-*` knob when `--auto-brightness` is omitted.
-- **REQ-090**: MUST implement `--auto-brightness` on 16-bit RGB using luminance-only pipeline `histogram-clip autolevel -> CLAHE -> conditional gamma(mean,target,tolerance)` with per-pixel gain `g=L'/L` applied equally to R,G,B and anti-clipping gain cap.
-- **REQ-099**: MUST preserve scene-key class during auto-brightness target derivation and MUST keep chromatic neutrality by avoiding LAB output reconstruction and preserving RGB channel ratios for non-clipped pixels.
+- **REQ-088**: MUST default auto-brightness parameters to `target-grey=0.18` and fixed `max-gain=4.0`, and MUST treat `target-grey` as linear BT.709 middle-grey luminance target.
+- **REQ-089**: MUST validate auto-brightness with `target-grey in (0,1)`, MUST parse `--ab-target-grey` in assignment or split form, and MUST reject any `--ab-*` option when `--auto-brightness` is omitted.
+- **REQ-090**: MUST implement `--auto-brightness` as uint16 pipeline `normalize->linearize sRGB->BT.709 luminance->p50/p98 statistics->gain(target-grey/p50, cap 4.0)->highlight rolloff->inverse sRGB->uint16` using float64 processing.
+- **REQ-099**: MUST keep chromatic neutrality in auto-brightness by operating in linear sRGB with BT.709 luminance and by applying identical scalar gain to all RGB channels before any global highlight rolloff transfer.
 - **REQ-091**: MUST default luminance-mode postprocess factors to `post-gamma=1.0`, `brightness=1.0`, `contrast=1.2`, and `saturation=1.0` when `--luminance-tmo` is `mantiuk08` and no explicit postprocess overrides are provided.
 - **REQ-074**: MUST set output JPG filesystem access and modification timestamps from source DNG EXIF datetime (priority: `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`) after JPG encoding and EXIF copy when a parseable datetime exists.
 - **REQ-077**: MUST preserve orientation invariants across DNG extraction, HDR merge, auto-adjust processing, and JPG encoding; if any function rotates or transposes pixels for algorithmic constraints, it MUST restore source orientation before return.
@@ -231,7 +231,7 @@ High-risk areas without observed unit-test evidence are PDF transformation pipel
 - **TST-010**: MUST verify REQ-048 through REQ-054 by monkeypatching filesystem and subprocess boundaries, passing only if target selection and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
-- **TST-011**: MUST verify REQ-055 through REQ-099 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, manual/automatic EV-zero resolution, centered bracketing export, merged-HDR center preservation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, HDR subprocess calls, and auto-brightness chroma neutrality.
+- **TST-011**: MUST verify REQ-055 through REQ-099 by monkeypatching RAW decode, image writes, exposure-selector validation, static/adaptive EV computation, manual/automatic EV-zero resolution, centered bracketing export, merged-HDR center preservation, bit-derived EV range and logging, EXIF propagation, orientation preservation, thumbnail refresh behavior, timestamp updates, shared auto-adjust knob parsing/validation, auto-adjust implementation selection, HDR subprocess calls, and BT.709 linear auto-brightness behavior and chroma neutrality invariants.
 
 ## 5. Evidence
 

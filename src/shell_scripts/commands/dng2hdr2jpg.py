@@ -45,12 +45,8 @@ DEFAULT_AA_SIGMOID_CONTRAST = 1.8
 DEFAULT_AA_SIGMOID_MIDPOINT = 0.5
 DEFAULT_AA_SATURATION_GAMMA = 0.8
 DEFAULT_AA_HIGHPASS_BLUR_SIGMA = 2.0
-DEFAULT_AB_CLIP_LIMIT = 2.0
-DEFAULT_AB_TILE_GRID_WIDTH = 8
-DEFAULT_AB_TILE_GRID_HEIGHT = 8
-DEFAULT_AB_TARGET_MEAN = 0.52
-DEFAULT_AB_MEAN_TOLERANCE = 0.03
-DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT = 1.0
+DEFAULT_AB_TARGET_GREY = 0.18
+DEFAULT_AB_MAX_GAIN = 4.0
 DEFAULT_LUMINANCE_HDR_MODEL = "debevec"
 DEFAULT_LUMINANCE_HDR_WEIGHT = "flat"
 DEFAULT_LUMINANCE_HDR_RESPONSE_CURVE = "srgb"
@@ -78,10 +74,6 @@ AUTO_ZERO_SCENE_KEY_LOW_THRESHOLD = 0.35
 AUTO_ZERO_SCENE_KEY_HIGH_THRESHOLD = 0.65
 AUTO_ZERO_TARGET_LOW_KEY = 0.35
 AUTO_ZERO_TARGET_HIGH_KEY = 0.65
-AUTO_BRIGHTNESS_SCENE_KEY_LOW_THRESHOLD = 0.35
-AUTO_BRIGHTNESS_SCENE_KEY_HIGH_THRESHOLD = 0.65
-AUTO_BRIGHTNESS_TARGET_LOW_KEY = 0.35
-AUTO_BRIGHTNESS_TARGET_HIGH_KEY = 0.65
 _RUNTIME_OS_LABELS = {
     "windows": "Windows",
     "darwin": "MacOS",
@@ -103,11 +95,7 @@ _AUTO_ADJUST_KNOB_OPTIONS = (
     "--aa-highpass-blur-sigma",
 )
 _AUTO_BRIGHTNESS_KNOB_OPTIONS = (
-    "--ab-clip-limit",
-    "--ab-tile-grid-size",
-    "--ab-target-mean",
-    "--ab-mean-tolerance",
-    "--ab-initial-clip-hist-percent",
+    "--ab-target-grey",
 )
 _LUMINANCE_OPERATOR_TABLE_HEADERS = (
     "Operator",
@@ -291,25 +279,14 @@ class AutoAdjustOptions:
 class AutoBrightnessOptions:
     """@brief Hold `--auto-brightness` knob values.
 
-    @details Encapsulates validated OpenCV auto-brightness parameters consumed
-    by histogram clipping, CLAHE, and conditional gamma stages. Gamma target
-    derivation applies scene-key-preserving low/mid/high classification.
-    @param clip_limit {float} CLAHE clip limit (`> 0`).
-    @param tile_grid_width {int} CLAHE tile grid width (`> 0`).
-    @param tile_grid_height {int} CLAHE tile grid height (`> 0`).
-    @param target_mean {float} Mid-key luminance target in `(0, 1)`.
-    @param mean_tolerance {float} Mean tolerance before gamma in `[0, 1]`.
-    @param initial_clip_hist_percent {float} Histogram clipping percent (`>= 0`).
+    @details Encapsulates validated auto-brightness parameters for the BT.709
+    linear-sRGB luminance pipeline with global gain and highlight rolloff.
+    @param target_grey {float} Linear BT.709 middle-grey luminance target in `(0, 1)`.
     @return {None} Immutable dataclass container.
     @satisfies REQ-065, REQ-088, REQ-089, REQ-090
     """
 
-    clip_limit: float = DEFAULT_AB_CLIP_LIMIT
-    tile_grid_width: int = DEFAULT_AB_TILE_GRID_WIDTH
-    tile_grid_height: int = DEFAULT_AB_TILE_GRID_HEIGHT
-    target_mean: float = DEFAULT_AB_TARGET_MEAN
-    mean_tolerance: float = DEFAULT_AB_MEAN_TOLERANCE
-    initial_clip_hist_percent: float = DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT
+    target_grey: float = DEFAULT_AB_TARGET_GREY
 
 
 @dataclass(frozen=True)
@@ -468,9 +445,7 @@ def print_help(version):
         "[--auto-zero-pct=<0..100>] [--auto-ev-pct=<0..100>] "
         f"[--brightness=<value>] [--contrast=<value>] [--saturation=<value>] "
         "[--auto-brightness[=<1|true|yes|on>]] "
-        "[--ab-clip-limit=<value>] [--ab-tile-grid-size=<w,h>] "
-        "[--ab-target-mean=<(0,1)>] [--ab-mean-tolerance=<0..1>] "
-        "[--ab-initial-clip-hist-percent=<value>] "
+        "[--ab-target-grey=<(0,1)>] "
         f"[--jpg-compression=<0..100>] [--auto-adjust <ImageMagick|OpenCV>] "
         "[--aa-blur-sigma=<value>] [--aa-blur-threshold-pct=<0..100>] "
         "[--aa-level-low-pct=<0..100>] [--aa-level-high-pct=<0..100>] "
@@ -536,20 +511,7 @@ def print_help(version):
         "  [auto-brightness knobs] - Effective only when --auto-brightness is set."
     )
     print(
-        f"  --ab-clip-limit=<value> - CLAHE clip limit > 0 (default: {DEFAULT_AB_CLIP_LIMIT:g})."
-    )
-    print(
-        "  --ab-tile-grid-size=<w,h> - CLAHE tile grid size with integers > 0 "
-        f"(default: {DEFAULT_AB_TILE_GRID_WIDTH},{DEFAULT_AB_TILE_GRID_HEIGHT})."
-    )
-    print(
-        f"  --ab-target-mean=<(0,1)> - Mid-key target luminance mean in (0,1) used by scene-key-preserving auto-brightness gamma (default: {DEFAULT_AB_TARGET_MEAN:g})."
-    )
-    print(
-        f"  --ab-mean-tolerance=<0..1> - Mean tolerance in [0,1] (default: {DEFAULT_AB_MEAN_TOLERANCE:g})."
-    )
-    print(
-        f"  --ab-initial-clip-hist-percent=<value> - Histogram clipping percent >= 0 (default: {DEFAULT_AB_INITIAL_CLIP_HIST_PERCENT:g})."
+        f"  --ab-target-grey=<(0,1)> - Linear BT.709 luminance target grey in (0,1) (default: {DEFAULT_AB_TARGET_GREY:g})."
     )
     print(
         f"  --jpg-compression=<0..100> - JPEG compression level (default: {DEFAULT_JPG_COMPRESSION})."
@@ -1453,53 +1415,6 @@ def _parse_jpg_compression_option(compression_raw):
     return compression_value
 
 
-def _parse_positive_int_option(option_name, option_raw):
-    """@brief Parse and validate one positive integer option value.
-
-    @details Converts option token to `int`, requires value greater than zero,
-    and emits deterministic parse errors on malformed values.
-    @param option_name {str} Long-option identifier used in error messages.
-    @param option_raw {str} Raw option token value from CLI args.
-    @return {int|None} Parsed positive integer value when valid; `None` otherwise.
-    @satisfies REQ-065, REQ-089
-    """
-
-    try:
-        option_value = int(option_raw)
-    except ValueError:
-        print_error(f"Invalid {option_name} value: {option_raw}")
-        return None
-    if option_value <= 0:
-        print_error(f"Invalid {option_name} value: {option_raw}")
-        print_error(f"{option_name} must be greater than zero.")
-        return None
-    return option_value
-
-
-def _parse_auto_brightness_tile_grid_size_option(option_raw):
-    """@brief Parse and validate `--ab-tile-grid-size` option value.
-
-    @details Parses `w,h` integer pair, requires exactly two positive integers,
-    and returns deterministic validation errors for malformed values.
-    @param option_raw {str} Raw `--ab-tile-grid-size` token value from CLI args.
-    @return {tuple[int, int]|None} Parsed `(width, height)` tile grid pair; `None` on validation failure.
-    @satisfies REQ-065, REQ-089
-    """
-
-    parts = [part.strip() for part in option_raw.split(",")]
-    if len(parts) != 2 or not parts[0] or not parts[1]:
-        print_error(f"Invalid --ab-tile-grid-size value: {option_raw}")
-        print_error("Expected format: --ab-tile-grid-size=<width,height>")
-        return None
-    width = _parse_positive_int_option("--ab-tile-grid-size width", parts[0])
-    if width is None:
-        return None
-    height = _parse_positive_int_option("--ab-tile-grid-size height", parts[1])
-    if height is None:
-        return None
-    return (width, height)
-
-
 def _parse_float_exclusive_range_option(option_name, option_raw, min_value, max_value):
     """@brief Parse and validate one float option in an exclusive range.
 
@@ -1575,74 +1490,27 @@ def _parse_float_in_range_option(option_name, option_raw, min_value, max_value):
 
 
 def _parse_auto_brightness_options(auto_brightness_raw_values):
-    """@brief Parse and validate auto-brightness knobs.
+    """@brief Parse and validate auto-brightness parameters.
 
-    @details Applies defaults for omitted `--ab-*` knobs and validates scalar
-    constraints required by histogram clipping, CLAHE, and gamma mean balancing.
+    @details Parses optional linear BT.709 target-grey selector and applies
+    deterministic defaults for omitted auto-brightness options.
     @param auto_brightness_raw_values {dict[str, str]} Raw `--ab-*` option values keyed by long option name.
     @return {AutoBrightnessOptions|None} Parsed auto-brightness options or `None` on validation error.
     @satisfies REQ-088, REQ-089
     """
 
-    options = AutoBrightnessOptions()
-    clip_limit = options.clip_limit
-    tile_grid_width = options.tile_grid_width
-    tile_grid_height = options.tile_grid_height
-    target_mean = options.target_mean
-    mean_tolerance = options.mean_tolerance
-    initial_clip_hist_percent = options.initial_clip_hist_percent
-
-    if "--ab-clip-limit" in auto_brightness_raw_values:
-        parsed = _parse_positive_float_option(
-            "--ab-clip-limit", auto_brightness_raw_values["--ab-clip-limit"]
-        )
-        if parsed is None:
-            return None
-        clip_limit = parsed
-    if "--ab-tile-grid-size" in auto_brightness_raw_values:
-        parsed = _parse_auto_brightness_tile_grid_size_option(
-            auto_brightness_raw_values["--ab-tile-grid-size"]
-        )
-        if parsed is None:
-            return None
-        tile_grid_width, tile_grid_height = parsed
-    if "--ab-target-mean" in auto_brightness_raw_values:
+    target_grey = AutoBrightnessOptions().target_grey
+    if "--ab-target-grey" in auto_brightness_raw_values:
         parsed = _parse_float_exclusive_range_option(
-            "--ab-target-mean",
-            auto_brightness_raw_values["--ab-target-mean"],
+            "--ab-target-grey",
+            auto_brightness_raw_values["--ab-target-grey"],
             0.0,
             1.0,
         )
         if parsed is None:
             return None
-        target_mean = parsed
-    if "--ab-mean-tolerance" in auto_brightness_raw_values:
-        parsed = _parse_float_in_range_option(
-            "--ab-mean-tolerance",
-            auto_brightness_raw_values["--ab-mean-tolerance"],
-            0.0,
-            1.0,
-        )
-        if parsed is None:
-            return None
-        mean_tolerance = parsed
-    if "--ab-initial-clip-hist-percent" in auto_brightness_raw_values:
-        parsed = _parse_non_negative_float_option(
-            "--ab-initial-clip-hist-percent",
-            auto_brightness_raw_values["--ab-initial-clip-hist-percent"],
-        )
-        if parsed is None:
-            return None
-        initial_clip_hist_percent = parsed
-
-    return AutoBrightnessOptions(
-        clip_limit=clip_limit,
-        tile_grid_width=tile_grid_width,
-        tile_grid_height=tile_grid_height,
-        target_mean=target_mean,
-        mean_tolerance=mean_tolerance,
-        initial_clip_hist_percent=initial_clip_hist_percent,
-    )
+        target_grey = parsed
+    return AutoBrightnessOptions(target_grey=target_grey)
 
 
 def _parse_auto_adjust_options(auto_adjust_raw_values):
@@ -1828,12 +1696,12 @@ def _parse_run_options(args):
     `--ev-zero <value>`, optional `--auto-zero[=<1|true|yes|on>]`,
     optional `--auto-zero-pct=<0..100>`, optional `--auto-ev-pct=<0..100>`,
     optional `--gamma=<a,b>` or `--gamma <a,b>`,
-    optional postprocess controls, optional auto-brightness stage and knobs,
-    optional shared auto-adjust knobs, required backend selector
-    (`--enable-enfuse` or `--enable-luminance`), and luminance backend controls
-    including explicit `--tmo*` passthrough options and optional auto-adjust
-    implementation selector (`--auto-adjust <ImageMagick|OpenCV>`); rejects
-    unknown options and invalid arity.
+    optional postprocess controls, optional auto-brightness stage and
+    `--ab-target-grey` knob, optional shared auto-adjust knobs, required backend
+    selector (`--enable-enfuse` or `--enable-luminance`), and luminance backend
+    controls including explicit `--tmo*` passthrough options and optional
+    auto-adjust implementation selector (`--auto-adjust <ImageMagick|OpenCV>`);
+    rejects unknown options and invalid arity.
     @param args {list[str]} Raw command argument vector.
     @return {tuple[Path, Path, float|None, bool, tuple[float, float], PostprocessOptions, bool, LuminanceOptions, float, bool, float, float]|None} Parsed `(input, output, ev, auto_ev, gamma, postprocess, enable_luminance, luminance_options, ev_zero, auto_zero_enabled, auto_zero_pct, auto_ev_pct)` tuple; `None` on parse failure.
     @satisfies REQ-055, REQ-056, REQ-057, REQ-060, REQ-061, REQ-064, REQ-065, REQ-067, REQ-069, REQ-071, REQ-072, REQ-073, REQ-075, REQ-079, REQ-080, REQ-081, REQ-082, REQ-083, REQ-084, REQ-085, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-097
@@ -3235,191 +3103,121 @@ def _to_uint16_image_array(np_module, image_data):
     return image_data
 
 
-def _clip_histogram_autolevel_channel(
-    cv2_module, np_module, channel, clip_hist_percent
-):
-    """@brief Clip histogram tails and rescale one luminance channel.
+def _to_linear_srgb(np_module, image_srgb):
+    """@brief Convert sRGB tensor to linear-sRGB tensor.
 
-    @details Removes low/high histogram outliers by clipping a symmetric percent
-    from cumulative histogram, then applies linear rescale to native channel
-    range (`[0,255]` or `[0,65535]`) using clamp-only mapping.
-    @param cv2_module {ModuleType} Imported cv2 module.
+    @details Applies IEC 61966-2-1 piecewise inverse transfer function on
+    normalized channel values in `[0,1]`.
     @param np_module {ModuleType} Imported numpy module.
-    @param channel {object} Single-channel uint8/uint16 image tensor.
-    @param clip_hist_percent {float} Total histogram clipping percent (`>= 0`).
-    @return {object} Rescaled channel tensor preserving input dtype.
-    @exception ValueError Raised when channel dtype is not `uint8`/`uint16`.
-    @satisfies REQ-090
-    """
-
-    dtype_name = str(getattr(channel, "dtype", ""))
-    if dtype_name == "uint8":
-        histogram_bins = 256
-        histogram_range = [0, 256]
-        channel_max = 255.0
-    elif dtype_name == "uint16":
-        histogram_bins = 65536
-        histogram_range = [0, 65536]
-        channel_max = 65535.0
-    else:
-        raise ValueError("Auto-brightness channel must be uint8 or uint16")
-    histogram = cv2_module.calcHist(
-        [channel], [0], None, [histogram_bins], histogram_range
-    ).ravel()
-    cumulative = histogram.cumsum()
-    maximum = float(cumulative[-1]) if cumulative.size else 0.0
-    if maximum <= 0.0:
-        return channel.copy()
-    clip_amount = (clip_hist_percent / 100.0) * maximum / 2.0
-    minimum_gray = int(np_module.searchsorted(cumulative, clip_amount))
-    maximum_gray = int(np_module.searchsorted(cumulative, maximum - clip_amount))
-    if maximum_gray <= minimum_gray:
-        return channel.copy()
-    alpha = channel_max / float(maximum_gray - minimum_gray)
-    beta = -float(minimum_gray) * alpha
-    shifted = channel.astype(np_module.float64) * alpha + beta
-    return np_module.clip(np_module.round(shifted), 0.0, channel_max).astype(
-        channel.dtype
-    )
-
-
-def _apply_mean_gamma_correction_channel(
-    cv2_module, np_module, channel, current_mean, target_mean
-):
-    """@brief Apply LUT gamma correction from current and target means.
-
-    @details Computes gamma with `log(target)/log(current)`, clamps gamma to
-    `[0.5,2.0]`, and applies vectorized power mapping over native channel range
-    (`[0,255]` or `[0,65535]`) while preserving dtype.
-    @param cv2_module {ModuleType} Imported cv2 module.
-    @param np_module {ModuleType} Imported numpy module.
-    @param channel {object} Single-channel uint8/uint16 image tensor.
-    @param current_mean {float} Current normalized mean in `(0,1)`.
-    @param target_mean {float} Target normalized mean in `(0,1)`.
-    @return {object} Gamma-corrected channel tensor preserving input dtype.
-    @satisfies REQ-090
-    """
-
-    dtype_name = str(getattr(channel, "dtype", ""))
-    if dtype_name == "uint8":
-        channel_max = 255.0
-    elif dtype_name == "uint16":
-        channel_max = 65535.0
-    else:
-        raise ValueError("Auto-brightness gamma channel must be uint8 or uint16")
-    if current_mean <= 0.01 or current_mean >= 0.99:
-        return channel
-    gamma = float(np_module.log(target_mean) / np_module.log(current_mean))
-    gamma = float(np_module.clip(gamma, 0.5, 2.0))
-    inv_gamma = 1.0 / gamma
-    normalized = channel.astype(np_module.float64) / channel_max
-    corrected = (np_module.clip(normalized, 0.0, 1.0) ** inv_gamma) * channel_max
-    return np_module.clip(np_module.round(corrected), 0.0, channel_max).astype(
-        channel.dtype
-    )
-
-
-def _derive_scene_key_preserving_auto_brightness_target(
-    current_mean, mid_key_target
-):
-    """@brief Derive scene-key-preserving gamma target for auto-brightness.
-
-    @details Classifies scene key from luminance-channel mean and maps the
-    gamma target to low/mid/high classes. Low-key maps to bounded low-key
-    target, high-key maps to bounded high-key target, and mid-key preserves
-    configured `mid_key_target`.
-    @param current_mean {float} Current normalized luminance mean in `(0,1)`.
-    @param mid_key_target {float} Configured mid-key luminance target in `(0,1)`.
-    @return {float} Scene-key-preserving luminance target in `(0,1)`.
+    @param image_srgb {object} Float image tensor in sRGB domain `[0,1]`.
+    @return {object} Float image tensor in linear-sRGB domain `[0,1]`.
     @satisfies REQ-090, REQ-099
     """
 
-    if current_mean <= AUTO_BRIGHTNESS_SCENE_KEY_LOW_THRESHOLD:
-        return min(mid_key_target, AUTO_BRIGHTNESS_TARGET_LOW_KEY)
-    if current_mean >= AUTO_BRIGHTNESS_SCENE_KEY_HIGH_THRESHOLD:
-        return max(mid_key_target, AUTO_BRIGHTNESS_TARGET_HIGH_KEY)
-    return mid_key_target
+    mask = image_srgb <= 0.04045
+    result = image_srgb.copy()
+    result[mask] = image_srgb[mask] / 12.92
+    result[~mask] = ((image_srgb[~mask] + 0.055) / 1.055) ** 2.4
+    return result
+
+
+def _from_linear_srgb(np_module, image_linear):
+    """@brief Convert linear-sRGB tensor to sRGB tensor.
+
+    @details Applies IEC 61966-2-1 piecewise forward transfer function on
+    normalized linear channel values in `[0,1]`.
+    @param np_module {ModuleType} Imported numpy module.
+    @param image_linear {object} Float image tensor in linear-sRGB domain `[0,1]`.
+    @return {object} Float image tensor in sRGB domain `[0,1]`.
+    @satisfies REQ-090, REQ-099
+    """
+
+    mask = image_linear <= 0.0031308
+    result = image_linear.copy()
+    result[mask] = image_linear[mask] * 12.92
+    result[~mask] = 1.055 * (image_linear[~mask] ** (1.0 / 2.4)) - 0.055
+    return result
+
+
+def _compute_bt709_luminance(np_module, linear_rgb):
+    """@brief Compute BT.709 linear luminance from linear RGB tensor.
+
+    @details Computes per-pixel luminance using BT.709 coefficients with RGB
+    channel order: `0.2126*R + 0.7152*G + 0.0722*B`.
+    @param np_module {ModuleType} Imported numpy module.
+    @param linear_rgb {object} Linear-sRGB float tensor with shape `H,W,3`.
+    @return {object} Float luminance tensor with shape `H,W`.
+    @satisfies REQ-090, REQ-099
+    """
+
+    return (
+        0.2126 * linear_rgb[..., 0]
+        + 0.7152 * linear_rgb[..., 1]
+        + 0.0722 * linear_rgb[..., 2]
+    )
+
+
+def _apply_highlight_rolloff(np_module, linear_rgb):
+    """@brief Apply global highlight rolloff on linear RGB tensor.
+
+    @details Applies Reinhard-style two-step rolloff when any channel exceeds
+    `1.0`, then clamps to `[0,1]`.
+    @param np_module {ModuleType} Imported numpy module.
+    @param linear_rgb {object} Linear-sRGB float tensor.
+    @return {object} Rolloff-compressed linear-sRGB float tensor.
+    @satisfies REQ-090
+    """
+
+    max_value = float(np_module.max(linear_rgb)) if linear_rgb.size else 0.0
+    if max_value <= 1.0:
+        return np_module.clip(linear_rgb, 0.0, 1.0)
+    rolled = linear_rgb / (1.0 + (linear_rgb / (max_value**2)))
+    rolled = rolled / (1.0 + rolled) * (1.0 + max_value)
+    return np_module.clip(rolled, 0.0, 1.0)
 
 
 def _apply_auto_brightness_rgb_uint8(
     cv2_module, np_module, image_rgb_uint8, auto_brightness_options
 ):
-    """@brief Apply auto-brightness algorithm on RGB uint16 tensor.
+    """@brief Apply BT.709 linear-sRGB auto-brightness on uint16 RGB tensor.
 
-    @details Executes luminance-only pipeline `histogram-clip autolevel -> CLAHE
-    -> conditional gamma(mean,target,tolerance)` on 16-bit luminance derived from
-    RGB, then applies per-pixel gain `g=L'/L` equally to R,G,B with anti-clipping
-    cap to preserve chromatic ratios for non-clipped pixels.
+    @details Executes pipeline: uint16 normalization to `[0,1]` in float64,
+    sRGB linearization, BT.709 luminance extraction, percentile statistics
+    (`p50`, `p98`), global gain `target_grey/p50` with cap `4.0`, highlight
+    rolloff, inverse sRGB transfer, and uint16 restoration.
     @param cv2_module {ModuleType} Imported cv2 module.
     @param np_module {ModuleType} Imported numpy module.
     @param image_rgb_uint8 {object} RGB uint16 image tensor.
-    @param auto_brightness_options {AutoBrightnessOptions} Parsed auto-brightness knobs.
-    @return {object} RGB float tensor in `[0,65535]` corrected by auto-brightness pipeline.
-    @exception ValueError Raised when input tensor is not uint16.
+    @param auto_brightness_options {AutoBrightnessOptions} Parsed auto-brightness parameters.
+    @return {object} RGB uint16 image tensor after BT.709 auto-brightness.
+    @exception ValueError Raised when input tensor is not uint16 RGB.
     @satisfies REQ-066, REQ-090, REQ-099
     """
 
+    del cv2_module
     if str(getattr(image_rgb_uint8, "dtype", "")) != "uint16":
         raise ValueError("Auto-brightness input image must be uint16")
-    if len(image_rgb_uint8.shape) == 2:
-        luminance_channel = image_rgb_uint8
-        original_luminance = luminance_channel
-        rgb_image = None
-    elif len(image_rgb_uint8.shape) == 3 and image_rgb_uint8.shape[2] == 1:
-        luminance_channel = image_rgb_uint8[:, :, 0]
-        original_luminance = luminance_channel
-        rgb_image = None
-    else:
-        rgb_image = image_rgb_uint8.astype(np_module.float64)
-        original_luminance = np_module.round(
-            0.2126 * rgb_image[..., 0]
-            + 0.7152 * rgb_image[..., 1]
-            + 0.0722 * rgb_image[..., 2]
-        ).astype(np_module.uint16)
-        luminance_channel = original_luminance
+    if len(image_rgb_uint8.shape) != 3 or image_rgb_uint8.shape[2] != 3:
+        raise ValueError("Auto-brightness input image must be RGB uint16")
 
-    if auto_brightness_options.initial_clip_hist_percent > 0.0:
-        luminance_channel = _clip_histogram_autolevel_channel(
-            cv2_module=cv2_module,
-            np_module=np_module,
-            channel=luminance_channel,
-            clip_hist_percent=auto_brightness_options.initial_clip_hist_percent,
-        )
-    clahe = cv2_module.createCLAHE(
-        clipLimit=auto_brightness_options.clip_limit,
-        tileGridSize=(
-            auto_brightness_options.tile_grid_width,
-            auto_brightness_options.tile_grid_height,
-        ),
-    )
-    luminance_channel = clahe.apply(luminance_channel)
-    current_mean = float(np_module.mean(luminance_channel)) / 65535.0
-    scene_key_target = _derive_scene_key_preserving_auto_brightness_target(
-        current_mean=current_mean,
-        mid_key_target=auto_brightness_options.target_mean,
-    )
-    if (
-        abs(current_mean - scene_key_target)
-        > auto_brightness_options.mean_tolerance
-    ):
-        luminance_channel = _apply_mean_gamma_correction_channel(
-            cv2_module=cv2_module,
-            np_module=np_module,
-            channel=luminance_channel,
-            current_mean=current_mean,
-            target_mean=scene_key_target,
-        )
-    if rgb_image is None:
-        if len(image_rgb_uint8.shape) == 2:
-            return luminance_channel
-        return luminance_channel[:, :, None]
-    source_luminance = np_module.maximum(original_luminance.astype(np_module.float64), 1.0)
-    gain = luminance_channel.astype(np_module.float64) / source_luminance
-    peak_channel = np_module.maximum(np_module.max(rgb_image, axis=2), 1.0)
-    anti_clip_cap = 65535.0 / peak_channel
-    gain = np_module.minimum(gain, anti_clip_cap)
-    corrected_rgb = rgb_image * gain[..., None]
-    return np_module.clip(corrected_rgb, 0.0, 65535.0)
+    image_srgb = image_rgb_uint8.astype(np_module.float64) / 65535.0
+    image_linear = _to_linear_srgb(np_module=np_module, image_srgb=image_srgb)
+
+    linear_luminance = _compute_bt709_luminance(np_module=np_module, linear_rgb=image_linear)
+    p50 = float(np_module.percentile(linear_luminance, 50))
+    _ = float(np_module.percentile(linear_luminance, 98))
+
+    gain = auto_brightness_options.target_grey / (p50 + 1e-7)
+    gain = min(gain, DEFAULT_AB_MAX_GAIN)
+
+    bright_linear = image_linear * gain
+    bright_linear = _apply_highlight_rolloff(np_module=np_module, linear_rgb=bright_linear)
+
+    bright_srgb = _from_linear_srgb(np_module=np_module, image_linear=bright_linear)
+    return np_module.clip(
+        np_module.round(bright_srgb * 65535.0), 0.0, 65535.0
+    ).astype(np_module.uint16)
+
 
 
 def _apply_validated_auto_adjust_pipeline(
@@ -3949,12 +3747,13 @@ def _encode_jpg(
 
     @details Loads merged image payload, keeps 16-bit depth when source
     dynamic range exceeds JPEG-native depth if auto-brightness is enabled,
-    optionally executes auto-brightness
-    pre-stage, preserves resolved `ev_zero` as extraction/merge reference only
-    without additional brightness compensation at encode stage, then applies shared gamma/brightness/contrast/saturation
-    postprocessing over resulting image, optionally executes auto-adjust stage
-    over temporary lossless 16-bit TIFF intermediates, and writes JPEG with
-    configured compression level for both HDR backends.
+    optionally executes BT.709 linear-sRGB auto-brightness pre-stage, preserves
+    resolved `ev_zero` as extraction/merge reference only without additional
+    brightness compensation at encode stage, then applies shared
+    gamma/brightness/contrast/saturation postprocessing over resulting image,
+    optionally executes auto-adjust stage over temporary lossless 16-bit TIFF
+    intermediates, and writes JPEG with configured compression level for both
+    HDR backends.
     @param imageio_module {ModuleType} Imported imageio module with `imread` and `imwrite`.
     @param pil_image_module {ModuleType} Imported Pillow image module.
     @param pil_enhance_module {ModuleType} Imported Pillow ImageEnhance module.
