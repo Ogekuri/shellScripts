@@ -2,8 +2,10 @@
 """@brief Update-check orchestration for shellscripts startup.
 
 @details Performs cooldown-gated GitHub release checks, persists cache metadata,
-and prints terminal-visible update or HTTP-error status lines. Network errors
-other than HTTP responses are suppressed to preserve CLI startup continuity.
+and prints terminal-visible update or HTTP-error status lines. Successful
+requests apply the default cooldown. HTTP-error responses apply the enlarged
+cooldown. Network errors other than HTTP responses are suppressed to preserve
+CLI startup continuity.
 @satisfies PRJ-004, DES-002, DES-003, DES-004, DES-005, DES-006, REQ-003, REQ-059, REQ-060, REQ-061
 """
 
@@ -18,8 +20,8 @@ from pathlib import Path
 PROGRAM = "shellscripts"
 OWNER = "Ogekuri"
 REPOSITORY = "shellScripts"
-IDLE_DELAY = 300
-RATE_LIMIT_IDLE_DELAY = 3600
+IDLE_DELAY = 3600
+HTTP_ERROR_IDLE_DELAY = 86400
 HTTP_TIMEOUT = 2
 GITHUB_API_URL = f"https://api.github.com/repos/{OWNER}/{REPOSITORY}/releases/latest"
 CACHE_DIR = Path.home() / ".cache" / PROGRAM
@@ -59,7 +61,7 @@ def _write_idle_config(last_check_ts: float, idle_delay_seconds: int) -> None:
     @param idle_delay_seconds {int} Cooldown duration applied after the check.
     @return {None} No return value.
     @throws {OSError} Propagated when cache directory creation or file write fails.
-    @satisfies DES-003, DES-004, DES-005
+    @satisfies DES-003, DES-004, DES-005, REQ-061
     """
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -152,8 +154,9 @@ def check_for_updates(current_version: str) -> None:
     @details Applies cooldown gating unless the current CLI invocation requests
     `--version` or `--ver`, performs the latest-release HTTP request, prints a
     bright-green update line for newer releases, prints bright-red HTTP errors,
-    persists cooldown metadata, and suppresses non-HTTP exceptions. Complexity:
-    O(1) excluding network latency and JSON parsing.
+    persists a 3600-second success cooldown or an 86400-second HTTP-error
+    cooldown, and suppresses non-HTTP exceptions. Complexity: O(1) excluding
+    network latency and JSON parsing.
     @param current_version {str} Installed package version string.
     @return {None} No return value.
     @throws {urllib.error.HTTPError} Internally handled and converted to output.
@@ -183,13 +186,13 @@ def check_for_updates(current_version: str) -> None:
 
     except urllib.error.HTTPError as e:
         if e.code in (403, 429):
-            _write_idle_config(now, RATE_LIMIT_IDLE_DELAY)
+            _write_idle_config(now, HTTP_ERROR_IDLE_DELAY)
             print(
                 f"{BRIGHT_RED}Update check failed: rate limit exceeded "
                 f"(HTTP {e.code}).{RESET}"
             )
         else:
-            _write_idle_config(now, IDLE_DELAY)
+            _write_idle_config(now, HTTP_ERROR_IDLE_DELAY)
             print(f"{BRIGHT_RED}Update check failed: HTTP {e.code}.{RESET}")
     except Exception:
         pass

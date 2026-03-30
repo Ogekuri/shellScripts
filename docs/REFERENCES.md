@@ -1800,7 +1800,7 @@ startup-level OS semantics across command execution flow.
 
 ---
 
-# version_check.py | Python | 195L | 19 symbols | 7 imports | 9 comments
+# version_check.py | Python | 198L | 19 symbols | 7 imports | 9 comments
 > Path: `src/shell_scripts/version_check.py`
 
 ## Imports
@@ -1816,47 +1816,47 @@ from pathlib import Path
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L18)
-- var `OWNER = "Ogekuri"` (L19)
-- var `REPOSITORY = "shellScripts"` (L20)
-- var `IDLE_DELAY = 300` (L21)
-- var `RATE_LIMIT_IDLE_DELAY = 3600` (L22)
-- var `HTTP_TIMEOUT = 2` (L23)
-- var `GITHUB_API_URL = f"https://api.github.com/repos/{OWNER}/{REPOSITORY}/releases/latest"` (L24)
-- var `CACHE_DIR = Path.home() / ".cache" / PROGRAM` (L25)
-- var `IDLE_TIME_FILE = CACHE_DIR / "check_version_idle-time.json"` (L26)
-- var `BRIGHT_GREEN = "\033[92m"` (L28)
-- var `BRIGHT_RED = "\033[91m"` (L29)
-- var `RESET = "\033[0m"` (L30)
-### fn `def _read_idle_config() -> dict[str, object] | None` `priv` (L33-51)
+- var `PROGRAM = "shellscripts"` (L20)
+- var `OWNER = "Ogekuri"` (L21)
+- var `REPOSITORY = "shellScripts"` (L22)
+- var `IDLE_DELAY = 3600` (L23)
+- var `HTTP_ERROR_IDLE_DELAY = 86400` (L24)
+- var `HTTP_TIMEOUT = 2` (L25)
+- var `GITHUB_API_URL = f"https://api.github.com/repos/{OWNER}/{REPOSITORY}/releases/latest"` (L26)
+- var `CACHE_DIR = Path.home() / ".cache" / PROGRAM` (L27)
+- var `IDLE_TIME_FILE = CACHE_DIR / "check_version_idle-time.json"` (L28)
+- var `BRIGHT_GREEN = "\033[92m"` (L30)
+- var `BRIGHT_RED = "\033[91m"` (L31)
+- var `RESET = "\033[0m"` (L32)
+### fn `def _read_idle_config() -> dict[str, object] | None` `priv` (L35-53)
 - @brief Load cached cooldown metadata for the version check.
 - @details Reads the cooldown JSON payload from the user cache directory. Absent files and unreadable JSON payloads resolve to `None`. Complexity: O(1) for fixed-size payload parsing.
 - @return {dict[str, object] | None} Cached cooldown payload or `None`.
 - @satisfies DES-003, REQ-059
 
-### fn `def _write_idle_config(last_check_ts: float, idle_delay_seconds: int) -> None` `priv` (L52-81)
+### fn `def _write_idle_config(last_check_ts: float, idle_delay_seconds: int) -> None` `priv` (L54-83)
 - @brief Persist cooldown timestamps for the next version-check gate.
 - @details Derives the idle-until timestamp from the supplied delay, writes both machine-readable timestamps and UTC-rendered strings, and stores the applied delay for downstream inspection. Complexity: O(1).
 - @param last_check_ts {float} UNIX timestamp recorded for the current check.
 - @param idle_delay_seconds {int} Cooldown duration applied after the check.
 - @return {None} No return value.
 - @throws {OSError} Propagated when cache directory creation or file write fails.
-- @satisfies DES-003, DES-004, DES-005
+- @satisfies DES-003, DES-004, DES-005, REQ-061
 
-### fn `def _is_forced_version_check() -> bool` `priv` (L82-94)
+### fn `def _is_forced_version_check() -> bool` `priv` (L84-96)
 - @brief Detect CLI flags that force the version-check HTTP request.
 - @details Evaluates the live process argument vector and returns `True` when the current invocation requested `--version` or `--ver`. Complexity: O(N) where N is the number of CLI arguments.
 - @return {bool} `True` when the request must bypass cooldown gating.
 - @satisfies REQ-003, REQ-059
 
-### fn `def _should_check(force_check: bool = False) -> bool` `priv` (L95-116)
+### fn `def _should_check(force_check: bool = False) -> bool` `priv` (L97-118)
 - @brief Evaluate whether the GitHub version-check request should run.
 - @details Forces execution when `force_check` is `True`; otherwise reads the cached idle-until timestamp and compares it against the current wall-clock time. Complexity: O(1).
 - @param force_check {bool} Cooldown-bypass flag derived from CLI arguments.
 - @return {bool} `True` when the HTTP request is allowed or forced.
 - @satisfies REQ-003, REQ-059
 
-### fn `def _parse_version(version_value: str) -> tuple[int, ...]` `priv` (L117-130)
+### fn `def _parse_version(version_value: str) -> tuple[int, ...]` `priv` (L119-132)
 - @brief Convert a semantic-version string into an integer tuple.
 - @details Strips a leading `v` prefix, splits by `.`, and converts each segment to `int`. Complexity: O(N) where N is the number of segments.
 - @param version_value {str} Raw semantic version token.
@@ -1864,7 +1864,7 @@ from pathlib import Path
 - @throws {ValueError} Propagated when a segment is not numeric.
 - @satisfies PRJ-004
 
-### fn `def _compare_versions(current: str, latest: str) -> bool` `priv` (L131-148)
+### fn `def _compare_versions(current: str, latest: str) -> bool` `priv` (L133-150)
 - @brief Compare installed and latest semantic versions.
 - @details Parses both version strings into integer tuples and returns `True` only when `latest` is newer than `current`. Invalid inputs collapse to `False`. Complexity: O(N).
 - @param current {str} Installed package version.
@@ -1872,9 +1872,9 @@ from pathlib import Path
 - @return {bool} `True` when the remote version is newer.
 - @satisfies PRJ-004, REQ-060
 
-### fn `def check_for_updates(current_version: str) -> None` (L149-195)
+### fn `def check_for_updates(current_version: str) -> None` (L151-198)
 - @brief Execute the startup GitHub release version check.
-- @details Applies cooldown gating unless the current CLI invocation requests `--version` or `--ver`, performs the latest-release HTTP request, prints a bright-green update line for newer releases, prints bright-red HTTP errors, persists cooldown metadata, and suppresses non-HTTP exceptions. Complexity: O(1) excluding network latency and JSON parsing.
+- @details Applies cooldown gating unless the current CLI invocation requests `--version` or `--ver`, performs the latest-release HTTP request, prints a bright-green update line for newer releases, prints bright-red HTTP errors, persists a 3600-second success cooldown or an 86400-second HTTP-error cooldown, and suppresses non-HTTP exceptions. Complexity: O(1) excluding network latency and JSON parsing.
 - @param current_version {str} Installed package version string.
 - @return {None} No return value.
 - @throws {urllib.error.HTTPError} Internally handled and converted to output.
@@ -1883,23 +1883,23 @@ from pathlib import Path
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|18||
-|`OWNER`|var|pub|19||
-|`REPOSITORY`|var|pub|20||
-|`IDLE_DELAY`|var|pub|21||
-|`RATE_LIMIT_IDLE_DELAY`|var|pub|22||
-|`HTTP_TIMEOUT`|var|pub|23||
-|`GITHUB_API_URL`|var|pub|24||
-|`CACHE_DIR`|var|pub|25||
-|`IDLE_TIME_FILE`|var|pub|26||
-|`BRIGHT_GREEN`|var|pub|28||
-|`BRIGHT_RED`|var|pub|29||
-|`RESET`|var|pub|30||
-|`_read_idle_config`|fn|priv|33-51|def _read_idle_config() -> dict[str, object] | None|
-|`_write_idle_config`|fn|priv|52-81|def _write_idle_config(last_check_ts: float, idle_delay_s...|
-|`_is_forced_version_check`|fn|priv|82-94|def _is_forced_version_check() -> bool|
-|`_should_check`|fn|priv|95-116|def _should_check(force_check: bool = False) -> bool|
-|`_parse_version`|fn|priv|117-130|def _parse_version(version_value: str) -> tuple[int, ...]|
-|`_compare_versions`|fn|priv|131-148|def _compare_versions(current: str, latest: str) -> bool|
-|`check_for_updates`|fn|pub|149-195|def check_for_updates(current_version: str) -> None|
+|`PROGRAM`|var|pub|20||
+|`OWNER`|var|pub|21||
+|`REPOSITORY`|var|pub|22||
+|`IDLE_DELAY`|var|pub|23||
+|`HTTP_ERROR_IDLE_DELAY`|var|pub|24||
+|`HTTP_TIMEOUT`|var|pub|25||
+|`GITHUB_API_URL`|var|pub|26||
+|`CACHE_DIR`|var|pub|27||
+|`IDLE_TIME_FILE`|var|pub|28||
+|`BRIGHT_GREEN`|var|pub|30||
+|`BRIGHT_RED`|var|pub|31||
+|`RESET`|var|pub|32||
+|`_read_idle_config`|fn|priv|35-53|def _read_idle_config() -> dict[str, object] | None|
+|`_write_idle_config`|fn|priv|54-83|def _write_idle_config(last_check_ts: float, idle_delay_s...|
+|`_is_forced_version_check`|fn|priv|84-96|def _is_forced_version_check() -> bool|
+|`_should_check`|fn|priv|97-118|def _should_check(force_check: bool = False) -> bool|
+|`_parse_version`|fn|priv|119-132|def _parse_version(version_value: str) -> tuple[int, ...]|
+|`_compare_versions`|fn|priv|133-150|def _compare_versions(current: str, latest: str) -> bool|
+|`check_for_updates`|fn|pub|151-198|def check_for_updates(current_version: str) -> None|
 

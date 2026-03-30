@@ -61,7 +61,7 @@
 - Internal Call-Trace Tree:
   - `main(...)`: Entry dispatcher for all CLI invocations [`src/shell_scripts/core.py`]
     - `detect_runtime_os(...)`: Detect and cache normalized runtime OS token for startup-wide platform decisions [`src/shell_scripts/utils.py`]
-    - `check_for_updates(...)`: Startup version-check gate with forced CLI bypass and cooldown persistence [`src/shell_scripts/version_check.py`]
+    - `check_for_updates(...)`: Startup version-check gate with forced CLI bypass plus 3600-second success and 86400-second HTTP-error cooldown persistence [`src/shell_scripts/version_check.py`]
       - `_is_forced_version_check(...)`: Detect `--version` or `--ver` requests that bypass cooldown gating [`src/shell_scripts/version_check.py`]
       - `_should_check(...)`: Evaluate forced bypass or cached cooldown expiration before network request [`src/shell_scripts/version_check.py`]
         - `_read_idle_config(...)`: Read cached cooldown JSON from user cache directory [`src/shell_scripts/version_check.py`]
