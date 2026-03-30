@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
+"""@brief Update-check orchestration for shellscripts startup.
+
+@details Performs cooldown-gated GitHub release checks, persists cache metadata,
+and prints terminal-visible update or HTTP-error status lines. Network errors
+other than HTTP responses are suppressed to preserve CLI startup continuity.
+@satisfies PRJ-004, DES-002, DES-003, DES-004, DES-005, DES-006, REQ-003, REQ-059, REQ-060, REQ-061
+"""
+
 import json
+import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,6 +19,7 @@ PROGRAM = "shellscripts"
 OWNER = "Ogekuri"
 REPOSITORY = "shellScripts"
 IDLE_DELAY = 300
+RATE_LIMIT_IDLE_DELAY = 3600
 HTTP_TIMEOUT = 2
 GITHUB_API_URL = f"https://api.github.com/repos/{OWNER}/{REPOSITORY}/releases/latest"
 CACHE_DIR = Path.home() / ".cache" / PROGRAM
@@ -20,7 +30,16 @@ BRIGHT_RED = "\033[91m"
 RESET = "\033[0m"
 
 
-def _read_idle_config():
+def _read_idle_config() -> dict[str, object] | None:
+    """@brief Load cached cooldown metadata for the version check.
+
+    @details Reads the cooldown JSON payload from the user cache directory.
+    Absent files and unreadable JSON payloads resolve to `None`. Complexity:
+    O(1) for fixed-size payload parsing.
+    @return {dict[str, object] | None} Cached cooldown payload or `None`.
+    @satisfies DES-003, REQ-059
+    """
+
     if not IDLE_TIME_FILE.exists():
         return None
     try:
@@ -30,13 +49,27 @@ def _read_idle_config():
         return None
 
 
-def _write_idle_config(last_check_ts, idle_until_ts):
+def _write_idle_config(last_check_ts: float, idle_delay_seconds: int) -> None:
+    """@brief Persist cooldown timestamps for the next version-check gate.
+
+    @details Derives the idle-until timestamp from the supplied delay, writes
+    both machine-readable timestamps and UTC-rendered strings, and stores the
+    applied delay for downstream inspection. Complexity: O(1).
+    @param last_check_ts {float} UNIX timestamp recorded for the current check.
+    @param idle_delay_seconds {int} Cooldown duration applied after the check.
+    @return {None} No return value.
+    @throws {OSError} Propagated when cache directory creation or file write fails.
+    @satisfies DES-003, DES-004, DES-005
+    """
+
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    idle_until_ts = last_check_ts + idle_delay_seconds
     data = {
         "last_check_timestamp": last_check_ts,
         "last_check_human": datetime.fromtimestamp(
             last_check_ts, tz=timezone.utc
         ).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "idle_delay_seconds": idle_delay_seconds,
         "idle_until_timestamp": idle_until_ts,
         "idle_until_human": datetime.fromtimestamp(
             idle_until_ts, tz=timezone.utc
@@ -46,25 +79,88 @@ def _write_idle_config(last_check_ts, idle_until_ts):
         json.dump(data, f, indent=2)
 
 
-def _should_check():
+def _is_forced_version_check() -> bool:
+    """@brief Detect CLI flags that force the version-check HTTP request.
+
+    @details Evaluates the live process argument vector and returns `True` when
+    the current invocation requested `--version` or `--ver`. Complexity: O(N)
+    where N is the number of CLI arguments.
+    @return {bool} `True` when the request must bypass cooldown gating.
+    @satisfies REQ-003, REQ-059
+    """
+
+    return any(arg in ("--version", "--ver") for arg in sys.argv[1:])
+
+
+def _should_check(force_check: bool = False) -> bool:
+    """@brief Evaluate whether the GitHub version-check request should run.
+
+    @details Forces execution when `force_check` is `True`; otherwise reads the
+    cached idle-until timestamp and compares it against the current wall-clock
+    time. Complexity: O(1).
+    @param force_check {bool} Cooldown-bypass flag derived from CLI arguments.
+    @return {bool} `True` when the HTTP request is allowed or forced.
+    @satisfies REQ-003, REQ-059
+    """
+
+    if force_check:
+        return True
     config = _read_idle_config()
     if config is None:
         return True
     idle_until = config.get("idle_until_timestamp", 0)
+    if not isinstance(idle_until, (int, float)):
+        return True
     return time.time() >= idle_until
 
 
-def _compare_versions(current, latest):
-    def parse(v):
-        return tuple(int(x) for x in v.strip().lstrip("v").split("."))
+def _parse_version(version_value: str) -> tuple[int, ...]:
+    """@brief Convert a semantic-version string into an integer tuple.
+
+    @details Strips a leading `v` prefix, splits by `.`, and converts each
+    segment to `int`. Complexity: O(N) where N is the number of segments.
+    @param version_value {str} Raw semantic version token.
+    @return {tuple[int, ...]} Parsed numeric version segments.
+    @throws {ValueError} Propagated when a segment is not numeric.
+    @satisfies PRJ-004
+    """
+
+    return tuple(int(part) for part in version_value.strip().lstrip("v").split("."))
+
+
+def _compare_versions(current: str, latest: str) -> bool:
+    """@brief Compare installed and latest semantic versions.
+
+    @details Parses both version strings into integer tuples and returns
+    `True` only when `latest` is newer than `current`. Invalid inputs collapse
+    to `False`. Complexity: O(N).
+    @param current {str} Installed package version.
+    @param latest {str} Latest GitHub release version.
+    @return {bool} `True` when the remote version is newer.
+    @satisfies PRJ-004, REQ-060
+    """
+
     try:
-        return parse(latest) > parse(current)
+        return _parse_version(latest) > _parse_version(current)
     except (ValueError, AttributeError):
         return False
 
 
-def check_for_updates(current_version):
-    if not _should_check():
+def check_for_updates(current_version: str) -> None:
+    """@brief Execute the startup GitHub release version check.
+
+    @details Applies cooldown gating unless the current CLI invocation requests
+    `--version` or `--ver`, performs the latest-release HTTP request, prints a
+    bright-green update line for newer releases, prints bright-red HTTP errors,
+    persists cooldown metadata, and suppresses non-HTTP exceptions. Complexity:
+    O(1) excluding network latency and JSON parsing.
+    @param current_version {str} Installed package version string.
+    @return {None} No return value.
+    @throws {urllib.error.HTTPError} Internally handled and converted to output.
+    @satisfies PRJ-004, DES-004, DES-005, DES-006, REQ-003, REQ-059, REQ-060, REQ-061
+    """
+
+    if not _should_check(force_check=_is_forced_version_check()):
         return
 
     now = time.time()
@@ -79,41 +175,21 @@ def check_for_updates(current_version):
 
             if latest and _compare_versions(current_version, latest):
                 print(
-                    f"{BRIGHT_GREEN}A new version of {PROGRAM} is available: "
-                    f"{latest} (installed: {current_version}). "
-                    f"Run '{PROGRAM} --upgrade' to update.{RESET}"
+                    f"{BRIGHT_GREEN}Versione Disponibile: {latest} | "
+                    f"Versione Installata: {current_version}{RESET}"
                 )
 
-            _write_idle_config(now, now + IDLE_DELAY)
+            _write_idle_config(now, IDLE_DELAY)
 
     except urllib.error.HTTPError as e:
-        if e.code == 429:
-            retry_after = IDLE_DELAY
-            ra_header = e.headers.get("Retry-After")
-            if ra_header:
-                try:
-                    retry_after = int(ra_header)
-                except ValueError:
-                    pass
-            idle_until = now + max(retry_after, IDLE_DELAY)
-            config = _read_idle_config()
-            if config:
-                existing_idle = config.get("idle_until_timestamp", 0)
-                if existing_idle > idle_until:
-                    idle_until = existing_idle
-            _write_idle_config(now, idle_until)
+        if e.code in (403, 429):
+            _write_idle_config(now, RATE_LIMIT_IDLE_DELAY)
             print(
                 f"{BRIGHT_RED}Update check failed: rate limit exceeded "
-                f"(HTTP 429). Retrying after cooldown.{RESET}"
-            )
-        elif e.code == 403:
-            _write_idle_config(now, now + IDLE_DELAY)
-            print(
-                f"{BRIGHT_RED}Update check failed: rate limit exceeded "
-                f"(HTTP 403).{RESET}"
+                f"(HTTP {e.code}).{RESET}"
             )
         else:
-            _write_idle_config(now, now + IDLE_DELAY)
+            _write_idle_config(now, IDLE_DELAY)
             print(f"{BRIGHT_RED}Update check failed: HTTP {e.code}.{RESET}")
     except Exception:
         pass
