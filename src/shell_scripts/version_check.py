@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """@brief Update-check orchestration for shellscripts startup.
 
-@details Performs cooldown-gated GitHub release checks, persists cache metadata,
-and prints terminal-visible update or HTTP-error status lines. Successful
-requests apply the default cooldown. HTTP-error responses apply the enlarged
-cooldown. Network errors other than HTTP responses are suppressed to preserve
-CLI startup continuity.
+@details Performs cooldown-gated GitHub release checks, persists cache metadata
+for every request outcome, and prints terminal-visible update or error status
+lines. Successful requests apply the default cooldown. Request errors apply the
+enlarged cooldown without aborting CLI startup continuity.
 @satisfies PRJ-004, DES-002, DES-003, DES-004, DES-005, DES-006, REQ-003, REQ-059, REQ-060, REQ-061
 """
 
@@ -94,6 +93,46 @@ def _is_forced_version_check() -> bool:
     return any(arg in ("--version", "--ver") for arg in sys.argv[1:])
 
 
+def _format_request_error(error: Exception) -> str:
+    """@brief Convert a request exception into terminal output detail text.
+
+    @details Returns a stable, parser-friendly error descriptor for HTTP and
+    non-HTTP request failures. HTTP errors preserve the status code. Non-HTTP
+    errors expose the exception type and optional message. Complexity: O(1).
+    @param error {Exception} Request failure captured during update checking.
+    @return {str} Error detail suffix without terminal color codes.
+    @satisfies DES-005, DES-006, REQ-061
+    """
+
+    if isinstance(error, urllib.error.HTTPError):
+        if error.code in (403, 429):
+            return f"rate limit exceeded (HTTP {error.code})"
+        return f"HTTP {error.code}"
+
+    error_type = type(error).__name__
+    error_message = str(error).strip()
+    if error_message:
+        return f"{error_type}: {error_message}"
+    return error_type
+
+
+def _handle_request_error(last_check_ts: float, error: Exception) -> None:
+    """@brief Persist cooldown metadata and print the request error line.
+
+    @details Applies the fixed HTTP-error cooldown, updates the cooldown JSON,
+    and emits a bright-red terminal line for the supplied request failure.
+    Complexity: O(1) excluding filesystem latency.
+    @param last_check_ts {float} UNIX timestamp recorded for the failed check.
+    @param error {Exception} Request failure captured during update checking.
+    @return {None} No return value.
+    @throws {OSError} Propagated when cache directory creation or file write fails.
+    @satisfies DES-003, DES-005, DES-006, REQ-061
+    """
+
+    _write_idle_config(last_check_ts, HTTP_ERROR_IDLE_DELAY)
+    print(f"{BRIGHT_RED}Update check failed: {_format_request_error(error)}.{RESET}")
+
+
 def _should_check(force_check: bool = False) -> bool:
     """@brief Evaluate whether the GitHub version-check request should run.
 
@@ -153,10 +192,11 @@ def check_for_updates(current_version: str) -> None:
 
     @details Applies cooldown gating unless the current CLI invocation requests
     `--version` or `--ver`, performs the latest-release HTTP request, prints a
-    bright-green update line for newer releases, prints bright-red HTTP errors,
-    persists a 3600-second success cooldown or an 86400-second HTTP-error
-    cooldown, and suppresses non-HTTP exceptions. Complexity: O(1) excluding
-    network latency and JSON parsing.
+    bright-green update line for newer releases, persists a 3600-second success
+    cooldown or an 86400-second request-error cooldown for every request
+    outcome, prints bright-red request errors, and suppresses propagation of
+    non-HTTP request exceptions. Complexity: O(1) excluding network latency and
+    JSON parsing.
     @param current_version {str} Installed package version string.
     @return {None} No return value.
     @throws {urllib.error.HTTPError} Internally handled and converted to output.
@@ -184,15 +224,7 @@ def check_for_updates(current_version: str) -> None:
 
             _write_idle_config(now, IDLE_DELAY)
 
-    except urllib.error.HTTPError as e:
-        if e.code in (403, 429):
-            _write_idle_config(now, HTTP_ERROR_IDLE_DELAY)
-            print(
-                f"{BRIGHT_RED}Update check failed: rate limit exceeded "
-                f"(HTTP {e.code}).{RESET}"
-            )
-        else:
-            _write_idle_config(now, HTTP_ERROR_IDLE_DELAY)
-            print(f"{BRIGHT_RED}Update check failed: HTTP {e.code}.{RESET}")
-    except Exception:
-        pass
+    except urllib.error.HTTPError as error:
+        _handle_request_error(now, error)
+    except Exception as error:
+        _handle_request_error(now, error)

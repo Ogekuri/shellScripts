@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.12"
+version: "0.6.13"
 date: "2026-03-30"
 author: "Auto-generated from repository evidence"
 scope:
@@ -106,10 +106,10 @@ Repository structure (evidence-oriented view, depth-limited):
 ### 3.1 Design and Implementation
 - **DES-001**: MUST implement command discovery with a static command-to-module mapping and lazy module imports.
 - **DES-002**: MUST execute runtime OS detection and update-check logic before normal CLI argument dispatch.
-- **DES-003**: MUST persist update-check cooldown state in `~/.cache/shellscripts/check_version_idle-time.json`.
+- **DES-003**: MUST persist update-check cooldown state for every version-check request outcome in `~/.cache/shellscripts/check_version_idle-time.json`.
 - **DES-004**: MUST apply a 3600-second cooldown after successful update checks.
-- **DES-005**: MUST apply a fixed 86400-second cooldown after version-check HTTP error responses.
-- **DES-006**: MUST suppress non-HTTP update-check exceptions without aborting command execution.
+- **DES-005**: MUST apply a fixed 86400-second cooldown after version-check request errors.
+- **DES-006**: MUST suppress propagation of non-HTTP update-check exceptions without aborting command execution.
 - **DES-007**: MUST implement `diff`, `edit`, and `view` commands as wrappers around shared MIME-based dispatch logic in `_dc_common` and runtime-configurable command profiles.
 - **DES-008**: MUST expose command modules with `DESCRIPTION`, `print_help(version)`, and `run(args)` call patterns.
 - **DES-009**: MUST recreate `.venv` whenever `.venv` already exists in `venv` command execution and `--force` MUST NOT change this behavior.
@@ -175,7 +175,7 @@ No explicit performance optimizations identified.
 - **REQ-058**: MUST implement `video2h265` using `ffmpeg -i <input> -c:v libx265 -crf 23 -tag:v hvc1 -pix_fmt yuv420p -c:a aac -b:a 192k <input>.mp4` in the input file directory.
 - **REQ-059**: MUST skip the version-check HTTP request when the cooldown file exists, the persisted idle delay is active, and neither `--version` nor `--ver` is passed.
 - **REQ-060**: MUST print a bright-green line containing `Versione Disponibile` and `Versione Installata` when the latest release version differs from the installed version.
-- **REQ-061**: MUST print a bright-red error line and apply an 86400-second cooldown when the version-check HTTP request returns an HTTP error response.
+- **REQ-061**: MUST print a bright-red error line and apply an 86400-second cooldown when the version-check request returns an HTTP error response or raises a non-HTTP exception.
 
 ## 4. Test Requirements
 
@@ -203,7 +203,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 |---|---|---|---|
 | PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047 | `src/shell_scripts/core.py` | `main`, `print_help` | Startup path detects runtime OS before dispatch; empty args print help and return `0`; unknown command path returns `1`; `--version` and `--ver` print `__version__`. |
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
-| PRJ-004, DES-002..DES-006, REQ-003, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_is_forced_version_check`, `_write_idle_config`, `_should_check` | Forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, stores delay metadata in cache JSON, applies 3600s on success and 86400s on HTTP errors, and prints colored update/error lines. |
+| PRJ-004, DES-002..DES-006, REQ-003, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_is_forced_version_check`, `_write_idle_config`, `_should_check` | Forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every request outcome, applies 3600s on success and 86400s on request errors, and prints colored update/error lines. |
 | PRJ-005 | `.github/workflows/release-uvx.yml` | `jobs.check-branch`, `jobs.build-release` | Workflow script is present at required path and defines release automation jobs. |
 | PRJ-006, REQ-057, REQ-058 | `src/shell_scripts/commands/video2h264.py`; `src/shell_scripts/commands/video2h265.py`; `src/shell_scripts/commands/__init__.py` | `run`, `_COMMAND_MODULES` | Command registry exposes `video2h264`/`video2h265`; runners build fixed FFmpeg argv vectors and output `<input>.mp4` in the input directory. |
 | CTN-001 | `pyproject.toml` | `[project].requires-python` | `requires-python = ">=3.11"`. |
