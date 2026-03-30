@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0](https://github.com/Ogekuri/shellScripts/compare/v0.7.0..v0.8.0) - 2026-03-30
+### 🚜  Changes
+- persist cooldown on all request outcomes [useReq] *(version-check)*
+  - Update version-check requirements for every request outcome
+  - Persist cooldown JSON after successful requests and request errors
+  - Keep default idle delay at 3600 seconds and error cooldown at 86400 seconds
+  - Add non-HTTP request error formatting and bright-red output handling
+  - Refresh workflow and references documentation
+- update success and error cooldowns [useReq] *(version-check)*
+  - Req-Change-ID: useReq-shellScripts-work-20260330152925
+  - Update SRS cooldown values for version-check flow
+  - Set default success idle delay to 3600 seconds
+  - Set HTTP error idle delay to 86400 seconds
+  - Refresh workflow and references documentation
+- force 1h cooldown on rate limits [useReq] *(version-check)*
+  - Req-Change-ID: useReq-shellScripts-work-20260330151242\nUpdate requirements for forced version checks and rate-limit cooldowns\nImplement fixed 3600s cooldown for HTTP 403/429 responses\nPersist idle_delay_seconds metadata in version cache JSON\nRefresh workflow and references documentation
+
 ## [0.7.0](https://github.com/Ogekuri/shellScripts/compare/v0.6.0..v0.7.0) - 2026-03-29
 ### ⛰️  Features
 - add ffmpeg video2h264/video2h265 commands [useReq] *(video-conversion)*
@@ -466,6 +483,7 @@
 - \[0.5.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.5.0
 - \[0.6.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.6.0
 - \[0.7.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.7.0
+- \[0.8.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.8.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -474,3 +492,4 @@
 [0.5.0]: https://github.com/Ogekuri/shellScripts/compare/v0.4.0..v0.5.0
 [0.6.0]: https://github.com/Ogekuri/shellScripts/compare/v0.5.0..v0.6.0
 [0.7.0]: https://github.com/Ogekuri/shellScripts/compare/v0.6.0..v0.7.0
+[0.8.0]: https://github.com/Ogekuri/shellScripts/compare/v0.7.0..v0.8.0
