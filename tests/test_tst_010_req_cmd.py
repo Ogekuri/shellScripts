@@ -1,14 +1,16 @@
 """
 @brief Validate `req` command target selection and external argv generation.
 @details Verifies default/current-directory mode, `--dirs`, `--recursive`,
-  mutual exclusion handling, and runtime-configured provider/static-check
-  argument injection while preserving hardcoded non-overridable args.
-@satisfies TST-010, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
+  mutual exclusion handling, cleanup evidence emission, and
+  runtime-configured provider/static-check argument injection while preserving
+  hardcoded non-overridable args.
+@satisfies TST-010, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053,
+  REQ-054, REQ-062, REQ-063
 @return {None} Pytest module scope.
 """
 
-from pathlib import Path
 import types
+from pathlib import Path
 
 import shell_scripts.commands.req_cmd as req_cmd
 
@@ -25,15 +27,16 @@ def _create_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def test_req_default_targets_current_directory(monkeypatch, tmp_path):
+def test_req_default_targets_current_directory(monkeypatch, tmp_path, capsys):
     """
     @brief Validate default target-selection mode.
     @details Runs command without selectors and asserts exactly one subprocess
       execution with `--base` pointing to current working directory.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
-    @satisfies TST-010, REQ-049, REQ-051
+    @satisfies TST-010, REQ-049, REQ-051, REQ-062
     """
 
     observed: list[list[str]] = []
@@ -52,6 +55,10 @@ def test_req_default_targets_current_directory(monkeypatch, tmp_path):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.chdir(tmp_path)
+    _create_dir(tmp_path / ".opencode" / "prompt")
+    codex_prompt_file = tmp_path / ".codex" / "prompts"
+    codex_prompt_file.parent.mkdir(parents=True, exist_ok=True)
+    codex_prompt_file.write_text("prompt-body", encoding="utf-8")
     monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(
@@ -61,22 +68,28 @@ def test_req_default_targets_current_directory(monkeypatch, tmp_path):
     )
 
     result = req_cmd.run([])
+    output = capsys.readouterr().out
 
     assert result == 0
     assert len(observed) == 1
     assert observed[0][0] == "req"
     assert observed[0][observed[0].index("--base") + 1] == str(tmp_path)
+    assert f"Cleanup target: {tmp_path}" in output
+    assert f"clean | deleted | dir | {tmp_path / '.opencode' / 'prompt'}" in output
+    assert f"clean | deleted | file | {codex_prompt_file}" in output
+    assert f"clean | skip | missing | {tmp_path / '.gemini' / 'commands'}" in output
 
 
-def test_req_dirs_targets_only_first_level_children(monkeypatch, tmp_path):
+def test_req_dirs_targets_only_first_level_children(monkeypatch, tmp_path, capsys):
     """
     @brief Validate `--dirs` selection semantics.
     @details Creates first-level and nested directories, runs `--dirs`, and
       asserts only non-hidden first-level directories are targeted.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
-    @satisfies TST-010, REQ-052
+    @satisfies TST-010, REQ-052, REQ-062
     """
 
     _create_dir(tmp_path / "a")
@@ -105,12 +118,15 @@ def test_req_dirs_targets_only_first_level_children(monkeypatch, tmp_path):
     monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
 
     result = req_cmd.run(["--dirs"])
+    output = capsys.readouterr().out
 
     assert result == 0
     assert observed_bases == [str(tmp_path / "a"), str(tmp_path / "b")]
+    assert f"Cleanup target: {tmp_path / 'a'}" in output
+    assert f"Cleanup target: {tmp_path / 'b'}" in output
 
 
-def test_req_recursive_targets_descendants_only(monkeypatch, tmp_path):
+def test_req_recursive_targets_descendants_only(monkeypatch, tmp_path, capsys):
     """
     @brief Validate `--recursive` selection semantics.
     @details Creates multi-level descendants and hidden paths, runs
@@ -118,8 +134,9 @@ def test_req_recursive_targets_descendants_only(monkeypatch, tmp_path):
       current directory is excluded.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
-    @satisfies TST-010, REQ-053
+    @satisfies TST-010, REQ-053, REQ-062
     """
 
     _create_dir(tmp_path / "a")
@@ -148,6 +165,7 @@ def test_req_recursive_targets_descendants_only(monkeypatch, tmp_path):
     monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
 
     result = req_cmd.run(["--recursive"])
+    output = capsys.readouterr().out
 
     assert result == 0
     assert observed_bases == [
@@ -155,6 +173,9 @@ def test_req_recursive_targets_descendants_only(monkeypatch, tmp_path):
         str(tmp_path / "a" / "nested"),
         str(tmp_path / "b"),
     ]
+    assert f"Cleanup target: {tmp_path / 'a'}" in output
+    assert f"Cleanup target: {tmp_path / 'a' / 'nested'}" in output
+    assert f"Cleanup target: {tmp_path / 'b'}" in output
 
 
 def test_req_rejects_dirs_and_recursive_together(monkeypatch):
@@ -294,7 +315,7 @@ def test_req_prepare_target_directory_cleans_opencode_prompt_path(tmp_path):
       predefined cleanup list semantics.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-010, REQ-048
+    @satisfies TST-010, REQ-048, REQ-062, REQ-063
     """
 
     opencode_prompt = tmp_path / ".opencode" / "prompt"
@@ -302,7 +323,32 @@ def test_req_prepare_target_directory_cleans_opencode_prompt_path(tmp_path):
     opencode_prompt.mkdir(parents=True, exist_ok=True)
     opencode_command.mkdir(parents=True, exist_ok=True)
 
-    req_cmd._prepare_target_directory(tmp_path)
+    evidence = req_cmd._prepare_target_directory(tmp_path)
 
     assert not opencode_prompt.exists()
     assert not opencode_command.exists()
+    assert ("deleted", "dir", opencode_prompt) in evidence
+    assert ("deleted", "dir", opencode_command) in evidence
+
+
+def test_req_prepare_target_directory_reports_deleted_file_and_skip(tmp_path):
+    """
+    @brief Validate cleanup evidence for file deletion and missing-path skip.
+    @details Creates one cleanup file entry, leaves another predefined cleanup
+      path absent, runs target preparation, and asserts evidence records `file`
+      deletion and `skip` for the missing path.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-010, REQ-048, REQ-062, REQ-063
+    """
+
+    cleanup_file = tmp_path / ".codex" / "prompts"
+    cleanup_file.parent.mkdir(parents=True, exist_ok=True)
+    cleanup_file.write_text("prompt-body", encoding="utf-8")
+    missing_path = tmp_path / ".kiro" / "skills"
+
+    evidence = req_cmd._prepare_target_directory(tmp_path)
+
+    assert not cleanup_file.exists()
+    assert ("deleted", "file", cleanup_file) in evidence
+    assert ("skip", "missing", missing_path) in evidence

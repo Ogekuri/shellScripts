@@ -1086,7 +1086,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# req_cmd.py | Python | 243L | 9 symbols | 6 imports | 9 comments
+# req_cmd.py | Python | 298L | 11 symbols | 6 imports | 11 comments
 > Path: `src/shell_scripts/commands/req_cmd.py`
 
 ## Imports
@@ -1101,9 +1101,9 @@ from shell_scripts.utils import print_error, require_commands
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L21)
-- var `DESCRIPTION = "Run useReq bootstrap on current or discovered directories."` (L22)
-### fn `def _is_hidden_path(path: Path, base_dir: Path) -> bool` `priv` (L53-67)
+- var `PROGRAM = "shellscripts"` (L23)
+- var `DESCRIPTION = "Run useReq bootstrap on current or discovered directories."` (L24)
+### fn `def _is_hidden_path(path: Path, base_dir: Path) -> bool` `priv` (L57-71)
 - @brief Determine whether path contains hidden segments below base.
 - @details Computes relative parts from `base_dir` and returns `True` when any path segment starts with a dot-prefix, preventing accidental traversal of hidden metadata directories (for example `.git`).
 - @param path {Path} Candidate directory path.
@@ -1111,61 +1111,77 @@ from shell_scripts.utils import print_error, require_commands
 - @return {bool} `True` when candidate has hidden relative segments.
 - @satisfies REQ-052, REQ-053
 
-### fn `def print_help(version: str) -> None` (L68-85)
+### fn `def print_help(version: str) -> None` (L72-89)
 - @brief Render command help for `req`.
 - @details Prints selector options and behavior contract for target directory discovery and external `req` invocation flow.
 - @param version {str} CLI version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _iter_first_level_dirs(base_dir: Path) -> list[Path]` `priv` (L86-105)
+### fn `def _iter_first_level_dirs(base_dir: Path) -> list[Path]` `priv` (L90-109)
 - @brief Collect first-level child directories in deterministic order.
 - @details Enumerates direct children of `base_dir`, keeps only directories, and sorts by path string for stable command behavior.
 - @param base_dir {Path} Directory whose first-level children are listed.
 - @return {list[Path]} Sorted first-level child directories.
 - @satisfies REQ-052
 
-### fn `def _iter_descendant_dirs(base_dir: Path) -> list[Path]` `priv` (L106-125)
+### fn `def _iter_descendant_dirs(base_dir: Path) -> list[Path]` `priv` (L110-129)
 - @brief Collect descendant directories recursively in deterministic order.
 - @details Traverses all descendants via glob expansion, excludes `base_dir` itself, keeps only directories, and sorts by path string.
 - @param base_dir {Path} Directory whose descendants are listed.
 - @return {list[Path]} Sorted descendant directory list excluding `base_dir`.
 - @satisfies REQ-053
 
-### fn `def _build_req_args(target_dir: Path) -> list[str]` `priv` (L126-161)
+### fn `def _build_req_args(target_dir: Path) -> list[str]` `priv` (L130-165)
 - @brief Build external `req` argument vector for one target directory.
 - @details Uses hardcoded non-overridable arguments and appends repeated runtime-configured providers/static-check entries sourced from `get_req_profile`.
 - @param target_dir {Path} Target directory used to parameterize path flags.
 - @return {list[str]} External `req` argv vector.
 - @satisfies REQ-049, REQ-050
 
-### fn `def _prepare_target_directory(target_dir: Path) -> None` `priv` (L162-177)
-- @brief Apply cleanup and scaffold operations for one target directory.
-- @details Removes each predefined integration directory if present and ensures required project subdirectories exist before external `req` call.
-- @param target_dir {Path} Target directory to mutate.
-- @return {None} Performs filesystem side effects.
-- @satisfies REQ-048
+### fn `def _delete_cleanup_path(cleanup_path: Path) -> tuple[str, str]` `priv` (L166-188)
+- @brief Remove one predefined cleanup path when it exists.
+- @details Evaluates one cleanup candidate path, returns `skip` when the path is absent, removes directories with `shutil.rmtree`, removes non-directory filesystem entries with `Path.unlink`, and classifies deleted entries as `dir` or `file`. Time complexity is O(n) for directory trees and O(1) for non-directory entries.
+- @param cleanup_path {Path} Absolute candidate cleanup path for one target.
+- @return {tuple[str, str]} Status-kind pair shaped as (`deleted`, `dir`), (`deleted`, `file`), or (`skip`, `missing`).
+- @satisfies REQ-048, REQ-062, REQ-063
 
-### fn `def run(args: list[str]) -> int` (L178-243)
+### fn `def _print_cleanup_evidence(evidence: CleanupEvidence) -> None` `priv` (L189-205)
+- @brief Emit one cleanup evidence line in deterministic token order.
+- @details Prints a parser-friendly line using fixed `clean | <status> | <kind> | <path>` tokens so downstream checks can differentiate deleted files, deleted directories, and skipped missing paths without reading surrounding prose. Time complexity is O(1).
+- @param evidence {CleanupEvidence} Tuple `(status, kind, path)` produced by cleanup preparation logic.
+- @return {None} Writes one stdout line.
+- @satisfies REQ-062, REQ-063
+
+### fn `def _prepare_target_directory(target_dir: Path) -> list[CleanupEvidence]` `priv` (L206-229)
+- @brief Apply cleanup and scaffold operations for one target directory.
+- @details Evaluates every predefined cleanup path, records deterministic cleanup evidence tuples, removes existing filesystem entries, and ensures required project subdirectories exist before external `req` call. Time complexity is O(m + d) where `m` is cleanup-path count and `d` is total removed directory-tree entries.
+- @param target_dir {Path} Target directory to mutate.
+- @return {list[CleanupEvidence]} Cleanup evidence entries in configured path order.
+- @satisfies REQ-048, REQ-062, REQ-063
+
+### fn `def run(args: list[str]) -> int` (L230-298)
 - @brief Execute `req` orchestration for selected directory targets.
-- @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options. Converts external `req` non-zero exits into explicit error output and propagated return codes.
+- @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase with per-path evidence emission, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options. Converts external `req` non-zero exits into explicit error output and propagated return codes.
 - @param args {list[str]} Command arguments excluding `req` token.
 - @return {int} `0` on success; non-zero for option or subprocess failures.
 - @exception {subprocess.CalledProcessError} Internally handled and converted to deterministic return code + error output.
-- @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056
+- @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-062, REQ-063
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|21||
-|`DESCRIPTION`|var|pub|22||
-|`_is_hidden_path`|fn|priv|53-67|def _is_hidden_path(path: Path, base_dir: Path) -> bool|
-|`print_help`|fn|pub|68-85|def print_help(version: str) -> None|
-|`_iter_first_level_dirs`|fn|priv|86-105|def _iter_first_level_dirs(base_dir: Path) -> list[Path]|
-|`_iter_descendant_dirs`|fn|priv|106-125|def _iter_descendant_dirs(base_dir: Path) -> list[Path]|
-|`_build_req_args`|fn|priv|126-161|def _build_req_args(target_dir: Path) -> list[str]|
-|`_prepare_target_directory`|fn|priv|162-177|def _prepare_target_directory(target_dir: Path) -> None|
-|`run`|fn|pub|178-243|def run(args: list[str]) -> int|
+|`PROGRAM`|var|pub|23||
+|`DESCRIPTION`|var|pub|24||
+|`_is_hidden_path`|fn|priv|57-71|def _is_hidden_path(path: Path, base_dir: Path) -> bool|
+|`print_help`|fn|pub|72-89|def print_help(version: str) -> None|
+|`_iter_first_level_dirs`|fn|priv|90-109|def _iter_first_level_dirs(base_dir: Path) -> list[Path]|
+|`_iter_descendant_dirs`|fn|priv|110-129|def _iter_descendant_dirs(base_dir: Path) -> list[Path]|
+|`_build_req_args`|fn|priv|130-165|def _build_req_args(target_dir: Path) -> list[str]|
+|`_delete_cleanup_path`|fn|priv|166-188|def _delete_cleanup_path(cleanup_path: Path) -> tuple[str...|
+|`_print_cleanup_evidence`|fn|priv|189-205|def _print_cleanup_evidence(evidence: CleanupEvidence) ->...|
+|`_prepare_target_directory`|fn|priv|206-229|def _prepare_target_directory(target_dir: Path) -> list[C...|
+|`run`|fn|pub|230-298|def run(args: list[str]) -> int|
 
 
 ---

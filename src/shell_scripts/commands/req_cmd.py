@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """@brief `req` bootstrap orchestrator for current/child project directories.
 
-@details Applies cleanup and scaffold actions, then executes external `req`
-installation arguments for selected target directories. Target selection mode is
-current directory by default, first-level child directories with `--dirs`, or
-all descendant directories with `--recursive`. Provider/static-check argument
-lists are resolved from runtime config with hardcoded fallback defaults.
-@satisfies PRJ-003, DES-008, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056
+@details Applies cleanup and scaffold actions, emits one cleanup evidence line
+for every predefined cleanup path, then executes external `req` installation
+arguments for selected target directories. Target selection mode is current
+directory by default, first-level child directories with `--dirs`, or all
+descendant directories with `--recursive`. Provider/static-check argument lists
+are resolved from runtime config with hardcoded fallback defaults.
+@satisfies PRJ-003, DES-008, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052,
+  REQ-053, REQ-054, REQ-056, REQ-062, REQ-063
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from shell_scripts.utils import print_error, require_commands
 PROGRAM = "shellscripts"
 DESCRIPTION = "Run useReq bootstrap on current or discovered directories."
 
-DELETE_DIRS: tuple[str, ...] = (
+CLEANUP_PATHS: tuple[str, ...] = (
     ".gemini/commands",
     ".gemini/skills",
     ".claude/commands",
@@ -48,6 +50,8 @@ REQUIRED_DIRS: tuple[str, ...] = (
     "scripts",
     ".github/workflows",
 )
+
+CleanupEvidence = tuple[str, str, Path]
 
 
 def _is_hidden_path(path: Path, base_dir: Path) -> bool:
@@ -159,35 +163,84 @@ def _build_req_args(target_dir: Path) -> list[str]:
     return args
 
 
-def _prepare_target_directory(target_dir: Path) -> None:
-    """@brief Apply cleanup and scaffold operations for one target directory.
+def _delete_cleanup_path(cleanup_path: Path) -> tuple[str, str]:
+    """@brief Remove one predefined cleanup path when it exists.
 
-    @details Removes each predefined integration directory if present and
-    ensures required project subdirectories exist before external `req` call.
-    @param target_dir {Path} Target directory to mutate.
-    @return {None} Performs filesystem side effects.
-    @satisfies REQ-048
+    @details Evaluates one cleanup candidate path, returns `skip` when the path
+    is absent, removes directories with `shutil.rmtree`, removes non-directory
+    filesystem entries with `Path.unlink`, and classifies deleted entries as
+    `dir` or `file`. Time complexity is O(n) for directory trees and O(1) for
+    non-directory entries.
+    @param cleanup_path {Path} Absolute candidate cleanup path for one target.
+    @return {tuple[str, str]} Status-kind pair shaped as (`deleted`, `dir`),
+      (`deleted`, `file`), or (`skip`, `missing`).
+    @satisfies REQ-048, REQ-062, REQ-063
     """
 
-    for rel_path in DELETE_DIRS:
-        shutil.rmtree(target_dir / rel_path, ignore_errors=True)
+    if not cleanup_path.exists() and not cleanup_path.is_symlink():
+        return ("skip", "missing")
+    if cleanup_path.is_dir() and not cleanup_path.is_symlink():
+        shutil.rmtree(cleanup_path)
+        return ("deleted", "dir")
+    cleanup_path.unlink()
+    return ("deleted", "file")
+
+
+def _print_cleanup_evidence(evidence: CleanupEvidence) -> None:
+    """@brief Emit one cleanup evidence line in deterministic token order.
+
+    @details Prints a parser-friendly line using fixed `clean | <status> |
+    <kind> | <path>` tokens so downstream checks can differentiate deleted
+    files, deleted directories, and skipped missing paths without reading
+    surrounding prose. Time complexity is O(1).
+    @param evidence {CleanupEvidence} Tuple `(status, kind, path)` produced by
+      cleanup preparation logic.
+    @return {None} Writes one stdout line.
+    @satisfies REQ-062, REQ-063
+    """
+
+    status, kind, path = evidence
+    print(f"clean | {status} | {kind} | {path}")
+
+
+def _prepare_target_directory(target_dir: Path) -> list[CleanupEvidence]:
+    """@brief Apply cleanup and scaffold operations for one target directory.
+
+    @details Evaluates every predefined cleanup path, records deterministic
+    cleanup evidence tuples, removes existing filesystem entries, and ensures
+    required project subdirectories exist before external `req` call. Time
+    complexity is O(m + d) where `m` is cleanup-path count and `d` is total
+    removed directory-tree entries.
+    @param target_dir {Path} Target directory to mutate.
+    @return {list[CleanupEvidence]} Cleanup evidence entries in configured path
+      order.
+    @satisfies REQ-048, REQ-062, REQ-063
+    """
+
+    evidence: list[CleanupEvidence] = []
+    for rel_path in CLEANUP_PATHS:
+        cleanup_path = target_dir / rel_path
+        status, kind = _delete_cleanup_path(cleanup_path)
+        evidence.append((status, kind, cleanup_path))
     for rel_path in REQUIRED_DIRS:
         (target_dir / rel_path).mkdir(parents=True, exist_ok=True)
+    return evidence
 
 
 def run(args: list[str]) -> int:
     """@brief Execute `req` orchestration for selected directory targets.
 
     @details Parses mutually exclusive selector options, resolves target set,
-    applies cleanup/scaffold phase, and executes external `req` for each target.
-    Returns `1` on invalid option combinations or unknown options. Converts
-    external `req` non-zero exits into explicit error output and propagated
-    return codes.
+    applies cleanup/scaffold phase with per-path evidence emission, and executes
+    external `req` for each target. Returns `1` on invalid option combinations
+    or unknown options. Converts external `req` non-zero exits into explicit
+    error output and propagated return codes.
     @param args {list[str]} Command arguments excluding `req` token.
     @return {int} `0` on success; non-zero for option or subprocess failures.
     @exception {subprocess.CalledProcessError} Internally handled and converted
       to deterministic return code + error output.
-    @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056
+    @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056,
+      REQ-062, REQ-063
     """
 
     mode_current = True
@@ -222,7 +275,9 @@ def run(args: list[str]) -> int:
     print("Clean previous install")
     print("-----------------------------------------------------------------------------------------------------------------")
     for target_dir in targets:
-        _prepare_target_directory(target_dir)
+        print(f"Cleanup target: {target_dir}")
+        for evidence in _prepare_target_directory(target_dir):
+            _print_cleanup_evidence(evidence)
         print()
 
     for target_dir in targets:
