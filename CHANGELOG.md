@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.0](https://github.com/Ogekuri/shellScripts/compare/v0.9.0..v0.10.0) - 2026-04-02
+### 🚜  Changes
+- report cleanup evidence for req [useReq] *(req_cmd)*
+  - Update REQ-048 and TST-010 for cleanup evidence output.
+  - Add REQ-062 and REQ-063 for deleted/skip reporting.
+  - Emit deterministic cleanup evidence for each predefined path.
+  - Differentiate deleted files and directories in req cleanup.
+  - Extend req command tests for deleted dir, deleted file, and skip cases.
+  - Refresh WORKFLOW and REFERENCES traces for req cleanup flow.
+
 ## [0.9.0](https://github.com/Ogekuri/shellScripts/compare/v0.8.0..v0.9.0) - 2026-04-01
 ### 🐛  Bug Fixes
 - Fix git repository.
@@ -489,6 +499,7 @@
 - \[0.7.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.7.0
 - \[0.8.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.8.0
 - \[0.9.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.9.0
+- \[0.10.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.10.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -499,3 +510,4 @@
 [0.7.0]: https://github.com/Ogekuri/shellScripts/compare/v0.6.0..v0.7.0
 [0.8.0]: https://github.com/Ogekuri/shellScripts/compare/v0.7.0..v0.8.0
 [0.9.0]: https://github.com/Ogekuri/shellScripts/compare/v0.8.0..v0.9.0
+[0.10.0]: https://github.com/Ogekuri/shellScripts/compare/v0.9.0..v0.10.0
