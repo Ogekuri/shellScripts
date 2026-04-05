@@ -56,7 +56,7 @@
   - Trigger: invoked through `python -m shell_scripts` or console script entrypoint mapping to `shell_scripts.core:main`.
   - Startup: captures stdin TTY state, executes runtime OS detection, update-check gate, and runtime-config load before argument dispatch.
   - Runtime mode: single-dispatch CLI process; selected command path runs child processes via blocking `subprocess.run` and propagates child return codes.
-  - Shutdown: restores saved TTY state and disables xterm mouse tracking before returning explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
+  - Shutdown: restores saved TTY state and disables legacy+xterm mouse tracking (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before returning explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - `main(...)`: Entry dispatcher for all CLI invocations [`src/shell_scripts/core.py`]
@@ -280,12 +280,12 @@
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
         - `require_commands(...)`: Validate VS Code Insiders executable before subprocess invocation [`src/shell_scripts/utils.py`]
-    - `reset_terminal_state(...)`: Restore captured stdin TTY attributes, disable xterm mouse modes, and execute `stty sane` fallback on TTY stdin [`src/shell_scripts/utils.py`]
+    - `reset_terminal_state(...)`: Restore captured stdin TTY attributes, disable legacy+xterm mouse modes (`?9l` through `?1016l`), and execute `stty sane` fallback on TTY stdin [`src/shell_scripts/utils.py`]
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
 - External Boundaries:
   - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
   - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands).
-  - Terminal boundary: ANSI control-sequence writes for xterm mouse-mode disable and best-effort `termios`/`stty sane` restoration.
+  - Terminal boundary: ANSI control-sequence writes for legacy+xterm mouse-mode disable (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) and best-effort `termios`/`stty sane` restoration.
   - Process-replacement boundary: none; launcher-style commands now execute external tools via `subprocess.run`.
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.

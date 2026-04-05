@@ -4,7 +4,7 @@
 @details Provides reusable terminal formatting utilities, project-root
 resolution, platform detection with runtime OS caching, command availability
 checks, and terminal-state restoration primitives used by CLI command wrappers.
-@satisfies CTN-003, CTN-005, DES-002, REQ-047, REQ-055, REQ-056, REQ-064
+@satisfies CTN-003, CTN-005, DES-002, REQ-047, REQ-055, REQ-056, REQ-064, REQ-065
 """
 
 import os
@@ -45,9 +45,11 @@ _RUNTIME_OS = None
 
 ## @var _MOUSE_OFF_ESCAPE_SEQUENCE
 #  @brief Escape-sequence payload that disables known xterm mouse-reporting modes.
-#  @details Concatenates CSI mode-off controls for common mouse tracking modes.
-#  @satisfies REQ-064
+#  @details Concatenates CSI mode-off controls for legacy X10 mode (`?9l`) and
+#  common xterm mouse tracking modes (`?1000l`..`?1016l`).
+#  @satisfies REQ-064, REQ-065
 _MOUSE_OFF_ESCAPE_SEQUENCE = (
+    "\x1b[?9l"
     "\x1b[?1000l"
     "\x1b[?1001l"
     "\x1b[?1002l"
@@ -403,12 +405,14 @@ def reset_terminal_state(saved_tty=None):
     """@brief Restore terminal raw/cbreak and mouse-tracking state.
 
     @details Restores previously captured stdin termios attributes when present,
-    disables known xterm mouse modes on TTY stdout, and best-effort runs
-    `stty sane` for Git Bash/Unix-compatible terminals. Failures are ignored to
-    preserve wrapper exit semantics. Time complexity O(1).
+    writes `_MOUSE_OFF_ESCAPE_SEQUENCE` (`?9l`, `?1000l`, `?1001l`, `?1002l`,
+    `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) to
+    TTY stdout, and best-effort runs `stty sane` for Git Bash/Unix-compatible
+    terminals. Failures are ignored to preserve wrapper exit semantics. Time
+    complexity O(1).
     @param saved_tty {list[object] | None} Attributes from `capture_terminal_state`.
     @return {None} Performs best-effort terminal-state restoration.
-    @satisfies REQ-064
+    @satisfies REQ-064, REQ-065
     """
 
     tcsetattr = None

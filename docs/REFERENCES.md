@@ -354,7 +354,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ### fn `def run(args)` (L26-41)
 - @brief Launch Claude CLI after external executable validation.
-- @details Resolves project root, resolves user-local Claude executable path, resolves and validates executable path via shared command guard, then executes command via subprocess.
+- @details Resolves project root, resolves user-local Claude executable path, validates executable availability, then executes command via subprocess.
 - @param args {list[str]} Additional CLI args forwarded to Claude.
 - @return {int} Child process return code.
 - @satisfies REQ-017, REQ-055, REQ-056, REQ-064
@@ -414,7 +414,7 @@ from shell_scripts.utils import print_info, require_project_root, require_comman
 
 ### fn `def run(args: list[str]) -> int` (L83-101)
 - @brief Launch Codex CLI with project-scoped environment preparation.
-- @details Resolves project root, guarantees codex auth symlink compliance, sets `CODEX_HOME=<project-root>/.codex`, resolves executable path for `codex`, then executes `codex --yolo` plus pass-through args through blocking subprocess run.
+- @details Resolves project root, guarantees codex auth symlink compliance, sets `CODEX_HOME=<project-root>/.codex`, then executes `codex --yolo` plus pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Codex.
 - @return {int} Child process return code.
 - @throws {OSError} Propagated for filesystem or process-launch failures.
@@ -450,7 +450,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ### fn `def run(args)` (L25-39)
 - @brief Launch Copilot CLI after external executable validation.
-- @details Resolves project root, resolves and validates executable path for `copilot`, then executes pass-through args through blocking subprocess run.
+- @details Resolves project root, checks executable availability for `copilot`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Copilot.
 - @return {int} Child process return code.
 - @satisfies REQ-015, REQ-055, REQ-056, REQ-064
@@ -483,7 +483,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ### fn `def run(args)` (L25-39)
 - @brief Launch Gemini CLI after external executable validation.
-- @details Resolves project root, resolves and validates executable path for `gemini`, then executes pass-through args through blocking subprocess run.
+- @details Resolves project root, checks executable availability for `gemini`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Gemini.
 - @return {int} Child process return code.
 - @satisfies REQ-016, REQ-055, REQ-056, REQ-064
@@ -516,7 +516,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ### fn `def run(args)` (L25-39)
 - @brief Launch Kiro CLI after external executable validation.
-- @details Resolves project root, resolves and validates executable path for `kiro-cli`, then executes pass-through args through blocking subprocess run.
+- @details Resolves project root, validates executable availability for `kiro-cli`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Kiro.
 - @return {int} Child process return code.
 - @satisfies REQ-019, REQ-055, REQ-056, REQ-064
@@ -549,7 +549,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ### fn `def run(args)` (L25-39)
 - @brief Launch OpenCode CLI after external executable validation.
-- @details Resolves project root, resolves and validates executable path for `opencode`, then executes pass-through args through blocking subprocess run.
+- @details Resolves project root, checks executable availability for `opencode`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to OpenCode.
 - @return {int} Child process return code.
 - @satisfies REQ-018, REQ-055, REQ-056, REQ-064
@@ -1616,7 +1616,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 195L | 6 symbols | 7 imports | 7 comments
+# core.py | Python | 197L | 6 symbols | 7 imports | 7 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1660,11 +1660,11 @@ from shell_scripts.utils import (
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L139-195)
+### fn `def main()` (L139-197)
 - @brief Entrypoint for shellscripts argument dispatch.
-- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands, then restores terminal raw/cbreak and xterm mouse-tracking modes before exit.
+- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
-- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1674,12 +1674,12 @@ from shell_scripts.utils import (
 |`do_upgrade`|fn|pub|78-100|def do_upgrade()|
 |`do_uninstall`|fn|pub|101-123|def do_uninstall()|
 |`do_write_config`|fn|pub|124-138|def do_write_config()|
-|`main`|fn|pub|139-195|def main()|
+|`main`|fn|pub|139-197|def main()|
 
 
 ---
 
-# utils.py | Python | 452L | 40 symbols | 8 imports | 23 comments
+# utils.py | Python | 455L | 42 symbols | 8 imports | 26 comments
 > Path: `src/shell_scripts/utils.py`
 
 ## Imports
@@ -1696,182 +1696,189 @@ import termios
 
 ## Definitions
 
-- var `RESET = "\033[0m"` (L22)
-- var `BOLD = "\033[1m"` (L23)
-- var `RED = "\033[31m"` (L24)
-- var `GREEN = "\033[32m"` (L25)
-- var `YELLOW = "\033[33m"` (L26)
-- var `BLUE = "\033[34m"` (L27)
-- var `MAGENTA = "\033[35m"` (L28)
-- var `CYAN = "\033[36m"` (L29)
-- var `WHITE = "\033[37m"` (L30)
-- var `BRIGHT_RED = "\033[91m"` (L31)
-- var `BRIGHT_GREEN = "\033[92m"` (L32)
-- var `BRIGHT_YELLOW = "\033[93m"` (L33)
-- var `BRIGHT_BLUE = "\033[94m"` (L34)
-- var `BRIGHT_CYAN = "\033[96m"` (L35)
-- var `BRIGHT_WHITE = "\033[97m"` (L36)
-### fn `def color_enabled()` (L63-68)
+- var `RESET = "\033[0m"` (L23)
+- var `BOLD = "\033[1m"` (L24)
+- var `RED = "\033[31m"` (L25)
+- var `GREEN = "\033[32m"` (L26)
+- var `YELLOW = "\033[33m"` (L27)
+- var `BLUE = "\033[34m"` (L28)
+- var `MAGENTA = "\033[35m"` (L29)
+- var `CYAN = "\033[36m"` (L30)
+- var `WHITE = "\033[37m"` (L31)
+- var `BRIGHT_RED = "\033[91m"` (L32)
+- var `BRIGHT_GREEN = "\033[92m"` (L33)
+- var `BRIGHT_YELLOW = "\033[93m"` (L34)
+- var `BRIGHT_BLUE = "\033[94m"` (L35)
+- var `BRIGHT_CYAN = "\033[96m"` (L36)
+- var `BRIGHT_WHITE = "\033[97m"` (L37)
+### fn `def color_enabled()` (L66-71)
 - @brief Escape-sequence payload that disables known xterm mouse-reporting modes.
-- @details Concatenates CSI mode-off controls for common mouse tracking modes.
-- @satisfies REQ-064
+- @details Concatenates CSI mode-off controls for legacy X10 mode (`?9l`) and
+common xterm mouse tracking modes (`?1000l`..`?1016l`).
+- @satisfies REQ-064, REQ-065
 
-### fn `def c(text, color)` (L69-74)
+### fn `def c(text, color)` (L72-77)
 
-### fn `def print_info(msg)` (L75-78)
+### fn `def print_info(msg)` (L78-81)
 
-### fn `def print_error(msg)` (L79-82)
+### fn `def print_error(msg)` (L82-85)
 
-### fn `def print_warn(msg)` (L83-86)
+### fn `def print_warn(msg)` (L86-89)
 
-### fn `def print_success(msg)` (L87-90)
+### fn `def print_success(msg)` (L90-93)
 
-### fn `def get_project_root()` (L91-103)
+### fn `def get_project_root()` (L94-106)
 
-### fn `def require_project_root()` (L104-112)
+### fn `def require_project_root()` (L107-115)
 
-### fn `def detect_runtime_os()` (L113-135)
+### fn `def detect_runtime_os()` (L116-138)
 - @brief Detect and cache runtime operating-system token.
 - @details Normalizes `sys.platform` into deterministic categories (`windows`, `linux`, `darwin`, `other`) and stores the result in module cache for subsequent calls. Time complexity O(1).
 - @return {str} Normalized runtime operating-system token.
 - @satisfies DES-002, REQ-047
 
-### fn `def get_runtime_os()` (L136-149)
+### fn `def get_runtime_os()` (L139-152)
 - @brief Return cached runtime operating-system token.
 - @details Lazily initializes the cache via `detect_runtime_os` when unset, preserving a single startup-consistent OS classification.
 - @return {str} Normalized runtime operating-system token.
 - @satisfies DES-002, REQ-047
 
-### fn `def is_windows()` (L150-160)
+### fn `def is_windows()` (L153-163)
 - @brief Check whether runtime operating system is Windows.
 - @details Evaluates cached runtime token from `get_runtime_os`.
 - @return {bool} `True` when runtime OS is Windows; otherwise `False`.
 - @satisfies DES-013, REQ-008, REQ-047
 
-### fn `def is_linux()` (L161-171)
+### fn `def is_linux()` (L164-174)
 - @brief Check whether runtime operating system is Linux.
 - @details Evaluates cached runtime token from `get_runtime_os`.
 - @return {bool} `True` when runtime OS is Linux; otherwise `False`.
 - @satisfies CTN-004, REQ-004, REQ-005, REQ-047
 
-### fn `def _is_executable_file(path: Path) -> bool` `priv` (L173-185)
+### fn `def _is_executable_file(path: Path) -> bool` `priv` (L175-188)
 - @brief Validate executable-file capability for a filesystem path.
 - @details Expands user-home markers, checks path kind, and applies platform executable checks. On Windows, missing-extension candidates are validated against `PATHEXT` suffixes.
 - @param path {Path} Candidate executable filesystem path.
 - @return {bool} `True` when the path resolves to an executable file.
 - @satisfies CTN-003, REQ-055
 
-### fn `def _resolve_executable_file(path: Path) -> Path | None` `priv` (L187-215)
+### fn `def _resolve_executable_file(path: Path) -> Path | None` `priv` (L189-218)
 - @brief Resolve an executable filesystem path for the runtime OS.
 - @details Expands user-home markers and resolves Windows extension-less candidates through `PATHEXT` fallback checks.
 - @param path {Path} Candidate executable filesystem path.
 - @return {Path | None} Resolved executable path when runnable, else `None`.
 - @satisfies CTN-003, REQ-055
 
-### fn `def resolve_executable_command(command: str) -> str | None` (L217-237)
+### fn `def resolve_executable_command(command: str) -> str | None` (L219-240)
 - @brief Resolve a runnable command token to an executable path.
 - @details Accepts command names or executable paths and returns the concrete runnable executable path when available on the current runtime platform.
 - @param command {str} Command token or filesystem path to executable.
 - @return {str | None} Resolved executable path or `None` when not runnable.
 - @satisfies CTN-003, REQ-055
 
-### fn `def is_executable_command(command: str) -> bool` (L239-251)
+### fn `def is_executable_command(command: str) -> bool` (L241-254)
 - @brief Determine whether an external command is executable on runtime OS.
 - @details Accepts command names or executable paths. Name-based checks use `PATH` resolution via `shutil.which`; path-based checks verify executable file metadata, including Windows `PATHEXT` variants.
 - @param command {str} Command token or filesystem path to executable.
 - @return {bool} `True` when command is executable; otherwise `False`.
 - @satisfies CTN-003, REQ-055
 
-### fn `def command_exists(cmd)` (L253-255)
+### fn `def command_exists(cmd)` (L255-258)
 
-### fn `def require_commands(*cmds: str) -> str | list[str]` (L257-277)
+### fn `def require_commands(cmd: str, /) -> str` `@overload` (L260-263)
 
-### fn `def _is_shell_assignment_token(token)` `priv` (L280-295)
+### fn `def require_commands(cmd1: str, cmd2: str, /, *cmds: str) -> list[str]` `@overload` (L265-268)
+
+### fn `def require_commands(*cmds: str) -> str | list[str]` (L269-281)
+
+### fn `def _is_shell_assignment_token(token)` `priv` (L282-297)
 - @brief Check whether a token is a shell variable assignment.
 - @details Matches `NAME=value` form where `NAME` obeys shell identifier syntax and therefore does not represent an executable token.
 - @param token {str} Shell token candidate.
 - @return {bool} `True` when token is an assignment expression.
 - @satisfies REQ-056
 
-### fn `def extract_shell_executables(command_line)` (L296-339)
+### fn `def extract_shell_executables(command_line)` (L298-341)
 - @brief Extract executable tokens from a shell command line.
 - @details Tokenizes command line using runtime-OS splitting mode and returns ordered unique executable candidates at command boundaries (`&&`, `||`, `;`, `|`) including wrapper commands such as `sudo`.
 - @param command_line {str} Raw shell command line.
 - @return {list[str]} Ordered executable token list.
 - @satisfies REQ-056
 
-### fn `def require_shell_command_executables(command_line)` (L340-355)
+### fn `def require_shell_command_executables(command_line)` (L342-358)
 - @brief Validate executable availability for a shell command line.
 - @details Extracts executable tokens from `command_line`, validates each token via `is_executable_command`, prints deterministic error with missing command name, and terminates process on first failure.
 - @param command_line {str} Raw shell command line.
 - @return {None} Process exits on validation failure.
 - @satisfies REQ-056
 
-### fn `def _is_tty_stream(stream)` `priv` (L357-376)
+### fn `def _is_tty_stream(stream)` `priv` (L359-378)
 - @brief Determine whether a stream is an attached TTY.
 - @details Performs capability checks (`isatty`, callable) and returns deterministic boolean without raising on unsupported stream objects. Time complexity O(1).
 - @param stream {object} Stream-like object (stdin/stdout/stderr candidate).
 - @return {bool} `True` when stream supports and reports TTY attachment.
 - @satisfies REQ-064
 
-### fn `def capture_terminal_state()` (L377-401)
+### fn `def capture_terminal_state()` (L379-403)
 - @brief Capture current stdin terminal attributes when available.
 - @details Reads current TTY attributes via `termios.tcgetattr` only on runtimes exposing `termios` and when stdin is a TTY. Returns `None` when attributes are unavailable. Time complexity O(1).
 - @return {list[object] | None} Saved TTY attributes for later restoration.
 - @satisfies REQ-064
 
-### fn `def reset_terminal_state(saved_tty=None)` (L402-448)
+### fn `def reset_terminal_state(saved_tty=None)` (L404-453)
 - @brief Restore terminal raw/cbreak and mouse-tracking state.
-- @details Restores previously captured stdin termios attributes when present, disables known xterm mouse modes on TTY stdout, and best-effort runs `stty sane` for Git Bash/Unix-compatible terminals. Failures are ignored to preserve wrapper exit semantics. Time complexity O(1).
+- @details Restores previously captured stdin termios attributes when present, writes `_MOUSE_OFF_ESCAPE_SEQUENCE` (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) to TTY stdout, and best-effort runs `stty sane` for Git Bash/Unix-compatible terminals. Failures are ignored to preserve wrapper exit semantics. Time complexity O(1).
 - @param saved_tty {list[object] | None} Attributes from `capture_terminal_state`.
 - @return {None} Performs best-effort terminal-state restoration.
-- @satisfies REQ-064
+- @satisfies REQ-064, REQ-065
 
-### fn `def run_cmd(cmd, **kwargs)` (L450-451)
+### fn `def run_cmd(cmd, **kwargs)` (L454-455)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`RESET`|var|pub|22||
-|`BOLD`|var|pub|23||
-|`RED`|var|pub|24||
-|`GREEN`|var|pub|25||
-|`YELLOW`|var|pub|26||
-|`BLUE`|var|pub|27||
-|`MAGENTA`|var|pub|28||
-|`CYAN`|var|pub|29||
-|`WHITE`|var|pub|30||
-|`BRIGHT_RED`|var|pub|31||
-|`BRIGHT_GREEN`|var|pub|32||
-|`BRIGHT_YELLOW`|var|pub|33||
-|`BRIGHT_BLUE`|var|pub|34||
-|`BRIGHT_CYAN`|var|pub|35||
-|`BRIGHT_WHITE`|var|pub|36||
-|`color_enabled`|fn|pub|63-68|def color_enabled()|
-|`c`|fn|pub|69-74|def c(text, color)|
-|`print_info`|fn|pub|75-78|def print_info(msg)|
-|`print_error`|fn|pub|79-82|def print_error(msg)|
-|`print_warn`|fn|pub|83-86|def print_warn(msg)|
-|`print_success`|fn|pub|87-90|def print_success(msg)|
-|`get_project_root`|fn|pub|91-103|def get_project_root()|
-|`require_project_root`|fn|pub|104-112|def require_project_root()|
-|`detect_runtime_os`|fn|pub|113-135|def detect_runtime_os()|
-|`get_runtime_os`|fn|pub|136-149|def get_runtime_os()|
-|`is_windows`|fn|pub|150-160|def is_windows()|
-|`is_linux`|fn|pub|161-171|def is_linux()|
-|`_is_executable_file`|fn|priv|173-185|def _is_executable_file(path: Path) -> bool|
-|`_resolve_executable_file`|fn|priv|187-215|def _resolve_executable_file(path: Path) -> Path \| None|
-|`resolve_executable_command`|fn|pub|217-237|def resolve_executable_command(command: str) -> str \| None|
-|`is_executable_command`|fn|pub|239-251|def is_executable_command(command: str) -> bool|
-|`command_exists`|fn|pub|253-255|def command_exists(cmd)|
-|`require_commands`|fn|pub|257-277|def require_commands(*cmds: str) -> str \| list[str]|
-|`_is_shell_assignment_token`|fn|priv|280-295|def _is_shell_assignment_token(token)|
-|`extract_shell_executables`|fn|pub|296-339|def extract_shell_executables(command_line)|
-|`require_shell_command_executables`|fn|pub|340-355|def require_shell_command_executables(command_line)|
-|`_is_tty_stream`|fn|priv|357-376|def _is_tty_stream(stream)|
-|`capture_terminal_state`|fn|pub|377-401|def capture_terminal_state()|
-|`reset_terminal_state`|fn|pub|402-448|def reset_terminal_state(saved_tty=None)|
-|`run_cmd`|fn|pub|450-451|def run_cmd(cmd, **kwargs)|
+|`RESET`|var|pub|23||
+|`BOLD`|var|pub|24||
+|`RED`|var|pub|25||
+|`GREEN`|var|pub|26||
+|`YELLOW`|var|pub|27||
+|`BLUE`|var|pub|28||
+|`MAGENTA`|var|pub|29||
+|`CYAN`|var|pub|30||
+|`WHITE`|var|pub|31||
+|`BRIGHT_RED`|var|pub|32||
+|`BRIGHT_GREEN`|var|pub|33||
+|`BRIGHT_YELLOW`|var|pub|34||
+|`BRIGHT_BLUE`|var|pub|35||
+|`BRIGHT_CYAN`|var|pub|36||
+|`BRIGHT_WHITE`|var|pub|37||
+|`color_enabled`|fn|pub|66-71|def color_enabled()|
+|`c`|fn|pub|72-77|def c(text, color)|
+|`print_info`|fn|pub|78-81|def print_info(msg)|
+|`print_error`|fn|pub|82-85|def print_error(msg)|
+|`print_warn`|fn|pub|86-89|def print_warn(msg)|
+|`print_success`|fn|pub|90-93|def print_success(msg)|
+|`get_project_root`|fn|pub|94-106|def get_project_root()|
+|`require_project_root`|fn|pub|107-115|def require_project_root()|
+|`detect_runtime_os`|fn|pub|116-138|def detect_runtime_os()|
+|`get_runtime_os`|fn|pub|139-152|def get_runtime_os()|
+|`is_windows`|fn|pub|153-163|def is_windows()|
+|`is_linux`|fn|pub|164-174|def is_linux()|
+|`_is_executable_file`|fn|priv|175-188|def _is_executable_file(path: Path) -> bool|
+|`_resolve_executable_file`|fn|priv|189-218|def _resolve_executable_file(path: Path) -> Path | None|
+|`resolve_executable_command`|fn|pub|219-240|def resolve_executable_command(command: str) -> str | None|
+|`is_executable_command`|fn|pub|241-254|def is_executable_command(command: str) -> bool|
+|`command_exists`|fn|pub|255-258|def command_exists(cmd)|
+|`require_commands`|fn|pub|260-263|def require_commands(cmd: str, /) -> str|
+|`require_commands`|fn|pub|265-268|def require_commands(cmd1: str, cmd2: str, /, *cmds: str)...|
+|`require_commands`|fn|pub|269-281|def require_commands(*cmds: str) -> str | list[str]|
+|`_is_shell_assignment_token`|fn|priv|282-297|def _is_shell_assignment_token(token)|
+|`extract_shell_executables`|fn|pub|298-341|def extract_shell_executables(command_line)|
+|`require_shell_command_executables`|fn|pub|342-358|def require_shell_command_executables(command_line)|
+|`_is_tty_stream`|fn|priv|359-378|def _is_tty_stream(stream)|
+|`capture_terminal_state`|fn|pub|379-403|def capture_terminal_state()|
+|`reset_terminal_state`|fn|pub|404-453|def reset_terminal_state(saved_tty=None)|
+|`run_cmd`|fn|pub|454-455|def run_cmd(cmd, **kwargs)|
 
 
 ---
