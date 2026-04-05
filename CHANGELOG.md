@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.11.0](https://github.com/Ogekuri/shellScripts/compare/v0.10.0..v0.11.0) - 2026-04-05
+### 🐛  Bug Fixes
+- CRLF will be replaced by LF.
+- normalize launcher paths across platforms [useReq] *(launcher)*
+  - normalize launcher root path comparison across Git Bash and POSIX paths
+  - replace readlink -f dependency with canonical cd/pwd resolution
+  - update WORKFLOW and REFERENCES for launcher runtime model
+
+### 🚜  Changes
+- use token-based AI CLI execution [useReq] *(cli-launchers)*
+  - Update REQ-014/015/016/018/019/043 to remove hardcoded absolute binaries.
+  - Switch cli-codex, cli-copilot, cli-gemini, cli-opencode, and cli-kiro to command tokens.
+  - Adjust TST-005 launcher assertions and skip symlink-only codex tests when privilege is unavailable on Windows.
+  - Refresh WORKFLOW and regenerate REFERENCES for traceability.
+
 ## [0.10.0](https://github.com/Ogekuri/shellScripts/compare/v0.9.0..v0.10.0) - 2026-04-02
 ### 🚜  Changes
 - report cleanup evidence for req [useReq] *(req_cmd)*
@@ -500,6 +515,7 @@
 - \[0.8.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.8.0
 - \[0.9.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.9.0
 - \[0.10.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.10.0
+- \[0.11.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.11.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -511,3 +527,4 @@
 [0.8.0]: https://github.com/Ogekuri/shellScripts/compare/v0.7.0..v0.8.0
 [0.9.0]: https://github.com/Ogekuri/shellScripts/compare/v0.8.0..v0.9.0
 [0.10.0]: https://github.com/Ogekuri/shellScripts/compare/v0.9.0..v0.10.0
+[0.11.0]: https://github.com/Ogekuri/shellScripts/compare/v0.10.0..v0.11.0
