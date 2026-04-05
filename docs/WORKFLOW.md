@@ -37,14 +37,14 @@
   - `scripts/s.sh (top-level script entrypoint)` [`scripts/s.sh`]
 - Lifecycle/trigger:
   - Trigger: user invokes launcher script `s`.
-  - Startup: resolves full script path, script directory, and repository root; validates base directory equals git root.
+  - Startup: resolves canonical script/base directories, resolves git repository root, normalizes both paths for cross-platform representation differences, and validates base directory equals git root.
   - Transfer: executes `uv run --project <base_dir> python -m shell_scripts "$@"` with `exec` (process image replacement).
   - Shutdown: exits via `exec` replacement or explicit non-zero exit on path/root validation failure.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
-  - No internal function declarations detected in this script file.
+  - `normalize_path(...)`: Normalize raw path text to a comparable canonical form across POSIX and Git Bash/MSYS path formats [`scripts/s.sh`]
 - External Boundaries:
-  - OS/process boundary: shell built-ins and external commands (`readlink`, `dirname`, `git`, `uv`, `python`).
+  - OS/process boundary: shell built-ins and external commands (`dirname`, `cd`, `pwd`, `git`, `cygpath`, `uv`, `python`).
   - Environment boundary: positional argument vector `$@` forwarded unchanged.
 
 ### `PROC:main`

@@ -1,67 +1,76 @@
 # Files Structure
 ```
 .
-Γö£ΓöÇΓöÇ scripts
-Γöé   ΓööΓöÇΓöÇ s.sh
-ΓööΓöÇΓöÇ src
-    ΓööΓöÇΓöÇ shell_scripts
-        Γö£ΓöÇΓöÇ __init__.py
-        Γö£ΓöÇΓöÇ __main__.py
-        Γö£ΓöÇΓöÇ commands
-        Γöé   Γö£ΓöÇΓöÇ __init__.py
-        Γöé   Γö£ΓöÇΓöÇ _dc_common.py
-        Γöé   Γö£ΓöÇΓöÇ ai_install.py
-        Γöé   Γö£ΓöÇΓöÇ bin_links.py
-        Γöé   Γö£ΓöÇΓöÇ clean.py
-        Γöé   Γö£ΓöÇΓöÇ cli_claude.py
-        Γöé   Γö£ΓöÇΓöÇ cli_codex.py
-        Γöé   Γö£ΓöÇΓöÇ cli_copilot.py
-        Γöé   Γö£ΓöÇΓöÇ cli_gemini.py
-        Γöé   Γö£ΓöÇΓöÇ cli_kiro.py
-        Γöé   Γö£ΓöÇΓöÇ cli_opencode.py
-        Γöé   Γö£ΓöÇΓöÇ dicom2jpg.py
-        Γöé   Γö£ΓöÇΓöÇ dicomviewer.py
-        Γöé   Γö£ΓöÇΓöÇ diff_cmd.py
-        Γöé   Γö£ΓöÇΓöÇ doxygen_cmd.py
-        Γöé   Γö£ΓöÇΓöÇ edit_cmd.py
-        Γöé   Γö£ΓöÇΓöÇ pdf_crop.py
-        Γöé   Γö£ΓöÇΓöÇ pdf_merge.py
-        Γöé   Γö£ΓöÇΓöÇ pdf_split_by_format.py
-        Γöé   Γö£ΓöÇΓöÇ pdf_split_by_toc.py
-        Γöé   Γö£ΓöÇΓöÇ pdf_tiler_090.py
-        Γöé   Γö£ΓöÇΓöÇ pdf_tiler_100.py
-        Γöé   Γö£ΓöÇΓöÇ pdf_toc_clean.py
-        Γöé   Γö£ΓöÇΓöÇ req_cmd.py
-        Γöé   Γö£ΓöÇΓöÇ tests_cmd.py
-        Γöé   Γö£ΓöÇΓöÇ ubuntu_dark_theme.py
-        Γöé   Γö£ΓöÇΓöÇ venv_cmd.py
-        Γöé   Γö£ΓöÇΓöÇ video2h264.py
-        Γöé   Γö£ΓöÇΓöÇ video2h265.py
-        Γöé   Γö£ΓöÇΓöÇ view_cmd.py
-        Γöé   Γö£ΓöÇΓöÇ vscode_cmd.py
-        Γöé   ΓööΓöÇΓöÇ vsinsider_cmd.py
-        Γö£ΓöÇΓöÇ config.py
-        Γö£ΓöÇΓöÇ core.py
-        Γö£ΓöÇΓöÇ utils.py
-        ΓööΓöÇΓöÇ version_check.py
+├── scripts
+│   └── s.sh
+└── src
+    └── shell_scripts
+        ├── __init__.py
+        ├── __main__.py
+        ├── commands
+        │   ├── __init__.py
+        │   ├── _dc_common.py
+        │   ├── ai_install.py
+        │   ├── bin_links.py
+        │   ├── clean.py
+        │   ├── cli_claude.py
+        │   ├── cli_codex.py
+        │   ├── cli_copilot.py
+        │   ├── cli_gemini.py
+        │   ├── cli_kiro.py
+        │   ├── cli_opencode.py
+        │   ├── dicom2jpg.py
+        │   ├── dicomviewer.py
+        │   ├── diff_cmd.py
+        │   ├── doxygen_cmd.py
+        │   ├── edit_cmd.py
+        │   ├── pdf_crop.py
+        │   ├── pdf_merge.py
+        │   ├── pdf_split_by_format.py
+        │   ├── pdf_split_by_toc.py
+        │   ├── pdf_tiler_090.py
+        │   ├── pdf_tiler_100.py
+        │   ├── pdf_toc_clean.py
+        │   ├── req_cmd.py
+        │   ├── tests_cmd.py
+        │   ├── ubuntu_dark_theme.py
+        │   ├── venv_cmd.py
+        │   ├── video2h264.py
+        │   ├── video2h265.py
+        │   ├── view_cmd.py
+        │   ├── vscode_cmd.py
+        │   └── vsinsider_cmd.py
+        ├── config.py
+        ├── core.py
+        ├── utils.py
+        └── version_check.py
 ```
 
-# s.sh | Shell | 23L | 4 symbols | 0 imports | 4 comments
+# s.sh | Shell | 51L | 6 symbols | 0 imports | 9 comments
 > Path: `scripts/s.sh`
 
 ## Definitions
 
-- var `FULL_PATH=$(readlink -f "$0")` (L6)
-- var `SCRIPT_PATH=$(dirname "$FULL_PATH")` (L7)
-- var `BASE_DIR=$(dirname "$SCRIPT_PATH")` (L8)
-- var `PROJECT_ROOT=$(git -C "${BASE_DIR}" rev-parse --show-toplevel 2>/dev/null)` (L10)
+- fn `normalize_path() {` (L11)
+- @brief Normalize a path for cross-platform comparison.
+- @details Uses cygpath when available (Git Bash/MSYS) and falls back to
+canonical directory resolution via cd/pwd -P.
+- @param $1 Raw path to normalize.
+- @return Prints the normalized path to stdout.
+- var `SCRIPT_PATH=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd -P)` (L32)
+- var `BASE_DIR=$(CDPATH= cd -- "${SCRIPT_PATH}/.." 2>/dev/null && pwd -P)` (L33)
+- var `PROJECT_ROOT=$(git -C "${BASE_DIR}" rev-parse --show-toplevel 2>/dev/null)` (L35)
+- var `PROJECT_ROOT=$(normalize_path "${PROJECT_ROOT}")` (L41)
+- var `BASE_DIR=$(normalize_path "${BASE_DIR}")` (L42)
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`FULL_PATH`|var||6||
-|`SCRIPT_PATH`|var||7||
-|`BASE_DIR`|var||8||
-|`PROJECT_ROOT`|var||10||
+|`normalize_path`|fn||11|normalize_path()|
+|`SCRIPT_PATH`|var||32||
+|`BASE_DIR`|var||33||
+|`PROJECT_ROOT`|var||35||
+|`PROJECT_ROOT`|var||41||
+|`BASE_DIR`|var||42||
 
 
 ---
