@@ -132,12 +132,12 @@ No explicit performance optimizations identified.
 - **REQ-009**: MUST install Claude CLI by downloading `latest` version metadata and installing an executable binary at `~/.claude/bin/claude`.
 - **REQ-010**: MUST install Kiro CLI by downloading a ZIP archive, extracting binaries, and copying `kiro-cli*` executables into `~/.local/bin` with executable permissions.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
-- **REQ-014**: MUST execute `/usr/bin/codex --yolo` in `cli-codex` and MUST set `CODEX_HOME` to `<project-root>/.codex` before execution.
-- **REQ-015**: MUST execute `/usr/bin/copilot --yolo --allow-all-tools` in `cli-copilot`.
-- **REQ-016**: MUST execute `/usr/bin/gemini --yolo` in `cli-gemini`.
+- **REQ-014**: MUST execute `codex --yolo` in `cli-codex` and MUST set `CODEX_HOME` to `<project-root>/.codex` before execution.
+- **REQ-015**: MUST execute `copilot --yolo --allow-all-tools` in `cli-copilot`.
+- **REQ-016**: MUST execute `gemini --yolo` in `cli-gemini`.
 - **REQ-017**: MUST execute `~/.claude/bin/claude --dangerously-skip-permissions` in `cli-claude`.
-- **REQ-018**: MUST execute `/usr/bin/opencode` in `cli-opencode`.
-- **REQ-019**: MUST execute `~/.local/bin/kiro-cli` in `cli-kiro`.
+- **REQ-018**: MUST execute `opencode` in `cli-opencode`.
+- **REQ-019**: MUST execute `kiro-cli` in `cli-kiro`.
 - **REQ-020**: MUST open the project root in VS Code or VS Code Insiders commands and append the project path as final argument.
 - **REQ-021**: MUST set `CODEX_HOME` to `<project-root>/.codex` before VS Code and VS Code Insiders command execution.
 - **REQ-022**: MUST attempt GNOME GTK dark theme configuration via `gsettings` and MAY launch `gtk-chtheme`, `qt5ct`, and `qt6ct` when available.
@@ -157,7 +157,7 @@ No explicit performance optimizations identified.
 - **REQ-036**: MUST run pytest through `.venv/bin/python3` in `tests` and MUST prepend `<project-root>/src` to `PYTHONPATH`.
 - **REQ-037**: MUST create `.venv` in `tests` when missing and MUST install `requirements.txt` only when that file exists.
 - **REQ-038**: MUST recreate `.venv` in `venv` and MUST install `requirements.txt` when present; otherwise it MUST skip pip installation and continue successfully.
-- **REQ-043**: MUST ensure `<project-root>/.codex/auth.json` is a symlink to `~/.codex/auth.json` before `cli-codex` executes `/usr/bin/codex --yolo`.
+- **REQ-043**: MUST ensure `<project-root>/.codex/auth.json` is a symlink to `~/.codex/auth.json` before `cli-codex` executes `codex --yolo`.
 - **REQ-044**: MUST create the symlink and print an informational message when `<project-root>/.codex/auth.json` is not already that exact symlink.
 - **REQ-045**: MUST load runtime configuration from `~/.config/shellScripts/config.json` during CLI startup, and MUST keep hardcoded defaults for missing file, missing keys, or invalid value types.
 - **REQ-046**: MUST write the default runtime configuration JSON to `~/.config/shellScripts/config.json` and return code `0` when invoked with `--write-config`.
@@ -217,12 +217,12 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
 | REQ-006, REQ-007, REQ-008, REQ-009, REQ-010 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm install command omits `sudo` on Windows and uses `sudo` on non-Windows; Claude/Kiro installers use download/extract/copy flows. |
-| REQ-014, REQ-043, REQ-044 | `src/shell_scripts/commands/cli_codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; ensures `.codex/auth.json` symlink target `~/.codex/auth.json`; prints creation info when symlink is created; executes `/usr/bin/codex --yolo`. |
-| REQ-015 | `src/shell_scripts/commands/cli_copilot.py` | `run` | Executes `/usr/bin/copilot --yolo --allow-all-tools`. |
-| REQ-016 | `src/shell_scripts/commands/cli_gemini.py` | `run` | Executes `/usr/bin/gemini --yolo`. |
+| REQ-014, REQ-043, REQ-044 | `src/shell_scripts/commands/cli_codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; ensures `.codex/auth.json` symlink target `~/.codex/auth.json`; prints creation info when symlink is created; executes `codex --yolo`. |
+| REQ-015 | `src/shell_scripts/commands/cli_copilot.py` | `run` | Executes `copilot --yolo --allow-all-tools`. |
+| REQ-016 | `src/shell_scripts/commands/cli_gemini.py` | `run` | Executes `gemini --yolo`. |
 | REQ-017 | `src/shell_scripts/commands/cli_claude.py` | `run` | Executes `~/.claude/bin/claude --dangerously-skip-permissions`. |
-| REQ-018 | `src/shell_scripts/commands/cli_opencode.py` | `run` | Executes `/usr/bin/opencode`. |
-| REQ-019 | `src/shell_scripts/commands/cli_kiro.py` | `run` | Executes `~/.local/bin/kiro-cli`. |
+| REQ-018 | `src/shell_scripts/commands/cli_opencode.py` | `run` | Executes `opencode`. |
+| REQ-019 | `src/shell_scripts/commands/cli_kiro.py` | `run` | Executes `kiro-cli`. |
 | REQ-020, REQ-021 | `src/shell_scripts/commands/vscode_cmd.py`; `src/shell_scripts/commands/vsinsider_cmd.py` | `run` | Commands set `CODEX_HOME`, change to project root, and execute Code binaries with project path appended. |
 | REQ-022 | `src/shell_scripts/commands/ubuntu_dark_theme.py` | `run` | Applies `gsettings ... gtk-theme Adwaita-dark` and conditionally launches `gtk-chtheme`, `qt5ct`, `qt6ct`. |
 | REQ-025 | `src/shell_scripts/commands/dicomviewer.py` | `run`, `_find_jars` | Requires `java-wrappers` and Java runtime; executes `com.pixelmed.display.DicomImageViewer`. |

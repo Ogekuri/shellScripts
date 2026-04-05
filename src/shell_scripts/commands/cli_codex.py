@@ -4,7 +4,7 @@
 @details Ensures project-local Codex context is prepared before process
 replacement. The launcher enforces auth-link presence in `<project>/.codex`
 and sets `CODEX_HOME` to `<project>/.codex` before delegating execution to
-`/usr/bin/codex --yolo`.
+`codex --yolo`.
 @satisfies REQ-014, REQ-043, REQ-044
 """
 
@@ -84,7 +84,7 @@ def run(args: list[str]) -> None:
 
     @details Resolves project root, guarantees codex auth symlink compliance,
     sets `CODEX_HOME=<project-root>/.codex`, then replaces process image with
-    `/usr/bin/codex --yolo` plus pass-through args.
+    `codex --yolo` plus pass-through args.
     @param args {list[str]} Additional CLI args forwarded to Codex.
     @return {None} Function does not return on successful `os.execvp`.
     @throws {SystemExit} Propagated in tests when `os.execvp` is monkeypatched.
@@ -95,6 +95,6 @@ def run(args: list[str]) -> None:
     _ensure_auth_symlink(project_root)
     codex_home = str(project_root / ".codex")
     os.environ["CODEX_HOME"] = codex_home
-    cmd = ["/usr/bin/codex", "--yolo"] + args
+    cmd = ["codex", "--yolo"] + args
     require_commands(cmd[0])
     os.execvp(cmd[0], cmd)

@@ -1,49 +1,49 @@
 # Files Structure
 ```
 .
-├── scripts
-│   └── s.sh
-└── src
-    └── shell_scripts
-        ├── __init__.py
-        ├── __main__.py
-        ├── commands
-        │   ├── __init__.py
-        │   ├── _dc_common.py
-        │   ├── ai_install.py
-        │   ├── bin_links.py
-        │   ├── clean.py
-        │   ├── cli_claude.py
-        │   ├── cli_codex.py
-        │   ├── cli_copilot.py
-        │   ├── cli_gemini.py
-        │   ├── cli_kiro.py
-        │   ├── cli_opencode.py
-        │   ├── dicom2jpg.py
-        │   ├── dicomviewer.py
-        │   ├── diff_cmd.py
-        │   ├── doxygen_cmd.py
-        │   ├── edit_cmd.py
-        │   ├── pdf_crop.py
-        │   ├── pdf_merge.py
-        │   ├── pdf_split_by_format.py
-        │   ├── pdf_split_by_toc.py
-        │   ├── pdf_tiler_090.py
-        │   ├── pdf_tiler_100.py
-        │   ├── pdf_toc_clean.py
-        │   ├── req_cmd.py
-        │   ├── tests_cmd.py
-        │   ├── ubuntu_dark_theme.py
-        │   ├── venv_cmd.py
-        │   ├── video2h264.py
-        │   ├── video2h265.py
-        │   ├── view_cmd.py
-        │   ├── vscode_cmd.py
-        │   └── vsinsider_cmd.py
-        ├── config.py
-        ├── core.py
-        ├── utils.py
-        └── version_check.py
+Γö£ΓöÇΓöÇ scripts
+Γöé   ΓööΓöÇΓöÇ s.sh
+ΓööΓöÇΓöÇ src
+    ΓööΓöÇΓöÇ shell_scripts
+        Γö£ΓöÇΓöÇ __init__.py
+        Γö£ΓöÇΓöÇ __main__.py
+        Γö£ΓöÇΓöÇ commands
+        Γöé   Γö£ΓöÇΓöÇ __init__.py
+        Γöé   Γö£ΓöÇΓöÇ _dc_common.py
+        Γöé   Γö£ΓöÇΓöÇ ai_install.py
+        Γöé   Γö£ΓöÇΓöÇ bin_links.py
+        Γöé   Γö£ΓöÇΓöÇ clean.py
+        Γöé   Γö£ΓöÇΓöÇ cli_claude.py
+        Γöé   Γö£ΓöÇΓöÇ cli_codex.py
+        Γöé   Γö£ΓöÇΓöÇ cli_copilot.py
+        Γöé   Γö£ΓöÇΓöÇ cli_gemini.py
+        Γöé   Γö£ΓöÇΓöÇ cli_kiro.py
+        Γöé   Γö£ΓöÇΓöÇ cli_opencode.py
+        Γöé   Γö£ΓöÇΓöÇ dicom2jpg.py
+        Γöé   Γö£ΓöÇΓöÇ dicomviewer.py
+        Γöé   Γö£ΓöÇΓöÇ diff_cmd.py
+        Γöé   Γö£ΓöÇΓöÇ doxygen_cmd.py
+        Γöé   Γö£ΓöÇΓöÇ edit_cmd.py
+        Γöé   Γö£ΓöÇΓöÇ pdf_crop.py
+        Γöé   Γö£ΓöÇΓöÇ pdf_merge.py
+        Γöé   Γö£ΓöÇΓöÇ pdf_split_by_format.py
+        Γöé   Γö£ΓöÇΓöÇ pdf_split_by_toc.py
+        Γöé   Γö£ΓöÇΓöÇ pdf_tiler_090.py
+        Γöé   Γö£ΓöÇΓöÇ pdf_tiler_100.py
+        Γöé   Γö£ΓöÇΓöÇ pdf_toc_clean.py
+        Γöé   Γö£ΓöÇΓöÇ req_cmd.py
+        Γöé   Γö£ΓöÇΓöÇ tests_cmd.py
+        Γöé   Γö£ΓöÇΓöÇ ubuntu_dark_theme.py
+        Γöé   Γö£ΓöÇΓöÇ venv_cmd.py
+        Γöé   Γö£ΓöÇΓöÇ video2h264.py
+        Γöé   Γö£ΓöÇΓöÇ video2h265.py
+        Γöé   Γö£ΓöÇΓöÇ view_cmd.py
+        Γöé   Γö£ΓöÇΓöÇ vscode_cmd.py
+        Γöé   ΓööΓöÇΓöÇ vsinsider_cmd.py
+        Γö£ΓöÇΓöÇ config.py
+        Γö£ΓöÇΓöÇ core.py
+        Γö£ΓöÇΓöÇ utils.py
+        ΓööΓöÇΓöÇ version_check.py
 ```
 
 # s.sh | Shell | 23L | 4 symbols | 0 imports | 4 comments
@@ -404,7 +404,7 @@ from shell_scripts.utils import print_info, require_project_root, require_comman
 
 ### fn `def run(args: list[str]) -> None` (L82-100)
 - @brief Launch Codex CLI with project-scoped environment preparation.
-- @details Resolves project root, guarantees codex auth symlink compliance, sets `CODEX_HOME=<project-root>/.codex`, then replaces process image with `/usr/bin/codex --yolo` plus pass-through args.
+- @details Resolves project root, guarantees codex auth symlink compliance, sets `CODEX_HOME=<project-root>/.codex`, then replaces process image with `codex --yolo` plus pass-through args.
 - @param args {list[str]} Additional CLI args forwarded to Codex.
 - @return {None} Function does not return on successful `os.execvp`.
 - @throws {SystemExit} Propagated in tests when `os.execvp` is monkeypatched.
@@ -441,7 +441,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ### fn `def run(args)` (L25-38)
 - @brief Launch Copilot CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `/usr/bin/copilot`, then replaces process image with pass-through args.
+- @details Resolves project root, checks executable availability for `copilot`, then replaces process image with pass-through args.
 - @param args {list[str]} Additional CLI args forwarded to Copilot.
 - @return {None} Function does not return on successful `os.execvp`.
 - @satisfies REQ-015, REQ-055, REQ-056
@@ -474,7 +474,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ### fn `def run(args)` (L25-38)
 - @brief Launch Gemini CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `/usr/bin/gemini`, then replaces process image with pass-through args.
+- @details Resolves project root, checks executable availability for `gemini`, then replaces process image with pass-through args.
 - @param args {list[str]} Additional CLI args forwarded to Gemini.
 - @return {None} Function does not return on successful `os.execvp`.
 - @satisfies REQ-016, REQ-055, REQ-056
@@ -490,25 +490,24 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ---
 
-# cli_kiro.py | Python | 40L | 4 symbols | 3 imports | 3 comments
+# cli_kiro.py | Python | 38L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_kiro.py`
 
 ## Imports
 ```
 import os
-from pathlib import Path
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L14)
-- var `DESCRIPTION = "Launch Kiro CLI in the project context."` (L15)
-### fn `def print_help(version)` (L18-25)
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "Launch Kiro CLI in the project context."` (L14)
+### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L26-40)
+### fn `def run(args)` (L25-38)
 - @brief Launch Kiro CLI after external executable validation.
-- @details Resolves project root and user-local Kiro executable path, validates executable availability, then replaces process image.
+- @details Resolves project root, validates executable availability for `kiro-cli`, then replaces process image.
 - @param args {list[str]} Additional CLI args forwarded to Kiro.
 - @return {None} Function does not return on successful `os.execvp`.
 - @satisfies REQ-019, REQ-055, REQ-056
@@ -516,10 +515,10 @@ from shell_scripts.utils import require_project_root, require_commands
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|14||
-|`DESCRIPTION`|var|pub|15||
-|`print_help`|fn|pub|18-25|def print_help(version)|
-|`run`|fn|pub|26-40|def run(args)|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`print_help`|fn|pub|17-24|def print_help(version)|
+|`run`|fn|pub|25-38|def run(args)|
 
 
 ---
@@ -541,7 +540,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ### fn `def run(args)` (L25-38)
 - @brief Launch OpenCode CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `/usr/bin/opencode`, then replaces process image with pass-through args.
+- @details Resolves project root, checks executable availability for `opencode`, then replaces process image with pass-through args.
 - @param args {list[str]} Additional CLI args forwarded to OpenCode.
 - @return {None} Function does not return on successful `os.execvp`.
 - @satisfies REQ-018, REQ-055, REQ-056

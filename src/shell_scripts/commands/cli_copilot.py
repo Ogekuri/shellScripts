@@ -2,7 +2,7 @@
 """@brief GitHub Copilot CLI launcher in project context.
 
 @details Ensures project-root prerequisite and executable availability before
-process replacement with `/usr/bin/copilot`.
+process replacement with `copilot`.
 @satisfies REQ-015, REQ-055, REQ-056
 """
 
@@ -26,13 +26,13 @@ def run(args):
     """@brief Launch Copilot CLI after external executable validation.
 
     @details Resolves project root, checks executable availability for
-    `/usr/bin/copilot`, then replaces process image with pass-through args.
+    `copilot`, then replaces process image with pass-through args.
     @param args {list[str]} Additional CLI args forwarded to Copilot.
     @return {None} Function does not return on successful `os.execvp`.
     @satisfies REQ-015, REQ-055, REQ-056
     """
 
     require_project_root()
-    cmd = ["/usr/bin/copilot", "--yolo", "--allow-all-tools"] + args
+    cmd = ["copilot", "--yolo", "--allow-all-tools"] + args
     require_commands(cmd[0])
     os.execvp(cmd[0], cmd)

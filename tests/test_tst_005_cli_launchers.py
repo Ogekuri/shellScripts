@@ -10,6 +10,8 @@
 
 from pathlib import Path
 
+import pytest
+
 import shell_scripts.commands.cli_claude as cli_claude
 import shell_scripts.commands.cli_codex as cli_codex
 import shell_scripts.commands.cli_copilot as cli_copilot
@@ -18,6 +20,27 @@ import shell_scripts.commands.cli_kiro as cli_kiro
 import shell_scripts.commands.cli_opencode as cli_opencode
 import shell_scripts.commands.vscode_cmd as vscode_cmd
 import shell_scripts.commands.vsinsider_cmd as vsinsider_cmd
+
+
+def _require_symlink_capability(tmp_path: Path) -> None:
+    """
+    @brief Skip symlink-dependent tests when runtime lacks symlink privilege.
+    @details Creates and removes a temporary symlink probe to detect whether
+      the current runtime account can create symbolic links.
+    @param tmp_path {pathlib.Path} Isolated filesystem fixture.
+    @return {None} Test is skipped when symlink creation is unavailable.
+    """
+
+    probe_dir = tmp_path / "symlink-probe"
+    probe_dir.mkdir(parents=True, exist_ok=True)
+    target = probe_dir / "target"
+    target.touch()
+    link = probe_dir / "link"
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"symlink capability unavailable: {exc}")
+    link.unlink(missing_ok=True)
 
 
 def test_cli_codex_creates_auth_symlink_sets_codex_home_and_executes_expected_command(
@@ -35,6 +58,7 @@ def test_cli_codex_creates_auth_symlink_sets_codex_home_and_executes_expected_co
     @satisfies TST-005, REQ-014, REQ-043, REQ-044
     """
 
+    _require_symlink_capability(tmp_path)
     project_root = tmp_path / "project-a"
     fake_home = tmp_path / "home-a"
     project_root.mkdir(parents=True)
@@ -83,8 +107,8 @@ def test_cli_codex_creates_auth_symlink_sets_codex_home_and_executes_expected_co
     assert expected_link.resolve(strict=False) == expected_target.resolve(strict=False)
     assert observed_info == [f"Created symlink: {expected_link} -> {expected_target}"]
     assert cli_codex.os.environ["CODEX_HOME"] == str(project_root / ".codex")
-    assert observed["executable"] == "/usr/bin/codex"
-    assert observed["args"] == ["/usr/bin/codex", "--yolo", "--x"]
+    assert observed["executable"] == "codex"
+    assert observed["args"] == ["codex", "--yolo", "--x"]
 
 
 def test_cli_codex_keeps_existing_auth_symlink_without_creation_message(
@@ -101,6 +125,7 @@ def test_cli_codex_keeps_existing_auth_symlink_without_creation_message(
     @satisfies TST-005, REQ-014, REQ-043, REQ-044
     """
 
+    _require_symlink_capability(tmp_path)
     project_root = tmp_path / "project-b"
     fake_home = tmp_path / "home-b"
     project_root.mkdir(parents=True)
@@ -151,8 +176,8 @@ def test_cli_codex_keeps_existing_auth_symlink_without_creation_message(
     assert expected_link.resolve(strict=False) == expected_target.resolve(strict=False)
     assert observed_info == []
     assert cli_codex.os.environ["CODEX_HOME"] == str(project_root / ".codex")
-    assert observed["executable"] == "/usr/bin/codex"
-    assert observed["args"] == ["/usr/bin/codex", "--yolo", "--z"]
+    assert observed["executable"] == "codex"
+    assert observed["args"] == ["codex", "--yolo", "--z"]
 
 
 def test_cli_copilot_executes_expected_command(monkeypatch):
@@ -190,9 +215,9 @@ def test_cli_copilot_executes_expected_command(monkeypatch):
     except SystemExit as exc:
         assert exc.code == 0
 
-    assert observed["executable"] == "/usr/bin/copilot"
+    assert observed["executable"] == "copilot"
     assert observed["args"] == [
-        "/usr/bin/copilot",
+        "copilot",
         "--yolo",
         "--allow-all-tools",
         "--extra",
@@ -234,8 +259,8 @@ def test_cli_gemini_executes_expected_command(monkeypatch):
     except SystemExit as exc:
         assert exc.code == 0
 
-    assert observed["executable"] == "/usr/bin/gemini"
-    assert observed["args"] == ["/usr/bin/gemini", "--yolo", "--flag"]
+    assert observed["executable"] == "gemini"
+    assert observed["args"] == ["gemini", "--yolo", "--flag"]
 
 
 def test_cli_claude_executes_expected_command(monkeypatch, tmp_path):
@@ -319,17 +344,16 @@ def test_cli_opencode_executes_expected_command(monkeypatch):
     except SystemExit as exc:
         assert exc.code == 0
 
-    assert observed["executable"] == "/usr/bin/opencode"
-    assert observed["args"] == ["/usr/bin/opencode", "--inspect"]
+    assert observed["executable"] == "opencode"
+    assert observed["args"] == ["opencode", "--inspect"]
 
 
-def test_cli_kiro_executes_expected_command(monkeypatch, tmp_path):
+def test_cli_kiro_executes_expected_command(monkeypatch):
     """
     @brief Validate cli-kiro execution contract.
-    @details Redirects home directory to deterministic path and asserts command
-      vector includes expected Kiro binary.
+    @details Stubs project-root guard and exec boundary to assert command
+      vector.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
     @satisfies TST-005, REQ-019
     """
@@ -351,7 +375,6 @@ def test_cli_kiro_executes_expected_command(monkeypatch, tmp_path):
         raise SystemExit(0)
 
     monkeypatch.setattr(cli_kiro, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(cli_kiro.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(cli_kiro, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(cli_kiro.os, "execvp", _fake_execvp)
 
@@ -360,9 +383,8 @@ def test_cli_kiro_executes_expected_command(monkeypatch, tmp_path):
     except SystemExit as exc:
         assert exc.code == 0
 
-    expected_bin = str(tmp_path / ".local" / "bin" / "kiro-cli")
-    assert observed["executable"] == expected_bin
-    assert observed["args"] == [expected_bin, "--ai"]
+    assert observed["executable"] == "kiro-cli"
+    assert observed["args"] == ["kiro-cli", "--ai"]
 
 
 def test_vscode_appends_project_path_and_sets_codex_home(monkeypatch):
