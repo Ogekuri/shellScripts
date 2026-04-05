@@ -4,7 +4,7 @@
 @details Provides global help rendering, management command execution
 (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`), runtime
 configuration bootstrap, and subcommand delegation to lazily imported modules.
-@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056
+@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064
 """
 
 import sys
@@ -19,10 +19,12 @@ from shell_scripts.config import (
 from shell_scripts.version_check import check_for_updates
 from shell_scripts.commands import get_command, get_all_commands
 from shell_scripts.utils import (
+    capture_terminal_state,
     detect_runtime_os,
     is_linux,
     print_error,
     print_info,
+    reset_terminal_state,
     require_shell_command_executables,
 )
 
@@ -138,52 +140,56 @@ def main():
     """@brief Entrypoint for shellscripts argument dispatch.
 
     @details Performs runtime OS detection, update check, runtime configuration
-    load, and argument dispatch through management flags and subcommands.
+    load, and argument dispatch through management flags and subcommands, then
+    restores terminal raw/cbreak and xterm mouse-tracking modes before exit.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064
     """
+    saved_tty = capture_terminal_state()
+    try:
+        detect_runtime_os()
+        check_for_updates(__version__)
+        load_runtime_config()
 
-    detect_runtime_os()
-    check_for_updates(__version__)
-    load_runtime_config()
+        args = sys.argv[1:]
 
-    args = sys.argv[1:]
-
-    if not args:
-        print_help()
-        return 0
-
-    first_arg = args[0]
-
-    if first_arg in ("--version", "--ver"):
-        print(__version__)
-        return 0
-
-    if first_arg == "--upgrade":
-        return do_upgrade()
-
-    if first_arg == "--uninstall":
-        return do_uninstall()
-
-    if first_arg == "--write-config":
-        return do_write_config()
-
-    if first_arg == "--help":
-        if len(args) > 1:
-            print_help(args[1])
-        else:
+        if not args:
             print_help()
-        return 0
-
-    cmd = get_command(first_arg)
-    if cmd:
-        cmd_args = args[1:]
-        if "--help" in cmd_args:
-            cmd.print_help(__version__)
             return 0
-        return cmd.run(cmd_args) or 0
 
-    print_error(f"Unknown command: {first_arg}")
-    print()
-    print_help()
-    return 1
+        first_arg = args[0]
+
+        if first_arg in ("--version", "--ver"):
+            print(__version__)
+            return 0
+
+        if first_arg == "--upgrade":
+            return do_upgrade()
+
+        if first_arg == "--uninstall":
+            return do_uninstall()
+
+        if first_arg == "--write-config":
+            return do_write_config()
+
+        if first_arg == "--help":
+            if len(args) > 1:
+                print_help(args[1])
+            else:
+                print_help()
+            return 0
+
+        cmd = get_command(first_arg)
+        if cmd:
+            cmd_args = args[1:]
+            if "--help" in cmd_args:
+                cmd.print_help(__version__)
+                return 0
+            return cmd.run(cmd_args) or 0
+
+        print_error(f"Unknown command: {first_arg}")
+        print()
+        print_help()
+        return 1
+    finally:
+        reset_terminal_state(saved_tty)

@@ -1616,7 +1616,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 189L | 6 symbols | 7 imports | 7 comments
+# core.py | Python | 195L | 6 symbols | 7 imports | 7 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1632,8 +1632,8 @@ from shell_scripts.utils import (
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L29)
-### fn `def print_help(command_name=None)` (L32-75)
+- var `PROGRAM = "shellscripts"` (L31)
+### fn `def print_help(command_name=None)` (L34-77)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and all command descriptions sorted by registry key.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -1641,45 +1641,45 @@ from shell_scripts.utils import (
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, REQ-001, REQ-002
 
-### fn `def do_upgrade()` (L76-98)
+### fn `def do_upgrade()` (L78-100)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L99-121)
+### fn `def do_uninstall()` (L101-123)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L122-136)
+### fn `def do_write_config()` (L124-138)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L137-189)
+### fn `def main()` (L139-195)
 - @brief Entrypoint for shellscripts argument dispatch.
-- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands.
+- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands, then restores terminal raw/cbreak and xterm mouse-tracking modes before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
-- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|29||
-|`print_help`|fn|pub|32-75|def print_help(command_name=None)|
-|`do_upgrade`|fn|pub|76-98|def do_upgrade()|
-|`do_uninstall`|fn|pub|99-121|def do_uninstall()|
-|`do_write_config`|fn|pub|122-136|def do_write_config()|
-|`main`|fn|pub|137-189|def main()|
+|`PROGRAM`|var|pub|31||
+|`print_help`|fn|pub|34-77|def print_help(command_name=None)|
+|`do_upgrade`|fn|pub|78-100|def do_upgrade()|
+|`do_uninstall`|fn|pub|101-123|def do_uninstall()|
+|`do_write_config`|fn|pub|124-138|def do_write_config()|
+|`main`|fn|pub|139-195|def main()|
 
 
 ---
 
-# utils.py | Python | 290L | 35 symbols | 6 imports | 16 comments
+# utils.py | Python | 405L | 38 symbols | 7 imports | 23 comments
 > Path: `src/shell_scripts/utils.py`
 
 ## Imports
@@ -1690,148 +1690,171 @@ import subprocess
 import shutil
 import shlex
 from pathlib import Path
+import termios
 ```
 
 ## Definitions
 
-- var `RESET = "\033[0m"` (L17)
-- var `BOLD = "\033[1m"` (L18)
-- var `RED = "\033[31m"` (L19)
-- var `GREEN = "\033[32m"` (L20)
-- var `YELLOW = "\033[33m"` (L21)
-- var `BLUE = "\033[34m"` (L22)
-- var `MAGENTA = "\033[35m"` (L23)
-- var `CYAN = "\033[36m"` (L24)
-- var `WHITE = "\033[37m"` (L25)
-- var `BRIGHT_RED = "\033[91m"` (L26)
-- var `BRIGHT_GREEN = "\033[92m"` (L27)
-- var `BRIGHT_YELLOW = "\033[93m"` (L28)
-- var `BRIGHT_BLUE = "\033[94m"` (L29)
-- var `BRIGHT_CYAN = "\033[96m"` (L30)
-- var `BRIGHT_WHITE = "\033[97m"` (L31)
-### fn `def color_enabled()` (L41-46)
-- @brief Cached normalized runtime operating-system token.
-- @details Initialized on first detection and reused to guarantee stable
-startup-level OS semantics across command execution flow.
-- @satisfies DES-002, REQ-047
+- var `RESET = "\033[0m"` (L22)
+- var `BOLD = "\033[1m"` (L23)
+- var `RED = "\033[31m"` (L24)
+- var `GREEN = "\033[32m"` (L25)
+- var `YELLOW = "\033[33m"` (L26)
+- var `BLUE = "\033[34m"` (L27)
+- var `MAGENTA = "\033[35m"` (L28)
+- var `CYAN = "\033[36m"` (L29)
+- var `WHITE = "\033[37m"` (L30)
+- var `BRIGHT_RED = "\033[91m"` (L31)
+- var `BRIGHT_GREEN = "\033[92m"` (L32)
+- var `BRIGHT_YELLOW = "\033[93m"` (L33)
+- var `BRIGHT_BLUE = "\033[94m"` (L34)
+- var `BRIGHT_CYAN = "\033[96m"` (L35)
+- var `BRIGHT_WHITE = "\033[97m"` (L36)
+### fn `def color_enabled()` (L63-68)
+- @brief Escape-sequence payload that disables known xterm mouse-reporting modes.
+- @details Concatenates CSI mode-off controls for common mouse tracking modes.
+- @satisfies REQ-064
 
-### fn `def c(text, color)` (L47-52)
+### fn `def c(text, color)` (L69-74)
 
-### fn `def print_info(msg)` (L53-56)
+### fn `def print_info(msg)` (L75-78)
 
-### fn `def print_error(msg)` (L57-60)
+### fn `def print_error(msg)` (L79-82)
 
-### fn `def print_warn(msg)` (L61-64)
+### fn `def print_warn(msg)` (L83-86)
 
-### fn `def print_success(msg)` (L65-68)
+### fn `def print_success(msg)` (L87-90)
 
-### fn `def get_project_root()` (L69-81)
+### fn `def get_project_root()` (L91-103)
 
-### fn `def require_project_root()` (L82-90)
+### fn `def require_project_root()` (L104-112)
 
-### fn `def detect_runtime_os()` (L91-113)
+### fn `def detect_runtime_os()` (L113-135)
 - @brief Detect and cache runtime operating-system token.
 - @details Normalizes `sys.platform` into deterministic categories (`windows`, `linux`, `darwin`, `other`) and stores the result in module cache for subsequent calls. Time complexity O(1).
 - @return {str} Normalized runtime operating-system token.
 - @satisfies DES-002, REQ-047
 
-### fn `def get_runtime_os()` (L114-127)
+### fn `def get_runtime_os()` (L136-149)
 - @brief Return cached runtime operating-system token.
 - @details Lazily initializes the cache via `detect_runtime_os` when unset, preserving a single startup-consistent OS classification.
 - @return {str} Normalized runtime operating-system token.
 - @satisfies DES-002, REQ-047
 
-### fn `def is_windows()` (L128-138)
+### fn `def is_windows()` (L150-160)
 - @brief Check whether runtime operating system is Windows.
 - @details Evaluates cached runtime token from `get_runtime_os`.
 - @return {bool} `True` when runtime OS is Windows; otherwise `False`.
 - @satisfies DES-013, REQ-008, REQ-047
 
-### fn `def is_linux()` (L139-149)
+### fn `def is_linux()` (L161-171)
 - @brief Check whether runtime operating system is Linux.
 - @details Evaluates cached runtime token from `get_runtime_os`.
 - @return {bool} `True` when runtime OS is Linux; otherwise `False`.
 - @satisfies CTN-004, REQ-004, REQ-005, REQ-047
 
-### fn `def _is_executable_file(path: Path)` `priv` (L150-178)
+### fn `def _is_executable_file(path: Path)` `priv` (L172-200)
 - @brief Validate executable-file capability for a filesystem path.
 - @details Expands user-home markers, checks path kind, and applies platform executable checks. On Windows, missing-extension candidates are validated against `PATHEXT` suffixes.
 - @param path {Path} Candidate executable filesystem path.
 - @return {bool} `True` when the path resolves to an executable file.
 - @satisfies CTN-003, REQ-055
 
-### fn `def is_executable_command(command)` (L179-200)
+### fn `def is_executable_command(command)` (L201-222)
 - @brief Determine whether an external command is executable on runtime OS.
 - @details Accepts command names or executable paths. Name-based checks use `PATH` resolution via `shutil.which`; path-based checks verify executable file metadata, including Windows `PATHEXT` variants.
 - @param command {str} Command token or filesystem path to executable.
 - @return {bool} `True` when command is executable; otherwise `False`.
 - @satisfies CTN-003, REQ-055
 
-### fn `def command_exists(cmd)` (L201-204)
+### fn `def command_exists(cmd)` (L223-226)
 
-### fn `def require_commands(*cmds)` (L205-211)
+### fn `def require_commands(*cmds)` (L227-233)
 
-### fn `def _is_shell_assignment_token(token)` `priv` (L212-227)
+### fn `def _is_shell_assignment_token(token)` `priv` (L234-249)
 - @brief Check whether a token is a shell variable assignment.
 - @details Matches `NAME=value` form where `NAME` obeys shell identifier syntax and therefore does not represent an executable token.
 - @param token {str} Shell token candidate.
 - @return {bool} `True` when token is an assignment expression.
 - @satisfies REQ-056
 
-### fn `def extract_shell_executables(command_line)` (L228-271)
+### fn `def extract_shell_executables(command_line)` (L250-293)
 - @brief Extract executable tokens from a shell command line.
 - @details Tokenizes command line using runtime-OS splitting mode and returns ordered unique executable candidates at command boundaries (`&&`, `||`, `;`, `|`) including wrapper commands such as `sudo`.
 - @param command_line {str} Raw shell command line.
 - @return {list[str]} Ordered executable token list.
 - @satisfies REQ-056
 
-### fn `def require_shell_command_executables(command_line)` (L272-288)
+### fn `def require_shell_command_executables(command_line)` (L294-310)
 - @brief Validate executable availability for a shell command line.
 - @details Extracts executable tokens from `command_line`, validates each token via `is_executable_command`, prints deterministic error with missing command name, and terminates process on first failure.
 - @param command_line {str} Raw shell command line.
 - @return {None} Process exits on validation failure.
 - @satisfies REQ-056
 
-### fn `def run_cmd(cmd, **kwargs)` (L289-290)
+### fn `def _is_tty_stream(stream)` `priv` (L311-330)
+- @brief Determine whether a stream is an attached TTY.
+- @details Performs capability checks (`isatty`, callable) and returns deterministic boolean without raising on unsupported stream objects. Time complexity O(1).
+- @param stream {object} Stream-like object (stdin/stdout/stderr candidate).
+- @return {bool} `True` when stream supports and reports TTY attachment.
+- @satisfies REQ-064
+
+### fn `def capture_terminal_state()` (L331-355)
+- @brief Capture current stdin terminal attributes when available.
+- @details Reads current TTY attributes via `termios.tcgetattr` only on runtimes exposing `termios` and when stdin is a TTY. Returns `None` when attributes are unavailable. Time complexity O(1).
+- @return {list[object] | None} Saved TTY attributes for later restoration.
+- @satisfies REQ-064
+
+### fn `def reset_terminal_state(saved_tty=None)` (L356-403)
+- @brief Restore terminal raw/cbreak and mouse-tracking state.
+- @details Restores previously captured stdin termios attributes when present, disables known xterm mouse modes on TTY stdout, and best-effort runs `stty sane` for Git Bash/Unix-compatible terminals. Failures are ignored to preserve wrapper exit semantics. Time complexity O(1).
+- @param saved_tty {list[object] | None} Attributes from `capture_terminal_state`.
+- @return {None} Performs best-effort terminal-state restoration.
+- @satisfies REQ-064
+
+### fn `def run_cmd(cmd, **kwargs)` (L404-405)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`RESET`|var|pub|17||
-|`BOLD`|var|pub|18||
-|`RED`|var|pub|19||
-|`GREEN`|var|pub|20||
-|`YELLOW`|var|pub|21||
-|`BLUE`|var|pub|22||
-|`MAGENTA`|var|pub|23||
-|`CYAN`|var|pub|24||
-|`WHITE`|var|pub|25||
-|`BRIGHT_RED`|var|pub|26||
-|`BRIGHT_GREEN`|var|pub|27||
-|`BRIGHT_YELLOW`|var|pub|28||
-|`BRIGHT_BLUE`|var|pub|29||
-|`BRIGHT_CYAN`|var|pub|30||
-|`BRIGHT_WHITE`|var|pub|31||
-|`color_enabled`|fn|pub|41-46|def color_enabled()|
-|`c`|fn|pub|47-52|def c(text, color)|
-|`print_info`|fn|pub|53-56|def print_info(msg)|
-|`print_error`|fn|pub|57-60|def print_error(msg)|
-|`print_warn`|fn|pub|61-64|def print_warn(msg)|
-|`print_success`|fn|pub|65-68|def print_success(msg)|
-|`get_project_root`|fn|pub|69-81|def get_project_root()|
-|`require_project_root`|fn|pub|82-90|def require_project_root()|
-|`detect_runtime_os`|fn|pub|91-113|def detect_runtime_os()|
-|`get_runtime_os`|fn|pub|114-127|def get_runtime_os()|
-|`is_windows`|fn|pub|128-138|def is_windows()|
-|`is_linux`|fn|pub|139-149|def is_linux()|
-|`_is_executable_file`|fn|priv|150-178|def _is_executable_file(path: Path)|
-|`is_executable_command`|fn|pub|179-200|def is_executable_command(command)|
-|`command_exists`|fn|pub|201-204|def command_exists(cmd)|
-|`require_commands`|fn|pub|205-211|def require_commands(*cmds)|
-|`_is_shell_assignment_token`|fn|priv|212-227|def _is_shell_assignment_token(token)|
-|`extract_shell_executables`|fn|pub|228-271|def extract_shell_executables(command_line)|
-|`require_shell_command_executables`|fn|pub|272-288|def require_shell_command_executables(command_line)|
-|`run_cmd`|fn|pub|289-290|def run_cmd(cmd, **kwargs)|
+|`RESET`|var|pub|22||
+|`BOLD`|var|pub|23||
+|`RED`|var|pub|24||
+|`GREEN`|var|pub|25||
+|`YELLOW`|var|pub|26||
+|`BLUE`|var|pub|27||
+|`MAGENTA`|var|pub|28||
+|`CYAN`|var|pub|29||
+|`WHITE`|var|pub|30||
+|`BRIGHT_RED`|var|pub|31||
+|`BRIGHT_GREEN`|var|pub|32||
+|`BRIGHT_YELLOW`|var|pub|33||
+|`BRIGHT_BLUE`|var|pub|34||
+|`BRIGHT_CYAN`|var|pub|35||
+|`BRIGHT_WHITE`|var|pub|36||
+|`color_enabled`|fn|pub|63-68|def color_enabled()|
+|`c`|fn|pub|69-74|def c(text, color)|
+|`print_info`|fn|pub|75-78|def print_info(msg)|
+|`print_error`|fn|pub|79-82|def print_error(msg)|
+|`print_warn`|fn|pub|83-86|def print_warn(msg)|
+|`print_success`|fn|pub|87-90|def print_success(msg)|
+|`get_project_root`|fn|pub|91-103|def get_project_root()|
+|`require_project_root`|fn|pub|104-112|def require_project_root()|
+|`detect_runtime_os`|fn|pub|113-135|def detect_runtime_os()|
+|`get_runtime_os`|fn|pub|136-149|def get_runtime_os()|
+|`is_windows`|fn|pub|150-160|def is_windows()|
+|`is_linux`|fn|pub|161-171|def is_linux()|
+|`_is_executable_file`|fn|priv|172-200|def _is_executable_file(path: Path)|
+|`is_executable_command`|fn|pub|201-222|def is_executable_command(command)|
+|`command_exists`|fn|pub|223-226|def command_exists(cmd)|
+|`require_commands`|fn|pub|227-233|def require_commands(*cmds)|
+|`_is_shell_assignment_token`|fn|priv|234-249|def _is_shell_assignment_token(token)|
+|`extract_shell_executables`|fn|pub|250-293|def extract_shell_executables(command_line)|
+|`require_shell_command_executables`|fn|pub|294-310|def require_shell_command_executables(command_line)|
+|`_is_tty_stream`|fn|priv|311-330|def _is_tty_stream(stream)|
+|`capture_terminal_state`|fn|pub|331-355|def capture_terminal_state()|
+|`reset_terminal_state`|fn|pub|356-403|def reset_terminal_state(saved_tty=None)|
+|`run_cmd`|fn|pub|404-405|def run_cmd(cmd, **kwargs)|
 
 
 ---

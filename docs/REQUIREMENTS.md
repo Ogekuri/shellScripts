@@ -178,7 +178,7 @@ No explicit performance optimizations identified.
 - **REQ-061**: MUST print a bright-red error line and apply an 86400-second cooldown when the version-check request returns an HTTP error response or raises a non-HTTP exception.
 - **REQ-062**: MUST print one cleanup evidence line per predefined cleanup path using status `deleted` for removed filesystem entries and status `skip` for absent paths.
 - **REQ-063**: MUST label each `deleted` cleanup evidence line with entry kind `file` or `dir` based on the removed filesystem entry type.
-- **REQ-064**: MUST execute every external system command through `subprocess.run` and MUST continue CLI flow only after the child process terminates.
+- **REQ-064**: MUST execute delegated external system commands through `subprocess.run` with inherited stdin/stdout/stderr, MUST wait for child termination, and MUST restore raw/cbreak TTY state plus xterm mouse modes before wrapper exit.
 
 ## 4. Test Requirements
 
@@ -204,7 +204,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 
 | Requirement IDs | File Path | Symbol / Function | Short Evidence Excerpt |
 |---|---|---|---|
-| PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047 | `src/shell_scripts/core.py` | `main`, `print_help` | Startup path detects runtime OS before dispatch; empty args print help and return `0`; unknown command path returns `1`; `--version` and `--ver` print `__version__`. |
+| PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047, REQ-064 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `main`, `capture_terminal_state`, `reset_terminal_state`, `print_help` | Startup detects runtime OS before dispatch; empty args print help and return `0`; unknown command path returns `1`; `--version`/`--ver` print `__version__`; wrapper exit restores saved TTY attributes and disables xterm mouse modes. |
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
 | PRJ-004, DES-002..DES-006, REQ-003, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_is_forced_version_check`, `_write_idle_config`, `_should_check` | Forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every request outcome, applies 3600s on success and 86400s on request errors, and prints colored update/error lines. |
 | PRJ-005 | `.github/workflows/release-uvx.yml` | `jobs.check-branch`, `jobs.build-release` | Workflow script is present at required path and defines release automation jobs. |

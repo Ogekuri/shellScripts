@@ -3,8 +3,8 @@
 
 @details Provides reusable terminal formatting utilities, project-root
 resolution, platform detection with runtime OS caching, command availability
-checks, and thin subprocess wrappers used across command modules.
-@satisfies CTN-003, CTN-005, DES-002, REQ-047, REQ-055, REQ-056
+checks, and terminal-state restoration primitives used by CLI command wrappers.
+@satisfies CTN-003, CTN-005, DES-002, REQ-047, REQ-055, REQ-056, REQ-064
 """
 
 import os
@@ -13,6 +13,11 @@ import subprocess
 import shutil
 import shlex
 from pathlib import Path
+
+try:
+    import termios
+except ImportError:
+    termios = None
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -36,6 +41,23 @@ BRIGHT_WHITE = "\033[97m"
 #  startup-level OS semantics across command execution flow.
 #  @satisfies DES-002, REQ-047
 _RUNTIME_OS = None
+
+## @var _MOUSE_OFF_ESCAPE_SEQUENCE
+#  @brief Escape-sequence payload that disables known xterm mouse-reporting modes.
+#  @details Concatenates CSI mode-off controls for common mouse tracking modes.
+#  @satisfies REQ-064
+_MOUSE_OFF_ESCAPE_SEQUENCE = (
+    "\x1b[?1000l"
+    "\x1b[?1001l"
+    "\x1b[?1002l"
+    "\x1b[?1003l"
+    "\x1b[?1004l"
+    "\x1b[?1005l"
+    "\x1b[?1006l"
+    "\x1b[?1007l"
+    "\x1b[?1015l"
+    "\x1b[?1016l"
+)
 
 
 def color_enabled():
@@ -284,6 +306,99 @@ def require_shell_command_executables(command_line):
         if not is_executable_command(token):
             print_error(f"Command not executable: {token}")
             sys.exit(1)
+
+
+def _is_tty_stream(stream):
+    """@brief Determine whether a stream is an attached TTY.
+
+    @details Performs capability checks (`isatty`, callable) and returns
+    deterministic boolean without raising on unsupported stream objects.
+    Time complexity O(1).
+    @param stream {object} Stream-like object (stdin/stdout/stderr candidate).
+    @return {bool} `True` when stream supports and reports TTY attachment.
+    @satisfies REQ-064
+    """
+
+    isatty = getattr(stream, "isatty", None)
+    if not callable(isatty):
+        return False
+    try:
+        return bool(isatty())
+    except OSError:
+        return False
+
+
+def capture_terminal_state():
+    """@brief Capture current stdin terminal attributes when available.
+
+    @details Reads current TTY attributes via `termios.tcgetattr` only on
+    runtimes exposing `termios` and when stdin is a TTY. Returns `None` when
+    attributes are unavailable. Time complexity O(1).
+    @return {list[object] | None} Saved TTY attributes for later restoration.
+    @satisfies REQ-064
+    """
+
+    if termios is None or not _is_tty_stream(sys.stdin):
+        return None
+    try:
+        stdin_fd = sys.stdin.fileno()
+    except (AttributeError, OSError, ValueError):
+        return None
+    tcgetattr = getattr(termios, "tcgetattr", None)
+    if not callable(tcgetattr):
+        return None
+    try:
+        return tcgetattr(stdin_fd)
+    except OSError:
+        return None
+
+
+def reset_terminal_state(saved_tty=None):
+    """@brief Restore terminal raw/cbreak and mouse-tracking state.
+
+    @details Restores previously captured stdin termios attributes when present,
+    disables known xterm mouse modes on TTY stdout, and best-effort runs
+    `stty sane` for Git Bash/Unix-compatible terminals. Failures are ignored to
+    preserve wrapper exit semantics. Time complexity O(1).
+    @param saved_tty {list[object] | None} Attributes from `capture_terminal_state`.
+    @return {None} Performs best-effort terminal-state restoration.
+    @satisfies REQ-064
+    """
+
+    tcsetattr = None
+    tcsa_drain = None
+    if saved_tty is not None and termios is not None and _is_tty_stream(sys.stdin):
+        tcsetattr = getattr(termios, "tcsetattr", None)
+        tcsa_drain = getattr(termios, "TCSADRAIN", None)
+    if (
+        saved_tty is not None
+        and _is_tty_stream(sys.stdin)
+        and callable(tcsetattr)
+        and tcsa_drain is not None
+    ):
+        try:
+            tcsetattr(sys.stdin.fileno(), tcsa_drain, saved_tty)
+        except (AttributeError, OSError, ValueError):
+            pass
+
+    if _is_tty_stream(sys.stdout):
+        try:
+            sys.stdout.write(_MOUSE_OFF_ESCAPE_SEQUENCE)
+            sys.stdout.flush()
+        except OSError:
+            pass
+
+    if _is_tty_stream(sys.stdin):
+        try:
+            subprocess.run(
+                ["stty", "sane"],
+                stdin=sys.stdin,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError:
+            pass
 
 
 def run_cmd(cmd, **kwargs):
