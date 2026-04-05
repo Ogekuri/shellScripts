@@ -78,7 +78,7 @@ def test_cli_codex_creates_auth_symlink_sets_codex_home_and_executes_expected_co
     monkeypatch.setattr(cli_codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(cli_codex.Path, "home", lambda: fake_home)
     monkeypatch.setattr(cli_codex, "print_info", _fake_print_info)
-    monkeypatch.setattr(cli_codex, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(cli_codex, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(cli_codex.subprocess, "run", _fake_run)
 
     result = cli_codex.run(["--x"])
@@ -131,7 +131,7 @@ def test_cli_codex_keeps_existing_auth_symlink_without_creation_message(
     monkeypatch.setattr(cli_codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(cli_codex.Path, "home", lambda: fake_home)
     monkeypatch.setattr(cli_codex, "print_info", _fake_print_info)
-    monkeypatch.setattr(cli_codex, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(cli_codex, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(cli_codex.subprocess, "run", _fake_run)
 
     result = cli_codex.run(["--z"])
@@ -163,7 +163,7 @@ def test_cli_copilot_executes_expected_command(monkeypatch):
         return types.SimpleNamespace(returncode=11)
 
     monkeypatch.setattr(cli_copilot, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(cli_copilot, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(cli_copilot, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(cli_copilot.subprocess, "run", _fake_run)
 
     result = cli_copilot.run(["--extra"])
@@ -196,7 +196,7 @@ def test_cli_gemini_executes_expected_command(monkeypatch):
         return types.SimpleNamespace(returncode=12)
 
     monkeypatch.setattr(cli_gemini, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(cli_gemini, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(cli_gemini, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(cli_gemini.subprocess, "run", _fake_run)
 
     result = cli_gemini.run(["--flag"])
@@ -226,7 +226,7 @@ def test_cli_claude_executes_expected_command(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli_claude, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(cli_claude.Path, "home", lambda: tmp_path)
-    monkeypatch.setattr(cli_claude, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(cli_claude, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(cli_claude.subprocess, "run", _fake_run)
 
     result = cli_claude.run(["--session"])
@@ -259,7 +259,7 @@ def test_cli_opencode_executes_expected_command(monkeypatch):
         return types.SimpleNamespace(returncode=14)
 
     monkeypatch.setattr(cli_opencode, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(cli_opencode, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(cli_opencode, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(cli_opencode.subprocess, "run", _fake_run)
 
     result = cli_opencode.run(["--inspect"])
@@ -287,13 +287,64 @@ def test_cli_kiro_executes_expected_command(monkeypatch):
         return types.SimpleNamespace(returncode=15)
 
     monkeypatch.setattr(cli_kiro, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(cli_kiro, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(cli_kiro, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(cli_kiro.subprocess, "run", _fake_run)
 
     result = cli_kiro.run(["--ai"])
 
     assert result == 15
     assert observed["command"] == ["kiro-cli", "--ai"]
+    assert observed["kwargs"] == {}
+
+
+@pytest.mark.parametrize(
+    ("module", "args", "expected_tail"),
+    [
+        (cli_copilot, ["--extra"], ["--yolo", "--allow-all-tools", "--extra"]),
+        (cli_gemini, ["--flag"], ["--yolo", "--flag"]),
+        (cli_opencode, ["--inspect"], ["--inspect"]),
+        (cli_kiro, ["--ai"], ["--ai"]),
+        (cli_claude, ["--session"], ["--dangerously-skip-permissions", "--session"]),
+    ],
+)
+def test_cli_launchers_use_resolved_executable_path_from_require_commands(
+    monkeypatch,
+    tmp_path,
+    module,
+    args,
+    expected_tail,
+):
+    """
+    @brief Validate CLI launchers execute the resolved executable path.
+    @details Mocks `require_commands` to return a Windows-style resolved path
+      and verifies launcher execution uses that resolved token as argv[0].
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {pathlib.Path} Isolated filesystem fixture.
+    @param module {module} CLI launcher module under test.
+    @param args {list[str]} Pass-through command arguments.
+    @param expected_tail {list[str]} Expected fixed and forwarded argument tail.
+    @return {None} Assertions only.
+    @satisfies TST-005, REQ-055, REQ-056, REQ-064
+    """
+
+    observed = {}
+    resolved_exec = r"C:\Tools\resolved-tool.cmd"
+
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=27)
+
+    monkeypatch.setattr(module, "require_project_root", lambda: Path("/tmp/p"))
+    monkeypatch.setattr(module, "require_commands", lambda *_cmds: resolved_exec)
+    monkeypatch.setattr(module.subprocess, "run", _fake_run)
+    if module is cli_claude:
+        monkeypatch.setattr(module.Path, "home", lambda: tmp_path)
+
+    result = module.run(args)
+
+    assert result == 27
+    assert observed["command"] == [resolved_exec] + expected_tail
     assert observed["kwargs"] == {}
 
 

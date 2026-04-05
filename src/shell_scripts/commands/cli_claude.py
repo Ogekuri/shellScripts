@@ -36,6 +36,6 @@ def run(args):
     require_project_root()
     claude_bin = Path.home() / ".claude" / "bin" / "claude"
     cmd = [str(claude_bin), "--dangerously-skip-permissions"] + args
-    require_commands(cmd[0])
+    cmd[0] = require_commands(cmd[0])
     result = subprocess.run(cmd)
     return result.returncode

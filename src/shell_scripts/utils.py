@@ -13,6 +13,7 @@ import subprocess
 import shutil
 import shlex
 from pathlib import Path
+from typing import overload
 
 try:
     import termios
@@ -169,7 +170,7 @@ def is_linux():
     return get_runtime_os() == "linux"
 
 
-def _is_executable_file(path: Path):
+def _is_executable_file(path: Path) -> bool:
     """@brief Validate executable-file capability for a filesystem path.
 
     @details Expands user-home markers, checks path kind, and applies platform
@@ -180,25 +181,62 @@ def _is_executable_file(path: Path):
     @satisfies CTN-003, REQ-055
     """
 
+    return _resolve_executable_file(path) is not None
+
+
+def _resolve_executable_file(path: Path) -> Path | None:
+    """@brief Resolve an executable filesystem path for the runtime OS.
+
+    @details Expands user-home markers and resolves Windows extension-less
+    candidates through `PATHEXT` fallback checks.
+    @param path {Path} Candidate executable filesystem path.
+    @return {Path | None} Resolved executable path when runnable, else `None`.
+    @satisfies CTN-003, REQ-055
+    """
+
     expanded = path.expanduser()
     if expanded.suffix:
-        return expanded.is_file() and os.access(str(expanded), os.X_OK)
+        if expanded.is_file() and os.access(str(expanded), os.X_OK):
+            return expanded
+        return None
 
     if expanded.is_file() and os.access(str(expanded), os.X_OK):
-        return True
+        return expanded
 
     if get_runtime_os() != "windows":
-        return False
+        return None
 
     path_ext = os.environ.get("PATHEXT", ".EXE;.CMD;.BAT;.COM")
     for ext in [item for item in path_ext.split(";") if item]:
         candidate = Path(f"{expanded}{ext}")
         if candidate.is_file() and os.access(str(candidate), os.X_OK):
-            return True
-    return False
+            return candidate
+    return None
 
 
-def is_executable_command(command):
+def resolve_executable_command(command: str) -> str | None:
+    """@brief Resolve a runnable command token to an executable path.
+
+    @details Accepts command names or executable paths and returns the concrete
+    runnable executable path when available on the current runtime platform.
+    @param command {str} Command token or filesystem path to executable.
+    @return {str | None} Resolved executable path or `None` when not runnable.
+    @satisfies CTN-003, REQ-055
+    """
+
+    if not isinstance(command, str) or not command.strip():
+        return None
+
+    normalized = command.strip()
+    path_like = os.sep in normalized or (os.altsep is not None and os.altsep in normalized)
+    if path_like or Path(normalized).is_absolute():
+        resolved_path = _resolve_executable_file(Path(normalized))
+        return str(resolved_path) if resolved_path is not None else None
+
+    return shutil.which(normalized)
+
+
+def is_executable_command(command: str) -> bool:
     """@brief Determine whether an external command is executable on runtime OS.
 
     @details Accepts command names or executable paths. Name-based checks use
@@ -209,26 +247,34 @@ def is_executable_command(command):
     @satisfies CTN-003, REQ-055
     """
 
-    if not isinstance(command, str) or not command.strip():
-        return False
-
-    normalized = command.strip()
-    path_like = os.sep in normalized or (os.altsep is not None and os.altsep in normalized)
-    if path_like or Path(normalized).is_absolute():
-        return _is_executable_file(Path(normalized))
-
-    return shutil.which(normalized) is not None
+    return resolve_executable_command(command) is not None
 
 
 def command_exists(cmd):
     return is_executable_command(cmd)
 
 
-def require_commands(*cmds):
-    missing = [cmd for cmd in cmds if not is_executable_command(cmd)]
-    if missing:
-        print_error(f"Command not executable: {missing[0]}")
-        sys.exit(1)
+@overload
+def require_commands(cmd: str, /) -> str:
+    ...
+
+
+@overload
+def require_commands(cmd1: str, cmd2: str, /, *cmds: str) -> list[str]:
+    ...
+
+
+def require_commands(*cmds: str) -> str | list[str]:
+    resolved = []
+    for cmd in cmds:
+        resolved_cmd = resolve_executable_command(cmd)
+        if resolved_cmd is None:
+            print_error(f"Command not executable: {cmd}")
+            sys.exit(1)
+        resolved.append(resolved_cmd)
+    if len(resolved) == 1:
+        return resolved[0]
+    return resolved
 
 
 def _is_shell_assignment_token(token):

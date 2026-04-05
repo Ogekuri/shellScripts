@@ -34,6 +34,6 @@ def run(args):
 
     require_project_root()
     cmd = ["kiro-cli"] + args
-    require_commands(cmd[0])
+    cmd[0] = require_commands(cmd[0])
     result = subprocess.run(cmd)
     return result.returncode

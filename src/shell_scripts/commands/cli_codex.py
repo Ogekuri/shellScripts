@@ -96,6 +96,6 @@ def run(args: list[str]) -> int:
     codex_home = str(project_root / ".codex")
     os.environ["CODEX_HOME"] = codex_home
     cmd = ["codex", "--yolo"] + args
-    require_commands(cmd[0])
+    cmd[0] = require_commands(cmd[0])
     result = subprocess.run(cmd)
     return result.returncode
