@@ -1,10 +1,13 @@
 """
 @brief Validate FFmpeg video conversion command wrappers.
 @details Verifies `video2h264` and `video2h265` command argument validation,
-  output path generation semantics, and exact FFmpeg argv construction.
-@satisfies TST-011, REQ-057, REQ-058
+  output path generation semantics, exact FFmpeg argv construction, and
+  subprocess return-code propagation.
+@satisfies TST-011, REQ-057, REQ-058, REQ-064
 @return {None} Pytest module scope.
 """
+
+import types
 
 import shell_scripts.commands.video2h264 as video2h264
 import shell_scripts.commands.video2h265 as video2h265
@@ -14,35 +17,38 @@ def test_video2h264_run_execs_ffmpeg_with_required_options(monkeypatch, tmp_path
     """@brief Validate H.264 FFmpeg argv construction.
 
     @details Creates one temporary input file, intercepts executable checks and
-    execvp call, and asserts required fixed encoder flags plus output suffix.
+    subprocess boundary, and asserts required fixed encoder flags plus output
+    suffix and propagated return code.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Temporary filesystem root.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-057, REQ-055, REQ-056
+    @satisfies TST-011, REQ-057, REQ-055, REQ-056, REQ-064
     """
 
     input_file = tmp_path / "input.mov"
     input_file.write_bytes(b"x")
     observed = {}
 
-    monkeypatch.setattr(video2h264, "require_commands", lambda command: observed.__setitem__("checked", command))
+    monkeypatch.setattr(
+        video2h264,
+        "require_commands",
+        lambda command: observed.__setitem__("checked", command),
+    )
 
-    def _fake_execvp(executable, argv):
-        observed["executable"] = executable
-        observed["argv"] = argv
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=30)
 
-    monkeypatch.setattr("os.execvp", _fake_execvp)
+    monkeypatch.setattr(video2h264.subprocess, "run", _fake_run)
 
-    try:
-        video2h264.run([str(input_file)])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = video2h264.run([str(input_file)])
 
     expected_output = str(tmp_path / "input.mov.mp4")
+    assert result == 30
     assert observed["checked"] == "ffmpeg"
-    assert observed["executable"] == "ffmpeg"
-    assert observed["argv"] == [
+    assert observed["kwargs"] == {}
+    assert observed["command"] == [
         "ffmpeg",
         "-i",
         str(input_file),
@@ -68,35 +74,38 @@ def test_video2h265_run_execs_ffmpeg_with_required_options(monkeypatch, tmp_path
     """@brief Validate H.265 FFmpeg argv construction.
 
     @details Creates one temporary input file, intercepts executable checks and
-    execvp call, and asserts required fixed encoder flags plus output suffix.
+    subprocess boundary, and asserts required fixed encoder flags plus output
+    suffix and propagated return code.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Temporary filesystem root.
     @return {None} Assertions only.
-    @satisfies TST-011, REQ-058, REQ-055, REQ-056
+    @satisfies TST-011, REQ-058, REQ-055, REQ-056, REQ-064
     """
 
     input_file = tmp_path / "input.mov"
     input_file.write_bytes(b"x")
     observed = {}
 
-    monkeypatch.setattr(video2h265, "require_commands", lambda command: observed.__setitem__("checked", command))
+    monkeypatch.setattr(
+        video2h265,
+        "require_commands",
+        lambda command: observed.__setitem__("checked", command),
+    )
 
-    def _fake_execvp(executable, argv):
-        observed["executable"] = executable
-        observed["argv"] = argv
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=31)
 
-    monkeypatch.setattr("os.execvp", _fake_execvp)
+    monkeypatch.setattr(video2h265.subprocess, "run", _fake_run)
 
-    try:
-        video2h265.run([str(input_file)])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = video2h265.run([str(input_file)])
 
     expected_output = str(tmp_path / "input.mov.mp4")
+    assert result == 31
     assert observed["checked"] == "ffmpeg"
-    assert observed["executable"] == "ffmpeg"
-    assert observed["argv"] == [
+    assert observed["kwargs"] == {}
+    assert observed["command"] == [
         "ffmpeg",
         "-i",
         str(input_file),

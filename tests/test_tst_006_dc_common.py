@@ -59,8 +59,8 @@ def test_categorize_uses_mime_and_extension_mapping(monkeypatch):
 def test_dispatch_selects_category_specific_command(monkeypatch):
     """
     @brief Validate category-to-command dispatch routing.
-    @details Mocks categorization, command lookup, and process replacement
-      boundary to assert selected command receives file and extra args.
+    @details Mocks categorization, command lookup, and subprocess boundary to
+      assert selected command receives file and extra args.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
     @satisfies TST-006, REQ-024
@@ -68,33 +68,32 @@ def test_dispatch_selects_category_specific_command(monkeypatch):
 
     observed = {}
 
-    def _fake_execvp(executable, args):
+    def _fake_run(command, **kwargs):
         """
-        @brief Mock os.execvp for dispatch test.
-        @details Captures command payload and exits via SystemExit.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
+        @brief Mock subprocess.run for dispatch test.
+        @details Captures command payload and returns deterministic code.
+        @param command {list[str]} Process argv vector.
+        @param kwargs {dict[str, object]} Subprocess keyword arguments.
+        @return {types.SimpleNamespace} Deterministic returncode wrapper.
         """
 
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return type("R", (), {"returncode": 5})()
 
     monkeypatch.setattr(dc_common, "categorize", lambda _path: "markdown")
     monkeypatch.setattr(dc_common, "is_executable_command", lambda _cmd: True)
-    monkeypatch.setattr(dc_common.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(dc_common.subprocess, "run", _fake_run)
 
     category_cmds = {"markdown": ["typora"]}
 
-    try:
-        dc_common.dispatch(category_cmds, ["sushi"], "/tmp/readme.md", ["--line", "3"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = dc_common.dispatch(
+        category_cmds, ["sushi"], "/tmp/readme.md", ["--line", "3"]
+    )
 
-    assert observed["executable"] == "typora"
-    assert observed["args"] == ["typora", "/tmp/readme.md", "--line", "3"]
+    assert result == 5
+    assert observed["command"] == ["typora", "/tmp/readme.md", "--line", "3"]
+    assert observed["kwargs"] == {}
 
 
 def test_wrappers_use_runtime_dispatch_profiles(monkeypatch):

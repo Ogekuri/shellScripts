@@ -55,7 +55,7 @@
 - Lifecycle/trigger:
   - Trigger: invoked through `python -m shell_scripts` or console script entrypoint mapping to `shell_scripts.core:main`.
   - Startup: executes runtime OS detection, update-check gate, and runtime-config load before argument dispatch.
-  - Runtime mode: single-dispatch CLI process; selected command path may terminate current process via `os.execvp` or run child processes via `subprocess`.
+  - Runtime mode: single-dispatch CLI process; selected command path runs child processes via blocking `subprocess.run` and propagates child return codes.
   - Shutdown: returns explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
@@ -113,40 +113,40 @@
       - `cli_claude.run(...)`: Launch Claude CLI in project context [`src/shell_scripts/commands/cli_claude.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
-        - `require_commands(...)`: Validate command executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate command executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `cli_codex.run(...)`: Launch Codex CLI with project-scoped `CODEX_HOME` and command token `codex --yolo` [`src/shell_scripts/commands/cli_codex.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
         - `cli_codex._ensure_auth_symlink(...)`: Ensure project auth link points to user auth file before CLI exec [`src/shell_scripts/commands/cli_codex.py`]
           - `cli_codex._is_expected_auth_link(...)`: Validate existing symlink destination against expected home auth target [`src/shell_scripts/commands/cli_codex.py`]
-        - `require_commands(...)`: Validate command executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate command executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `cli_copilot.run(...)`: Launch Copilot CLI in project context via command token `copilot --yolo --allow-all-tools` [`src/shell_scripts/commands/cli_copilot.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
-        - `require_commands(...)`: Validate command executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate command executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `cli_gemini.run(...)`: Launch Gemini CLI in project context via command token `gemini --yolo` [`src/shell_scripts/commands/cli_gemini.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
-        - `require_commands(...)`: Validate command executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate command executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `cli_kiro.run(...)`: Launch Kiro CLI in project context via command token `kiro-cli` [`src/shell_scripts/commands/cli_kiro.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
-        - `require_commands(...)`: Validate command executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate command executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `cli_opencode.run(...)`: Launch OpenCode CLI in project context via command token `opencode` [`src/shell_scripts/commands/cli_opencode.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
-        - `require_commands(...)`: Validate command executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate command executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `diff_cmd.run(...)`: Generic differ wrapper [`src/shell_scripts/commands/diff_cmd.py`]
         - `get_dispatch_profile(...)`: Resolve command-category and fallback vectors for diff from runtime config [`src/shell_scripts/config.py`]
           - `_normalize_categories(...)`: Validate category command map payload [`src/shell_scripts/config.py`]
             - `_normalize_command_vector(...)`: Validate command vector payload type and values [`src/shell_scripts/config.py`]
           - `_normalize_command_vector(...)`: Validate fallback command vector payload [`src/shell_scripts/config.py`]
-        - `dispatch(...)`: Select command by categorized file type and replace process with selected tool [`src/shell_scripts/commands/_dc_common.py`]
+        - `dispatch(...)`: Select command by categorized file type and execute selected tool via blocking subprocess run [`src/shell_scripts/commands/_dc_common.py`]
           - `categorize(...)`: Determine category from MIME + extension [`src/shell_scripts/commands/_dc_common.py`]
             - `get_extension(...)`: Parse lowercase extension from file basename [`src/shell_scripts/commands/_dc_common.py`]
             - `detect_mime(...)`: Probe MIME type via `mimetype` or `file` commands [`src/shell_scripts/commands/_dc_common.py`]
           - `pick_cmd(...)`: Choose primary command if available, else fallback [`src/shell_scripts/commands/_dc_common.py`]
-          - `is_executable_command(...)`: Validate selected command executable before process replacement [`src/shell_scripts/utils.py`]
+          - `is_executable_command(...)`: Validate selected command executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `edit_cmd.run(...)`: Generic editor wrapper [`src/shell_scripts/commands/edit_cmd.py`]
         - `get_dispatch_profile(...)`: Resolve command-category and fallback vectors for edit from runtime config [`src/shell_scripts/config.py`]
           - `_normalize_categories(...)`: Validate category command map payload [`src/shell_scripts/config.py`]
@@ -228,10 +228,10 @@
         - `pdf_split_by_toc._sanitize_title(...)`: Normalize chapter titles to filename-safe tokens [`src/shell_scripts/commands/pdf_split_by_toc.py`]
         - `pdf_split_by_toc._extract_toc_for_range(...)`: Rebase bookmark page numbers for extracted range [`src/shell_scripts/commands/pdf_split_by_toc.py`]
         - `pdf_split_by_toc._apply_toc_to_file(...)`: Apply rebased TOC to output PDF artifact [`src/shell_scripts/commands/pdf_split_by_toc.py`]
-      - `pdf_tiler_090.run(...)`: Build tiled A4 output at 0.90 scaling and replace process with `plakativ` [`src/shell_scripts/commands/pdf_tiler_090.py`]
+      - `pdf_tiler_090.run(...)`: Build tiled A4 output at 0.90 scaling and execute `plakativ` via blocking subprocess run [`src/shell_scripts/commands/pdf_tiler_090.py`]
         - `require_commands(...)`: Validate required executable (`plakativ`) [`src/shell_scripts/utils.py`]
           - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
-      - `pdf_tiler_100.run(...)`: Build tiled A4 output at A1 source size and replace process with `plakativ` [`src/shell_scripts/commands/pdf_tiler_100.py`]
+      - `pdf_tiler_100.run(...)`: Build tiled A4 output at A1 source size and execute `plakativ` via blocking subprocess run [`src/shell_scripts/commands/pdf_tiler_100.py`]
         - `require_commands(...)`: Validate required executable (`plakativ`) [`src/shell_scripts/utils.py`]
           - `command_exists(...)`: Probe executable presence in PATH [`src/shell_scripts/utils.py`]
       - `pdf_toc_clean.run(...)`: Clean out-of-range bookmarks for each input PDF [`src/shell_scripts/commands/pdf_toc_clean.py`]
@@ -265,21 +265,21 @@
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
         - `require_commands(...)`: Validate flow-conditional executable set before each subprocess invocation [`src/shell_scripts/utils.py`]
       - `video2h264.run(...)`: Transcode one input video to H.264/AAC MP4 via FFmpeg with fixed encoder profile/options [`src/shell_scripts/commands/video2h264.py`]
-        - `require_commands(...)`: Validate `ffmpeg` executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate `ffmpeg` executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `video2h265.run(...)`: Transcode one input video to H.265/AAC MP4 via FFmpeg with fixed encoder profile/options [`src/shell_scripts/commands/video2h265.py`]
-        - `require_commands(...)`: Validate `ffmpeg` executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate `ffmpeg` executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `vscode_cmd.run(...)`: Launch VS Code in project root with CODEX_HOME set [`src/shell_scripts/commands/vscode_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
-        - `require_commands(...)`: Validate VS Code executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate VS Code executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `vsinsider_cmd.run(...)`: Launch VS Code Insiders in project root with CODEX_HOME set [`src/shell_scripts/commands/vsinsider_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
-        - `require_commands(...)`: Validate VS Code Insiders executable before process replacement [`src/shell_scripts/utils.py`]
+        - `require_commands(...)`: Validate VS Code Insiders executable before subprocess invocation [`src/shell_scripts/utils.py`]
 - External Boundaries:
   - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
-  - Process boundary: `subprocess.run` / `subprocess.Popen` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities).
-  - Process-replacement boundary: `os.execvp` in launcher-style commands (`cli-*`, `vscode`, `vsinsider`, `pdf-tiler-*`, `video2h264`, `video2h265`, `_dc_common.dispatch`).
+  - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands).
+  - Process-replacement boundary: none; launcher-style commands now execute external tools via `subprocess.run`.
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
 

@@ -1,14 +1,15 @@
 """
 @brief Validate CLI launcher command wrappers.
-@details Verifies executable paths, argument vectors, project-root append
-  behavior, CODEX_HOME environment setup, and codex auth symlink guard across
-  cli-* and editor commands.
+@details Verifies subprocess command vectors, project-path handling, CODEX_HOME
+  environment setup, and codex auth symlink guard across cli-* and editor
+  commands.
 @satisfies TST-005, REQ-014, REQ-015, REQ-016, REQ-017, REQ-018, REQ-019,
-  REQ-020, REQ-021, REQ-043, REQ-044
+  REQ-020, REQ-021, REQ-043, REQ-044, REQ-064
 @return {None} Pytest module scope.
 """
 
 from pathlib import Path
+import types
 
 import pytest
 
@@ -49,13 +50,13 @@ def test_cli_codex_creates_auth_symlink_sets_codex_home_and_executes_expected_co
 ):
     """
     @brief Validate cli-codex creation path contract.
-    @details Stubs project-root resolution and exec boundary, then validates
-      auth-symlink creation, creation-message emission, CODEX_HOME assignment,
-      and command vector.
+    @details Stubs project-root resolution and subprocess boundary, then
+      validates auth-symlink creation, creation-message emission, CODEX_HOME
+      assignment, command vector, and return-code propagation.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-014, REQ-043, REQ-044
+    @satisfies TST-005, REQ-014, REQ-043, REQ-044, REQ-064
     """
 
     _require_symlink_capability(tmp_path)
@@ -66,49 +67,31 @@ def test_cli_codex_creates_auth_symlink_sets_codex_home_and_executes_expected_co
     observed = {}
     observed_info = []
 
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for cli-codex test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=7)
 
     def _fake_print_info(message):
-        """
-        @brief Mock informational logger for symlink creation path.
-        @details Captures emitted informational message for assertion.
-        @param message {str} Info text emitted by command implementation.
-        @return {None} Captures side-effect only.
-        """
-
         observed_info.append(message)
 
     monkeypatch.setattr(cli_codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(cli_codex.Path, "home", lambda: fake_home)
     monkeypatch.setattr(cli_codex, "print_info", _fake_print_info)
     monkeypatch.setattr(cli_codex, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(cli_codex.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(cli_codex.subprocess, "run", _fake_run)
 
-    try:
-        cli_codex.run(["--x"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = cli_codex.run(["--x"])
 
     expected_link = project_root / ".codex" / "auth.json"
     expected_target = fake_home / ".codex" / "auth.json"
+    assert result == 7
     assert expected_link.is_symlink()
     assert expected_link.resolve(strict=False) == expected_target.resolve(strict=False)
     assert observed_info == [f"Created symlink: {expected_link} -> {expected_target}"]
     assert cli_codex.os.environ["CODEX_HOME"] == str(project_root / ".codex")
-    assert observed["executable"] == "codex"
-    assert observed["args"] == ["codex", "--yolo", "--x"]
+    assert observed["command"] == ["codex", "--yolo", "--x"]
+    assert observed["kwargs"] == {}
 
 
 def test_cli_codex_keeps_existing_auth_symlink_without_creation_message(
@@ -118,11 +101,11 @@ def test_cli_codex_keeps_existing_auth_symlink_without_creation_message(
     """
     @brief Validate cli-codex no-op path for compliant auth symlink.
     @details Precreates compliant project auth symlink and verifies command
-      does not emit creation info while preserving execution contract.
+      does not emit creation info while preserving subprocess execution contract.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-014, REQ-043, REQ-044
+    @satisfies TST-005, REQ-014, REQ-043, REQ-044, REQ-064
     """
 
     _require_symlink_capability(tmp_path)
@@ -137,130 +120,90 @@ def test_cli_codex_keeps_existing_auth_symlink_without_creation_message(
     observed_info = []
     observed = {}
 
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for cli-codex no-op symlink test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=0)
 
     def _fake_print_info(message):
-        """
-        @brief Mock informational logger for no-op path assertion.
-        @details Captures messages to verify creation log suppression.
-        @param message {str} Info text emitted by command implementation.
-        @return {None} Captures side-effect only.
-        """
-
         observed_info.append(message)
 
     monkeypatch.setattr(cli_codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(cli_codex.Path, "home", lambda: fake_home)
     monkeypatch.setattr(cli_codex, "print_info", _fake_print_info)
     monkeypatch.setattr(cli_codex, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(cli_codex.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(cli_codex.subprocess, "run", _fake_run)
 
-    try:
-        cli_codex.run(["--z"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = cli_codex.run(["--z"])
 
+    assert result == 0
     assert expected_link.is_symlink()
     assert expected_link.resolve(strict=False) == expected_target.resolve(strict=False)
     assert observed_info == []
     assert cli_codex.os.environ["CODEX_HOME"] == str(project_root / ".codex")
-    assert observed["executable"] == "codex"
-    assert observed["args"] == ["codex", "--yolo", "--z"]
+    assert observed["command"] == ["codex", "--yolo", "--z"]
+    assert observed["kwargs"] == {}
 
 
 def test_cli_copilot_executes_expected_command(monkeypatch):
     """
     @brief Validate cli-copilot execution contract.
-    @details Stubs project-root guard and exec boundary to assert command
-      vector.
+    @details Stubs project-root guard and subprocess boundary to assert command
+      vector and propagated return code.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-015
+    @satisfies TST-005, REQ-015, REQ-064
     """
 
     observed = {}
 
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for cli-copilot test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=11)
 
     monkeypatch.setattr(cli_copilot, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(cli_copilot, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(cli_copilot.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(cli_copilot.subprocess, "run", _fake_run)
 
-    try:
-        cli_copilot.run(["--extra"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = cli_copilot.run(["--extra"])
 
-    assert observed["executable"] == "copilot"
-    assert observed["args"] == [
+    assert result == 11
+    assert observed["command"] == [
         "copilot",
         "--yolo",
         "--allow-all-tools",
         "--extra",
     ]
+    assert observed["kwargs"] == {}
 
 
 def test_cli_gemini_executes_expected_command(monkeypatch):
     """
     @brief Validate cli-gemini execution contract.
-    @details Stubs project-root guard and exec boundary to assert command
-      vector.
+    @details Stubs project-root guard and subprocess boundary to assert command
+      vector and propagated return code.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-016
+    @satisfies TST-005, REQ-016, REQ-064
     """
 
     observed = {}
 
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for cli-gemini test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=12)
 
     monkeypatch.setattr(cli_gemini, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(cli_gemini, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(cli_gemini.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(cli_gemini.subprocess, "run", _fake_run)
 
-    try:
-        cli_gemini.run(["--flag"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = cli_gemini.run(["--flag"])
 
-    assert observed["executable"] == "gemini"
-    assert observed["args"] == ["gemini", "--yolo", "--flag"]
+    assert result == 12
+    assert observed["command"] == ["gemini", "--yolo", "--flag"]
+    assert observed["kwargs"] == {}
 
 
 def test_cli_claude_executes_expected_command(monkeypatch, tmp_path):
@@ -271,223 +214,152 @@ def test_cli_claude_executes_expected_command(monkeypatch, tmp_path):
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-017
+    @satisfies TST-005, REQ-017, REQ-064
     """
 
     observed = {}
 
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for cli-claude test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=13)
 
     monkeypatch.setattr(cli_claude, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(cli_claude.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(cli_claude, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(cli_claude.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(cli_claude.subprocess, "run", _fake_run)
 
-    try:
-        cli_claude.run(["--session"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = cli_claude.run(["--session"])
 
     expected_bin = str(tmp_path / ".claude" / "bin" / "claude")
-    assert observed["executable"] == expected_bin
-    assert observed["args"] == [
+    assert result == 13
+    assert observed["command"] == [
         expected_bin,
         "--dangerously-skip-permissions",
         "--session",
     ]
+    assert observed["kwargs"] == {}
 
 
 def test_cli_opencode_executes_expected_command(monkeypatch):
     """
     @brief Validate cli-opencode execution contract.
-    @details Stubs project-root guard and exec boundary to assert command
-      vector.
+    @details Stubs project-root guard and subprocess boundary to assert command
+      vector and propagated return code.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-018
+    @satisfies TST-005, REQ-018, REQ-064
     """
 
     observed = {}
 
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for cli-opencode test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=14)
 
     monkeypatch.setattr(cli_opencode, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(cli_opencode, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(cli_opencode.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(cli_opencode.subprocess, "run", _fake_run)
 
-    try:
-        cli_opencode.run(["--inspect"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = cli_opencode.run(["--inspect"])
 
-    assert observed["executable"] == "opencode"
-    assert observed["args"] == ["opencode", "--inspect"]
+    assert result == 14
+    assert observed["command"] == ["opencode", "--inspect"]
+    assert observed["kwargs"] == {}
 
 
 def test_cli_kiro_executes_expected_command(monkeypatch):
     """
     @brief Validate cli-kiro execution contract.
-    @details Stubs project-root guard and exec boundary to assert command
-      vector.
+    @details Stubs project-root guard and subprocess boundary to assert command
+      vector and propagated return code.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-019
+    @satisfies TST-005, REQ-019, REQ-064
     """
 
     observed = {}
 
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for cli-kiro test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=15)
 
     monkeypatch.setattr(cli_kiro, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(cli_kiro, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(cli_kiro.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(cli_kiro.subprocess, "run", _fake_run)
 
-    try:
-        cli_kiro.run(["--ai"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = cli_kiro.run(["--ai"])
 
-    assert observed["executable"] == "kiro-cli"
-    assert observed["args"] == ["kiro-cli", "--ai"]
+    assert result == 15
+    assert observed["command"] == ["kiro-cli", "--ai"]
+    assert observed["kwargs"] == {}
 
 
 def test_vscode_appends_project_path_and_sets_codex_home(monkeypatch):
     """
     @brief Validate vscode launcher behavior.
-    @details Stubs project-root resolution, chdir, and exec boundary to assert
-      CODEX_HOME assignment and final project-path argument placement.
+    @details Stubs project-root resolution and subprocess boundary to assert
+      CODEX_HOME assignment, final project-path argument placement, and `cwd`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-020, REQ-021
+    @satisfies TST-005, REQ-020, REQ-021, REQ-064
     """
 
     project_root = Path("/tmp/project-vscode")
     observed = {}
 
-    def _fake_chdir(path):
-        """
-        @brief Mock os.chdir for vscode test.
-        @details Captures requested working directory.
-        @param path {str | os.PathLike[str]} Target directory path.
-        @return {None} Captures side-effect only.
-        """
-
-        observed["chdir"] = path
-
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for vscode test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=21)
 
     monkeypatch.setattr(vscode_cmd, "require_project_root", lambda: project_root)
     monkeypatch.setattr(vscode_cmd, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(vscode_cmd.os, "chdir", _fake_chdir)
-    monkeypatch.setattr(vscode_cmd.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(vscode_cmd.subprocess, "run", _fake_run)
 
-    try:
-        vscode_cmd.run(["--reuse-window"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = vscode_cmd.run(["--reuse-window"])
 
-    assert observed["chdir"] == project_root
+    assert result == 21
     assert vscode_cmd.os.environ["CODEX_HOME"] == str(project_root / ".codex")
-    assert observed["executable"] == "/usr/share/code/bin/code"
-    assert observed["args"][-1] == str(project_root)
+    assert observed["command"] == [
+        "/usr/share/code/bin/code",
+        "--reuse-window",
+        str(project_root),
+    ]
+    assert observed["kwargs"] == {"cwd": project_root}
 
 
 def test_vsinsider_appends_project_path_and_sets_codex_home(monkeypatch):
     """
     @brief Validate VS Code Insiders launcher behavior.
-    @details Stubs project-root resolution, chdir, and exec boundary to assert
-      CODEX_HOME assignment and final project-path argument placement.
+    @details Stubs project-root resolution and subprocess boundary to assert
+      CODEX_HOME assignment, final project-path argument placement, and `cwd`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-020, REQ-021
+    @satisfies TST-005, REQ-020, REQ-021, REQ-064
     """
 
     project_root = Path("/tmp/project-vsinsider")
     observed = {}
 
-    def _fake_chdir(path):
-        """
-        @brief Mock os.chdir for vsinsider test.
-        @details Captures requested working directory.
-        @param path {str | os.PathLike[str]} Target directory path.
-        @return {None} Captures side-effect only.
-        """
-
-        observed["chdir"] = path
-
-    def _fake_execvp(executable, args):
-        """
-        @brief Mock os.execvp for vsinsider test.
-        @details Captures executable and argument vector; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
-        """
-
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=22)
 
     monkeypatch.setattr(vsinsider_cmd, "require_project_root", lambda: project_root)
     monkeypatch.setattr(vsinsider_cmd, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(vsinsider_cmd.os, "chdir", _fake_chdir)
-    monkeypatch.setattr(vsinsider_cmd.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(vsinsider_cmd.subprocess, "run", _fake_run)
 
-    try:
-        vsinsider_cmd.run(["--new-window"])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = vsinsider_cmd.run(["--new-window"])
 
-    assert observed["chdir"] == project_root
+    assert result == 22
     assert vsinsider_cmd.os.environ["CODEX_HOME"] == str(project_root / ".codex")
-    assert observed["executable"] == "/usr/share/code-insiders/bin/code-insiders"
-    assert observed["args"][-1] == str(project_root)
+    assert observed["command"] == [
+        "/usr/share/code-insiders/bin/code-insiders",
+        "--new-window",
+        str(project_root),
+    ]
+    assert observed["kwargs"] == {"cwd": project_root}

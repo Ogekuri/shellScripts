@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """@brief Codex CLI launcher with project-context authentication-link guard.
 
-@details Ensures project-local Codex context is prepared before process
-replacement. The launcher enforces auth-link presence in `<project>/.codex`
-and sets `CODEX_HOME` to `<project>/.codex` before delegating execution to
-`codex --yolo`.
-@satisfies REQ-014, REQ-043, REQ-044
+@details Ensures project-local Codex context is prepared before command
+execution. The launcher enforces auth-link presence in `<project>/.codex`,
+sets `CODEX_HOME` to `<project>/.codex`, and executes `codex --yolo` through
+blocking subprocess invocation.
+@satisfies REQ-014, REQ-043, REQ-044, REQ-064
 """
 
 import os
+import subprocess
 from pathlib import Path
 
 from shell_scripts.utils import print_info, require_project_root, require_commands
@@ -79,17 +80,16 @@ def _ensure_auth_symlink(project_root: Path) -> None:
     print_info(f"Created symlink: {link_path} -> {target_path}")
 
 
-def run(args: list[str]) -> None:
+def run(args: list[str]) -> int:
     """@brief Launch Codex CLI with project-scoped environment preparation.
 
     @details Resolves project root, guarantees codex auth symlink compliance,
-    sets `CODEX_HOME=<project-root>/.codex`, then replaces process image with
-    `codex --yolo` plus pass-through args.
+    sets `CODEX_HOME=<project-root>/.codex`, then executes `codex --yolo` plus
+    pass-through args through blocking subprocess run.
     @param args {list[str]} Additional CLI args forwarded to Codex.
-    @return {None} Function does not return on successful `os.execvp`.
-    @throws {SystemExit} Propagated in tests when `os.execvp` is monkeypatched.
+    @return {int} Child process return code.
     @throws {OSError} Propagated for filesystem or process-launch failures.
-    @satisfies REQ-014, REQ-043, REQ-044
+    @satisfies REQ-014, REQ-043, REQ-044, REQ-064
     """
     project_root = require_project_root()
     _ensure_auth_symlink(project_root)
@@ -97,4 +97,5 @@ def run(args: list[str]) -> None:
     os.environ["CODEX_HOME"] = codex_home
     cmd = ["codex", "--yolo"] + args
     require_commands(cmd[0])
-    os.execvp(cmd[0], cmd)
+    result = subprocess.run(cmd)
+    return result.returncode

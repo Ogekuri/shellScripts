@@ -24,8 +24,9 @@ import shell_scripts.commands.pdf_toc_clean as pdf_toc_clean
 def test_pdf_tiler_090_uses_a4_output_and_expected_filename(monkeypatch, tmp_path):
     """
     @brief Validate pdf-tiler-090 command vector.
-    @details Mocks dependency checks and exec boundary, then asserts plakativ
-      invocation includes A4 output and `<stem>_tiled-A4.pdf` naming.
+    @details Mocks dependency checks and subprocess boundary, then asserts
+      plakativ invocation includes A4 output, `<stem>_tiled-A4.pdf` naming, and
+      propagated return code.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -36,39 +37,38 @@ def test_pdf_tiler_090_uses_a4_output_and_expected_filename(monkeypatch, tmp_pat
     input_pdf.write_text("dummy")
     observed = {}
 
-    def _fake_execvp(executable, args):
+    def _fake_run(command, **kwargs):
         """
-        @brief Mock os.execvp for pdf-tiler-090.
-        @details Captures executable and argv payload; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
+        @brief Mock subprocess.run for pdf-tiler-090.
+        @details Captures command payload and returns deterministic code.
+        @param command {list[str]} Process argv vector.
+        @param kwargs {dict[str, object]} Subprocess keyword arguments.
+        @return {types.SimpleNamespace} Object with deterministic return code.
         """
 
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return type("R", (), {"returncode": 2})()
 
     monkeypatch.setattr(pdf_tiler_090, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(pdf_tiler_090.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(pdf_tiler_090.subprocess, "run", _fake_run)
 
-    try:
-        pdf_tiler_090.run([str(input_pdf)])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = pdf_tiler_090.run([str(input_pdf)])
 
-    assert observed["executable"] == "plakativ"
-    assert "--pagesize" in observed["args"]
-    assert "A4" in observed["args"]
-    assert str(tmp_path / "doc_tiled-A4.pdf") in observed["args"]
+    assert result == 2
+    assert observed["kwargs"] == {}
+    assert observed["command"][0] == "plakativ"
+    assert "--pagesize" in observed["command"]
+    assert "A4" in observed["command"]
+    assert str(tmp_path / "doc_tiled-A4.pdf") in observed["command"]
 
 
 def test_pdf_tiler_100_uses_a4_output_and_expected_filename(monkeypatch, tmp_path):
     """
     @brief Validate pdf-tiler-100 command vector.
-    @details Mocks dependency checks and exec boundary, then asserts plakativ
-      invocation includes A4 output and `<stem>_tiled-A4.pdf` naming.
+    @details Mocks dependency checks and subprocess boundary, then asserts
+      plakativ invocation includes A4 output, `<stem>_tiled-A4.pdf` naming, and
+      propagated return code.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -79,32 +79,30 @@ def test_pdf_tiler_100_uses_a4_output_and_expected_filename(monkeypatch, tmp_pat
     input_pdf.write_text("dummy")
     observed = {}
 
-    def _fake_execvp(executable, args):
+    def _fake_run(command, **kwargs):
         """
-        @brief Mock os.execvp for pdf-tiler-100.
-        @details Captures executable and argv payload; terminates flow.
-        @param executable {str} Executable path.
-        @param args {list[str]} Process argv vector.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
+        @brief Mock subprocess.run for pdf-tiler-100.
+        @details Captures command payload and returns deterministic code.
+        @param command {list[str]} Process argv vector.
+        @param kwargs {dict[str, object]} Subprocess keyword arguments.
+        @return {types.SimpleNamespace} Object with deterministic return code.
         """
 
-        observed["executable"] = executable
-        observed["args"] = args
-        raise SystemExit(0)
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return type("R", (), {"returncode": 3})()
 
     monkeypatch.setattr(pdf_tiler_100, "require_commands", lambda *_cmds: None)
-    monkeypatch.setattr(pdf_tiler_100.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(pdf_tiler_100.subprocess, "run", _fake_run)
 
-    try:
-        pdf_tiler_100.run([str(input_pdf)])
-    except SystemExit as exc:
-        assert exc.code == 0
+    result = pdf_tiler_100.run([str(input_pdf)])
 
-    assert observed["executable"] == "plakativ"
-    assert "--pagesize" in observed["args"]
-    assert "A4" in observed["args"]
-    assert str(tmp_path / "poster_tiled-A4.pdf") in observed["args"]
+    assert result == 3
+    assert observed["kwargs"] == {}
+    assert observed["command"][0] == "plakativ"
+    assert "--pagesize" in observed["command"]
+    assert "A4" in observed["command"]
+    assert str(tmp_path / "poster_tiled-A4.pdf") in observed["command"]
 
 
 def test_pdf_merge_runs_qpdf_pdftk_sequence(monkeypatch, tmp_path):
@@ -449,9 +447,9 @@ def test_pdf_crop_run_supports_required_options(monkeypatch, tmp_path):
 
 def test_pdf_tiler_090_checks_executable_before_exec(monkeypatch, tmp_path):
     """
-    @brief Validate pre-exec command guard in pdf-tiler-090.
+    @brief Validate pre-run command guard in pdf-tiler-090.
     @details Captures require_commands calls and confirms `plakativ` executable
-      check occurs before process replacement.
+      check occurs before subprocess invocation.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -472,20 +470,21 @@ def test_pdf_tiler_090_checks_executable_before_exec(monkeypatch, tmp_path):
 
         observed.append(cmds)
 
-    def _fake_execvp(_executable, _args):
+    def _fake_run(_command, **_kwargs):
         """
-        @brief Mock os.execvp boundary.
-        @details Terminates execution flow to keep test deterministic.
-        @throws {SystemExit} Forced termination for test boundary.
-        @return {NoReturn} Function always raises.
+        @brief Mock subprocess.run boundary.
+        @details Returns deterministic return code to keep test deterministic.
+        @param _command {list[str]} Process argv vector.
+        @param _kwargs {dict[str, object]} Subprocess keyword arguments.
+        @return {types.SimpleNamespace} Deterministic returncode wrapper.
         """
 
-        raise SystemExit(0)
+        return type("R", (), {"returncode": 0})()
 
     monkeypatch.setattr(pdf_tiler_090, "require_commands", _fake_require_commands)
-    monkeypatch.setattr(pdf_tiler_090.os, "execvp", _fake_execvp)
+    monkeypatch.setattr(pdf_tiler_090.subprocess, "run", _fake_run)
 
-    with pytest.raises(SystemExit):
-        pdf_tiler_090.run([str(input_pdf)])
+    result = pdf_tiler_090.run([str(input_pdf)])
 
+    assert result == 0
     assert observed == [("plakativ",), ("plakativ",)]

@@ -137,7 +137,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 
 ---
 
-# _dc_common.py | Python | 137L | 9 symbols | 3 imports | 5 comments
+# _dc_common.py | Python | 138L | 9 symbols | 3 imports | 5 comments
 > Path: `src/shell_scripts/commands/_dc_common.py`
 
 ## Imports
@@ -172,15 +172,15 @@ from shell_scripts.utils import is_executable_command, print_error
 - @return {list[str]} Selected executable command vector.
 - @satisfies REQ-024, REQ-055
 
-### fn `def dispatch(category_cmds, fallback_cmd, filepath, extra_args)` (L115-137)
+### fn `def dispatch(category_cmds, fallback_cmd, filepath, extra_args)` (L115-138)
 - @brief Dispatch diff/edit/view command by detected file category.
-- @details Resolves category-specific command vector, validates executable availability, and replaces process with selected command.
+- @details Resolves category-specific command vector, validates executable availability, and executes selected command via blocking subprocess run.
 - @param category_cmds {dict[str, list[str]]} Category-to-command mapping.
 - @param fallback_cmd {list[str]} Fallback command vector.
 - @param filepath {str} Target file path.
 - @param extra_args {list[str]} Additional arguments forwarded to executable.
-- @return {int} `1` when executable is unavailable; otherwise no return on exec.
-- @satisfies REQ-024, REQ-055, REQ-056
+- @return {int} `1` when executable is unavailable; child return code otherwise.
+- @satisfies REQ-024, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -193,7 +193,7 @@ from shell_scripts.utils import is_executable_command, print_error
 |`detect_mime`|fn|pub|34-60|def detect_mime(filepath)|
 |`categorize`|fn|pub|61-98|def categorize(filepath)|
 |`pick_cmd`|fn|pub|99-114|def pick_cmd(primary, fallback)|
-|`dispatch`|fn|pub|115-137|def dispatch(category_cmds, fallback_cmd, filepath, extra...|
+|`dispatch`|fn|pub|115-138|def dispatch(category_cmds, fallback_cmd, filepath, extra...|
 
 
 ---
@@ -336,12 +336,12 @@ from shell_scripts.utils import require_project_root, print_error
 
 ---
 
-# cli_claude.py | Python | 40L | 4 symbols | 3 imports | 3 comments
+# cli_claude.py | Python | 41L | 4 symbols | 3 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_claude.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from pathlib import Path
 from shell_scripts.utils import require_project_root, require_commands
 ```
@@ -352,12 +352,12 @@ from shell_scripts.utils import require_project_root, require_commands
 - var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L15)
 ### fn `def print_help(version)` (L18-25)
 
-### fn `def run(args)` (L26-40)
+### fn `def run(args)` (L26-41)
 - @brief Launch Claude CLI after external executable validation.
-- @details Resolves project root, resolves user-local Claude executable path, validates executable availability, then replaces process image.
+- @details Resolves project root, resolves user-local Claude executable path, validates executable availability, then executes command via subprocess.
 - @param args {list[str]} Additional CLI args forwarded to Claude.
-- @return {None} Function does not return on successful `os.execvp`.
-- @satisfies REQ-017, REQ-055, REQ-056
+- @return {int} Child process return code.
+- @satisfies REQ-017, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -365,37 +365,38 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|14||
 |`DESCRIPTION`|var|pub|15||
 |`print_help`|fn|pub|18-25|def print_help(version)|
-|`run`|fn|pub|26-40|def run(args)|
+|`run`|fn|pub|26-41|def run(args)|
 
 
 ---
 
-# cli_codex.py | Python | 100L | 6 symbols | 3 imports | 12 comments
+# cli_codex.py | Python | 101L | 6 symbols | 4 imports | 12 comments
 > Path: `src/shell_scripts/commands/cli_codex.py`
 
 ## Imports
 ```
 import os
+import subprocess
 from pathlib import Path
 from shell_scripts.utils import print_info, require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L19)
+- var `PROGRAM = "shellscripts"` (L20)
 - @brief Base CLI program name used in help output.
 - @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch OpenAI Codex CLI in the project context."` (L23)
+- var `DESCRIPTION = "Launch OpenAI Codex CLI in the project context."` (L24)
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version: str) -> None` (L26-41)
+### fn `def print_help(version: str) -> None` (L27-42)
 - @brief Print command-specific help for `cli-codex`.
 - @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _is_expected_auth_link(link_path: Path, target_path: Path) -> bool` `priv` (L42-57)
+### fn `def _is_expected_auth_link(link_path: Path, target_path: Path) -> bool` `priv` (L43-58)
 - @brief Determine whether auth link already targets expected home file.
 - @details Evaluates symlink kind and resolved destination with `strict=False` to support not-yet-materialized target files. Time complexity O(1) excluding filesystem metadata lookup costs.
 - @param link_path {Path} Candidate project-local auth link path.
@@ -403,7 +404,7 @@ from shell_scripts.utils import print_info, require_project_root, require_comman
 - @return {bool} True only when `link_path` is symlink resolving to `target_path`.
 - @satisfies REQ-043
 
-### fn `def _ensure_auth_symlink(project_root: Path) -> None` `priv` (L58-81)
+### fn `def _ensure_auth_symlink(project_root: Path) -> None` `priv` (L59-82)
 - @brief Ensure project Codex auth path is symlinked to user auth file.
 - @details Computes `<project-root>/.codex/auth.json` and verifies it points to `~/.codex/auth.json`. If not compliant, creates parent directories, replaces existing path entry, creates expected symlink, and emits one info message announcing link creation. Time complexity O(1).
 - @param project_root {Path} Git project root used by command runtime context.
@@ -411,34 +412,33 @@ from shell_scripts.utils import print_info, require_project_root, require_comman
 - @throws {OSError} If directory creation, unlink, or symlink creation fails.
 - @satisfies REQ-043, REQ-044
 
-### fn `def run(args: list[str]) -> None` (L82-100)
+### fn `def run(args: list[str]) -> int` (L83-101)
 - @brief Launch Codex CLI with project-scoped environment preparation.
-- @details Resolves project root, guarantees codex auth symlink compliance, sets `CODEX_HOME=<project-root>/.codex`, then replaces process image with `codex --yolo` plus pass-through args.
+- @details Resolves project root, guarantees codex auth symlink compliance, sets `CODEX_HOME=<project-root>/.codex`, then executes `codex --yolo` plus pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Codex.
-- @return {None} Function does not return on successful `os.execvp`.
-- @throws {SystemExit} Propagated in tests when `os.execvp` is monkeypatched.
+- @return {int} Child process return code.
 - @throws {OSError} Propagated for filesystem or process-launch failures.
-- @satisfies REQ-014, REQ-043, REQ-044
+- @satisfies REQ-014, REQ-043, REQ-044, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|19||
-|`DESCRIPTION`|var|pub|23||
-|`print_help`|fn|pub|26-41|def print_help(version: str) -> None|
-|`_is_expected_auth_link`|fn|priv|42-57|def _is_expected_auth_link(link_path: Path, target_path: ...|
-|`_ensure_auth_symlink`|fn|priv|58-81|def _ensure_auth_symlink(project_root: Path) -> None|
-|`run`|fn|pub|82-100|def run(args: list[str]) -> None|
+|`PROGRAM`|var|pub|20||
+|`DESCRIPTION`|var|pub|24||
+|`print_help`|fn|pub|27-42|def print_help(version: str) -> None|
+|`_is_expected_auth_link`|fn|priv|43-58|def _is_expected_auth_link(link_path: Path, target_path: ...|
+|`_ensure_auth_symlink`|fn|priv|59-82|def _ensure_auth_symlink(project_root: Path) -> None|
+|`run`|fn|pub|83-101|def run(args: list[str]) -> int|
 
 
 ---
 
-# cli_copilot.py | Python | 38L | 4 symbols | 2 imports | 3 comments
+# cli_copilot.py | Python | 39L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_copilot.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
@@ -448,12 +448,12 @@ from shell_scripts.utils import require_project_root, require_commands
 - var `DESCRIPTION = "Launch GitHub Copilot CLI in the project context."` (L14)
 ### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L25-38)
+### fn `def run(args)` (L25-39)
 - @brief Launch Copilot CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `copilot`, then replaces process image with pass-through args.
+- @details Resolves project root, checks executable availability for `copilot`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Copilot.
-- @return {None} Function does not return on successful `os.execvp`.
-- @satisfies REQ-015, REQ-055, REQ-056
+- @return {int} Child process return code.
+- @satisfies REQ-015, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -461,17 +461,17 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|13||
 |`DESCRIPTION`|var|pub|14||
 |`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-38|def run(args)|
+|`run`|fn|pub|25-39|def run(args)|
 
 
 ---
 
-# cli_gemini.py | Python | 38L | 4 symbols | 2 imports | 3 comments
+# cli_gemini.py | Python | 39L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_gemini.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
@@ -481,12 +481,12 @@ from shell_scripts.utils import require_project_root, require_commands
 - var `DESCRIPTION = "Launch Google Gemini CLI in the project context."` (L14)
 ### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L25-38)
+### fn `def run(args)` (L25-39)
 - @brief Launch Gemini CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `gemini`, then replaces process image with pass-through args.
+- @details Resolves project root, checks executable availability for `gemini`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Gemini.
-- @return {None} Function does not return on successful `os.execvp`.
-- @satisfies REQ-016, REQ-055, REQ-056
+- @return {int} Child process return code.
+- @satisfies REQ-016, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -494,17 +494,17 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|13||
 |`DESCRIPTION`|var|pub|14||
 |`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-38|def run(args)|
+|`run`|fn|pub|25-39|def run(args)|
 
 
 ---
 
-# cli_kiro.py | Python | 38L | 4 symbols | 2 imports | 3 comments
+# cli_kiro.py | Python | 39L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_kiro.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
@@ -514,12 +514,12 @@ from shell_scripts.utils import require_project_root, require_commands
 - var `DESCRIPTION = "Launch Kiro CLI in the project context."` (L14)
 ### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L25-38)
+### fn `def run(args)` (L25-39)
 - @brief Launch Kiro CLI after external executable validation.
-- @details Resolves project root, validates executable availability for `kiro-cli`, then replaces process image.
+- @details Resolves project root, validates executable availability for `kiro-cli`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Kiro.
-- @return {None} Function does not return on successful `os.execvp`.
-- @satisfies REQ-019, REQ-055, REQ-056
+- @return {int} Child process return code.
+- @satisfies REQ-019, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -527,17 +527,17 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|13||
 |`DESCRIPTION`|var|pub|14||
 |`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-38|def run(args)|
+|`run`|fn|pub|25-39|def run(args)|
 
 
 ---
 
-# cli_opencode.py | Python | 38L | 4 symbols | 2 imports | 3 comments
+# cli_opencode.py | Python | 39L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/cli_opencode.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
@@ -547,12 +547,12 @@ from shell_scripts.utils import require_project_root, require_commands
 - var `DESCRIPTION = "Launch OpenCode CLI in the project context."` (L14)
 ### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L25-38)
+### fn `def run(args)` (L25-39)
 - @brief Launch OpenCode CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `opencode`, then replaces process image with pass-through args.
+- @details Resolves project root, checks executable availability for `opencode`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to OpenCode.
-- @return {None} Function does not return on successful `os.execvp`.
-- @satisfies REQ-018, REQ-055, REQ-056
+- @return {int} Child process return code.
+- @satisfies REQ-018, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -560,7 +560,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|13||
 |`DESCRIPTION`|var|pub|14||
 |`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-38|def run(args)|
+|`run`|fn|pub|25-39|def run(args)|
 
 
 ---
@@ -772,7 +772,7 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# pdf_crop.py | Python | 522L | 27 symbols | 7 imports | 1 comments
+# pdf_crop.py | Python | 520L | 27 symbols | 7 imports | 1 comments
 > Path: `src/shell_scripts/commands/pdf_crop.py`
 
 ## Imports
@@ -831,9 +831,9 @@ from shell_scripts.utils import (
 
 ### fn `def _render_progress(current, total, label)` `priv` (L231-270)
 
-### fn `def _convert_pdf_with_progress(input_f, output_f, first, last, cw, ch, cl, cb, total)` `priv` (L271-315)
+### fn `def _convert_pdf_with_progress(input_f, output_f, first, last, cw, ch, cl, cb, total)` `priv` (L271-313)
 
-### fn `def run(args)` (L316-515)
+### fn `def run(args)` (L314-513)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -863,8 +863,8 @@ from shell_scripts.utils import (
 |`_get_mediabox`|fn|priv|174-186|def _get_mediabox(pdf, page=1)|
 |`_compute_auto_bbox`|fn|priv|187-230|def _compute_auto_bbox(pdf, first_page, last_page)|
 |`_render_progress`|fn|priv|231-270|def _render_progress(current, total, label)|
-|`_convert_pdf_with_progress`|fn|priv|271-315|def _convert_pdf_with_progress(input_f, output_f, first, ...|
-|`run`|fn|pub|316-515|def run(args)|
+|`_convert_pdf_with_progress`|fn|priv|271-313|def _convert_pdf_with_progress(input_f, output_f, first, ...|
+|`run`|fn|pub|314-513|def run(args)|
 
 
 ---
@@ -994,12 +994,12 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# pdf_tiler_090.py | Python | 50L | 4 symbols | 3 imports | 1 comments
+# pdf_tiler_090.py | Python | 61L | 4 symbols | 3 imports | 2 comments
 > Path: `src/shell_scripts/commands/pdf_tiler_090.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from pathlib import Path
 from shell_scripts.utils import require_commands, print_error
 ```
@@ -1010,7 +1010,12 @@ from shell_scripts.utils import require_commands, print_error
 - var `DESCRIPTION = "Tile PDF to A4 pages at 90% scale using plakativ."` (L8)
 ### fn `def print_help(version)` (L11-20)
 
-### fn `def run(args)` (L21-50)
+### fn `def run(args)` (L21-61)
+- @brief Execute `pdf-tiler-090` command with blocking subprocess launch.
+- @details Validates input argument and file presence, builds `plakativ` command vector with fixed A4/0.90 parameters, then executes it via `subprocess.run` while inheriting stdio streams.
+- @param args {list[str]} Command arguments excluding command token.
+- @return {int} `1` on validation failure; child process return code otherwise.
+- @satisfies REQ-029, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1018,17 +1023,17 @@ from shell_scripts.utils import require_commands, print_error
 |`PROGRAM`|var|pub|7||
 |`DESCRIPTION`|var|pub|8||
 |`print_help`|fn|pub|11-20|def print_help(version)|
-|`run`|fn|pub|21-50|def run(args)|
+|`run`|fn|pub|21-61|def run(args)|
 
 
 ---
 
-# pdf_tiler_100.py | Python | 50L | 4 symbols | 3 imports | 1 comments
+# pdf_tiler_100.py | Python | 61L | 4 symbols | 3 imports | 2 comments
 > Path: `src/shell_scripts/commands/pdf_tiler_100.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from pathlib import Path
 from shell_scripts.utils import require_commands, print_error
 ```
@@ -1039,7 +1044,12 @@ from shell_scripts.utils import require_commands, print_error
 - var `DESCRIPTION = "Tile PDF to A4 pages at original A1 size using plakativ."` (L8)
 ### fn `def print_help(version)` (L11-20)
 
-### fn `def run(args)` (L21-50)
+### fn `def run(args)` (L21-61)
+- @brief Execute `pdf-tiler-100` command with blocking subprocess launch.
+- @details Validates input argument and file presence, builds `plakativ` command vector with fixed A1 source size and A4 tiling parameters, then executes it via `subprocess.run` while inheriting stdio streams.
+- @param args {list[str]} Command arguments excluding command token.
+- @return {int} `1` on validation failure; child process return code otherwise.
+- @satisfies REQ-029, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1047,7 +1057,7 @@ from shell_scripts.utils import require_commands, print_error
 |`PROGRAM`|var|pub|7||
 |`DESCRIPTION`|var|pub|8||
 |`print_help`|fn|pub|11-20|def print_help(version)|
-|`run`|fn|pub|21-50|def run(args)|
+|`run`|fn|pub|21-61|def run(args)|
 
 
 ---
@@ -1299,12 +1309,12 @@ from shell_scripts.utils import (
 
 ---
 
-# video2h264.py | Python | 88L | 4 symbols | 3 imports | 10 comments
+# video2h264.py | Python | 89L | 4 symbols | 3 imports | 10 comments
 > Path: `src/shell_scripts/commands/video2h264.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from pathlib import Path
 from shell_scripts.utils import print_error, require_commands
 ```
@@ -1324,12 +1334,12 @@ from shell_scripts.utils import print_error, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008, REQ-057
 
-### fn `def run(args)` (L44-88)
+### fn `def run(args)` (L44-89)
 - @brief Execute H.264 transcode command with fixed FFmpeg parameters.
-- @details Validates input argument presence and file existence, then replaces current process with `ffmpeg` execution using required libx264 profile, level, CRF, pixel format, and AAC audio bitrate options.
+- @details Validates input argument presence and file existence, then executes `ffmpeg` using required libx264 profile, level, CRF, pixel format, and AAC audio bitrate options through blocking subprocess invocation.
 - @param args {list[str]} Expected single positional input-video path.
-- @return {int} `1` on argument/validation failure; otherwise no return on exec.
-- @satisfies REQ-057, REQ-055, REQ-056
+- @return {int} `1` on argument/validation failure; child return code otherwise.
+- @satisfies REQ-057, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1337,17 +1347,17 @@ from shell_scripts.utils import print_error, require_commands
 |`PROGRAM`|var|pub|18||
 |`DESCRIPTION`|var|pub|22||
 |`print_help`|fn|pub|25-43|def print_help(version)|
-|`run`|fn|pub|44-88|def run(args)|
+|`run`|fn|pub|44-89|def run(args)|
 
 
 ---
 
-# video2h265.py | Python | 86L | 4 symbols | 3 imports | 10 comments
+# video2h265.py | Python | 87L | 4 symbols | 3 imports | 10 comments
 > Path: `src/shell_scripts/commands/video2h265.py`
 
 ## Imports
 ```
-import os
+import subprocess
 from pathlib import Path
 from shell_scripts.utils import print_error, require_commands
 ```
@@ -1367,12 +1377,12 @@ from shell_scripts.utils import print_error, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008, REQ-058
 
-### fn `def run(args)` (L44-86)
+### fn `def run(args)` (L44-87)
 - @brief Execute H.265 transcode command with fixed FFmpeg parameters.
-- @details Validates input argument presence and file existence, then replaces current process with `ffmpeg` execution using required libx265 CRF, codec tag, pixel format, and AAC audio bitrate options.
+- @details Validates input argument presence and file existence, then executes `ffmpeg` using required libx265 CRF, codec tag, pixel format, and AAC audio bitrate options through blocking subprocess invocation.
 - @param args {list[str]} Expected single positional input-video path.
-- @return {int} `1` on argument/validation failure; otherwise no return on exec.
-- @satisfies REQ-058, REQ-055, REQ-056
+- @return {int} `1` on argument/validation failure; child return code otherwise.
+- @satisfies REQ-058, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1380,7 +1390,7 @@ from shell_scripts.utils import print_error, require_commands
 |`PROGRAM`|var|pub|18||
 |`DESCRIPTION`|var|pub|22||
 |`print_help`|fn|pub|25-43|def print_help(version)|
-|`run`|fn|pub|44-86|def run(args)|
+|`run`|fn|pub|44-87|def run(args)|
 
 
 ---
@@ -1424,68 +1434,70 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# vscode_cmd.py | Python | 41L | 4 symbols | 2 imports | 3 comments
+# vscode_cmd.py | Python | 42L | 4 symbols | 3 imports | 3 comments
 > Path: `src/shell_scripts/commands/vscode_cmd.py`
 
 ## Imports
 ```
 import os
+import subprocess
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "Open VS Code in the project root with Codex integration."` (L14)
-### fn `def print_help(version)` (L17-24)
+- var `PROGRAM = "shellscripts"` (L14)
+- var `DESCRIPTION = "Open VS Code in the project root with Codex integration."` (L15)
+### fn `def print_help(version)` (L18-25)
 
-### fn `def run(args)` (L25-41)
+### fn `def run(args)` (L26-42)
 - @brief Launch VS Code after executable validation.
-- @details Changes current directory to project root, sets `CODEX_HOME`, validates executable availability for VS Code binary, and replaces process.
+- @details Sets `CODEX_HOME`, validates executable availability for VS Code binary, and executes the command with project-root working directory.
 - @param args {list[str]} Additional CLI args forwarded to VS Code.
-- @return {None} Function does not return on successful `os.execvp`.
-- @satisfies REQ-020, REQ-021, REQ-055, REQ-056
+- @return {int} Child process return code.
+- @satisfies REQ-020, REQ-021, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-41|def run(args)|
+|`PROGRAM`|var|pub|14||
+|`DESCRIPTION`|var|pub|15||
+|`print_help`|fn|pub|18-25|def print_help(version)|
+|`run`|fn|pub|26-42|def run(args)|
 
 
 ---
 
-# vsinsider_cmd.py | Python | 41L | 4 symbols | 2 imports | 3 comments
+# vsinsider_cmd.py | Python | 42L | 4 symbols | 3 imports | 3 comments
 > Path: `src/shell_scripts/commands/vsinsider_cmd.py`
 
 ## Imports
 ```
 import os
+import subprocess
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "Open VS Code Insiders in the project root with Codex integration."` (L14)
-### fn `def print_help(version)` (L17-24)
+- var `PROGRAM = "shellscripts"` (L14)
+- var `DESCRIPTION = "Open VS Code Insiders in the project root with Codex integration."` (L15)
+### fn `def print_help(version)` (L18-25)
 
-### fn `def run(args)` (L25-41)
+### fn `def run(args)` (L26-42)
 - @brief Launch VS Code Insiders after executable validation.
-- @details Changes current directory to project root, sets `CODEX_HOME`, validates executable availability for VS Code Insiders binary, and replaces process.
+- @details Sets `CODEX_HOME`, validates executable availability for VS Code Insiders binary, and executes the command with project-root working directory.
 - @param args {list[str]} Additional CLI args forwarded to VS Code Insiders.
-- @return {None} Function does not return on successful `os.execvp`.
-- @satisfies REQ-020, REQ-021, REQ-055, REQ-056
+- @return {int} Child process return code.
+- @satisfies REQ-020, REQ-021, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-41|def run(args)|
+|`PROGRAM`|var|pub|14||
+|`DESCRIPTION`|var|pub|15||
+|`print_help`|fn|pub|18-25|def print_help(version)|
+|`run`|fn|pub|26-42|def run(args)|
 
 
 ---

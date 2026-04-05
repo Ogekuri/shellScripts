@@ -2,8 +2,8 @@
 """@brief Shared MIME-based dispatcher primitives for diff/edit/view commands.
 
 @details Provides extension and MIME classification plus external executable
-resolution and process replacement for generic file tool wrappers.
-@satisfies DES-007, REQ-024, REQ-055, REQ-056
+resolution and blocking subprocess invocation for generic file tool wrappers.
+@satisfies DES-007, REQ-024, REQ-055, REQ-056, REQ-064
 """
 
 import os
@@ -116,13 +116,13 @@ def dispatch(category_cmds, fallback_cmd, filepath, extra_args):
     """@brief Dispatch diff/edit/view command by detected file category.
 
     @details Resolves category-specific command vector, validates executable
-    availability, and replaces process with selected command.
+    availability, and executes selected command via blocking subprocess run.
     @param category_cmds {dict[str, list[str]]} Category-to-command mapping.
     @param fallback_cmd {list[str]} Fallback command vector.
     @param filepath {str} Target file path.
     @param extra_args {list[str]} Additional arguments forwarded to executable.
-    @return {int} `1` when executable is unavailable; otherwise no return on exec.
-    @satisfies REQ-024, REQ-055, REQ-056
+    @return {int} `1` when executable is unavailable; child return code otherwise.
+    @satisfies REQ-024, REQ-055, REQ-056, REQ-064
     """
 
     category = categorize(filepath)
@@ -134,4 +134,5 @@ def dispatch(category_cmds, fallback_cmd, filepath, extra_args):
         return 1
 
     full_cmd = cmd + [filepath] + extra_args
-    os.execvp(full_cmd[0], full_cmd)
+    result = subprocess.run(full_cmd)
+    return result.returncode

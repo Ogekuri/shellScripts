@@ -271,7 +271,7 @@ def _render_progress(current, total, label):
 def _convert_pdf_with_progress(input_f, output_f, first, last, cw, ch, cl, cb, total):
     _render_progress(0, total, "Progress")
 
-    proc = subprocess.Popen(
+    result = subprocess.run(
         [
             "gs",
             "-dSAFER",
@@ -298,19 +298,17 @@ def _convert_pdf_with_progress(input_f, output_f, first, last, cw, ch, cl, cb, t
     )
 
     count = 0
-    stdout_stream = proc.stdout
-    if stdout_stream is not None:
-        for line in stdout_stream:
-            if re.match(r"^Page\s+\d+\s*$", line):
-                count += 1
-                _render_progress(min(count, total), total, "Progress")
-    proc.wait()
+    stdout_stream = result.stdout or ""
+    for line in stdout_stream.splitlines():
+        if re.match(r"^Page\s+\d+\s*$", line):
+            count += 1
+            _render_progress(min(count, total), total, "Progress")
 
     if sys.stdout.isatty():
         sys.stdout.write("\r\033[2K")
         sys.stdout.flush()
 
-    return proc.returncode
+    return result.returncode
 
 
 def run(args):
