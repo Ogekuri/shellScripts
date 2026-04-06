@@ -72,6 +72,7 @@ def test_codex_syncs_auth_file_sets_codex_home_and_executes_expected_command(
     project_auth.parent.mkdir(parents=True, exist_ok=True)
     project_auth.write_text("project-auth-stale", encoding="utf-8")
     observed = {}
+    observed_info = []
 
     def _fake_run(command, **kwargs):
         observed["command"] = command
@@ -80,8 +81,12 @@ def test_codex_syncs_auth_file_sets_codex_home_and_executes_expected_command(
         project_auth.write_text("project-auth-after", encoding="utf-8")
         return types.SimpleNamespace(returncode=7)
 
+    def _fake_print_info(message):
+        observed_info.append(message)
+
     monkeypatch.setattr(codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(codex.Path, "home", lambda: fake_home)
+    monkeypatch.setattr(codex, "print_info", _fake_print_info)
     monkeypatch.setattr(codex, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(codex.subprocess, "run", _fake_run)
 
@@ -91,6 +96,10 @@ def test_codex_syncs_auth_file_sets_codex_home_and_executes_expected_command(
     assert not project_auth.is_symlink()
     assert project_auth.read_text(encoding="utf-8") == "project-auth-after"
     assert home_auth.read_text(encoding="utf-8") == "project-auth-after"
+    assert observed_info == [
+        f"Copied auth.json (global config -> project config): {home_auth} -> {project_auth}",
+        f"Copied auth.json (project config -> global config): {project_auth} -> {home_auth}",
+    ]
     assert codex.os.environ["CODEX_HOME"] == str(project_root / ".codex")
     assert observed["command"] == ["codex", "--yolo", "--x"]
     assert observed["kwargs"] == {}
@@ -127,6 +136,7 @@ def test_codex_replaces_auth_symlink_paths_with_synced_files(
     home_auth_target.write_text("home-auth-before", encoding="utf-8")
     home_auth.symlink_to(home_auth_target)
     observed = {}
+    observed_info = []
 
     def _fake_run(command, **kwargs):
         observed["command"] = command
@@ -135,8 +145,12 @@ def test_codex_replaces_auth_symlink_paths_with_synced_files(
         project_auth.write_text("project-auth-after", encoding="utf-8")
         return types.SimpleNamespace(returncode=0)
 
+    def _fake_print_info(message):
+        observed_info.append(message)
+
     monkeypatch.setattr(codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(codex.Path, "home", lambda: fake_home)
+    monkeypatch.setattr(codex, "print_info", _fake_print_info)
     monkeypatch.setattr(codex, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(codex.subprocess, "run", _fake_run)
 
@@ -147,6 +161,10 @@ def test_codex_replaces_auth_symlink_paths_with_synced_files(
     assert project_auth.read_text(encoding="utf-8") == "project-auth-after"
     assert not home_auth.is_symlink()
     assert home_auth.read_text(encoding="utf-8") == "project-auth-after"
+    assert observed_info == [
+        f"Copied auth.json (global config -> project config): {home_auth} -> {project_auth}",
+        f"Copied auth.json (project config -> global config): {project_auth} -> {home_auth}",
+    ]
     assert codex.os.environ["CODEX_HOME"] == str(project_root / ".codex")
     assert observed["command"] == ["codex", "--yolo", "--z"]
     assert observed["kwargs"] == {}

@@ -5,7 +5,8 @@
 execution. The launcher copies auth state from `~/.codex/auth.json` into
 `<project>/.codex/auth.json` before CLI launch, sets
 `CODEX_HOME=<project>/.codex`, executes `codex --yolo`, then copies auth state
-back from project path to home path before returning.
+back from project path to home path before returning, emitting one
+informational output line for each copy direction.
 @satisfies REQ-014, REQ-043, REQ-044, REQ-064
 """
 
@@ -14,7 +15,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from shell_scripts.utils import require_project_root, require_commands
+from shell_scripts.utils import print_info, require_project_root, require_commands
 
 ## @var PROGRAM
 #  @brief Base CLI program name used in help output.
@@ -42,15 +43,21 @@ def print_help(version: str) -> None:
     print("  --help  - Show this help message.")
 
 
-def _copy_auth_file(source_path: Path, destination_path: Path) -> None:
+def _copy_auth_file(
+    source_path: Path,
+    destination_path: Path,
+    direction_label: str,
+) -> None:
     """@brief Copy Codex auth file while replacing destination file or symlink.
 
     @details Ensures destination parent directory exists, removes an existing
     destination entry when it is a file or symbolic link, then copies source
-    bytes to destination preserving metadata with `shutil.copy2`. Time
-    complexity O(n) where n is auth file size.
+    bytes to destination preserving metadata with `shutil.copy2`, then emits
+    one informational output line for copy evidence. Time complexity O(n) where
+    n is auth file size.
     @param source_path {Path} Existing auth file source path.
     @param destination_path {Path} Auth file destination path to overwrite.
+    @param direction_label {str} Copy direction descriptor shown in info output.
     @return {None} Applies destination filesystem mutation.
     @throws {OSError} If source read, destination unlink, or copy operation fails.
     @satisfies REQ-043, REQ-044
@@ -59,15 +66,19 @@ def _copy_auth_file(source_path: Path, destination_path: Path) -> None:
     if destination_path.exists() or destination_path.is_symlink():
         destination_path.unlink()
     shutil.copy2(source_path, destination_path)
+    print_info(
+        f"Copied auth.json ({direction_label}): {source_path} -> {destination_path}"
+    )
 
 
 def run(args: list[str]) -> int:
     """@brief Launch Codex CLI with project-scoped environment preparation.
 
     @details Resolves project root, copies auth from home into project auth
-    file, sets `CODEX_HOME=<project-root>/.codex`, executes `codex --yolo` plus
-    pass-through args through blocking subprocess run, then copies project auth
-    back to home path in a `finally` block.
+    file, emits copy evidence output, sets `CODEX_HOME=<project-root>/.codex`,
+    executes `codex --yolo` plus pass-through args through blocking subprocess
+    run, then copies project auth back to home path in a `finally` block with
+    reverse-direction copy evidence output.
     @param args {list[str]} Additional CLI args forwarded to Codex.
     @return {int} Child process return code.
     @throws {OSError} Propagated for auth-file copy or process-launch failures.
@@ -76,7 +87,11 @@ def run(args: list[str]) -> int:
     project_root = require_project_root()
     project_auth_path = project_root / ".codex" / "auth.json"
     home_auth_path = Path.home() / ".codex" / "auth.json"
-    _copy_auth_file(home_auth_path, project_auth_path)
+    _copy_auth_file(
+        home_auth_path,
+        project_auth_path,
+        "global config -> project config",
+    )
     codex_home = str(project_root / ".codex")
     os.environ["CODEX_HOME"] = codex_home
     cmd = ["codex", "--yolo"] + args
@@ -84,5 +99,9 @@ def run(args: list[str]) -> int:
     try:
         result = subprocess.run(cmd)
     finally:
-        _copy_auth_file(project_auth_path, home_auth_path)
+        _copy_auth_file(
+            project_auth_path,
+            home_auth_path,
+            "project config -> global config",
+        )
     return result.returncode
