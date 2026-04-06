@@ -379,65 +379,58 @@ from shell_scripts.utils import require_project_root, print_error
 
 ---
 
-# codex.py | Python | 101L | 6 symbols | 4 imports | 12 comments
+# codex.py | Python | 88L | 5 symbols | 5 imports | 11 comments
 > Path: `src/shell_scripts/commands/codex.py`
 
 ## Imports
 ```
 import os
+import shutil
 import subprocess
 from pathlib import Path
-from shell_scripts.utils import print_info, require_project_root, require_commands
+from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L20)
+- var `PROGRAM = "shellscripts"` (L22)
 - @brief Base CLI program name used in help output.
 - @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch OpenAI Codex CLI in the project context."` (L24)
+- var `DESCRIPTION = "Launch OpenAI Codex CLI in the project context."` (L26)
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version: str) -> None` (L27-42)
+### fn `def print_help(version: str) -> None` (L29-44)
 - @brief Print command-specific help for `codex`.
 - @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _is_expected_auth_link(link_path: Path, target_path: Path) -> bool` `priv` (L43-58)
-- @brief Determine whether auth link already targets expected home file.
-- @details Evaluates symlink kind and resolved destination with `strict=False` to support not-yet-materialized target files. Time complexity O(1) excluding filesystem metadata lookup costs.
-- @param link_path {Path} Candidate project-local auth link path.
-- @param target_path {Path} Expected user-home auth file path.
-- @return {bool} True only when `link_path` is symlink resolving to `target_path`.
-- @satisfies REQ-043
-
-### fn `def _ensure_auth_symlink(project_root: Path) -> None` `priv` (L59-82)
-- @brief Ensure project Codex auth path is symlinked to user auth file.
-- @details Computes `<project-root>/.codex/auth.json` and verifies it points to `~/.codex/auth.json`. If not compliant, creates parent directories, replaces existing path entry, creates expected symlink, and emits one info message announcing link creation. Time complexity O(1).
-- @param project_root {Path} Git project root used by command runtime context.
-- @return {None} Applies filesystem mutations when compliance is absent.
-- @throws {OSError} If directory creation, unlink, or symlink creation fails.
+### fn `def _copy_auth_file(source_path: Path, destination_path: Path) -> None` `priv` (L45-63)
+- @brief Copy Codex auth file while replacing destination file or symlink.
+- @details Ensures destination parent directory exists, removes an existing destination entry when it is a file or symbolic link, then copies source bytes to destination preserving metadata with `shutil.copy2`. Time complexity O(n) where n is auth file size.
+- @param source_path {Path} Existing auth file source path.
+- @param destination_path {Path} Auth file destination path to overwrite.
+- @return {None} Applies destination filesystem mutation.
+- @throws {OSError} If source read, destination unlink, or copy operation fails.
 - @satisfies REQ-043, REQ-044
 
-### fn `def run(args: list[str]) -> int` (L83-101)
+### fn `def run(args: list[str]) -> int` (L64-88)
 - @brief Launch Codex CLI with project-scoped environment preparation.
-- @details Resolves project root, guarantees codex auth symlink compliance, sets `CODEX_HOME=<project-root>/.codex`, then executes `codex --yolo` plus pass-through args through blocking subprocess run.
+- @details Resolves project root, copies auth from home into project auth file, sets `CODEX_HOME=<project-root>/.codex`, executes `codex --yolo` plus pass-through args through blocking subprocess run, then copies project auth back to home path in a `finally` block.
 - @param args {list[str]} Additional CLI args forwarded to Codex.
 - @return {int} Child process return code.
-- @throws {OSError} Propagated for filesystem or process-launch failures.
+- @throws {OSError} Propagated for auth-file copy or process-launch failures.
 - @satisfies REQ-014, REQ-043, REQ-044, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|20||
-|`DESCRIPTION`|var|pub|24||
-|`print_help`|fn|pub|27-42|def print_help(version: str) -> None|
-|`_is_expected_auth_link`|fn|priv|43-58|def _is_expected_auth_link(link_path: Path, target_path: ...|
-|`_ensure_auth_symlink`|fn|priv|59-82|def _ensure_auth_symlink(project_root: Path) -> None|
-|`run`|fn|pub|83-101|def run(args: list[str]) -> int|
+|`PROGRAM`|var|pub|22||
+|`DESCRIPTION`|var|pub|26||
+|`print_help`|fn|pub|29-44|def print_help(version: str) -> None|
+|`_copy_auth_file`|fn|priv|45-63|def _copy_auth_file(source_path: Path, destination_path: ...|
+|`run`|fn|pub|64-88|def run(args: list[str]) -> int|
 
 
 ---

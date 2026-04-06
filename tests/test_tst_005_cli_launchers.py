@@ -1,7 +1,8 @@
 """
 @brief Validate CLI launcher command wrappers.
 @details Verifies subprocess command vectors, project-path handling, CODEX_HOME
-  environment setup, and codex auth symlink guard across AI launcher and editor
+  environment setup, and codex auth file synchronization across AI launcher and
+  editor commands.
   commands.
 @satisfies TST-005, REQ-014, REQ-015, REQ-016, REQ-017, REQ-018, REQ-019,
   REQ-020, REQ-021, REQ-043, REQ-044, REQ-064
@@ -44,64 +45,66 @@ def _require_symlink_capability(tmp_path: Path) -> None:
     link.unlink(missing_ok=True)
 
 
-def test_codex_creates_auth_symlink_sets_codex_home_and_executes_expected_command(
+def test_codex_syncs_auth_file_sets_codex_home_and_executes_expected_command(
     monkeypatch,
     tmp_path,
 ):
     """
-    @brief Validate codex creation path contract.
+    @brief Validate codex auth-file synchronization lifecycle.
     @details Stubs project-root resolution and subprocess boundary, then
-      validates auth-symlink creation, creation-message emission, CODEX_HOME
-      assignment, command vector, and return-code propagation.
+      validates home-to-project auth copy before execution, project-to-home auth
+      copy after execution, CODEX_HOME assignment, command vector, and
+      return-code propagation.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
     @satisfies TST-005, REQ-014, REQ-043, REQ-044, REQ-064
     """
 
-    _require_symlink_capability(tmp_path)
     project_root = tmp_path / "project-a"
     fake_home = tmp_path / "home-a"
     project_root.mkdir(parents=True)
     fake_home.mkdir(parents=True)
+    home_auth = fake_home / ".codex" / "auth.json"
+    home_auth.parent.mkdir(parents=True, exist_ok=True)
+    home_auth.write_text("home-auth-before", encoding="utf-8")
+    project_auth = project_root / ".codex" / "auth.json"
+    project_auth.parent.mkdir(parents=True, exist_ok=True)
+    project_auth.write_text("project-auth-stale", encoding="utf-8")
     observed = {}
-    observed_info = []
 
     def _fake_run(command, **kwargs):
         observed["command"] = command
         observed["kwargs"] = kwargs
+        assert project_auth.read_text(encoding="utf-8") == "home-auth-before"
+        project_auth.write_text("project-auth-after", encoding="utf-8")
         return types.SimpleNamespace(returncode=7)
-
-    def _fake_print_info(message):
-        observed_info.append(message)
 
     monkeypatch.setattr(codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(codex.Path, "home", lambda: fake_home)
-    monkeypatch.setattr(codex, "print_info", _fake_print_info)
     monkeypatch.setattr(codex, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(codex.subprocess, "run", _fake_run)
 
     result = codex.run(["--x"])
 
-    expected_link = project_root / ".codex" / "auth.json"
-    expected_target = fake_home / ".codex" / "auth.json"
     assert result == 7
-    assert expected_link.is_symlink()
-    assert expected_link.resolve(strict=False) == expected_target.resolve(strict=False)
-    assert observed_info == [f"Created symlink: {expected_link} -> {expected_target}"]
+    assert not project_auth.is_symlink()
+    assert project_auth.read_text(encoding="utf-8") == "project-auth-after"
+    assert home_auth.read_text(encoding="utf-8") == "project-auth-after"
     assert codex.os.environ["CODEX_HOME"] == str(project_root / ".codex")
     assert observed["command"] == ["codex", "--yolo", "--x"]
     assert observed["kwargs"] == {}
 
 
-def test_codex_keeps_existing_auth_symlink_without_creation_message(
+def test_codex_replaces_auth_symlink_paths_with_synced_files(
     monkeypatch,
     tmp_path,
 ):
     """
-    @brief Validate codex no-op path for compliant auth symlink.
-    @details Precreates compliant project auth symlink and verifies command
-      does not emit creation info while preserving subprocess execution contract.
+    @brief Validate codex overwrite contract for auth symlink destinations.
+    @details Precreates project and home auth paths as symlinks, then verifies
+      synchronization replaces both symlinks with copied file payloads while
+      preserving subprocess execution contract.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -113,33 +116,37 @@ def test_codex_keeps_existing_auth_symlink_without_creation_message(
     fake_home = tmp_path / "home-b"
     project_root.mkdir(parents=True)
     fake_home.mkdir(parents=True)
-    expected_link = project_root / ".codex" / "auth.json"
-    expected_target = fake_home / ".codex" / "auth.json"
-    expected_link.parent.mkdir(parents=True, exist_ok=True)
-    expected_link.symlink_to(expected_target)
-    observed_info = []
+    project_auth = project_root / ".codex" / "auth.json"
+    project_auth.parent.mkdir(parents=True, exist_ok=True)
+    project_auth_target = project_root / "project-auth-target.txt"
+    project_auth_target.write_text("project-auth-target", encoding="utf-8")
+    project_auth.symlink_to(project_auth_target)
+    home_auth = fake_home / ".codex" / "auth.json"
+    home_auth.parent.mkdir(parents=True, exist_ok=True)
+    home_auth_target = fake_home / "home-auth-target.txt"
+    home_auth_target.write_text("home-auth-before", encoding="utf-8")
+    home_auth.symlink_to(home_auth_target)
     observed = {}
 
     def _fake_run(command, **kwargs):
         observed["command"] = command
         observed["kwargs"] = kwargs
+        assert project_auth.read_text(encoding="utf-8") == "home-auth-before"
+        project_auth.write_text("project-auth-after", encoding="utf-8")
         return types.SimpleNamespace(returncode=0)
-
-    def _fake_print_info(message):
-        observed_info.append(message)
 
     monkeypatch.setattr(codex, "require_project_root", lambda: project_root)
     monkeypatch.setattr(codex.Path, "home", lambda: fake_home)
-    monkeypatch.setattr(codex, "print_info", _fake_print_info)
     monkeypatch.setattr(codex, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(codex.subprocess, "run", _fake_run)
 
     result = codex.run(["--z"])
 
     assert result == 0
-    assert expected_link.is_symlink()
-    assert expected_link.resolve(strict=False) == expected_target.resolve(strict=False)
-    assert observed_info == []
+    assert not project_auth.is_symlink()
+    assert project_auth.read_text(encoding="utf-8") == "project-auth-after"
+    assert not home_auth.is_symlink()
+    assert home_auth.read_text(encoding="utf-8") == "project-auth-after"
     assert codex.os.environ["CODEX_HOME"] == str(project_root / ".codex")
     assert observed["command"] == ["codex", "--yolo", "--z"]
     assert observed["kwargs"] == {}
