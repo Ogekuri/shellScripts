@@ -25,7 +25,7 @@ DESCRIPTION = "Launch OpenAI Codex CLI in the project context."
 
 
 def print_help(version: str) -> None:
-    """@brief Print command-specific help for `cli-codex`.
+    """@brief Print command-specific help for `codex`.
 
     @details Emits usage and pass-through argument behavior for deterministic
     terminal rendering; does not mutate process state.
@@ -33,9 +33,9 @@ def print_help(version: str) -> None:
     @return {None} Writes help text to stdout.
     @satisfies DES-008
     """
-    print(f"Usage: {PROGRAM} cli-codex [args...] ({version})")
+    print(f"Usage: {PROGRAM} codex [args...] ({version})")
     print()
-    print("cli-codex options:")
+    print("codex options:")
     print("  All arguments are passed through to the Codex CLI.")
     print("  --help  - Show this help message.")
 

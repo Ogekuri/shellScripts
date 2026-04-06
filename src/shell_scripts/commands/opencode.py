@@ -10,14 +10,29 @@ import subprocess
 
 from shell_scripts.utils import require_project_root, require_commands
 
+## @var PROGRAM
+#  @brief Base CLI program name used in help output.
+#  @details Constant identifier for usage-line rendering in command help.
 PROGRAM = "shellscripts"
+## @var DESCRIPTION
+#  @brief One-line command description for dispatcher help surfaces.
+#  @details Exposed by command registry introspection (`get_all_commands`).
 DESCRIPTION = "Launch OpenCode CLI in the project context."
 
 
 def print_help(version):
-    print(f"Usage: {PROGRAM} cli-opencode [args...] ({version})")
+    """@brief Print command-specific help for `opencode`.
+
+    @details Emits usage and pass-through argument behavior for deterministic
+    terminal rendering; does not mutate process state.
+    @param version {str} CLI version string propagated by dispatcher.
+    @return {None} Writes help text to stdout.
+    @satisfies DES-008
+    """
+
+    print(f"Usage: {PROGRAM} opencode [args...] ({version})")
     print()
-    print("cli-opencode options:")
+    print("opencode options:")
     print("  All arguments are passed through to the OpenCode CLI.")
     print("  --help  - Show this help message.")
 

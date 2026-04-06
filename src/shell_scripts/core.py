@@ -4,7 +4,7 @@
 @details Provides global help rendering, management command execution
 (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`), runtime
 configuration bootstrap, and subcommand delegation to lazily imported modules.
-@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065
+@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066
 """
 
 import sys
@@ -17,7 +17,7 @@ from shell_scripts.config import (
     write_default_runtime_config,
 )
 from shell_scripts.version_check import check_for_updates
-from shell_scripts.commands import get_command, get_all_commands
+from shell_scripts.commands import get_command
 from shell_scripts.utils import (
     capture_terminal_state,
     detect_runtime_os,
@@ -29,6 +29,83 @@ from shell_scripts.utils import (
 )
 
 PROGRAM = "shellscripts"
+## @var HELP_COMMAND_COLUMN_WIDTH
+#  @brief Fixed command-name column width for grouped help rendering.
+#  @details Forces deterministic spacing for all command rows across grouped
+#  global help sections.
+#  @satisfies REQ-066
+HELP_COMMAND_COLUMN_WIDTH = 16
+
+## @var HELP_SECTION_COMMANDS
+#  @brief Ordered command groups for global help rendering.
+#  @details Defines deterministic section order and command-token order used by
+#  `print_help` when emitting grouped command help. Ordering is normative and
+#  maps directly to REQ-066 output expectations.
+#  @satisfies DES-014, REQ-066
+HELP_SECTION_COMMANDS = (
+    (
+        "Edit/View Commands",
+        (
+            "edit",
+            "view",
+            "diff",
+        ),
+    ),
+    (
+        "PDF Commands",
+        (
+            "pdf-crop",
+            "pdf-merge",
+            "pdf-split-by-format",
+            "pdf-split-by-toc",
+            "pdf-tiler-090",
+            "pdf-tiler-100",
+            "pdf-toc-clean",
+        ),
+    ),
+    (
+        "AI Commands",
+        (
+            "ai-install",
+            "claude",
+            "codex",
+            "copilot",
+            "gemini",
+            "kiro",
+            "opencode",
+        ),
+    ),
+    (
+        "Develop Commands",
+        (
+            "req",
+            "venv",
+            "clean",
+            "doxygen",
+            "tests",
+            "vscode",
+            "vsinsider",
+        ),
+    ),
+    (
+        "Image Commands",
+        (
+            "dicom2jpg",
+            "dicomviewer",
+        ),
+    ),
+    (
+        "Video Commands",
+        (
+            "video2h264",
+            "video2h265",
+        ),
+    ),
+    (
+        "OS Commands",
+        ("ubuntu-dark-theme",),
+    ),
+)
 
 
 def print_help(command_name=None):
@@ -36,11 +113,12 @@ def print_help(command_name=None):
 
     @details Renders command module help for known command names; otherwise exits
     with explicit unknown-command error. Global help includes management options
-    and all command descriptions sorted by registry key.
+    and grouped command sections using deterministic section and command order,
+    with descriptions sourced from each command module `DESCRIPTION` constant.
     @param command_name {str|None} Optional command token for scoped help.
     @return {None} Writes to stdout/stderr; may terminate process on invalid command.
     @throws {SystemExit} Raised when unknown command name is requested.
-    @satisfies PRJ-002, REQ-001, REQ-002
+    @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066
     """
 
     if command_name:
@@ -68,11 +146,13 @@ def print_help(command_name=None):
         "  --help       - Print the full help screen or the help text of a specific command."
     )
     print()
-    print("Commands:")
-    commands = get_all_commands()
-    max_name = max(len(n) for n in commands) if commands else 10
-    for name, desc in commands.items():
-        print(f"  {name:<{max_name}}  - {desc}")
+    for section_name, command_names in HELP_SECTION_COMMANDS:
+        print()
+        print(section_name)
+        for command_name in command_names:
+            command_module = get_command(command_name)
+            description = getattr(command_module, "DESCRIPTION", "")
+            print(f"  {command_name:<{HELP_COMMAND_COLUMN_WIDTH}} - {description}")
 
 
 def do_upgrade():
@@ -132,7 +212,8 @@ def do_write_config():
     """
 
     target = write_default_runtime_config()
-    print_info(f"Default runtime config written to: {target}")
+    target_text = target.as_posix() if hasattr(target, "as_posix") else str(target)
+    print_info(f"Default runtime config written to: {target_text}")
     return 0
 
 
@@ -145,7 +226,7 @@ def main():
     (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`,
     `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066
     """
     saved_tty = capture_terminal_state()
     try:

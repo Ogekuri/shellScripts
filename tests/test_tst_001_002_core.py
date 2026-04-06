@@ -4,7 +4,7 @@
   startup OS detection, Linux-only upgrade/uninstall command resolution from
   runtime config, and management write-config behavior. Tests are deterministic
   and isolate subprocess and filesystem boundaries.
-@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054
+@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-066
 @return {None} Pytest module scope.
 """
 
@@ -26,12 +26,16 @@ def test_main_without_args_returns_zero_and_prints_help(
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
-    @satisfies TST-001, REQ-001, REQ-047
+    @satisfies TST-001, REQ-001, REQ-047, REQ-066
     """
 
     observed = {"detected": 0}
     monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
-    monkeypatch.setattr(core, "detect_runtime_os", lambda: observed.__setitem__("detected", observed["detected"] + 1))
+    monkeypatch.setattr(
+        core,
+        "detect_runtime_os",
+        lambda: observed.__setitem__("detected", observed["detected"] + 1),
+    )
     monkeypatch.setattr(core.sys, "argv", ["shellscripts"])
 
     result = core.main()
@@ -40,6 +44,42 @@ def test_main_without_args_returns_zero_and_prints_help(
     assert result == 0
     assert observed["detected"] == 1
     assert "Usage: shellscripts" in captured.out
+    assert "Edit/View Commands" in captured.out
+    assert "PDF Commands" in captured.out
+    assert "AI Commands" in captured.out
+    assert "Develop Commands" in captured.out
+    assert "Image Commands" in captured.out
+    assert "Video Commands" in captured.out
+    assert "OS Commands" in captured.out
+    assert (
+        "  claude           - Launch Claude CLI with skip-permissions in the project context."
+        in captured.out
+    )
+    assert (
+        "  codex            - Launch OpenAI Codex CLI in the project context."
+        in captured.out
+    )
+    assert (
+        "  copilot          - Launch GitHub Copilot CLI in the project context."
+        in captured.out
+    )
+    assert (
+        "  gemini           - Launch Google Gemini CLI in the project context."
+        in captured.out
+    )
+    assert (
+        "  kiro             - Launch Kiro CLI in the project context." in captured.out
+    )
+    assert (
+        "  opencode         - Launch OpenCode CLI in the project context."
+        in captured.out
+    )
+    assert captured.out.index("Edit/View Commands") < captured.out.index("PDF Commands")
+    assert captured.out.index("PDF Commands") < captured.out.index("AI Commands")
+    assert captured.out.index("AI Commands") < captured.out.index("Develop Commands")
+    assert captured.out.index("Develop Commands") < captured.out.index("Image Commands")
+    assert captured.out.index("Image Commands") < captured.out.index("Video Commands")
+    assert captured.out.index("Video Commands") < captured.out.index("OS Commands")
 
 
 def test_main_unknown_command_returns_one_and_prints_error_and_help(
@@ -173,7 +213,11 @@ def test_main_loads_runtime_config_before_dispatch(monkeypatch):
 
     observed = {"loaded": 0}
     monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
-    monkeypatch.setattr(core, "load_runtime_config", lambda: observed.__setitem__("loaded", observed["loaded"] + 1))
+    monkeypatch.setattr(
+        core,
+        "load_runtime_config",
+        lambda: observed.__setitem__("loaded", observed["loaded"] + 1),
+    )
     monkeypatch.setattr(core.sys, "argv", ["shellscripts", "--version"])
 
     result = core.main()
@@ -207,7 +251,9 @@ def test_main_write_config_returns_zero_and_calls_writer(monkeypatch, capsys):
 
     monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
     monkeypatch.setattr(core, "load_runtime_config", lambda: {})
-    monkeypatch.setattr(core, "write_default_runtime_config", _fake_write_default_runtime_config)
+    monkeypatch.setattr(
+        core, "write_default_runtime_config", _fake_write_default_runtime_config
+    )
     monkeypatch.setattr(core.sys, "argv", ["shellscripts", "--write-config"])
 
     result = core.main()

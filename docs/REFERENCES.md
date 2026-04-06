@@ -12,18 +12,18 @@
         │   ├── _dc_common.py
         │   ├── ai_install.py
         │   ├── bin_links.py
+        │   ├── claude.py
         │   ├── clean.py
-        │   ├── cli_claude.py
-        │   ├── cli_codex.py
-        │   ├── cli_copilot.py
-        │   ├── cli_gemini.py
-        │   ├── cli_kiro.py
-        │   ├── cli_opencode.py
+        │   ├── codex.py
+        │   ├── copilot.py
         │   ├── dicom2jpg.py
         │   ├── dicomviewer.py
         │   ├── diff_cmd.py
         │   ├── doxygen_cmd.py
         │   ├── edit_cmd.py
+        │   ├── gemini.py
+        │   ├── kiro.py
+        │   ├── opencode.py
         │   ├── pdf_crop.py
         │   ├── pdf_merge.py
         │   ├── pdf_split_by_format.py
@@ -304,6 +304,49 @@ from shell_scripts.utils import print_error
 
 ---
 
+# claude.py | Python | 56L | 4 symbols | 3 imports | 10 comments
+> Path: `src/shell_scripts/commands/claude.py`
+
+## Imports
+```
+import subprocess
+from pathlib import Path
+from shell_scripts.utils import require_project_root, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L17)
+- @brief Base CLI program name used in help output.
+- @details Constant identifier for usage-line rendering in command help.
+- var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L21)
+- @brief One-line command description for dispatcher help surfaces.
+- @details Exposed by command registry introspection (`get_all_commands`).
+### fn `def print_help(version)` (L24-40)
+- @brief Print command-specific help for `claude`.
+- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @param version {str} CLI version string propagated by dispatcher.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
+
+### fn `def run(args)` (L41-56)
+- @brief Launch Claude CLI after external executable validation.
+- @details Resolves project root, resolves user-local Claude executable path, validates executable availability, then executes command via subprocess.
+- @param args {list[str]} Additional CLI args forwarded to Claude.
+- @return {int} Child process return code.
+- @satisfies REQ-017, REQ-055, REQ-056, REQ-064
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|17||
+|`DESCRIPTION`|var|pub|21||
+|`print_help`|fn|pub|24-40|def print_help(version)|
+|`run`|fn|pub|41-56|def run(args)|
+
+
+---
+
 # clean.py | Python | 98L | 5 symbols | 4 imports | 1 comments
 > Path: `src/shell_scripts/commands/clean.py`
 
@@ -336,42 +379,8 @@ from shell_scripts.utils import require_project_root, print_error
 
 ---
 
-# cli_claude.py | Python | 41L | 4 symbols | 3 imports | 3 comments
-> Path: `src/shell_scripts/commands/cli_claude.py`
-
-## Imports
-```
-import subprocess
-from pathlib import Path
-from shell_scripts.utils import require_project_root, require_commands
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L14)
-- var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L15)
-### fn `def print_help(version)` (L18-25)
-
-### fn `def run(args)` (L26-41)
-- @brief Launch Claude CLI after external executable validation.
-- @details Resolves project root, resolves user-local Claude executable path, validates executable availability, then executes command via subprocess.
-- @param args {list[str]} Additional CLI args forwarded to Claude.
-- @return {int} Child process return code.
-- @satisfies REQ-017, REQ-055, REQ-056, REQ-064
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|14||
-|`DESCRIPTION`|var|pub|15||
-|`print_help`|fn|pub|18-25|def print_help(version)|
-|`run`|fn|pub|26-41|def run(args)|
-
-
----
-
-# cli_codex.py | Python | 101L | 6 symbols | 4 imports | 12 comments
-> Path: `src/shell_scripts/commands/cli_codex.py`
+# codex.py | Python | 101L | 6 symbols | 4 imports | 12 comments
+> Path: `src/shell_scripts/commands/codex.py`
 
 ## Imports
 ```
@@ -390,7 +399,7 @@ from shell_scripts.utils import print_info, require_project_root, require_comman
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
 ### fn `def print_help(version: str) -> None` (L27-42)
-- @brief Print command-specific help for `cli-codex`.
+- @brief Print command-specific help for `codex`.
 - @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
@@ -433,8 +442,8 @@ from shell_scripts.utils import print_info, require_project_root, require_comman
 
 ---
 
-# cli_copilot.py | Python | 39L | 4 symbols | 2 imports | 3 comments
-> Path: `src/shell_scripts/commands/cli_copilot.py`
+# copilot.py | Python | 54L | 4 symbols | 2 imports | 10 comments
+> Path: `src/shell_scripts/commands/copilot.py`
 
 ## Imports
 ```
@@ -444,11 +453,20 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "Launch GitHub Copilot CLI in the project context."` (L14)
-### fn `def print_help(version)` (L17-24)
+- var `PROGRAM = "shellscripts"` (L16)
+- @brief Base CLI program name used in help output.
+- @details Constant identifier for usage-line rendering in command help.
+- var `DESCRIPTION = "Launch GitHub Copilot CLI in the project context."` (L20)
+- @brief One-line command description for dispatcher help surfaces.
+- @details Exposed by command registry introspection (`get_all_commands`).
+### fn `def print_help(version)` (L23-39)
+- @brief Print command-specific help for `copilot`.
+- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @param version {str} CLI version string propagated by dispatcher.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
 
-### fn `def run(args)` (L25-39)
+### fn `def run(args)` (L40-54)
 - @brief Launch Copilot CLI after external executable validation.
 - @details Resolves project root, checks executable availability for `copilot`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Copilot.
@@ -458,109 +476,10 @@ from shell_scripts.utils import require_project_root, require_commands
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-39|def run(args)|
-
-
----
-
-# cli_gemini.py | Python | 39L | 4 symbols | 2 imports | 3 comments
-> Path: `src/shell_scripts/commands/cli_gemini.py`
-
-## Imports
-```
-import subprocess
-from shell_scripts.utils import require_project_root, require_commands
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "Launch Google Gemini CLI in the project context."` (L14)
-### fn `def print_help(version)` (L17-24)
-
-### fn `def run(args)` (L25-39)
-- @brief Launch Gemini CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `gemini`, then executes pass-through args through blocking subprocess run.
-- @param args {list[str]} Additional CLI args forwarded to Gemini.
-- @return {int} Child process return code.
-- @satisfies REQ-016, REQ-055, REQ-056, REQ-064
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-39|def run(args)|
-
-
----
-
-# cli_kiro.py | Python | 39L | 4 symbols | 2 imports | 3 comments
-> Path: `src/shell_scripts/commands/cli_kiro.py`
-
-## Imports
-```
-import subprocess
-from shell_scripts.utils import require_project_root, require_commands
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "Launch Kiro CLI in the project context."` (L14)
-### fn `def print_help(version)` (L17-24)
-
-### fn `def run(args)` (L25-39)
-- @brief Launch Kiro CLI after external executable validation.
-- @details Resolves project root, validates executable availability for `kiro-cli`, then executes pass-through args through blocking subprocess run.
-- @param args {list[str]} Additional CLI args forwarded to Kiro.
-- @return {int} Child process return code.
-- @satisfies REQ-019, REQ-055, REQ-056, REQ-064
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-39|def run(args)|
-
-
----
-
-# cli_opencode.py | Python | 39L | 4 symbols | 2 imports | 3 comments
-> Path: `src/shell_scripts/commands/cli_opencode.py`
-
-## Imports
-```
-import subprocess
-from shell_scripts.utils import require_project_root, require_commands
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L13)
-- var `DESCRIPTION = "Launch OpenCode CLI in the project context."` (L14)
-### fn `def print_help(version)` (L17-24)
-
-### fn `def run(args)` (L25-39)
-- @brief Launch OpenCode CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `opencode`, then executes pass-through args through blocking subprocess run.
-- @param args {list[str]} Additional CLI args forwarded to OpenCode.
-- @return {int} Child process return code.
-- @satisfies REQ-018, REQ-055, REQ-056, REQ-064
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|13||
-|`DESCRIPTION`|var|pub|14||
-|`print_help`|fn|pub|17-24|def print_help(version)|
-|`run`|fn|pub|25-39|def run(args)|
+|`PROGRAM`|var|pub|16||
+|`DESCRIPTION`|var|pub|20||
+|`print_help`|fn|pub|23-39|def print_help(version)|
+|`run`|fn|pub|40-54|def run(args)|
 
 
 ---
@@ -768,6 +687,132 @@ from shell_scripts.commands._dc_common import dispatch
 |`DESCRIPTION`|var|pub|15||
 |`print_help`|fn|pub|18-34|def print_help(version)|
 |`run`|fn|pub|35-50|def run(args)|
+
+
+---
+
+# gemini.py | Python | 54L | 4 symbols | 2 imports | 10 comments
+> Path: `src/shell_scripts/commands/gemini.py`
+
+## Imports
+```
+import subprocess
+from shell_scripts.utils import require_project_root, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L16)
+- @brief Base CLI program name used in help output.
+- @details Constant identifier for usage-line rendering in command help.
+- var `DESCRIPTION = "Launch Google Gemini CLI in the project context."` (L20)
+- @brief One-line command description for dispatcher help surfaces.
+- @details Exposed by command registry introspection (`get_all_commands`).
+### fn `def print_help(version)` (L23-39)
+- @brief Print command-specific help for `gemini`.
+- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @param version {str} CLI version string propagated by dispatcher.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
+
+### fn `def run(args)` (L40-54)
+- @brief Launch Gemini CLI after external executable validation.
+- @details Resolves project root, checks executable availability for `gemini`, then executes pass-through args through blocking subprocess run.
+- @param args {list[str]} Additional CLI args forwarded to Gemini.
+- @return {int} Child process return code.
+- @satisfies REQ-016, REQ-055, REQ-056, REQ-064
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|16||
+|`DESCRIPTION`|var|pub|20||
+|`print_help`|fn|pub|23-39|def print_help(version)|
+|`run`|fn|pub|40-54|def run(args)|
+
+
+---
+
+# kiro.py | Python | 54L | 4 symbols | 2 imports | 10 comments
+> Path: `src/shell_scripts/commands/kiro.py`
+
+## Imports
+```
+import subprocess
+from shell_scripts.utils import require_project_root, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L16)
+- @brief Base CLI program name used in help output.
+- @details Constant identifier for usage-line rendering in command help.
+- var `DESCRIPTION = "Launch Kiro CLI in the project context."` (L20)
+- @brief One-line command description for dispatcher help surfaces.
+- @details Exposed by command registry introspection (`get_all_commands`).
+### fn `def print_help(version)` (L23-39)
+- @brief Print command-specific help for `kiro`.
+- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @param version {str} CLI version string propagated by dispatcher.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
+
+### fn `def run(args)` (L40-54)
+- @brief Launch Kiro CLI after external executable validation.
+- @details Resolves project root, validates executable availability for `kiro-cli`, then executes pass-through args through blocking subprocess run.
+- @param args {list[str]} Additional CLI args forwarded to Kiro.
+- @return {int} Child process return code.
+- @satisfies REQ-019, REQ-055, REQ-056, REQ-064
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|16||
+|`DESCRIPTION`|var|pub|20||
+|`print_help`|fn|pub|23-39|def print_help(version)|
+|`run`|fn|pub|40-54|def run(args)|
+
+
+---
+
+# opencode.py | Python | 54L | 4 symbols | 2 imports | 10 comments
+> Path: `src/shell_scripts/commands/opencode.py`
+
+## Imports
+```
+import subprocess
+from shell_scripts.utils import require_project_root, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L16)
+- @brief Base CLI program name used in help output.
+- @details Constant identifier for usage-line rendering in command help.
+- var `DESCRIPTION = "Launch OpenCode CLI in the project context."` (L20)
+- @brief One-line command description for dispatcher help surfaces.
+- @details Exposed by command registry introspection (`get_all_commands`).
+### fn `def print_help(version)` (L23-39)
+- @brief Print command-specific help for `opencode`.
+- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @param version {str} CLI version string propagated by dispatcher.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008
+
+### fn `def run(args)` (L40-54)
+- @brief Launch OpenCode CLI after external executable validation.
+- @details Resolves project root, checks executable availability for `opencode`, then executes pass-through args through blocking subprocess run.
+- @param args {list[str]} Additional CLI args forwarded to OpenCode.
+- @return {int} Child process return code.
+- @satisfies REQ-018, REQ-055, REQ-056, REQ-064
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|16||
+|`DESCRIPTION`|var|pub|20||
+|`print_help`|fn|pub|23-39|def print_help(version)|
+|`run`|fn|pub|40-54|def run(args)|
 
 
 ---
@@ -1616,7 +1661,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 197L | 6 symbols | 7 imports | 7 comments
+# core.py | Python | 278L | 8 symbols | 7 imports | 18 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1626,55 +1671,68 @@ import subprocess
 from shell_scripts import __version__
 from shell_scripts.config import (
 from shell_scripts.version_check import check_for_updates
-from shell_scripts.commands import get_command, get_all_commands
+from shell_scripts.commands import get_command
 from shell_scripts.utils import (
 ```
 
 ## Definitions
 
 - var `PROGRAM = "shellscripts"` (L31)
-### fn `def print_help(command_name=None)` (L34-77)
+- var `HELP_COMMAND_COLUMN_WIDTH = 16` (L37)
+- @brief Fixed command-name column width for grouped help rendering.
+- @details Forces deterministic spacing for all command rows across grouped
+global help sections.
+- @satisfies REQ-066
+- var `HELP_SECTION_COMMANDS = (` (L45)
+- @brief Ordered command groups for global help rendering.
+- @details Defines deterministic section order and command-token order used by
+`print_help` when emitting grouped command help. Ordering is normative and
+maps directly to REQ-066 output expectations.
+- @satisfies DES-014, REQ-066
+### fn `def print_help(command_name=None)` (L111-157)
 - @brief Print global or command-specific help text.
-- @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and all command descriptions sorted by registry key.
+- @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
 - @return {None} Writes to stdout/stderr; may terminate process on invalid command.
 - @throws {SystemExit} Raised when unknown command name is requested.
-- @satisfies PRJ-002, REQ-001, REQ-002
+- @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066
 
-### fn `def do_upgrade()` (L78-100)
+### fn `def do_upgrade()` (L158-180)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L101-123)
+### fn `def do_uninstall()` (L181-203)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L124-138)
+### fn `def do_write_config()` (L204-219)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L139-197)
+### fn `def main()` (L220-278)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
-- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
 |`PROGRAM`|var|pub|31||
-|`print_help`|fn|pub|34-77|def print_help(command_name=None)|
-|`do_upgrade`|fn|pub|78-100|def do_upgrade()|
-|`do_uninstall`|fn|pub|101-123|def do_uninstall()|
-|`do_write_config`|fn|pub|124-138|def do_write_config()|
-|`main`|fn|pub|139-197|def main()|
+|`HELP_COMMAND_COLUMN_WIDTH`|var|pub|37||
+|`HELP_SECTION_COMMANDS`|var|pub|45||
+|`print_help`|fn|pub|111-157|def print_help(command_name=None)|
+|`do_upgrade`|fn|pub|158-180|def do_upgrade()|
+|`do_uninstall`|fn|pub|181-203|def do_uninstall()|
+|`do_write_config`|fn|pub|204-219|def do_write_config()|
+|`main`|fn|pub|220-278|def main()|
 
 
 ---

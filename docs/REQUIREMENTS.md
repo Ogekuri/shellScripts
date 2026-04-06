@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.14"
-date: "2026-04-02"
+version: "0.6.15"
+date: "2026-04-06"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -59,7 +59,7 @@ Repository structure (evidence-oriented view, depth-limited):
 │   │       ├── __init__.py
 │   │       ├── ai_install.py
 │   │       ├── clean.py
-│   │       ├── cli_*.py
+│   │       ├── {claude,codex,copilot,gemini,kiro,opencode}.py
 │   │       ├── {diff,edit,view}_cmd.py
 │   │       ├── dicom*.py
 │   │       ├── doxygen_cmd.py
@@ -117,6 +117,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-011**: MUST implement centralized runtime configuration loading from `~/.config/shellScripts/config.json` with recursive merge semantics where missing keys preserve hardcoded defaults, including `req` providers and static checks.
 - **DES-012**: MUST provide a management operation that writes default runtime configuration JSON to `~/.config/shellScripts/config.json`, creating parent directories when absent.
 - **DES-013**: MUST resolve `ai-install` npm command prefixes from detected runtime OS, omitting `sudo` on Windows and using `sudo` on non-Windows systems.
+- **DES-014**: MUST generate global help command listing from a fixed section-to-command mapping preserving section order and per-section command order.
 
 No explicit performance optimizations identified.
 
@@ -132,12 +133,12 @@ No explicit performance optimizations identified.
 - **REQ-009**: MUST install Claude CLI by downloading `latest` version metadata and installing an executable binary at `~/.claude/bin/claude`.
 - **REQ-010**: MUST install Kiro CLI by downloading a ZIP archive, extracting binaries, and copying `kiro-cli*` executables into `~/.local/bin` with executable permissions.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
-- **REQ-014**: MUST set `CODEX_HOME` to `<project-root>/.codex` and execute `codex --yolo` in `cli-codex` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-015**: MUST execute `copilot --yolo --allow-all-tools` in `cli-copilot` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-016**: MUST execute `gemini --yolo` in `cli-gemini` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-017**: MUST execute `~/.claude/bin/claude --dangerously-skip-permissions` in `cli-claude` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-018**: MUST execute `opencode` in `cli-opencode` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-019**: MUST execute `kiro-cli` in `cli-kiro` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-014**: MUST set `CODEX_HOME` to `<project-root>/.codex` and execute `codex --yolo` in `codex` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-015**: MUST execute `copilot --yolo --allow-all-tools` in `copilot` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-016**: MUST execute `gemini --yolo` in `gemini` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-017**: MUST execute `~/.claude/bin/claude --dangerously-skip-permissions` in `claude` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-018**: MUST execute `opencode` in `opencode` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-019**: MUST execute `kiro-cli` in `kiro` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-020**: MUST open the project root in VS Code and VS Code Insiders commands, append the project path as final argument, and execute each launcher via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-021**: MUST set `CODEX_HOME` to `<project-root>/.codex` before VS Code and VS Code Insiders command execution.
 - **REQ-022**: MUST attempt GNOME GTK dark theme configuration via `gsettings` and MAY launch `gtk-chtheme`, `qt5ct`, and `qt6ct` when available.
@@ -157,7 +158,7 @@ No explicit performance optimizations identified.
 - **REQ-036**: MUST run pytest through `.venv/bin/python3` in `tests` and MUST prepend `<project-root>/src` to `PYTHONPATH`.
 - **REQ-037**: MUST create `.venv` in `tests` when missing and MUST install `requirements.txt` only when that file exists.
 - **REQ-038**: MUST recreate `.venv` in `venv` and MUST install `requirements.txt` when present; otherwise it MUST skip pip installation and continue successfully.
-- **REQ-043**: MUST ensure `<project-root>/.codex/auth.json` is a symlink to `~/.codex/auth.json` before `cli-codex` executes `codex --yolo`.
+- **REQ-043**: MUST ensure `<project-root>/.codex/auth.json` is a symlink to `~/.codex/auth.json` before `codex` executes `codex --yolo`.
 - **REQ-044**: MUST create the symlink and print an informational message when `<project-root>/.codex/auth.json` is not already that exact symlink.
 - **REQ-045**: MUST load runtime configuration from `~/.config/shellScripts/config.json` during CLI startup, and MUST keep hardcoded defaults for missing file, missing keys, or invalid value types.
 - **REQ-046**: MUST write the default runtime configuration JSON to `~/.config/shellScripts/config.json` and return code `0` when invoked with `--write-config`.
@@ -180,6 +181,7 @@ No explicit performance optimizations identified.
 - **REQ-063**: MUST label each `deleted` cleanup evidence line with entry kind `file` or `dir` based on the removed filesystem entry type.
 - **REQ-064**: MUST execute delegated external system commands through `subprocess.run` with inherited stdin/stdout/stderr and MUST wait for child termination.
 - **REQ-065**: MUST disable raw mouse capture before wrapper exit by writing `\x1b[?9l\x1b[?1000l\x1b[?1001l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1007l\x1b[?1015l\x1b[?1016l` to TTY stdout.
+- **REQ-066**: MUST render global help command sections in this order: Edit/View, PDF, AI, Develop, Image, Video, OS, and list command descriptions exactly as registered command `DESCRIPTION` values.
 
 ## 4. Test Requirements
 
@@ -189,7 +191,7 @@ Implemented verification support exists via the `tests` command (`tests_cmd.py`)
 High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
 
 ### 4.2 Verification Requirements
-- **TST-001**: MUST verify REQ-001, REQ-002, and REQ-047 by invoking `shell_scripts.core.main`, passing only if return codes, help/error outputs, and startup OS-detection invocation match specified behavior.
+- **TST-001**: MUST verify REQ-001, REQ-002, REQ-047, and REQ-066 by invoking `shell_scripts.core.main`, passing only if return codes, grouped help/error outputs, and startup OS-detection invocation match specified behavior.
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting command values resolved from runtime config with default command fallback and propagated return codes.
 - **TST-003**: MUST verify REQ-006 through REQ-010 by monkeypatching installer call sites and passing only if selector parsing is correct, unknown options return code `1`, and REQ-008 `sudo` usage changes by runtime OS.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
@@ -205,7 +207,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 
 | Requirement IDs | File Path | Symbol / Function | Short Evidence Excerpt |
 |---|---|---|---|
-| PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047, REQ-064, REQ-065 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `main`, `capture_terminal_state`, `reset_terminal_state`, `print_help` | Startup detects runtime OS before dispatch; empty args print help and return `0`; unknown command path returns `1`; `--version`/`--ver` print `__version__`; wrapper exit restores saved TTY attributes and writes full mouse-off escape sequence including `?9l` through `?1016l`. |
+| PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047, REQ-064, REQ-065, REQ-066 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `main`, `capture_terminal_state`, `reset_terminal_state`, `print_help` | Startup detects runtime OS before dispatch; empty args print grouped help and return `0`; unknown command path returns `1`; `--version`/`--ver` print `__version__`; wrapper exit restores saved TTY attributes and writes full mouse-off escape sequence including `?9l` through `?1016l`. |
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
 | PRJ-004, DES-002..DES-006, REQ-003, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_is_forced_version_check`, `_write_idle_config`, `_should_check` | Forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every request outcome, applies 3600s on success and 86400s on request errors, and prints colored update/error lines. |
 | PRJ-005 | `.github/workflows/release-uvx.yml` | `jobs.check-branch`, `jobs.build-release` | Workflow script is present at required path and defines release automation jobs. |
@@ -214,17 +216,17 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 | CTN-002 | `pyproject.toml` | `[project.scripts]` | `shellscripts = "shell_scripts.core:main"`, `s = "shell_scripts.core:main"`. |
 | CTN-003 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/*.py` | `require_commands`, command `run` functions | Multiple commands call `require_commands(...)` and terminate on missing tools. |
 | CTN-004, REQ-004, REQ-005 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `do_upgrade`, `do_uninstall`, `is_linux` | Linux executes `uv tool ...`; non-Linux prints manual command text and returns `0`. |
-| CTN-005 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/cli_*.py` | `require_project_root`, `run` | Project-context commands call `require_project_root()` and exit on missing Git root. |
+| CTN-005 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/{claude,codex,copilot,gemini,kiro,opencode}.py` | `require_project_root`, `run` | Project-context commands call `require_project_root()` and exit on missing Git root. |
 | DES-007, REQ-023, REQ-024, REQ-064 | `src/shell_scripts/commands/diff_cmd.py`; `src/shell_scripts/commands/edit_cmd.py`; `src/shell_scripts/commands/view_cmd.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `diff`/`edit`/`view` wrappers call shared dispatch; missing file argument returns `2`; selected external command is launched via `subprocess.run` with inherited stdio and blocking wait. |
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
 | REQ-006, REQ-007, REQ-008, REQ-009, REQ-010 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm install command omits `sudo` on Windows and uses `sudo` on non-Windows; Claude/Kiro installers use download/extract/copy flows. |
-| REQ-014, REQ-043, REQ-044, REQ-064 | `src/shell_scripts/commands/cli_codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; ensures `.codex/auth.json` symlink target `~/.codex/auth.json`; prints creation info when symlink is created; executes `codex --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-015, REQ-064 | `src/shell_scripts/commands/cli_copilot.py` | `run` | Executes `copilot --yolo --allow-all-tools` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-016, REQ-064 | `src/shell_scripts/commands/cli_gemini.py` | `run` | Executes `gemini --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-017, REQ-064 | `src/shell_scripts/commands/cli_claude.py` | `run` | Executes `~/.claude/bin/claude --dangerously-skip-permissions` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-018, REQ-064 | `src/shell_scripts/commands/cli_opencode.py` | `run` | Executes `opencode` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-019, REQ-064 | `src/shell_scripts/commands/cli_kiro.py` | `run` | Executes `kiro-cli` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-014, REQ-043, REQ-044, REQ-064 | `src/shell_scripts/commands/codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; ensures `.codex/auth.json` symlink target `~/.codex/auth.json`; prints creation info when symlink is created; executes `codex --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-015, REQ-064 | `src/shell_scripts/commands/copilot.py` | `run` | Executes `copilot --yolo --allow-all-tools` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-016, REQ-064 | `src/shell_scripts/commands/gemini.py` | `run` | Executes `gemini --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-017, REQ-064 | `src/shell_scripts/commands/claude.py` | `run` | Executes `~/.claude/bin/claude --dangerously-skip-permissions` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-018, REQ-064 | `src/shell_scripts/commands/opencode.py` | `run` | Executes `opencode` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-019, REQ-064 | `src/shell_scripts/commands/kiro.py` | `run` | Executes `kiro-cli` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-020, REQ-021, REQ-064 | `src/shell_scripts/commands/vscode_cmd.py`; `src/shell_scripts/commands/vsinsider_cmd.py` | `run` | Commands set `CODEX_HOME`, append project path, and execute Code binaries via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-022 | `src/shell_scripts/commands/ubuntu_dark_theme.py` | `run` | Applies `gsettings ... gtk-theme Adwaita-dark` and conditionally launches `gtk-chtheme`, `qt5ct`, `qt6ct`. |
 | REQ-025 | `src/shell_scripts/commands/dicomviewer.py` | `run`, `_find_jars` | Requires `java-wrappers` and Java runtime; executes `com.pixelmed.display.DicomImageViewer`. |
