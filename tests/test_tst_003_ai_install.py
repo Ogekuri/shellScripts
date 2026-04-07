@@ -3,7 +3,7 @@
 @details Verifies selector parsing, unknown-selector rejection, npm-based
   installer command construction, Claude binary installation flow, and Kiro ZIP
   extraction/copy flow. External network/process boundaries are mocked.
-@satisfies TST-003, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047
+@satisfies TST-003, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-067
 @return {None} Pytest module scope.
 """
 
@@ -378,52 +378,124 @@ def test_install_claude_falls_back_to_second_artifact_candidate(monkeypatch, tmp
 
 
 @pytest.mark.parametrize(
-    "runtime_os, expected_archive_name, binary_names",
+    "machine_token, libc_token, expected_download",
     [
-        ("linux", "kirocli-x86_64-linux.zip", ("kiro-cli", "kiro-cli-chat", "kiro-cli-term")),
-        (
-            "windows",
-            "kirocli-x86_64-windows.zip",
-            ("kiro-cli.exe", "kiro-cli-chat.exe", "kiro-cli-term.exe"),
-        ),
-        (
-            "darwin",
-            "kirocli-aarch64-macos.zip",
-            ("kiro-cli", "kiro-cli-chat", "kiro-cli-term"),
-        ),
+        ("x86_64", "gnu", "1.29.5/kirocli-x86_64-linux.zip"),
+        ("amd64", "musl", "1.29.5/kirocli-x86_64-linux-musl.zip"),
+        ("aarch64", "gnu", "1.29.5/kirocli-aarch64-linux.zip"),
+        ("arm64", "musl", "1.29.5/kirocli-aarch64-linux-musl.zip"),
     ],
 )
-def test_install_kiro_downloads_runtime_os_archive_and_copies_binaries(
+def test_install_kiro_resolves_linux_manifest_package_and_copies_binaries(
     monkeypatch,
     tmp_path,
-    runtime_os,
-    expected_archive_name,
-    binary_names,
+    machine_token,
+    libc_token,
+    expected_download,
 ):
     """
-    @brief Validate Kiro installer runtime-OS package selection and copy flow.
-    @details Mocks ZIP download per runtime OS by generating in-memory archives
-      and verifies extracted `kiro-cli*` binaries are copied into final bin path.
+    @brief Validate Kiro Linux manifest package resolution and install flow.
+    @details Mocks upstream manifest payload and ZIP download, resolves package
+      from runtime architecture/libc selectors, and verifies copied binaries.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
-    @param runtime_os {str} Simulated runtime OS token.
-    @param expected_archive_name {str} Expected Kiro archive name suffix.
-    @param binary_names {tuple[str, ...]} Binary file names contained in archive.
+    @param machine_token {str} Simulated machine architecture token.
+    @param libc_token {str} Simulated Linux libc class token.
+    @param expected_download {str} Expected manifest download path.
     @return {None} Assertions only.
     @satisfies TST-003, REQ-010, DES-013
     """
 
+    binary_names = ("kiro-cli", "kiro-cli-chat", "kiro-cli-term")
+    manifest_payload = {
+        "version": "1.29.5",
+        "packages": [
+            {
+                "os": "linux",
+                "fileType": "zip",
+                "variant": "headless",
+                "architecture": "x86_64",
+                "targetTriple": "x86_64-unknown-linux-gnu",
+                "download": "1.29.5/kirocli-x86_64-linux.zip",
+            },
+            {
+                "os": "linux",
+                "fileType": "zip",
+                "variant": "headless",
+                "architecture": "x86_64",
+                "targetTriple": "x86_64-unknown-linux-musl",
+                "download": "1.29.5/kirocli-x86_64-linux-musl.zip",
+            },
+            {
+                "os": "linux",
+                "fileType": "zip",
+                "variant": "headless",
+                "architecture": "aarch64",
+                "targetTriple": "aarch64-unknown-linux-gnu",
+                "download": "1.29.5/kirocli-aarch64-linux.zip",
+            },
+            {
+                "os": "linux",
+                "fileType": "zip",
+                "variant": "headless",
+                "architecture": "aarch64",
+                "targetTriple": "aarch64-unknown-linux-musl",
+                "download": "1.29.5/kirocli-aarch64-linux-musl.zip",
+            },
+            {
+                "os": "macos",
+                "fileType": "dmg",
+                "variant": "full",
+                "architecture": "universal",
+                "targetTriple": "universal-apple-darwin",
+                "download": "1.29.5/Kiro CLI.dmg",
+            },
+        ],
+    }
+    observed = {"urlopen": None, "download": None}
+
+    class _FakeManifestResponse:
+        """
+        @brief Mock HTTP response for manifest endpoint.
+        @details Returns deterministic JSON payload for package selection logic.
+        @return {None} Context-manager helper for tests.
+        """
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+        def read(self):
+            return ai_install.json.dumps(manifest_payload).encode()
+
+    def _fake_urlopen(url, timeout=0):
+        """
+        @brief Mock manifest fetch endpoint.
+        @details Captures URL and returns deterministic payload.
+        @param url {str} Download URL.
+        @param timeout {int | float} Timeout value.
+        @return {_FakeManifestResponse} Context-manager response.
+        """
+
+        del timeout
+        observed["urlopen"] = url
+        assert url == ai_install.KIRO_MANIFEST_URL
+        return _FakeManifestResponse()
+
     def _fake_urlretrieve(url, destination):
         """
         @brief Mock Kiro ZIP download.
-        @details Asserts runtime-OS archive selection and writes deterministic
-          archive with `kiro-cli*` binaries.
+        @details Asserts resolved package URL and writes deterministic archive.
         @param url {str} Download URL.
         @param destination {str} Destination archive path.
         @return {tuple[str, None]} Destination and placeholder headers.
         """
 
-        assert url.endswith(expected_archive_name)
+        observed["download"] = url
+        assert url == f"{ai_install.KIRO_CHANNEL_BASE_URL}/{expected_download}"
         with zipfile.ZipFile(destination, "w") as archive:
             for name in binary_names:
                 archive.writestr(f"kirocli/bin/{name}", "#!/bin/sh\n")
@@ -445,7 +517,13 @@ def test_install_kiro_downloads_runtime_os_archive_and_copies_binaries(
 
     monkeypatch.setattr(ai_install.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(ai_install.Path, "chmod", _fake_chmod)
-    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: runtime_os)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: "linux")
+    monkeypatch.setattr(ai_install.platform, "machine", lambda: machine_token)
+    if libc_token == "musl":
+        monkeypatch.setattr(ai_install.platform, "libc_ver", lambda: ("musl", "1.2.5"))
+    else:
+        monkeypatch.setattr(ai_install.platform, "libc_ver", lambda: ("glibc", "2.39"))
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     monkeypatch.setattr("urllib.request.urlretrieve", _fake_urlretrieve)
 
     ai_install._install_kiro()
@@ -454,8 +532,54 @@ def test_install_kiro_downloads_runtime_os_archive_and_copies_binaries(
     for name in binary_names:
         path = install_dir / name
         assert path.exists()
-    if runtime_os != "windows":
-        assert len(chmod_calls) == len(binary_names)
-        assert all(mode == 0o755 for _, mode in chmod_calls)
-    else:
-        assert not chmod_calls
+    assert len(chmod_calls) == len(binary_names)
+    assert all(mode == 0o755 for _, mode in chmod_calls)
+    assert observed["urlopen"] == ai_install.KIRO_MANIFEST_URL
+    assert observed["download"] == f"{ai_install.KIRO_CHANNEL_BASE_URL}/{expected_download}"
+
+
+@pytest.mark.parametrize(
+    "runtime_os, expected_fragment",
+    [
+        ("windows", "unsupported runtime OS windows"),
+        ("darwin", "unsupported runtime OS darwin"),
+    ],
+)
+def test_install_kiro_rejects_unsupported_runtime_os(
+    monkeypatch,
+    capsys,
+    runtime_os,
+    expected_fragment,
+):
+    """
+    @brief Validate explicit unsupported-platform handling for Kiro installer.
+    @details Forces unsupported runtime OS values and verifies installer emits
+      explicit errors without performing network download operations.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param capsys {pytest.CaptureFixture[str]} Output capture fixture.
+    @param runtime_os {str} Simulated unsupported runtime OS token.
+    @param expected_fragment {str} Expected stderr fragment.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-067
+    """
+
+    called = {"urlopen": 0, "urlretrieve": 0}
+
+    def _unexpected_urlopen(*_args, **_kwargs):
+        called["urlopen"] += 1
+        raise AssertionError("urlopen must not be called on unsupported platforms")
+
+    def _unexpected_urlretrieve(*_args, **_kwargs):
+        called["urlretrieve"] += 1
+        raise AssertionError("urlretrieve must not be called on unsupported platforms")
+
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: runtime_os)
+    monkeypatch.setattr("urllib.request.urlopen", _unexpected_urlopen)
+    monkeypatch.setattr("urllib.request.urlretrieve", _unexpected_urlretrieve)
+
+    ai_install._install_kiro()
+
+    captured = capsys.readouterr()
+    assert expected_fragment in captured.err
+    assert called["urlopen"] == 0
+    assert called["urlretrieve"] == 0

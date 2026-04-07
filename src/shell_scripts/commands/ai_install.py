@@ -2,13 +2,15 @@
 """@brief AI CLI installers dispatcher with OS-aware package resolution.
 
 @details Provides selector-based installation flows for npm-distributed tools
-and direct-download installers. Npm command prefix and direct-download package
-sources are resolved from detected runtime OS to keep installer payloads
-aligned with Linux, Windows, and macOS targets.
-@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-056
+and direct-download installers. Npm command prefix and installer payload
+sources are resolved from detected runtime OS. Kiro package resolution is
+manifest-driven on Linux and explicitly unsupported on Windows/macOS.
+@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-056, REQ-067
 """
 
+import json
 import os
+import platform
 import subprocess
 import shutil
 import zipfile
@@ -55,12 +57,9 @@ CLAUDE_ARTIFACT_CANDIDATES = {
     "windows": ("windows-x64/claude.exe", "win32-x64/claude.exe"),
     "darwin": ("darwin-arm64/claude", "darwin-x64/claude"),
 }
-KIRO_BASE_URL = "https://desktop-release.q.us-east-1.amazonaws.com/latest"
-KIRO_ARCHIVE_CANDIDATES = {
-    "linux": ("kirocli-x86_64-linux.zip",),
-    "windows": ("kirocli-x86_64-windows.zip",),
-    "darwin": ("kirocli-aarch64-macos.zip", "kirocli-x86_64-macos.zip"),
-}
+KIRO_CHANNEL_BASE_URL = "https://prod.download.cli.kiro.dev/stable"
+KIRO_MANIFEST_URL = f"{KIRO_CHANNEL_BASE_URL}/latest/manifest.json"
+KIRO_LINUX_VARIANT = "headless"
 
 
 def print_help(version):
@@ -115,6 +114,90 @@ def _install_npm_tool(tool_key):
     else:
         print_success(f"{info['name']} installed.")
     print()
+
+
+def _normalize_kiro_linux_arch(machine_token):
+    """@brief Normalize machine architecture token for Kiro Linux packages.
+
+    @details Maps runtime machine names into manifest architecture keys accepted
+    by Kiro headless Linux ZIP entries. Raises explicit error for unknown
+    architecture to avoid ambiguous package selection.
+    @param machine_token {str} Raw `platform.machine()` token.
+    @return {str} Normalized architecture token (`x86_64` or `aarch64`).
+    @throws {RuntimeError} When architecture is not supported by Kiro installer.
+    @satisfies REQ-010, REQ-067
+    """
+
+    normalized = machine_token.strip().lower()
+    if normalized in ("x86_64", "amd64"):
+        return "x86_64"
+    if normalized in ("aarch64", "arm64"):
+        return "aarch64"
+    raise RuntimeError(
+        f"Unsupported Linux architecture for Kiro installer: {machine_token}"
+    )
+
+
+def _detect_kiro_linux_libc():
+    """@brief Detect Linux libc class token for Kiro package selection.
+
+    @details Uses `platform.libc_ver()` to classify runtime libc as `musl` or
+    `gnu`. Unknown or empty values default to `gnu` to keep deterministic
+    package selection for glibc environments.
+    @return {str} libc class token (`musl` or `gnu`).
+    @satisfies REQ-010
+    """
+
+    libc_name, _ = platform.libc_ver()
+    if "musl" in libc_name.lower():
+        return "musl"
+    return "gnu"
+
+
+def _resolve_kiro_linux_download_path(manifest, arch_token, libc_token):
+    """@brief Resolve Kiro Linux ZIP download path from manifest metadata.
+
+    @details Filters manifest packages by Linux OS, headless ZIP variant,
+    runtime architecture, and runtime libc class reflected in target triple.
+    Returns first matching `download` path and fails explicitly when no match
+    exists.
+    @param manifest {dict[str, object]} Parsed Kiro manifest JSON payload.
+    @param arch_token {str} Normalized architecture token (`x86_64|aarch64`).
+    @param libc_token {str} Normalized libc token (`gnu|musl`).
+    @return {str} Relative download path from manifest `packages[].download`.
+    @throws {RuntimeError} When no manifest package matches runtime filters.
+    @satisfies DES-013, REQ-010
+    """
+
+    if libc_token not in ("gnu", "musl"):
+        raise RuntimeError(f"Unsupported Linux libc class for Kiro installer: {libc_token}")
+
+    target_suffix = "linux-musl" if libc_token == "musl" else "linux-gnu"
+    packages = manifest.get("packages")
+    if not isinstance(packages, list):
+        raise RuntimeError("Invalid Kiro manifest format: missing packages list")
+
+    for package in packages:
+        if not isinstance(package, dict):
+            continue
+        if package.get("os") != "linux":
+            continue
+        if package.get("fileType") != "zip":
+            continue
+        if package.get("variant") != KIRO_LINUX_VARIANT:
+            continue
+        if package.get("architecture") != arch_token:
+            continue
+        target_triple = str(package.get("targetTriple", ""))
+        if target_suffix not in target_triple:
+            continue
+        download_path = package.get("download")
+        if isinstance(download_path, str) and download_path:
+            return download_path
+
+    raise RuntimeError(
+        "No Kiro Linux package matched runtime architecture/libc in manifest"
+    )
 
 
 def _install_claude():
@@ -174,45 +257,57 @@ def _install_claude():
 def _install_kiro():
     """@brief Install Kiro CLI binaries by ZIP extraction flow.
 
-    @details Resolves runtime-OS archive candidates, downloads first available
-    Kiro ZIP package, extracts binaries, copies `kiro-cli*` executables into
-    `~/.local/bin`, and applies executable mode on non-Windows runtimes.
+    @details Rejects unsupported runtime OS values (`windows`, `darwin`) with
+    explicit errors. On Linux, resolves runtime architecture/libc package from
+    official stable manifest, downloads selected ZIP archive, extracts
+    `kiro-cli*` binaries, and installs them into `~/.local/bin`.
     @return {None} Executes side effects and prints result messages.
-    @throws {RuntimeError} When runtime OS has no configured package candidates.
+    @throws {RuntimeError} When runtime OS is unsupported or manifest has no
+      matching package.
     @throws {urllib.error.URLError} When archive download fails.
+    @throws {json.JSONDecodeError} When manifest payload is malformed.
     @throws {zipfile.BadZipFile} When downloaded archive is invalid.
     @throws {OSError} When extraction/copy/permission updates fail.
-    @satisfies DES-013, REQ-010
+    @satisfies DES-013, REQ-010, REQ-067
     """
 
     import urllib.error
     import urllib.request
 
     print_info("Installing Kiro CLI...")
+    runtime_os = get_runtime_os()
+    if runtime_os == "windows":
+        print_error("Failed to install Kiro CLI: unsupported runtime OS windows.")
+        print()
+        return
+    if runtime_os == "darwin":
+        print_error("Failed to install Kiro CLI: unsupported runtime OS darwin.")
+        print()
+        return
+    if runtime_os != "linux":
+        print_error(f"Failed to install Kiro CLI: unsupported runtime OS {runtime_os}.")
+        print()
+        return
+
     install_dir = Path.home() / ".local" / "bin"
     install_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        runtime_os = get_runtime_os()
-        archive_candidates = KIRO_ARCHIVE_CANDIDATES.get(runtime_os)
-        if not archive_candidates:
-            raise RuntimeError(f"Unsupported runtime OS for Kiro installer: {runtime_os}")
+        machine_arch = _normalize_kiro_linux_arch(platform.machine())
+        libc_token = _detect_kiro_linux_libc()
+        with urllib.request.urlopen(KIRO_MANIFEST_URL, timeout=15) as response:
+            manifest_payload = json.loads(response.read().decode())
+        download_path = _resolve_kiro_linux_download_path(
+            manifest_payload,
+            machine_arch,
+            libc_token,
+        )
+        archive_url = f"{KIRO_CHANNEL_BASE_URL}/{download_path}"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             zip_path = os.path.join(tmpdir, "kiro.zip")
             print_info("Downloading Kiro CLI...")
-            download_error = None
-            for archive_name in archive_candidates:
-                archive_url = f"{KIRO_BASE_URL}/{archive_name}"
-                try:
-                    urllib.request.urlretrieve(archive_url, zip_path)
-                    break
-                except (urllib.error.HTTPError, urllib.error.URLError) as error:
-                    download_error = error
-            else:
-                raise RuntimeError(
-                    f"No Kiro archive candidate was downloadable for OS {runtime_os}"
-                ) from download_error
+            urllib.request.urlretrieve(archive_url, zip_path)
 
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(tmpdir)
@@ -222,8 +317,7 @@ def _install_kiro():
                 if src.is_file():
                     dest = install_dir / src.name
                     shutil.copy2(src, str(dest))
-                    if runtime_os != "windows":
-                        dest.chmod(0o755)
+                    dest.chmod(0o755)
                     copied_binaries.append(dest.name)
 
             if not copied_binaries:
