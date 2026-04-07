@@ -90,8 +90,9 @@ def _install_npm_tool(tool_key):
 
     @details Resolves base npm command from static tool mapping, prepends
     `sudo` when runtime OS is not Windows, and uses resolved `npm.cmd` path on
-    Windows when available to avoid process-launch failures. Executes subprocess
-    and emits status messages.
+    Windows when available to avoid process-launch failures. For Windows
+    Copilot installs, retries once after a non-zero first attempt to mitigate
+    transient file-lock failures during binary replacement.
     @param tool_key {str} Tool identifier key from `TOOLS`.
     @return {None} Executes side effects and prints result messages.
     @satisfies DES-013, REQ-008, REQ-047, REQ-056
@@ -99,7 +100,8 @@ def _install_npm_tool(tool_key):
 
     info = TOOLS[tool_key]
     command = list(info["install"])
-    if is_windows():
+    windows_runtime = is_windows()
+    if windows_runtime:
         npm_cmd_path = shutil.which("npm.cmd")
         if npm_cmd_path:
             command[0] = npm_cmd_path
@@ -108,7 +110,17 @@ def _install_npm_tool(tool_key):
         command = ["sudo"] + command
     require_commands(command[0])
     print_info(f"Installing {info['name']}...")
-    result = subprocess.run(command)
+    max_attempts = 2 if windows_runtime and tool_key == "copilot" else 1
+    result = None
+    for attempt_idx in range(max_attempts):
+        result = subprocess.run(command)
+        if result.returncode == 0:
+            break
+        if attempt_idx + 1 < max_attempts:
+            print_info(
+                "Retrying GitHub Copilot CLI installation after transient Windows file lock..."
+            )
+    assert result is not None
     if result.returncode != 0:
         print_error(f"Failed to install {info['name']}.")
     else:

@@ -100,7 +100,7 @@
         - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
     - `get_command(...)`: Resolve first positional argument to command module [`src/shell_scripts/commands/__init__.py`]
       - `ai_install.run(...)`: Multi-tool AI CLI installer dispatcher [`src/shell_scripts/commands/ai_install.py`]
-        - `ai_install._install_npm_tool(...)`: Run OS-aware NPM global installation for selected tool with conditional `sudo` prefix [`src/shell_scripts/commands/ai_install.py`]
+        - `ai_install._install_npm_tool(...)`: Run OS-aware NPM global installation for selected tool with conditional `sudo` prefix and one retry for Windows Copilot transient install failures [`src/shell_scripts/commands/ai_install.py`]
           - `is_windows(...)`: Resolve cached runtime OS branch for npm command prefix selection [`src/shell_scripts/utils.py`]
             - `get_runtime_os(...)`: Read cached runtime OS token with lazy initialization [`src/shell_scripts/utils.py`]
               - `detect_runtime_os(...)`: Detect and cache normalized runtime OS token [`src/shell_scripts/utils.py`]

@@ -191,6 +191,47 @@ def test_install_npm_tool_uses_npm_cmd_on_windows(monkeypatch):
     assert observed["command"][0].endswith("npm.cmd")
 
 
+def test_install_npm_tool_retries_copilot_once_on_windows_failure(monkeypatch):
+    """
+    @brief Reproduce Windows Copilot npm EPERM transient install failure.
+    @details Simulates a first failed npm install attempt followed by success
+      and asserts the installer retries Copilot exactly once on Windows.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-008, REQ-047
+    """
+
+    observed = {"commands": []}
+
+    def _fake_run(command):
+        """
+        @brief Mock subprocess.run for retry-path assertions.
+        @details Records each invocation and returns a non-zero result on the
+          first attempt, then success on the second attempt.
+        @param command {list[str]} Command token vector.
+        @return {types.SimpleNamespace} Object with returncode field.
+        """
+
+        observed["commands"].append(list(command))
+        if len(observed["commands"]) == 1:
+            return types.SimpleNamespace(returncode=1)
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
+    monkeypatch.setattr(ai_install, "is_windows", lambda: True)
+    monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(
+        ai_install.shutil,
+        "which",
+        lambda name: "C:/Program Files/nodejs/npm.cmd" if name == "npm.cmd" else None,
+    )
+
+    ai_install._install_npm_tool("copilot")
+
+    assert len(observed["commands"]) == 2
+    assert observed["commands"][0] == observed["commands"][1]
+
+
 @pytest.mark.parametrize(
     "runtime_os, expected_artifact_segment",
     [
