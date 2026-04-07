@@ -198,7 +198,7 @@ from shell_scripts.utils import is_executable_command, print_error
 
 ---
 
-# ai_install.py | Python | 224L | 11 symbols | 9 imports | 7 comments
+# ai_install.py | Python | 286L | 13 symbols | 11 imports | 7 comments
 > Path: `src/shell_scripts/commands/ai_install.py`
 
 ## Imports
@@ -210,47 +210,56 @@ import zipfile
 import tempfile
 from pathlib import Path
 from shell_scripts.utils import (
+import urllib.error
 import urllib.request
+import urllib.error
 import urllib.request
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L25)
-- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L26)
-- var `TOOLS = {` (L28)
-- var `CLAUDE_BUCKET = (` (L47)
-- var `KIRO_URL = (` (L51)
-### fn `def print_help(version)` (L56-78)
+- var `PROGRAM = "shellscripts"` (L27)
+- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L28)
+- var `TOOLS = {` (L30)
+- var `CLAUDE_BUCKET = (` (L49)
+- var `CLAUDE_ARTIFACT_CANDIDATES = {` (L53)
+- var `KIRO_BASE_URL = "https://desktop-release.q.us-east-1.amazonaws.com/latest"` (L58)
+- var `KIRO_ARCHIVE_CANDIDATES = {` (L59)
+### fn `def print_help(version)` (L66-88)
 - @brief Render command help for `ai-install`.
 - @details Prints supported selectors and execution contract for installer dispatch.
 - @param version {str} CLI version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _install_npm_tool(tool_key)` `priv` (L79-109)
+### fn `def _install_npm_tool(tool_key)` `priv` (L89-119)
 - @brief Execute npm-based installer command for selected tool.
 - @details Resolves base npm command from static tool mapping, prepends `sudo` when runtime OS is not Windows, and uses resolved `npm.cmd` path on Windows when available to avoid process-launch failures. Executes subprocess and emits status messages.
 - @param tool_key {str} Tool identifier key from `TOOLS`.
 - @return {None} Executes side effects and prints result messages.
 - @satisfies DES-013, REQ-008, REQ-047, REQ-056
 
-### fn `def _install_claude()` `priv` (L110-142)
+### fn `def _install_claude()` `priv` (L120-173)
 - @brief Install Claude CLI by direct binary download.
-- @details Downloads latest version metadata and Linux binary from configured bucket, writes executable into `~/.claude/bin/claude`, and sets execute permissions.
+- @details Downloads latest version metadata from configured bucket, resolves OS-specific Claude artifact candidates from runtime OS token, downloads the first available artifact, writes executable into `~/.claude/bin/claude`, and sets execute permissions on non-Windows runtimes.
 - @return {None} Executes side effects and prints result messages.
-- @throws {Exception} Handled internally and logged as installer failure.
-- @satisfies REQ-009
+- @throws {RuntimeError} When runtime OS has no configured package candidates.
+- @throws {urllib.error.URLError} When metadata or artifact download fails.
+- @throws {OSError} When destination write or permission update fails.
+- @satisfies DES-013, REQ-009
 
-### fn `def _install_kiro()` `priv` (L143-181)
+### fn `def _install_kiro()` `priv` (L174-243)
 - @brief Install Kiro CLI binaries by ZIP extraction flow.
-- @details Downloads platform ZIP package, extracts binaries, copies `kiro-cli*` executables into `~/.local/bin`, and applies executable mode.
+- @details Resolves runtime-OS archive candidates, downloads first available Kiro ZIP package, extracts binaries, copies `kiro-cli*` executables into `~/.local/bin`, and applies executable mode on non-Windows runtimes.
 - @return {None} Executes side effects and prints result messages.
-- @throws {Exception} Handled internally and logged as installer failure.
-- @satisfies REQ-010
+- @throws {RuntimeError} When runtime OS has no configured package candidates.
+- @throws {urllib.error.URLError} When archive download fails.
+- @throws {zipfile.BadZipFile} When downloaded archive is invalid.
+- @throws {OSError} When extraction/copy/permission updates fail.
+- @satisfies DES-013, REQ-010
 
-- var `ALL_INSTALLERS = {` (L182)
-### fn `def run(args)` (L192-224)
+- var `ALL_INSTALLERS = {` (L244)
+### fn `def run(args)` (L254-286)
 - @brief Parse selectors and execute selected AI installer routines.
 - @details Accepts explicit selectors or defaults to full installer set when omitted; rejects unknown selectors with return code `1`.
 - @param args {list[str]} CLI selector tokens for installer filtering.
@@ -260,17 +269,19 @@ import urllib.request
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|25||
-|`DESCRIPTION`|var|pub|26||
-|`TOOLS`|var|pub|28||
-|`CLAUDE_BUCKET`|var|pub|47||
-|`KIRO_URL`|var|pub|51||
-|`print_help`|fn|pub|56-78|def print_help(version)|
-|`_install_npm_tool`|fn|priv|79-109|def _install_npm_tool(tool_key)|
-|`_install_claude`|fn|priv|110-142|def _install_claude()|
-|`_install_kiro`|fn|priv|143-181|def _install_kiro()|
-|`ALL_INSTALLERS`|var|pub|182||
-|`run`|fn|pub|192-224|def run(args)|
+|`PROGRAM`|var|pub|27||
+|`DESCRIPTION`|var|pub|28||
+|`TOOLS`|var|pub|30||
+|`CLAUDE_BUCKET`|var|pub|49||
+|`CLAUDE_ARTIFACT_CANDIDATES`|var|pub|53||
+|`KIRO_BASE_URL`|var|pub|58||
+|`KIRO_ARCHIVE_CANDIDATES`|var|pub|59||
+|`print_help`|fn|pub|66-88|def print_help(version)|
+|`_install_npm_tool`|fn|priv|89-119|def _install_npm_tool(tool_key)|
+|`_install_claude`|fn|priv|120-173|def _install_claude()|
+|`_install_kiro`|fn|priv|174-243|def _install_kiro()|
+|`ALL_INSTALLERS`|var|pub|244||
+|`run`|fn|pub|254-286|def run(args)|
 
 
 ---

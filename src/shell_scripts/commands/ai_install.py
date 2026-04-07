@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""@brief AI CLI installers dispatcher with OS-aware npm command behavior.
+"""@brief AI CLI installers dispatcher with OS-aware package resolution.
 
 @details Provides selector-based installation flows for npm-distributed tools
-and direct-download installers. Npm command prefix is resolved from detected
-runtime OS, omitting `sudo` on Windows and using `sudo` on non-Windows.
+and direct-download installers. Npm command prefix and direct-download package
+sources are resolved from detected runtime OS to keep installer payloads
+aligned with Linux, Windows, and macOS targets.
 @satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-056
 """
 
@@ -15,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 from shell_scripts.utils import (
+    get_runtime_os,
     is_windows,
     print_info,
     print_error,
@@ -48,9 +50,17 @@ CLAUDE_BUCKET = (
     "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819"
     "/claude-code-releases"
 )
-KIRO_URL = (
-    "https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip"
-)
+CLAUDE_ARTIFACT_CANDIDATES = {
+    "linux": ("linux-x64/claude",),
+    "windows": ("windows-x64/claude.exe", "win32-x64/claude.exe"),
+    "darwin": ("darwin-arm64/claude", "darwin-x64/claude"),
+}
+KIRO_BASE_URL = "https://desktop-release.q.us-east-1.amazonaws.com/latest"
+KIRO_ARCHIVE_CANDIDATES = {
+    "linux": ("kirocli-x86_64-linux.zip",),
+    "windows": ("kirocli-x86_64-windows.zip",),
+    "darwin": ("kirocli-aarch64-macos.zip", "kirocli-x86_64-macos.zip"),
+}
 
 
 def print_help(version):
@@ -110,14 +120,18 @@ def _install_npm_tool(tool_key):
 def _install_claude():
     """@brief Install Claude CLI by direct binary download.
 
-    @details Downloads latest version metadata and Linux binary from configured
-    bucket, writes executable into `~/.claude/bin/claude`, and sets execute
-    permissions.
+    @details Downloads latest version metadata from configured bucket, resolves
+    OS-specific Claude artifact candidates from runtime OS token, downloads the
+    first available artifact, writes executable into `~/.claude/bin/claude`,
+    and sets execute permissions on non-Windows runtimes.
     @return {None} Executes side effects and prints result messages.
-    @throws {Exception} Handled internally and logged as installer failure.
-    @satisfies REQ-009
+    @throws {RuntimeError} When runtime OS has no configured package candidates.
+    @throws {urllib.error.URLError} When metadata or artifact download fails.
+    @throws {OSError} When destination write or permission update fails.
+    @satisfies DES-013, REQ-009
     """
 
+    import urllib.error
     import urllib.request
 
     print_info("Installing Claude CLI...")
@@ -125,17 +139,34 @@ def _install_claude():
     install_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        runtime_os = get_runtime_os()
+        artifact_candidates = CLAUDE_ARTIFACT_CANDIDATES.get(runtime_os)
+        if not artifact_candidates:
+            raise RuntimeError(f"Unsupported runtime OS for Claude installer: {runtime_os}")
+
         version_url = f"{CLAUDE_BUCKET}/latest"
         with urllib.request.urlopen(version_url, timeout=15) as resp:
             version = resp.read().decode().strip()
 
         print_info(f"Downloading Claude CLI version {version}...")
-        binary_url = f"{CLAUDE_BUCKET}/{version}/linux-x64/claude"
+        download_error = None
         dest = install_dir / "claude"
-        urllib.request.urlretrieve(binary_url, str(dest))
-        dest.chmod(0o755)
+        for artifact_path in artifact_candidates:
+            binary_url = f"{CLAUDE_BUCKET}/{version}/{artifact_path}"
+            try:
+                urllib.request.urlretrieve(binary_url, str(dest))
+                break
+            except (urllib.error.HTTPError, urllib.error.URLError) as error:
+                download_error = error
+        else:
+            raise RuntimeError(
+                f"No Claude artifact candidate was downloadable for OS {runtime_os}"
+            ) from download_error
+
+        if runtime_os != "windows":
+            dest.chmod(0o755)
         print_success(f"Claude CLI installed to {dest}")
-    except Exception as e:
+    except (OSError, RuntimeError, urllib.error.HTTPError, urllib.error.URLError) as e:
         print_error(f"Failed to install Claude CLI: {e}")
     print()
 
@@ -143,13 +174,18 @@ def _install_claude():
 def _install_kiro():
     """@brief Install Kiro CLI binaries by ZIP extraction flow.
 
-    @details Downloads platform ZIP package, extracts binaries, copies
-    `kiro-cli*` executables into `~/.local/bin`, and applies executable mode.
+    @details Resolves runtime-OS archive candidates, downloads first available
+    Kiro ZIP package, extracts binaries, copies `kiro-cli*` executables into
+    `~/.local/bin`, and applies executable mode on non-Windows runtimes.
     @return {None} Executes side effects and prints result messages.
-    @throws {Exception} Handled internally and logged as installer failure.
-    @satisfies REQ-010
+    @throws {RuntimeError} When runtime OS has no configured package candidates.
+    @throws {urllib.error.URLError} When archive download fails.
+    @throws {zipfile.BadZipFile} When downloaded archive is invalid.
+    @throws {OSError} When extraction/copy/permission updates fail.
+    @satisfies DES-013, REQ-010
     """
 
+    import urllib.error
     import urllib.request
 
     print_info("Installing Kiro CLI...")
@@ -157,24 +193,50 @@ def _install_kiro():
     install_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        runtime_os = get_runtime_os()
+        archive_candidates = KIRO_ARCHIVE_CANDIDATES.get(runtime_os)
+        if not archive_candidates:
+            raise RuntimeError(f"Unsupported runtime OS for Kiro installer: {runtime_os}")
+
         with tempfile.TemporaryDirectory() as tmpdir:
             zip_path = os.path.join(tmpdir, "kiro.zip")
             print_info("Downloading Kiro CLI...")
-            urllib.request.urlretrieve(KIRO_URL, zip_path)
+            download_error = None
+            for archive_name in archive_candidates:
+                archive_url = f"{KIRO_BASE_URL}/{archive_name}"
+                try:
+                    urllib.request.urlretrieve(archive_url, zip_path)
+                    break
+                except (urllib.error.HTTPError, urllib.error.URLError) as error:
+                    download_error = error
+            else:
+                raise RuntimeError(
+                    f"No Kiro archive candidate was downloadable for OS {runtime_os}"
+                ) from download_error
 
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(tmpdir)
 
-            kiro_bin_dir = os.path.join(tmpdir, "kirocli", "bin")
-            for binary in ("kiro-cli", "kiro-cli-chat", "kiro-cli-term"):
-                src = os.path.join(kiro_bin_dir, binary)
-                if os.path.exists(src):
-                    dest = install_dir / binary
-                    shutil.copy2(src, dest)
-                    dest.chmod(0o755)
+            copied_binaries = []
+            for src in Path(tmpdir).rglob("kiro-cli*"):
+                if src.is_file():
+                    dest = install_dir / src.name
+                    shutil.copy2(src, str(dest))
+                    if runtime_os != "windows":
+                        dest.chmod(0o755)
+                    copied_binaries.append(dest.name)
+
+            if not copied_binaries:
+                raise RuntimeError("No kiro-cli* binaries found in extracted archive")
 
             print_success(f"Kiro CLI installed to {install_dir}")
-    except Exception as e:
+    except (
+        OSError,
+        RuntimeError,
+        urllib.error.HTTPError,
+        urllib.error.URLError,
+        zipfile.BadZipFile,
+    ) as e:
         print_error(f"Failed to install Kiro CLI: {e}")
     print()
 

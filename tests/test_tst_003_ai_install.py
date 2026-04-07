@@ -8,7 +8,9 @@
 """
 
 import types
+import urllib.error
 import zipfile
+from email.message import Message
 
 import pytest
 
@@ -144,7 +146,8 @@ def test_install_npm_tool_omits_sudo_on_windows(monkeypatch):
 
     ai_install._install_npm_tool("copilot")
 
-    assert observed["command"] == ["npm", "install", "-g", "@github/copilot"]
+    assert observed["command"][1:] == ["install", "-g", "@github/copilot"]
+    assert all(token != "sudo" for token in observed["command"])
 
 
 def test_install_npm_tool_uses_npm_cmd_on_windows(monkeypatch):
@@ -188,15 +191,31 @@ def test_install_npm_tool_uses_npm_cmd_on_windows(monkeypatch):
     assert observed["command"][0].endswith("npm.cmd")
 
 
-def test_install_claude_downloads_latest_and_installs_binary(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    "runtime_os, expected_artifact_segment",
+    [
+        ("linux", "/linux-x64/claude"),
+        ("windows", "/windows-x64/claude.exe"),
+        ("darwin", "/darwin-arm64/claude"),
+    ],
+)
+def test_install_claude_downloads_runtime_os_artifact(
+    monkeypatch,
+    tmp_path,
+    runtime_os,
+    expected_artifact_segment,
+):
     """
-    @brief Validate Claude installer download/install flow.
+    @brief Validate Claude installer runtime-OS package selection.
     @details Mocks metadata fetch and binary download operations, redirects
-      home directory to temporary storage, and validates output path and mode.
+      home directory to temporary storage, and verifies installer requests
+      runtime-OS specific artifact paths.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
+    @param runtime_os {str} Simulated runtime OS token.
+    @param expected_artifact_segment {str} Expected Claude artifact URL suffix.
     @return {None} Assertions only.
-    @satisfies TST-003, REQ-009
+    @satisfies TST-003, REQ-009, DES-013
     """
 
     class _FakeResponse:
@@ -252,19 +271,37 @@ def test_install_claude_downloads_latest_and_installs_binary(monkeypatch, tmp_pa
 
     def _fake_urlretrieve(url, destination):
         """
-        @brief Mock urllib.request.urlretrieve for Claude binary.
-        @details Writes deterministic executable payload at destination path.
+        @brief Mock Claude artifact download.
+        @details Asserts URL uses expected runtime-OS artifact segment and writes
+          deterministic executable payload at destination path.
         @param url {str} Binary source URL.
         @param destination {str} Destination path.
         @return {tuple[str, None]} Destination and placeholder headers.
         """
 
         assert "/v9.9.9/" in url
+        assert expected_artifact_segment in url
         with open(destination, "wb") as handle:
             handle.write(b"#!/bin/sh\nexit 0\n")
         return destination, None
 
+    chmod_calls = []
+
+    def _fake_chmod(path_obj, mode):
+        """
+        @brief Mock Path.chmod for permission assertions.
+        @details Captures chmod calls because Windows test filesystems do not
+          reliably expose POSIX execute bits in stat mode checks.
+        @param path_obj {pathlib.Path} Target path receiving chmod.
+        @param mode {int} Permission mode argument.
+        @return {None} Side-effect capture only.
+        """
+
+        chmod_calls.append((str(path_obj), mode))
+
     monkeypatch.setattr(ai_install.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ai_install.Path, "chmod", _fake_chmod)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: runtime_os)
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     monkeypatch.setattr("urllib.request.urlretrieve", _fake_urlretrieve)
 
@@ -272,43 +309,153 @@ def test_install_claude_downloads_latest_and_installs_binary(monkeypatch, tmp_pa
 
     target = tmp_path / ".claude" / "bin" / "claude"
     assert target.exists()
-    assert target.stat().st_mode & 0o111
+    if runtime_os != "windows":
+        assert chmod_calls == [(str(target), 0o755)]
+    else:
+        assert not chmod_calls
 
 
-def test_install_kiro_extracts_and_copies_executables(monkeypatch, tmp_path):
+def test_install_claude_falls_back_to_second_artifact_candidate(monkeypatch, tmp_path):
     """
-    @brief Validate Kiro installer ZIP extraction and copy flow.
-    @details Mocks ZIP download by generating an in-memory archive containing
-      expected binaries and verifies final installation under ~/.local/bin.
+    @brief Validate Claude artifact fallback for the same runtime OS.
+    @details Simulates a missing first candidate for Windows and verifies
+      installer retries next configured candidate URL before succeeding.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {pathlib.Path} Isolated filesystem fixture.
     @return {None} Assertions only.
-    @satisfies TST-003, REQ-010
+    @satisfies TST-003, REQ-009, DES-013
+    """
+
+    class _FakeResponse:
+        """
+        @brief Minimal urlopen response stub.
+        @details Exposes context-manager API and deterministic read payload.
+        @return {None} Helper type for unit tests.
+        """
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            del exc_type, exc, tb
+            return False
+
+        def read(self):
+            return b"v9.9.9"
+
+    calls = []
+
+    def _fake_urlretrieve(url, destination):
+        """
+        @brief Mock Claude artifact download with fallback behavior.
+        @details Fails the first Windows URL and succeeds on fallback candidate.
+        @param url {str} Artifact source URL.
+        @param destination {str} Destination path.
+        @return {tuple[str, None]} Destination and placeholder headers.
+        @throws {urllib.error.HTTPError} Simulated 404 for first candidate.
+        """
+
+        calls.append(url)
+        if url.endswith("/windows-x64/claude.exe"):
+            raise urllib.error.HTTPError(
+                url, 404, "not found", hdrs=Message(), fp=None
+            )
+        assert url.endswith("/win32-x64/claude.exe")
+        with open(destination, "wb") as handle:
+            handle.write(b"MZ")
+        return destination, None
+
+    monkeypatch.setattr(ai_install.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: "windows")
+    monkeypatch.setattr("urllib.request.urlopen", lambda _url, timeout=0: _FakeResponse())
+    monkeypatch.setattr("urllib.request.urlretrieve", _fake_urlretrieve)
+
+    ai_install._install_claude()
+
+    assert len(calls) == 2
+    assert calls[0].endswith("/windows-x64/claude.exe")
+    assert calls[1].endswith("/win32-x64/claude.exe")
+
+
+@pytest.mark.parametrize(
+    "runtime_os, expected_archive_name, binary_names",
+    [
+        ("linux", "kirocli-x86_64-linux.zip", ("kiro-cli", "kiro-cli-chat", "kiro-cli-term")),
+        (
+            "windows",
+            "kirocli-x86_64-windows.zip",
+            ("kiro-cli.exe", "kiro-cli-chat.exe", "kiro-cli-term.exe"),
+        ),
+        (
+            "darwin",
+            "kirocli-aarch64-macos.zip",
+            ("kiro-cli", "kiro-cli-chat", "kiro-cli-term"),
+        ),
+    ],
+)
+def test_install_kiro_downloads_runtime_os_archive_and_copies_binaries(
+    monkeypatch,
+    tmp_path,
+    runtime_os,
+    expected_archive_name,
+    binary_names,
+):
+    """
+    @brief Validate Kiro installer runtime-OS package selection and copy flow.
+    @details Mocks ZIP download per runtime OS by generating in-memory archives
+      and verifies extracted `kiro-cli*` binaries are copied into final bin path.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {pathlib.Path} Isolated filesystem fixture.
+    @param runtime_os {str} Simulated runtime OS token.
+    @param expected_archive_name {str} Expected Kiro archive name suffix.
+    @param binary_names {tuple[str, ...]} Binary file names contained in archive.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-010, DES-013
     """
 
     def _fake_urlretrieve(url, destination):
         """
         @brief Mock Kiro ZIP download.
-        @details Writes a deterministic ZIP archive with expected binaries.
+        @details Asserts runtime-OS archive selection and writes deterministic
+          archive with `kiro-cli*` binaries.
         @param url {str} Download URL.
         @param destination {str} Destination archive path.
         @return {tuple[str, None]} Destination and placeholder headers.
         """
 
-        assert url == ai_install.KIRO_URL
+        assert url.endswith(expected_archive_name)
         with zipfile.ZipFile(destination, "w") as archive:
-            archive.writestr("kirocli/bin/kiro-cli", "#!/bin/sh\n")
-            archive.writestr("kirocli/bin/kiro-cli-chat", "#!/bin/sh\n")
-            archive.writestr("kirocli/bin/kiro-cli-term", "#!/bin/sh\n")
+            for name in binary_names:
+                archive.writestr(f"kirocli/bin/{name}", "#!/bin/sh\n")
         return destination, None
 
+    chmod_calls = []
+
+    def _fake_chmod(path_obj, mode):
+        """
+        @brief Mock Path.chmod for permission assertions.
+        @details Captures chmod calls because Windows test filesystems do not
+          reliably expose POSIX execute bits in stat mode checks.
+        @param path_obj {pathlib.Path} Target path receiving chmod.
+        @param mode {int} Permission mode argument.
+        @return {None} Side-effect capture only.
+        """
+
+        chmod_calls.append((str(path_obj), mode))
+
     monkeypatch.setattr(ai_install.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ai_install.Path, "chmod", _fake_chmod)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: runtime_os)
     monkeypatch.setattr("urllib.request.urlretrieve", _fake_urlretrieve)
 
     ai_install._install_kiro()
 
     install_dir = tmp_path / ".local" / "bin"
-    for name in ("kiro-cli", "kiro-cli-chat", "kiro-cli-term"):
+    for name in binary_names:
         path = install_dir / name
         assert path.exists()
-        assert path.stat().st_mode & 0o111
+    if runtime_os != "windows":
+        assert len(chmod_calls) == len(binary_names)
+        assert all(mode == 0o755 for _, mode in chmod_calls)
+    else:
+        assert not chmod_calls
