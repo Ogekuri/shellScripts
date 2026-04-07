@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.12.0](https://github.com/Ogekuri/shellScripts/compare/v0.11.0..v0.12.0) - 2026-04-07
+### 🐛  Bug Fixes
+- Fix opencode exec on Windows.
+- Fix exit sequence.
+
+### 🚜  Changes
+- add auth copy evidence output [useReq] *(codex)*
+  - Update REQ-043 and REQ-044 to require informational output for both auth copy directions.
+  - Emit print_info evidence line after each auth.json copy in codex command flow.
+  - Extend TST-005 codex tests to assert both copy-evidence messages.
+  - Refresh WORKFLOW and REFERENCES to reflect updated codex runtime behavior.
+- replace auth symlink flow with auth sync [useReq] *(codex)*
+  - Update REQ-043 and REQ-044 to require bidirectional auth.json copy synchronization.
+  - Copy auth.json from home to project before codex launch and copy back after termination.
+  - Adapt TST-005 codex launcher tests and regenerate workflow/reference docs.
+- BREAKING CHANGE: rename AI launcher commands and group global help [useReq] *(core)*
+- normalize docs and source line endings [useReq] *(core)*
+  - preserve merged requirement and terminal cleanup content while normalizing file EOLs
+  - keep REQUIREMENTS, WORKFLOW, REFERENCES, core.py, and utils.py in consistent checkout format
+- disable terminal raw mouse capture on exit [useReq] *(core)*
+  - update REQ-064 and add REQ-065 for explicit terminal mouse shutdown sequence
+  - prepend ?9l mode-off escape before existing ?1000l..?1016l writes
+  - align core/utils Doxygen metadata plus WORKFLOW and REFERENCES docs
+  - verification: req --here --static-check and focused core pytest executed
+- enforce terminal reset after child command exit [useReq] *(core)*
+  - Update REQ-064 to require inherited stdio, blocking wait, and terminal-state restore.
+  - Capture stdin TTY state at CLI entry and restore raw/cbreak plus xterm mouse modes in main() finally.
+  - Add utils terminal helpers with best-effort stty sane fallback for Git Bash and Unix terminals.
+  - Update WORKFLOW runtime call-trace and regenerate REFERENCES for new symbols.
+- normalize line endings post-merge [useReq] *(repo)*
+  - Normalize merged files to repository LF convention after worktree merge.
+  - No functional deltas; content changes are newline normalization only.
+- use blocking subprocess runners [useReq] *(commands)*
+  - Update SRS to require subprocess.run for external command execution.
+  - Replace launcher/dispatch/video/pdf tiler process-replacement calls with blocking subprocess calls.
+  - Propagate child return codes and keep stdio inherited for interactive subprocesses.
+  - Align affected unit tests and regenerate workflow/reference docs.
+
 ## [0.11.0](https://github.com/Ogekuri/shellScripts/compare/v0.10.0..v0.11.0) - 2026-04-05
 ### 🐛  Bug Fixes
 - CRLF will be replaced by LF.
@@ -516,6 +554,7 @@
 - \[0.9.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.9.0
 - \[0.10.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.10.0
 - \[0.11.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.11.0
+- \[0.12.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.12.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -528,3 +567,4 @@
 [0.9.0]: https://github.com/Ogekuri/shellScripts/compare/v0.8.0..v0.9.0
 [0.10.0]: https://github.com/Ogekuri/shellScripts/compare/v0.9.0..v0.10.0
 [0.11.0]: https://github.com/Ogekuri/shellScripts/compare/v0.10.0..v0.11.0
+[0.12.0]: https://github.com/Ogekuri/shellScripts/compare/v0.11.0..v0.12.0
