@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.13.0](https://github.com/Ogekuri/shellScripts/compare/v0.12.0..v0.13.0) - 2026-04-07
+### 🐛  Bug Fixes
+- retry Windows Copilot install on transient lock [useReq] *(ai-install)*
+  - add one retry path for Windows Copilot npm install failures
+  - add a focused reproducer unit test for retry behavior
+  - update workflow and references docs for the changed runtime behavior
+
+### 🚜  Changes
+- BREAKING CHANGE: align Kiro installer with stable manifest [useReq] *(ai-install)*
+  - Update DES-013, REQ-010, TST-003 and add REQ-067 for Kiro platform behavior.\nReplace hardcoded Kiro archive mappings with manifest-driven Linux ZIP resolution.\nSwitch Kiro source to prod.download.cli.kiro.dev/stable/latest manifest endpoint.\nImplement Linux package selection by architecture and libc class (gnu/musl).\nAdd explicit unsupported-platform errors for Kiro on Windows and macOS.\nExpand ai-install tests for manifest resolution and unsupported-platform handling.\nRefresh WORKFLOW and REFERENCES documentation for updated call trace and symbols.
+- resolve Claude/Kiro packages by runtime OS [useReq] *(ai-install)*
+  - Update DES-013, REQ-009, REQ-010, and TST-003 for runtime-OS package resolution.\nRefactor ai-install Claude/Kiro download flows to select Linux/Windows/macOS artifacts.\nAdd Claude artifact fallback handling and runtime-OS archive selection for Kiro.\nExpand TST-003 unit coverage for runtime-OS package selection and fallback behavior.\nRefresh WORKFLOW and REFERENCES docs for updated installer call traces.\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+
 ## [0.12.0](https://github.com/Ogekuri/shellScripts/compare/v0.11.0..v0.12.0) - 2026-04-07
 ### 🐛  Bug Fixes
 - Fix opencode exec on Windows.
@@ -555,6 +568,7 @@
 - \[0.10.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.10.0
 - \[0.11.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.11.0
 - \[0.12.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.12.0
+- \[0.13.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.13.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -568,3 +582,4 @@
 [0.10.0]: https://github.com/Ogekuri/shellScripts/compare/v0.9.0..v0.10.0
 [0.11.0]: https://github.com/Ogekuri/shellScripts/compare/v0.10.0..v0.11.0
 [0.12.0]: https://github.com/Ogekuri/shellScripts/compare/v0.11.0..v0.12.0
+[0.13.0]: https://github.com/Ogekuri/shellScripts/compare/v0.12.0..v0.13.0
