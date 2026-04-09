@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/Ogekuri/shellScripts/compare/v0.13.0..v0.14.0) - 2026-04-09
+### 🚜  Changes
+- enforce no-auto-update flag [useReq] *(copilot)*
+  - Update REQ-015 to require --no-auto-update for Copilot launcher.
+  - Pass --no-auto-update in src/shell_scripts/commands/copilot.py.
+  - Adjust launcher tests and workflow runtime model for the new argv contract.
+
 ## [0.13.0](https://github.com/Ogekuri/shellScripts/compare/v0.12.0..v0.13.0) - 2026-04-07
 ### 🐛  Bug Fixes
 - retry Windows Copilot install on transient lock [useReq] *(ai-install)*
@@ -569,6 +576,7 @@
 - \[0.11.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.11.0
 - \[0.12.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.12.0
 - \[0.13.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.13.0
+- \[0.14.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.14.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -583,3 +591,4 @@
 [0.11.0]: https://github.com/Ogekuri/shellScripts/compare/v0.10.0..v0.11.0
 [0.12.0]: https://github.com/Ogekuri/shellScripts/compare/v0.11.0..v0.12.0
 [0.13.0]: https://github.com/Ogekuri/shellScripts/compare/v0.12.0..v0.13.0
+[0.14.0]: https://github.com/Ogekuri/shellScripts/compare/v0.13.0..v0.14.0
