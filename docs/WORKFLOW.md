@@ -128,7 +128,7 @@
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
         - `codex._copy_auth_file(...)`: Copy auth file content while replacing destination file or symlink and emit one informational output line per copy call (invoked before and after CLI execution) [`src/shell_scripts/commands/codex.py`]
         - `require_commands(...)`: Resolve and validate command executable path before subprocess invocation [`src/shell_scripts/utils.py`]
-      - `copilot.run(...)`: Launch Copilot CLI in project context via command token `copilot --yolo --allow-all-tools` [`src/shell_scripts/commands/copilot.py`]
+      - `copilot.run(...)`: Launch Copilot CLI in project context via command token `copilot --yolo --allow-all-tools --no-auto-update` [`src/shell_scripts/commands/copilot.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
         - `require_commands(...)`: Resolve and validate command executable path before subprocess invocation [`src/shell_scripts/utils.py`]

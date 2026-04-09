@@ -198,6 +198,7 @@ def test_copilot_executes_expected_command(monkeypatch):
         "copilot",
         "--yolo",
         "--allow-all-tools",
+        "--no-auto-update",
         "--extra",
     ]
     assert observed["kwargs"] == {}
@@ -325,7 +326,7 @@ def test_kiro_executes_expected_command(monkeypatch):
 @pytest.mark.parametrize(
     ("module", "args", "expected_tail"),
     [
-        (copilot, ["--extra"], ["--yolo", "--allow-all-tools", "--extra"]),
+        (copilot, ["--extra"], ["--yolo", "--allow-all-tools", "--no-auto-update", "--extra"]),
         (gemini, ["--flag"], ["--yolo", "--flag"]),
         (opencode, ["--inspect"], ["--inspect"]),
         (kiro, ["--ai"], ["--ai"]),

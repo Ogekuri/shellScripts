@@ -135,7 +135,7 @@ No explicit performance optimizations identified.
 - **REQ-067**: MUST reject Kiro installation on Windows and macOS with explicit unsupported-platform error output and without attempting package download or extraction.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
 - **REQ-014**: MUST set `CODEX_HOME` to `<project-root>/.codex` and execute `codex --yolo` in `codex` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-015**: MUST execute `copilot --yolo --allow-all-tools` in `copilot` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-015**: MUST execute `copilot --yolo --allow-all-tools --no-auto-update` in `copilot` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-016**: MUST execute `gemini --yolo` in `gemini` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-017**: MUST execute `~/.claude/bin/claude --dangerously-skip-permissions` in `claude` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-018**: MUST execute `opencode` in `opencode` via `subprocess.run` with inherited stdio and blocking wait.
@@ -223,7 +223,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
 | REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-067 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm install command omits `sudo` on Windows and uses `sudo` on non-Windows; Kiro installer resolves Linux headless ZIP package from official stable manifest and rejects Windows/macOS with explicit unsupported-platform errors. |
 | REQ-014, REQ-043, REQ-044, REQ-064 | `src/shell_scripts/commands/codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; copies `~/.codex/auth.json` into `<project>/.codex/auth.json` before launch and copies back after process termination, replacing existing file or symlink targets; emits one informational output line for each copy operation; executes `codex --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-015, REQ-064 | `src/shell_scripts/commands/copilot.py` | `run` | Executes `copilot --yolo --allow-all-tools` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-015, REQ-064 | `src/shell_scripts/commands/copilot.py` | `run` | Executes `copilot --yolo --allow-all-tools --no-auto-update` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-016, REQ-064 | `src/shell_scripts/commands/gemini.py` | `run` | Executes `gemini --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-017, REQ-064 | `src/shell_scripts/commands/claude.py` | `run` | Executes `~/.claude/bin/claude --dangerously-skip-permissions` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-018, REQ-064 | `src/shell_scripts/commands/opencode.py` | `run` | Executes `opencode` via `subprocess.run` with inherited stdio and blocking wait. |

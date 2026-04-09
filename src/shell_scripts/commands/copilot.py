@@ -48,7 +48,7 @@ def run(args):
     """
 
     require_project_root()
-    cmd = ["copilot", "--yolo", "--allow-all-tools"] + args
+    cmd = ["copilot", "--yolo", "--allow-all-tools", "--no-auto-update"] + args
     cmd[0] = require_commands(cmd[0])
     result = subprocess.run(cmd)
     return result.returncode
