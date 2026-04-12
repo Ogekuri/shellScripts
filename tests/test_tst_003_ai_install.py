@@ -64,30 +64,30 @@ def test_run_unknown_selector_returns_one(monkeypatch):
 @pytest.mark.parametrize(
     "tool_key, expected_cmd",
     [
-        ("codex", ["sudo", "npm", "install", "-g", "@openai/codex"]),
+        ("codex", ["npm", "install", "-g", "@openai/codex"]),
         (
             "copilot",
-            ["sudo", "npm", "install", "-g", "@github/copilot"],
+            ["npm", "install", "-g", "@github/copilot"],
         ),
         (
             "gemini",
-            ["sudo", "npm", "install", "-g", "@google/gemini-cli"],
+            ["npm", "install", "-g", "@google/gemini-cli"],
         ),
         (
             "opencode",
-            ["sudo", "npm", "install", "-g", "opencode-ai"],
+            ["npm", "install", "-g", "opencode-ai"],
         ),
     ],
 )
-def test_install_npm_tool_uses_expected_command(
+def test_install_npm_tool_uses_linux_non_sudo_command(
     monkeypatch,
     tool_key,
     expected_cmd,
 ):
     """
-    @brief Validate npm installer command vectors.
-    @details Intercepts subprocess invocation on non-Windows path and asserts
-      exact command tokens with `sudo` prefix for each npm-based installer.
+    @brief Validate npm installer command vectors on Linux.
+    @details Intercepts subprocess invocation on Linux runtime path and asserts
+      exact command tokens without `sudo` prefix for each npm-based installer.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tool_key {str} Installer key in ai_install.TOOLS.
     @param expected_cmd {list[str]} Expected subprocess command tokens.
@@ -109,12 +109,50 @@ def test_install_npm_tool_uses_expected_command(
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
-    monkeypatch.setattr(ai_install, "is_windows", lambda: False)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: "linux")
     monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
 
     ai_install._install_npm_tool(tool_key)
 
     assert observed["command"] == expected_cmd
+
+
+def test_install_npm_tool_uses_sudo_on_macos(monkeypatch):
+    """
+    @brief Validate npm installer command prefix on macOS.
+    @details Forces macOS runtime branch and verifies npm command executes with
+      `sudo` prefix.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-008, REQ-047
+    """
+
+    observed = {}
+
+    def _fake_run(command):
+        """
+        @brief Mock subprocess.run for macOS npm install path.
+        @details Captures command payload and returns successful status.
+        @param command {list[str]} Command token vector.
+        @return {types.SimpleNamespace} Object with returncode field.
+        """
+
+        observed["command"] = command
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: "darwin")
+    monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
+
+    ai_install._install_npm_tool("copilot")
+
+    assert observed["command"] == [
+        "sudo",
+        "npm",
+        "install",
+        "-g",
+        "@github/copilot",
+    ]
 
 
 def test_install_npm_tool_omits_sudo_on_windows(monkeypatch):
@@ -141,7 +179,7 @@ def test_install_npm_tool_omits_sudo_on_windows(monkeypatch):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
-    monkeypatch.setattr(ai_install, "is_windows", lambda: True)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: "windows")
     monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
 
     ai_install._install_npm_tool("copilot")
@@ -178,7 +216,7 @@ def test_install_npm_tool_uses_npm_cmd_on_windows(monkeypatch):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
-    monkeypatch.setattr(ai_install, "is_windows", lambda: True)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: "windows")
     monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(
         ai_install.shutil,
@@ -218,7 +256,7 @@ def test_install_npm_tool_retries_copilot_once_on_windows_failure(monkeypatch):
         return types.SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
-    monkeypatch.setattr(ai_install, "is_windows", lambda: True)
+    monkeypatch.setattr(ai_install, "get_runtime_os", lambda: "windows")
     monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(
         ai_install.shutil,

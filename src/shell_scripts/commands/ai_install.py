@@ -19,7 +19,6 @@ from pathlib import Path
 
 from shell_scripts.utils import (
     get_runtime_os,
-    is_windows,
     print_info,
     print_error,
     print_success,
@@ -88,11 +87,11 @@ def print_help(version):
 def _install_npm_tool(tool_key):
     """@brief Execute npm-based installer command for selected tool.
 
-    @details Resolves base npm command from static tool mapping, prepends
-    `sudo` when runtime OS is not Windows, and uses resolved `npm.cmd` path on
-    Windows when available to avoid process-launch failures. For Windows
-    Copilot installs, retries once after a non-zero first attempt to mitigate
-    transient file-lock failures during binary replacement.
+    @details Resolves base npm command from static tool mapping, omits `sudo`
+    on Linux and Windows, prepends `sudo` on other runtimes, and uses resolved
+    `npm.cmd` path on Windows when available to avoid process-launch failures.
+    For Windows Copilot installs, retries once after a non-zero first attempt
+    to mitigate transient file-lock failures during binary replacement.
     @param tool_key {str} Tool identifier key from `TOOLS`.
     @return {None} Executes side effects and prints result messages.
     @satisfies DES-013, REQ-008, REQ-047, REQ-056
@@ -100,12 +99,13 @@ def _install_npm_tool(tool_key):
 
     info = TOOLS[tool_key]
     command = list(info["install"])
-    windows_runtime = is_windows()
+    runtime_os = get_runtime_os()
+    windows_runtime = runtime_os == "windows"
     if windows_runtime:
         npm_cmd_path = shutil.which("npm.cmd")
         if npm_cmd_path:
             command[0] = npm_cmd_path
-    else:
+    elif runtime_os != "linux":
         require_commands("sudo")
         command = ["sudo"] + command
     require_commands(command[0])

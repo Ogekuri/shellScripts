@@ -221,24 +221,24 @@ import urllib.request
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L29)
-- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L30)
-- var `TOOLS = {` (L32)
-- var `CLAUDE_BUCKET = (` (L51)
-- var `CLAUDE_ARTIFACT_CANDIDATES = {` (L55)
-- var `KIRO_CHANNEL_BASE_URL = "https://prod.download.cli.kiro.dev/stable"` (L60)
-- var `KIRO_MANIFEST_URL = f"{KIRO_CHANNEL_BASE_URL}/latest/manifest.json"` (L61)
-- var `KIRO_LINUX_VARIANT = "headless"` (L62)
-### fn `def print_help(version)` (L65-87)
+- var `PROGRAM = "shellscripts"` (L28)
+- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L29)
+- var `TOOLS = {` (L31)
+- var `CLAUDE_BUCKET = (` (L50)
+- var `CLAUDE_ARTIFACT_CANDIDATES = {` (L54)
+- var `KIRO_CHANNEL_BASE_URL = "https://prod.download.cli.kiro.dev/stable"` (L59)
+- var `KIRO_MANIFEST_URL = f"{KIRO_CHANNEL_BASE_URL}/latest/manifest.json"` (L60)
+- var `KIRO_LINUX_VARIANT = "headless"` (L61)
+### fn `def print_help(version)` (L64-86)
 - @brief Render command help for `ai-install`.
 - @details Prints supported selectors and execution contract for installer dispatch.
 - @param version {str} CLI version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _install_npm_tool(tool_key)` `priv` (L88-130)
+### fn `def _install_npm_tool(tool_key)` `priv` (L87-130)
 - @brief Execute npm-based installer command for selected tool.
-- @details Resolves base npm command from static tool mapping, prepends `sudo` when runtime OS is not Windows, and uses resolved `npm.cmd` path on Windows when available to avoid process-launch failures. For Windows Copilot installs, retries once after a non-zero first attempt to mitigate transient file-lock failures during binary replacement.
+- @details Resolves base npm command from static tool mapping, omits `sudo` on Linux and Windows, prepends `sudo` on other runtimes, and uses resolved `npm.cmd` path on Windows when available to avoid process-launch failures. For Windows Copilot installs, retries once after a non-zero first attempt to mitigate transient file-lock failures during binary replacement.
 - @param tool_key {str} Tool identifier key from `TOOLS`.
 - @return {None} Executes side effects and prints result messages.
 - @satisfies DES-013, REQ-008, REQ-047, REQ-056
@@ -298,16 +298,16 @@ import urllib.request
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|29||
-|`DESCRIPTION`|var|pub|30||
-|`TOOLS`|var|pub|32||
-|`CLAUDE_BUCKET`|var|pub|51||
-|`CLAUDE_ARTIFACT_CANDIDATES`|var|pub|55||
-|`KIRO_CHANNEL_BASE_URL`|var|pub|60||
-|`KIRO_MANIFEST_URL`|var|pub|61||
-|`KIRO_LINUX_VARIANT`|var|pub|62||
-|`print_help`|fn|pub|65-87|def print_help(version)|
-|`_install_npm_tool`|fn|priv|88-130|def _install_npm_tool(tool_key)|
+|`PROGRAM`|var|pub|28||
+|`DESCRIPTION`|var|pub|29||
+|`TOOLS`|var|pub|31||
+|`CLAUDE_BUCKET`|var|pub|50||
+|`CLAUDE_ARTIFACT_CANDIDATES`|var|pub|54||
+|`KIRO_CHANNEL_BASE_URL`|var|pub|59||
+|`KIRO_MANIFEST_URL`|var|pub|60||
+|`KIRO_LINUX_VARIANT`|var|pub|61||
+|`print_help`|fn|pub|64-86|def print_help(version)|
+|`_install_npm_tool`|fn|priv|87-130|def _install_npm_tool(tool_key)|
 |`_normalize_kiro_linux_arch`|fn|priv|131-152|def _normalize_kiro_linux_arch(machine_token)|
 |`_detect_kiro_linux_libc`|fn|priv|153-168|def _detect_kiro_linux_libc()|
 |`_resolve_kiro_linux_download_path`|fn|priv|169-214|def _resolve_kiro_linux_download_path(manifest, arch_toke...|
