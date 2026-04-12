@@ -5,9 +5,9 @@
 and direct-download installers. Npm command prefix and installer payload
 sources are resolved from detected runtime OS. Kiro package resolution is
 manifest-driven on Linux and explicitly unsupported on Windows/macOS. pi.dev
-installation runs npm global installation first and then installs configured
-pi extensions.
-@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-056, REQ-067, REQ-072, REQ-073
+installation always runs npm global installation first; optional pi extension
+installation is enabled only when `--extra` is requested by CLI selector.
+@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-056, REQ-067, REQ-072, REQ-073, REQ-074
 """
 
 import json
@@ -87,6 +87,7 @@ def print_help(version):
     print("  --gemini     - Install Google Gemini CLI only.")
     print("  --opencode   - Install OpenCode CLI only.")
     print("  --pi         - Install pi.dev CLI only.")
+    print("  --extra      - Install optional pi.dev extension after pi CLI install.")
     print("  --claude     - Install Claude CLI only.")
     print("  --kiro       - Install Kiro CLI only.")
     print("  --help       - Show this help message.")
@@ -277,18 +278,24 @@ def _install_claude():
     print()
 
 
-def _install_pi():
-    """@brief Install pi.dev CLI and configured pi extensions.
+def _install_pi(*, install_extra=False):
+    """@brief Install pi.dev CLI and optional pi extensions.
 
     @details Executes npm-based pi.dev CLI installation first. When npm
-    installation succeeds, resolves `pi` executable and installs each extension
-    from `PI_EXTENSIONS` using `pi install <extension>`. Extension installation
-    is skipped after any CLI installation failure.
+    installation succeeds, extension installation executes only if
+    `install_extra` is `True`; in that mode the function resolves `pi`
+    executable and installs each extension from `PI_EXTENSIONS` using
+    `pi install <extension>`. Extension installation is skipped after any CLI
+    installation failure or when `install_extra` is `False`.
+    @param install_extra {bool} Enables optional pi extension installation.
     @return {None} Executes side effects and prints result messages.
-    @satisfies DES-013, REQ-072, REQ-073
+    @satisfies DES-013, REQ-072, REQ-073, REQ-074
     """
 
     if not _install_npm_tool("pi"):
+        return
+
+    if not install_extra:
         return
 
     pi_executable = require_commands("pi")
@@ -400,32 +407,44 @@ def run(args):
     """@brief Parse selectors and execute selected AI installer routines.
 
     @details Accepts explicit selectors or defaults to full installer set when
-    omitted; rejects unknown selectors with return code `1`.
+    omitted; parses optional `--extra` flag for pi extension gating; rejects
+    unknown selectors with return code `1`.
     @param args {list[str]} CLI selector tokens for installer filtering.
     @return {int} `0` on successful dispatch; `1` on unknown selector.
-    @satisfies REQ-006, REQ-007
+    @satisfies REQ-006, REQ-007, REQ-073, REQ-074
     """
 
     selected = []
+    include_all = False
+    install_extra = False
     for arg in args:
         key = arg.lstrip("-")
+        if key == "extra":
+            install_extra = True
+            continue
         if key == "all":
-            selected = list(ALL_INSTALLERS.keys())
-            break
-        elif key in ALL_INSTALLERS:
+            include_all = True
+            continue
+        if key in ALL_INSTALLERS:
             selected.append(key)
-        else:
-            print_error(f"Unknown option: {arg}")
-            return 1
+            continue
+        print_error(f"Unknown option: {arg}")
+        return 1
 
-    if not selected:
+    if include_all or not selected:
         selected = list(ALL_INSTALLERS.keys())
+    else:
+        selected = list(dict.fromkeys(selected))
 
     print_info(f"Starting AI CLI tools installation ({len(selected)} tools)...")
     print()
 
     for key in selected:
-        ALL_INSTALLERS[key]()
+        installer = ALL_INSTALLERS[key]
+        if key == "pi" and installer is _install_pi:
+            installer(install_extra=install_extra)
+            continue
+        installer()
 
     print_success("AI CLI tools installation complete.")
     return 0

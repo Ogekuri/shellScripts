@@ -1,9 +1,10 @@
 """
 @brief Validate AI installer selector and installer behaviors.
 @details Verifies selector parsing, unknown-selector rejection, npm-based
-  installer command construction, Claude binary installation flow, and Kiro ZIP
-  extraction/copy flow. External network/process boundaries are mocked.
-@satisfies TST-003, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-067
+  installer command construction, optional pi extension gating, Claude binary
+  installation flow, and Kiro ZIP extraction/copy flow. External
+  network/process boundaries are mocked.
+@satisfies TST-003, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-067, REQ-072, REQ-073, REQ-074
 @return {None} Pytest module scope.
 """
 
@@ -59,6 +60,153 @@ def test_run_unknown_selector_returns_one(monkeypatch):
     result = ai_install.run(["--unknown-selector"])
 
     assert result == 1
+
+
+def test_run_pi_with_extra_forwards_extension_flag(monkeypatch):
+    """
+    @brief Validate `--extra` selector propagation to pi installer.
+    @details Replaces pi installer with a flag-capturing stub and verifies
+      `ai-install --pi --extra` forwards `install_extra=True`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-073, REQ-074
+    """
+
+    observed = {}
+
+    def _fake_install_pi(*, install_extra=False):
+        """
+        @brief Capture forwarded extension flag.
+        @details Stores flag state for assertion of run-parser behavior.
+        @param install_extra {bool} Parsed extension gating flag.
+        @return {None} Test helper side effect only.
+        """
+
+        observed["install_extra"] = install_extra
+
+    monkeypatch.setattr(ai_install, "_install_pi", _fake_install_pi)
+    monkeypatch.setattr(ai_install, "ALL_INSTALLERS", {"pi": ai_install._install_pi})
+
+    result = ai_install.run(["--pi", "--extra"])
+
+    assert result == 0
+    assert observed["install_extra"] is True
+
+
+def test_run_without_selector_invokes_pi_without_extra(monkeypatch):
+    """
+    @brief Validate default pi invocation without `--extra` flag.
+    @details Replaces pi installer with a flag-capturing stub and verifies
+      empty selector invocation forwards `install_extra=False`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-006, REQ-073
+    """
+
+    observed = []
+
+    def _fake_install_pi(*, install_extra=False):
+        """
+        @brief Capture default extension flag.
+        @details Appends forwarded flag state for parser-behavior assertion.
+        @param install_extra {bool} Parsed extension gating flag.
+        @return {None} Test helper side effect only.
+        """
+
+        observed.append(("pi", install_extra))
+
+    monkeypatch.setattr(ai_install, "_install_pi", _fake_install_pi)
+    monkeypatch.setattr(
+        ai_install,
+        "ALL_INSTALLERS",
+        {
+            "pi": ai_install._install_pi,
+            "codex": lambda: observed.append(("codex", None)),
+        },
+    )
+
+    result = ai_install.run([])
+
+    assert result == 0
+    assert observed == [("pi", False), ("codex", None)]
+
+
+def test_install_pi_without_extra_skips_extension_installation(monkeypatch):
+    """
+    @brief Validate default pi installer extension skip behavior.
+    @details Forces successful npm installation and verifies extension command
+      launch path is not reached when `install_extra` is false.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-072, REQ-073
+    """
+
+    observed = {"require_commands_calls": 0, "subprocess_calls": 0}
+
+    def _fake_require_commands(*_cmds):
+        """
+        @brief Count extension executable resolution calls.
+        @details Increments call counter and returns deterministic `pi` token.
+        @param _cmds {tuple[str, ...]} Requested command tokens.
+        @return {str} Deterministic executable token.
+        """
+
+        observed["require_commands_calls"] += 1
+        return "pi"
+
+    def _fake_run(_command):
+        """
+        @brief Count extension subprocess invocations.
+        @details Increments call counter and returns successful status payload.
+        @param _command {list[str]} Command token vector.
+        @return {types.SimpleNamespace} Object with `returncode=0`.
+        """
+
+        observed["subprocess_calls"] += 1
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(ai_install, "_install_npm_tool", lambda _tool_key: True)
+    monkeypatch.setattr(ai_install, "require_commands", _fake_require_commands)
+    monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
+
+    ai_install._install_pi(install_extra=False)
+
+    assert observed["require_commands_calls"] == 0
+    assert observed["subprocess_calls"] == 0
+
+
+def test_install_pi_with_extra_installs_extensions(monkeypatch):
+    """
+    @brief Validate optional pi extension installation path.
+    @details Forces successful npm installation and verifies extension commands
+      execute in configured order when `install_extra` is true.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-003, REQ-072, REQ-074
+    """
+
+    observed_commands = []
+
+    def _fake_run(command):
+        """
+        @brief Capture extension subprocess command vectors.
+        @details Records command tokens and returns successful status payload.
+        @param command {list[str]} Command token vector.
+        @return {types.SimpleNamespace} Object with `returncode=0`.
+        """
+
+        observed_commands.append(list(command))
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(ai_install, "_install_npm_tool", lambda _tool_key: True)
+    monkeypatch.setattr(ai_install, "require_commands", lambda *_cmds: "pi")
+    monkeypatch.setattr(ai_install.subprocess, "run", _fake_run)
+
+    ai_install._install_pi(install_extra=True)
+
+    assert observed_commands == [
+        ["pi", "install", extension] for extension in ai_install.PI_EXTENSIONS
+    ]
 
 
 @pytest.mark.parametrize(
