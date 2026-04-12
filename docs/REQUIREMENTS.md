@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.20"
+version: "0.6.21"
 date: "2026-04-12"
 author: "Auto-generated from repository evidence"
 scope:
@@ -127,11 +127,13 @@ No explicit performance optimizations identified.
 - **REQ-003**: MUST force the version-check HTTP request, print the package version, and return code `0` for `--version` and `--ver`.
 - **REQ-004**: MUST execute the Linux `--upgrade` command from runtime config key `management.upgrade`, using default `uv tool install shellscripts --force --from git+https://github.com/Ogekuri/shellScripts.git` when unset.
 - **REQ-005**: MUST execute the Linux `--uninstall` command from runtime config key `management.uninstall`, using default `uv tool uninstall shellscripts` when unset.
-- **REQ-006**: MUST execute all AI installers by default in `ai-install` when no selector options are provided.
+- **REQ-006**: MUST execute all configured AI installers, including pi.dev, by default in `ai-install` when no selector options are provided.
 - **REQ-007**: MUST reject unknown `ai-install` selector options with return code `1`.
 - **REQ-008**: MUST install Codex, Copilot, Gemini, and OpenCode CLIs via `npm install -g` without `sudo` on Linux and Windows, and with `sudo` on macOS.
 - **REQ-009**: MUST install Claude CLI by downloading `latest` metadata, selecting runtime-OS binary package (`linux`, `windows`, `macos`), and installing the executable at `~/.claude/bin/claude`.
 - **REQ-010**: MUST install Kiro CLI only on Linux by resolving a headless ZIP package from `https://prod.download.cli.kiro.dev/stable/latest/manifest.json` using runtime architecture (`x86_64|aarch64`) and libc class (`gnu|musl`).
+- **REQ-072**: MUST install pi.dev CLI in `ai-install` via `npm install -g @mariozechner/pi-coding-agent` with the same runtime-OS sudo policy used for other npm-based AI installers.
+- **REQ-073**: MUST execute `pi install npm:pi-manage-todo-list` only after successful pi.dev CLI installation and MUST emit per-tool installer outputs using the same start/result print pattern used by other `ai-install` tools.
 - **REQ-067**: MUST reject Kiro installation on Windows and macOS with explicit unsupported-platform error output and without attempting package download or extraction.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
 - **REQ-014**: MUST set `CODEX_HOME` to `<project-root>/.codex` and execute `codex --yolo` in `codex` via `subprocess.run` with inherited stdio and blocking wait.
@@ -198,7 +200,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 ### 4.2 Verification Requirements
 - **TST-001**: MUST verify REQ-001, REQ-002, REQ-047, and REQ-066 by invoking `shell_scripts.core.main`, passing only if return codes, grouped help/error outputs, and startup OS-detection invocation match specified behavior.
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting command values resolved from runtime config with default command fallback and propagated return codes.
-- **TST-003**: MUST verify REQ-006 through REQ-010 and REQ-067 by monkeypatching installer call sites and passing only if selector parsing is correct, unknown options return code `1`, npm Linux/Windows no-`sudo` and macOS `sudo` policy is enforced, Linux Kiro manifest package resolution is correct, and Windows/macOS Kiro install paths fail explicitly.
+- **TST-003**: MUST verify REQ-006 through REQ-010, REQ-067, and REQ-072 through REQ-073 by monkeypatching installer call sites and passing only if selector parsing, npm sudo policy, pi post-install extension order, and Kiro platform gates are correct.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
 - **TST-005**: MUST verify REQ-014 through REQ-021, REQ-043 through REQ-044, and REQ-068 through REQ-069 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, codex auth synchronization, and propagated return codes match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
@@ -225,7 +227,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 | DES-007, REQ-023, REQ-024, REQ-064 | `src/shell_scripts/commands/diff_cmd.py`; `src/shell_scripts/commands/edit_cmd.py`; `src/shell_scripts/commands/view_cmd.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `diff`/`edit`/`view` wrappers call shared dispatch; missing file argument returns `2`; selected external command is launched via `subprocess.run` with inherited stdio and blocking wait. |
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
-| REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-067 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro` | Default installer selection is all tools; unknown options fail; npm install command omits `sudo` on Linux and Windows and uses `sudo` on macOS; Kiro installer resolves Linux headless ZIP package from official stable manifest and rejects Windows/macOS with explicit unsupported-platform errors. |
+| REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-067, REQ-072, REQ-073 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro`, `_install_pi` | Default installer selection is all tools including pi.dev; unknown options fail; npm install command omits `sudo` on Linux and Windows and uses `sudo` on macOS; pi installer runs CLI install then extension install; Kiro installer resolves Linux headless ZIP package from official stable manifest and rejects Windows/macOS with explicit unsupported-platform errors. |
 | REQ-014, REQ-043, REQ-044, REQ-064 | `src/shell_scripts/commands/codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; copies `~/.codex/auth.json` into `<project>/.codex/auth.json` before launch and copies back after process termination, replacing existing file or symlink targets; emits one informational output line for each copy operation; executes `codex --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-015, REQ-064 | `src/shell_scripts/commands/copilot.py` | `run` | Executes `copilot --yolo --allow-all-tools --no-auto-update` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-016, REQ-064 | `src/shell_scripts/commands/gemini.py` | `run` | Executes `gemini --yolo` via `subprocess.run` with inherited stdio and blocking wait. |

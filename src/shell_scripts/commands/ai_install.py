@@ -4,8 +4,10 @@
 @details Provides selector-based installation flows for npm-distributed tools
 and direct-download installers. Npm command prefix and installer payload
 sources are resolved from detected runtime OS. Kiro package resolution is
-manifest-driven on Linux and explicitly unsupported on Windows/macOS.
-@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-056, REQ-067
+manifest-driven on Linux and explicitly unsupported on Windows/macOS. pi.dev
+installation runs npm global installation first and then installs configured
+pi extensions.
+@satisfies PRJ-003, DES-013, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-047, REQ-056, REQ-067, REQ-072, REQ-073
 """
 
 import json
@@ -26,7 +28,7 @@ from shell_scripts.utils import (
 )
 
 PROGRAM = "shellscripts"
-DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."
+DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, pi.dev, Claude, Kiro)."
 
 TOOLS = {
     "codex": {
@@ -45,7 +47,12 @@ TOOLS = {
         "name": "OpenCode CLI",
         "install": ["npm", "install", "-g", "opencode-ai"],
     },
+    "pi": {
+        "name": "pi.dev CLI",
+        "install": ["npm", "install", "-g", "@mariozechner/pi-coding-agent"],
+    },
 }
+PI_EXTENSIONS = ("npm:pi-manage-todo-list",)
 
 CLAUDE_BUCKET = (
     "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819"
@@ -79,6 +86,7 @@ def print_help(version):
     print("  --copilot    - Install GitHub Copilot CLI only.")
     print("  --gemini     - Install Google Gemini CLI only.")
     print("  --opencode   - Install OpenCode CLI only.")
+    print("  --pi         - Install pi.dev CLI only.")
     print("  --claude     - Install Claude CLI only.")
     print("  --kiro       - Install Kiro CLI only.")
     print("  --help       - Show this help message.")
@@ -93,8 +101,8 @@ def _install_npm_tool(tool_key):
     For Windows Copilot installs, retries once after a non-zero first attempt
     to mitigate transient file-lock failures during binary replacement.
     @param tool_key {str} Tool identifier key from `TOOLS`.
-    @return {None} Executes side effects and prints result messages.
-    @satisfies DES-013, REQ-008, REQ-047, REQ-056
+    @return {bool} `True` when installation succeeds; `False` otherwise.
+    @satisfies DES-013, REQ-008, REQ-047, REQ-056, REQ-072
     """
 
     info = TOOLS[tool_key]
@@ -123,9 +131,12 @@ def _install_npm_tool(tool_key):
     assert result is not None
     if result.returncode != 0:
         print_error(f"Failed to install {info['name']}.")
-    else:
-        print_success(f"{info['name']} installed.")
+        print()
+        return False
+
+    print_success(f"{info['name']} installed.")
     print()
+    return True
 
 
 def _normalize_kiro_linux_arch(machine_token):
@@ -266,6 +277,33 @@ def _install_claude():
     print()
 
 
+def _install_pi():
+    """@brief Install pi.dev CLI and configured pi extensions.
+
+    @details Executes npm-based pi.dev CLI installation first. When npm
+    installation succeeds, resolves `pi` executable and installs each extension
+    from `PI_EXTENSIONS` using `pi install <extension>`. Extension installation
+    is skipped after any CLI installation failure.
+    @return {None} Executes side effects and prints result messages.
+    @satisfies DES-013, REQ-072, REQ-073
+    """
+
+    if not _install_npm_tool("pi"):
+        return
+
+    pi_executable = require_commands("pi")
+    print_info("Installing pi.dev extensions...")
+    for extension in PI_EXTENSIONS:
+        result = subprocess.run([pi_executable, "install", extension])
+        if result.returncode != 0:
+            print_error(f"Failed to install pi.dev extension: {extension}.")
+            print()
+            return
+
+    print_success("pi.dev extensions installed.")
+    print()
+
+
 def _install_kiro():
     """@brief Install Kiro CLI binaries by ZIP extraction flow.
 
@@ -352,6 +390,7 @@ ALL_INSTALLERS = {
     "copilot": lambda: _install_npm_tool("copilot"),
     "gemini": lambda: _install_npm_tool("gemini"),
     "opencode": lambda: _install_npm_tool("opencode"),
+    "pi": _install_pi,
     "claude": _install_claude,
     "kiro": _install_kiro,
 }

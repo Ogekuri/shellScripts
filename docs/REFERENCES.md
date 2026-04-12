@@ -199,7 +199,7 @@ from shell_scripts.utils import is_executable_command, print_error
 
 ---
 
-# ai_install.py | Python | 392L | 17 symbols | 13 imports | 10 comments
+# ai_install.py | Python | 431L | 19 symbols | 13 imports | 11 comments
 > Path: `src/shell_scripts/commands/ai_install.py`
 
 ## Imports
@@ -221,29 +221,30 @@ import urllib.request
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L28)
-- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, Claude, Kiro)."` (L29)
-- var `TOOLS = {` (L31)
-- var `CLAUDE_BUCKET = (` (L50)
-- var `CLAUDE_ARTIFACT_CANDIDATES = {` (L54)
-- var `KIRO_CHANNEL_BASE_URL = "https://prod.download.cli.kiro.dev/stable"` (L59)
-- var `KIRO_MANIFEST_URL = f"{KIRO_CHANNEL_BASE_URL}/latest/manifest.json"` (L60)
-- var `KIRO_LINUX_VARIANT = "headless"` (L61)
-### fn `def print_help(version)` (L64-86)
+- var `PROGRAM = "shellscripts"` (L30)
+- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, pi.dev, Claude, Kiro)."` (L31)
+- var `TOOLS = {` (L33)
+- var `PI_EXTENSIONS = ("npm:pi-manage-todo-list",)` (L55)
+- var `CLAUDE_BUCKET = (` (L57)
+- var `CLAUDE_ARTIFACT_CANDIDATES = {` (L61)
+- var `KIRO_CHANNEL_BASE_URL = "https://prod.download.cli.kiro.dev/stable"` (L66)
+- var `KIRO_MANIFEST_URL = f"{KIRO_CHANNEL_BASE_URL}/latest/manifest.json"` (L67)
+- var `KIRO_LINUX_VARIANT = "headless"` (L68)
+### fn `def print_help(version)` (L71-94)
 - @brief Render command help for `ai-install`.
 - @details Prints supported selectors and execution contract for installer dispatch.
 - @param version {str} CLI version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _install_npm_tool(tool_key)` `priv` (L87-130)
+### fn `def _install_npm_tool(tool_key)` `priv` (L95-141)
 - @brief Execute npm-based installer command for selected tool.
 - @details Resolves base npm command from static tool mapping, omits `sudo` on Linux and Windows, prepends `sudo` on other runtimes, and uses resolved `npm.cmd` path on Windows when available to avoid process-launch failures. For Windows Copilot installs, retries once after a non-zero first attempt to mitigate transient file-lock failures during binary replacement.
 - @param tool_key {str} Tool identifier key from `TOOLS`.
-- @return {None} Executes side effects and prints result messages.
-- @satisfies DES-013, REQ-008, REQ-047, REQ-056
+- @return {bool} `True` when installation succeeds; `False` otherwise.
+- @satisfies DES-013, REQ-008, REQ-047, REQ-056, REQ-072
 
-### fn `def _normalize_kiro_linux_arch(machine_token)` `priv` (L131-152)
+### fn `def _normalize_kiro_linux_arch(machine_token)` `priv` (L142-163)
 - @brief Normalize machine architecture token for Kiro Linux packages.
 - @details Maps runtime machine names into manifest architecture keys accepted by Kiro headless Linux ZIP entries. Raises explicit error for unknown architecture to avoid ambiguous package selection.
 - @param machine_token {str} Raw `platform.machine()` token.
@@ -251,13 +252,13 @@ import urllib.request
 - @throws {RuntimeError} When architecture is not supported by Kiro installer.
 - @satisfies REQ-010, REQ-067
 
-### fn `def _detect_kiro_linux_libc()` `priv` (L153-168)
+### fn `def _detect_kiro_linux_libc()` `priv` (L164-179)
 - @brief Detect Linux libc class token for Kiro package selection.
 - @details Uses `platform.libc_ver()` to classify runtime libc as `musl` or `gnu`. Unknown or empty values default to `gnu` to keep deterministic package selection for glibc environments.
 - @return {str} libc class token (`musl` or `gnu`).
 - @satisfies REQ-010
 
-### fn `def _resolve_kiro_linux_download_path(manifest, arch_token, libc_token)` `priv` (L169-214)
+### fn `def _resolve_kiro_linux_download_path(manifest, arch_token, libc_token)` `priv` (L180-225)
 - @brief Resolve Kiro Linux ZIP download path from manifest metadata.
 - @details Filters manifest packages by Linux OS, headless ZIP variant, runtime architecture, and runtime libc class reflected in target triple. Returns first matching `download` path and fails explicitly when no match exists.
 - @param manifest {dict[str, object]} Parsed Kiro manifest JSON payload.
@@ -267,7 +268,7 @@ import urllib.request
 - @throws {RuntimeError} When no manifest package matches runtime filters.
 - @satisfies DES-013, REQ-010
 
-### fn `def _install_claude()` `priv` (L215-268)
+### fn `def _install_claude()` `priv` (L226-279)
 - @brief Install Claude CLI by direct binary download.
 - @details Downloads latest version metadata from configured bucket, resolves OS-specific Claude artifact candidates from runtime OS token, downloads the first available artifact, writes executable into `~/.claude/bin/claude`, and sets execute permissions on non-Windows runtimes.
 - @return {None} Executes side effects and prints result messages.
@@ -276,7 +277,13 @@ import urllib.request
 - @throws {OSError} When destination write or permission update fails.
 - @satisfies DES-013, REQ-009
 
-### fn `def _install_kiro()` `priv` (L269-349)
+### fn `def _install_pi()` `priv` (L280-306)
+- @brief Install pi.dev CLI and configured pi extensions.
+- @details Executes npm-based pi.dev CLI installation first. When npm installation succeeds, resolves `pi` executable and installs each extension from `PI_EXTENSIONS` using `pi install <extension>`. Extension installation is skipped after any CLI installation failure.
+- @return {None} Executes side effects and prints result messages.
+- @satisfies DES-013, REQ-072, REQ-073
+
+### fn `def _install_kiro()` `priv` (L307-387)
 - @brief Install Kiro CLI binaries by ZIP extraction flow.
 - @details Rejects unsupported runtime OS values (`windows`, `darwin`) with explicit errors. On Linux, resolves runtime architecture/libc package from official stable manifest, downloads selected ZIP archive, extracts `kiro-cli*` binaries, and installs them into `~/.local/bin`.
 - @return {None} Executes side effects and prints result messages.
@@ -287,8 +294,8 @@ import urllib.request
 - @throws {OSError} When extraction/copy/permission updates fail.
 - @satisfies DES-013, REQ-010, REQ-067
 
-- var `ALL_INSTALLERS = {` (L350)
-### fn `def run(args)` (L360-392)
+- var `ALL_INSTALLERS = {` (L388)
+### fn `def run(args)` (L399-431)
 - @brief Parse selectors and execute selected AI installer routines.
 - @details Accepts explicit selectors or defaults to full installer set when omitted; rejects unknown selectors with return code `1`.
 - @param args {list[str]} CLI selector tokens for installer filtering.
@@ -298,23 +305,25 @@ import urllib.request
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|28||
-|`DESCRIPTION`|var|pub|29||
-|`TOOLS`|var|pub|31||
-|`CLAUDE_BUCKET`|var|pub|50||
-|`CLAUDE_ARTIFACT_CANDIDATES`|var|pub|54||
-|`KIRO_CHANNEL_BASE_URL`|var|pub|59||
-|`KIRO_MANIFEST_URL`|var|pub|60||
-|`KIRO_LINUX_VARIANT`|var|pub|61||
-|`print_help`|fn|pub|64-86|def print_help(version)|
-|`_install_npm_tool`|fn|priv|87-130|def _install_npm_tool(tool_key)|
-|`_normalize_kiro_linux_arch`|fn|priv|131-152|def _normalize_kiro_linux_arch(machine_token)|
-|`_detect_kiro_linux_libc`|fn|priv|153-168|def _detect_kiro_linux_libc()|
-|`_resolve_kiro_linux_download_path`|fn|priv|169-214|def _resolve_kiro_linux_download_path(manifest, arch_toke...|
-|`_install_claude`|fn|priv|215-268|def _install_claude()|
-|`_install_kiro`|fn|priv|269-349|def _install_kiro()|
-|`ALL_INSTALLERS`|var|pub|350||
-|`run`|fn|pub|360-392|def run(args)|
+|`PROGRAM`|var|pub|30||
+|`DESCRIPTION`|var|pub|31||
+|`TOOLS`|var|pub|33||
+|`PI_EXTENSIONS`|var|pub|55||
+|`CLAUDE_BUCKET`|var|pub|57||
+|`CLAUDE_ARTIFACT_CANDIDATES`|var|pub|61||
+|`KIRO_CHANNEL_BASE_URL`|var|pub|66||
+|`KIRO_MANIFEST_URL`|var|pub|67||
+|`KIRO_LINUX_VARIANT`|var|pub|68||
+|`print_help`|fn|pub|71-94|def print_help(version)|
+|`_install_npm_tool`|fn|priv|95-141|def _install_npm_tool(tool_key)|
+|`_normalize_kiro_linux_arch`|fn|priv|142-163|def _normalize_kiro_linux_arch(machine_token)|
+|`_detect_kiro_linux_libc`|fn|priv|164-179|def _detect_kiro_linux_libc()|
+|`_resolve_kiro_linux_download_path`|fn|priv|180-225|def _resolve_kiro_linux_download_path(manifest, arch_toke...|
+|`_install_claude`|fn|priv|226-279|def _install_claude()|
+|`_install_pi`|fn|priv|280-306|def _install_pi()|
+|`_install_kiro`|fn|priv|307-387|def _install_kiro()|
+|`ALL_INSTALLERS`|var|pub|388||
+|`run`|fn|pub|399-431|def run(args)|
 
 
 ---
