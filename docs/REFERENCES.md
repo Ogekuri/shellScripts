@@ -1245,7 +1245,7 @@ arguments.
 
 ---
 
-# req_cmd.py | Python | 361L | 13 symbols | 6 imports | 13 comments
+# req_cmd.py | Python | 362L | 13 symbols | 6 imports | 13 comments
 > Path: `src/shell_scripts/commands/req_cmd.py`
 
 ## Imports
@@ -1262,7 +1262,7 @@ from shell_scripts.utils import print_error, require_commands
 
 - var `PROGRAM = "shellscripts"` (L23)
 - var `DESCRIPTION = "Run useReq bootstrap on current or discovered directories."` (L24)
-### fn `def _is_hidden_path(path: Path, base_dir: Path) -> bool` `priv` (L58-72)
+### fn `def _is_hidden_path(path: Path, base_dir: Path) -> bool` `priv` (L59-73)
 - @brief Determine whether path contains hidden segments below base.
 - @details Computes relative parts from `base_dir` and returns `True` when any path segment starts with a dot-prefix, preventing accidental traversal of hidden metadata directories (for example `.git`).
 - @param path {Path} Candidate directory path.
@@ -1270,70 +1270,70 @@ from shell_scripts.utils import print_error, require_commands
 - @return {bool} `True` when candidate has hidden relative segments.
 - @satisfies REQ-052, REQ-053
 
-### fn `def print_help(version: str) -> None` (L73-90)
+### fn `def print_help(version: str) -> None` (L74-91)
 - @brief Render command help for `req`.
 - @details Prints selector options and behavior contract for target directory discovery and external `req` invocation flow.
 - @param version {str} CLI version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _iter_first_level_dirs(base_dir: Path) -> list[Path]` `priv` (L91-110)
+### fn `def _iter_first_level_dirs(base_dir: Path) -> list[Path]` `priv` (L92-111)
 - @brief Collect first-level child directories in deterministic order.
 - @details Enumerates direct children of `base_dir`, keeps only directories, and sorts by path string for stable command behavior.
 - @param base_dir {Path} Directory whose first-level children are listed.
 - @return {list[Path]} Sorted first-level child directories.
 - @satisfies REQ-052
 
-### fn `def _iter_descendant_dirs(base_dir: Path) -> list[Path]` `priv` (L111-130)
+### fn `def _iter_descendant_dirs(base_dir: Path) -> list[Path]` `priv` (L112-131)
 - @brief Collect descendant directories recursively in deterministic order.
 - @details Traverses all descendants via glob expansion, excludes `base_dir` itself, keeps only directories, and sorts by path string.
 - @param base_dir {Path} Directory whose descendants are listed.
 - @return {list[Path]} Sorted descendant directory list excluding `base_dir`.
 - @satisfies REQ-053
 
-### fn `def _build_req_args(target_dir: Path) -> list[str]` `priv` (L131-166)
+### fn `def _build_req_args(target_dir: Path) -> list[str]` `priv` (L132-167)
 - @brief Build external `req` argument vector for one target directory.
 - @details Uses hardcoded non-overridable arguments and appends repeated runtime-configured providers/static-check entries sourced from `get_req_profile`.
 - @param target_dir {Path} Target directory used to parameterize path flags.
 - @return {list[str]} External `req` argv vector.
 - @satisfies REQ-049, REQ-050
 
-### fn `def _delete_cleanup_path(cleanup_path: Path) -> tuple[str, str]` `priv` (L167-189)
+### fn `def _delete_cleanup_path(cleanup_path: Path) -> tuple[str, str]` `priv` (L168-190)
 - @brief Remove one predefined cleanup path when it exists.
 - @details Evaluates one cleanup candidate path, returns `skip` when the path is absent, removes directories with `shutil.rmtree`, removes non-directory filesystem entries with `Path.unlink`, and classifies deleted entries as `dir` or `file`. Time complexity is O(n) for directory trees and O(1) for non-directory entries.
 - @param cleanup_path {Path} Absolute candidate cleanup path for one target.
 - @return {tuple[str, str]} Status-kind pair shaped as (`deleted`, `dir`), (`deleted`, `file`), or (`skip`, `missing`).
 - @satisfies REQ-048, REQ-062, REQ-063
 
-### fn `def _print_cleanup_evidence(evidence: CleanupEvidence) -> None` `priv` (L190-206)
+### fn `def _print_cleanup_evidence(evidence: CleanupEvidence) -> None` `priv` (L191-207)
 - @brief Emit one cleanup evidence line in deterministic token order.
 - @details Prints a parser-friendly line using fixed `clean | <status> | <kind> | <path>` tokens so downstream checks can differentiate deleted files, deleted directories, and skipped missing paths without reading surrounding prose. Time complexity is O(1).
 - @param evidence {CleanupEvidence} Tuple `(status, kind, path)` produced by cleanup preparation logic.
 - @return {None} Writes one stdout line.
 - @satisfies REQ-062, REQ-063
 
-### fn `def _prepare_target_directory(target_dir: Path) -> list[CleanupEvidence]` `priv` (L207-230)
+### fn `def _prepare_target_directory(target_dir: Path) -> list[CleanupEvidence]` `priv` (L208-231)
 - @brief Apply cleanup and scaffold operations for one target directory.
 - @details Evaluates every predefined cleanup path, records deterministic cleanup evidence tuples, removes existing filesystem entries, and ensures required project subdirectories exist before external `req` call. Time complexity is O(m + d) where `m` is cleanup-path count and `d` is total removed directory-tree entries.
 - @param target_dir {Path} Target directory to mutate.
 - @return {list[CleanupEvidence]} Cleanup evidence entries in configured path order.
 - @satisfies REQ-048, REQ-062, REQ-063
 
-### fn `def _is_git_repository_root(target_dir: Path) -> bool` `priv` (L231-256)
+### fn `def _is_git_repository_root(target_dir: Path) -> bool` `priv` (L232-257)
 - @brief Check whether target directory is a Git repository root.
 - @details Executes `git -C <target> rev-parse --show-toplevel`, returns `False` on command failure, and compares normalized absolute paths to ensure the target directory matches the repository root exactly. Time complexity is O(1) excluding external process startup overhead.
 - @param target_dir {Path} Candidate target directory.
 - @return {bool} `True` when target directory is Git root; otherwise `False`.
 - @satisfies REQ-070, REQ-071
 
-### fn `def _print_install_skipped(target_dir: Path) -> None` `priv` (L257-273)
+### fn `def _print_install_skipped(target_dir: Path) -> None` `priv` (L258-274)
 - @brief Emit skip evidence when target directory is not Git root.
 - @details Prints one parser-stable line containing `skip` and token `skippata` to document installation omission for non-root directories in current-directory and `--dirs` modes. Time complexity is O(1).
 - @param target_dir {Path} Directory skipped from cleanup and installation.
 - @return {None} Writes one stdout line.
 - @satisfies REQ-070, REQ-071
 
-### fn `def run(args: list[str]) -> int` (L274-361)
+### fn `def run(args: list[str]) -> int` (L275-362)
 - @brief Execute `req` orchestration for selected directory targets.
 - @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase with per-path evidence emission, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options. Converts external `req` non-zero exits into explicit error output and propagated return codes.
 - @param args {list[str]} Command arguments excluding `req` token.
@@ -1346,17 +1346,17 @@ from shell_scripts.utils import print_error, require_commands
 |---|---|---|---|---|
 |`PROGRAM`|var|pub|23||
 |`DESCRIPTION`|var|pub|24||
-|`_is_hidden_path`|fn|priv|58-72|def _is_hidden_path(path: Path, base_dir: Path) -> bool|
-|`print_help`|fn|pub|73-90|def print_help(version: str) -> None|
-|`_iter_first_level_dirs`|fn|priv|91-110|def _iter_first_level_dirs(base_dir: Path) -> list[Path]|
-|`_iter_descendant_dirs`|fn|priv|111-130|def _iter_descendant_dirs(base_dir: Path) -> list[Path]|
-|`_build_req_args`|fn|priv|131-166|def _build_req_args(target_dir: Path) -> list[str]|
-|`_delete_cleanup_path`|fn|priv|167-189|def _delete_cleanup_path(cleanup_path: Path) -> tuple[str...|
-|`_print_cleanup_evidence`|fn|priv|190-206|def _print_cleanup_evidence(evidence: CleanupEvidence) ->...|
-|`_prepare_target_directory`|fn|priv|207-230|def _prepare_target_directory(target_dir: Path) -> list[C...|
-|`_is_git_repository_root`|fn|priv|231-256|def _is_git_repository_root(target_dir: Path) -> bool|
-|`_print_install_skipped`|fn|priv|257-273|def _print_install_skipped(target_dir: Path) -> None|
-|`run`|fn|pub|274-361|def run(args: list[str]) -> int|
+|`_is_hidden_path`|fn|priv|59-73|def _is_hidden_path(path: Path, base_dir: Path) -> bool|
+|`print_help`|fn|pub|74-91|def print_help(version: str) -> None|
+|`_iter_first_level_dirs`|fn|priv|92-111|def _iter_first_level_dirs(base_dir: Path) -> list[Path]|
+|`_iter_descendant_dirs`|fn|priv|112-131|def _iter_descendant_dirs(base_dir: Path) -> list[Path]|
+|`_build_req_args`|fn|priv|132-167|def _build_req_args(target_dir: Path) -> list[str]|
+|`_delete_cleanup_path`|fn|priv|168-190|def _delete_cleanup_path(cleanup_path: Path) -> tuple[str...|
+|`_print_cleanup_evidence`|fn|priv|191-207|def _print_cleanup_evidence(evidence: CleanupEvidence) ->...|
+|`_prepare_target_directory`|fn|priv|208-231|def _prepare_target_directory(target_dir: Path) -> list[C...|
+|`_is_git_repository_root`|fn|priv|232-257|def _is_git_repository_root(target_dir: Path) -> bool|
+|`_print_install_skipped`|fn|priv|258-274|def _print_install_skipped(target_dir: Path) -> None|
+|`run`|fn|pub|275-362|def run(args: list[str]) -> int|
 
 
 ---

@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.18"
+version: "0.6.19"
 date: "2026-04-12"
 author: "Auto-generated from repository evidence"
 scope:
