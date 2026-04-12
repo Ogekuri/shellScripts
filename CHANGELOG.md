@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.17.0](https://github.com/Ogekuri/shellScripts/compare/v0.16.0..v0.17.0) - 2026-04-12
+### 🚜  Changes
+- remove sudo from linux npm installs [useReq] *(ai-install)*
+  - update DES-013, REQ-008, and TST-003 for Linux no-sudo npm policy
+  - implement runtime OS branch in ai_install._install_npm_tool
+  - adjust ai-install unit tests for Linux/Windows no-sudo and macOS sudo
+  - refresh WORKFLOW and REFERENCES for updated call-trace and symbols
+
+### 📚  Documentation
+- align CLI surface and usage docs [useReq] *(readme)*
+  - sync command list with active dispatcher mappings
+  - document --write-config and runtime config keys
+  - replace removed command examples and add req/pi/video flows
+
 ## [0.16.0](https://github.com/Ogekuri/shellScripts/compare/v0.15.0..v0.16.0) - 2026-04-12
 ### 🚜  Changes
 - add .pi/skills to CLEANUP_PATHS [useReq] *(req_cmd)*
@@ -606,6 +620,7 @@
 - \[0.14.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.14.0
 - \[0.15.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.15.0
 - \[0.16.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.16.0
+- \[0.17.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.17.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -623,3 +638,4 @@
 [0.14.0]: https://github.com/Ogekuri/shellScripts/compare/v0.13.0..v0.14.0
 [0.15.0]: https://github.com/Ogekuri/shellScripts/compare/v0.14.0..v0.15.0
 [0.16.0]: https://github.com/Ogekuri/shellScripts/compare/v0.15.0..v0.16.0
+[0.17.0]: https://github.com/Ogekuri/shellScripts/compare/v0.16.0..v0.17.0
