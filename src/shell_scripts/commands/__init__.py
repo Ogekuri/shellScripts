@@ -23,6 +23,7 @@ _COMMAND_MODULES = {
     "gemini": "shell_scripts.commands.gemini",
     "kiro": "shell_scripts.commands.kiro",
     "opencode": "shell_scripts.commands.opencode",
+    "pi": "shell_scripts.commands.pi",
     "dicom2jpg": "shell_scripts.commands.dicom2jpg",
     "dicomviewer": "shell_scripts.commands.dicomviewer",
     "diff": "shell_scripts.commands.diff_cmd",

@@ -31,6 +31,7 @@
         │   ├── pdf_tiler_090.py
         │   ├── pdf_tiler_100.py
         │   ├── pdf_toc_clean.py
+        │   ├── pi.py
         │   ├── req_cmd.py
         │   ├── tests_cmd.py
         │   ├── ubuntu_dark_theme.py
@@ -98,7 +99,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 80L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 81L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -109,7 +110,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L50-65)
+### fn `def get_command(name: str) -> ModuleType | None` (L51-66)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -121,7 +122,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @satisfies PRJ-003, DES-001
 - @satisfies PRJ-001, DES-001, DES-008, REQ-057, REQ-058
 
-### fn `def get_all_commands() -> dict[str, str]` (L66-80)
+### fn `def get_all_commands() -> dict[str, str]` (L67-81)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
@@ -131,8 +132,8 @@ Removing an entry removes command discoverability and dispatch reachability.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|50-65|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|66-80|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|51-66|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|67-81|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -1190,6 +1191,60 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
+# pi.py | Python | 84L | 5 symbols | 2 imports | 16 comments
+> Path: `src/shell_scripts/commands/pi.py`
+
+## Imports
+```
+import subprocess
+from shell_scripts.utils import require_project_root, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L17)
+- @brief Base CLI program name used in help output.
+- @details Constant identifier for usage-line rendering in command help.
+- var `DESCRIPTION = "Launch pi.dev CLI in the project context."` (L22)
+- @brief One-line command description for dispatcher help surfaces.
+- @details Exposed by command registry introspection (`get_all_commands`).
+### fn `def print_help(version)` (L32-51)
+- @brief Default `--tools` payload for `pi` command invocations.
+- @brief Print command-specific help for `pi`.
+- @details Applied only when no `--tools` option token is present in forwarded
+arguments.
+- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; documents default `--tools` append semantics and override behavior when `--tools` is explicitly provided.
+- @param version {str} CLI version string propagated by dispatcher.
+- @return {None} Writes help text to stdout.
+- @satisfies REQ-068, REQ-069
+- @satisfies DES-008, REQ-068, REQ-069
+
+### fn `def _has_tools_option(args)` `priv` (L52-66)
+- @brief Detect whether forwarded args include a `--tools` option token.
+- @details Detects both tokenized forms `--tools <value>` and single-token form `--tools=<value>` using exact prefix matching on each argument element. Time complexity O(n), where n is the argument count.
+- @param args {list[str]} Forwarded CLI args for `pi` launcher.
+- @return {bool} `True` when any argument token provides `--tools`; `False` otherwise.
+- @satisfies REQ-068, REQ-069
+
+### fn `def run(args)` (L67-84)
+- @brief Launch pi.dev CLI after external executable validation.
+- @details Resolves project root, checks executable availability for `pi`, forwards all CLI arguments unchanged, and appends default tools option only when no `--tools` token exists in input args.
+- @param args {list[str]} Additional CLI args forwarded to pi.dev.
+- @return {int} Child process return code.
+- @satisfies REQ-055, REQ-056, REQ-064, REQ-068, REQ-069
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|17||
+|`DESCRIPTION`|var|pub|22||
+|`print_help`|fn|pub|32-51|def print_help(version)|
+|`_has_tools_option`|fn|priv|52-66|def _has_tools_option(args)|
+|`run`|fn|pub|67-84|def run(args)|
+
+
+---
+
 # req_cmd.py | Python | 298L | 11 symbols | 6 imports | 11 comments
 > Path: `src/shell_scripts/commands/req_cmd.py`
 
@@ -1702,7 +1757,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 278L | 8 symbols | 7 imports | 18 comments
+# core.py | Python | 279L | 8 symbols | 7 imports | 18 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1730,38 +1785,38 @@ global help sections.
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L111-157)
+### fn `def print_help(command_name=None)` (L112-158)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
 - @return {None} Writes to stdout/stderr; may terminate process on invalid command.
 - @throws {SystemExit} Raised when unknown command name is requested.
-- @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066
+- @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def do_upgrade()` (L158-180)
+### fn `def do_upgrade()` (L159-181)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L181-203)
+### fn `def do_uninstall()` (L182-204)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L204-219)
+### fn `def do_write_config()` (L205-220)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L220-278)
+### fn `def main()` (L221-279)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
-- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1769,11 +1824,11 @@ maps directly to REQ-066 output expectations.
 |`PROGRAM`|var|pub|31||
 |`HELP_COMMAND_COLUMN_WIDTH`|var|pub|37||
 |`HELP_SECTION_COMMANDS`|var|pub|45||
-|`print_help`|fn|pub|111-157|def print_help(command_name=None)|
-|`do_upgrade`|fn|pub|158-180|def do_upgrade()|
-|`do_uninstall`|fn|pub|181-203|def do_uninstall()|
-|`do_write_config`|fn|pub|204-219|def do_write_config()|
-|`main`|fn|pub|220-278|def main()|
+|`print_help`|fn|pub|112-158|def print_help(command_name=None)|
+|`do_upgrade`|fn|pub|159-181|def do_upgrade()|
+|`do_uninstall`|fn|pub|182-204|def do_uninstall()|
+|`do_write_config`|fn|pub|205-220|def do_write_config()|
+|`main`|fn|pub|221-279|def main()|
 
 
 ---

@@ -5,7 +5,7 @@
   editor commands.
   commands.
 @satisfies TST-005, REQ-014, REQ-015, REQ-016, REQ-017, REQ-018, REQ-019,
-  REQ-020, REQ-021, REQ-043, REQ-044, REQ-064
+  REQ-020, REQ-021, REQ-043, REQ-044, REQ-064, REQ-068, REQ-069
 @return {None} Pytest module scope.
 """
 
@@ -20,6 +20,7 @@ import shell_scripts.commands.copilot as copilot
 import shell_scripts.commands.gemini as gemini
 import shell_scripts.commands.kiro as kiro
 import shell_scripts.commands.opencode as opencode
+import shell_scripts.commands.pi as pi
 import shell_scripts.commands.vscode_cmd as vscode_cmd
 import shell_scripts.commands.vsinsider_cmd as vsinsider_cmd
 
@@ -323,12 +324,95 @@ def test_kiro_executes_expected_command(monkeypatch):
     assert observed["kwargs"] == {}
 
 
+def test_pi_appends_default_tools_when_option_is_absent(monkeypatch):
+    """
+    @brief Validate pi command default tools append behavior.
+    @details Stubs project-root guard and subprocess boundary to assert default
+      `--tools` parameter is appended only when CLI args do not include
+      `--tools` option tokens.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-005, REQ-068, REQ-064
+    """
+
+    observed = {}
+
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=16)
+
+    monkeypatch.setattr(pi, "require_project_root", lambda: Path("/tmp/p"))
+    monkeypatch.setattr(pi, "require_commands", lambda *cmds: cmds[0])
+    monkeypatch.setattr(pi.subprocess, "run", _fake_run)
+
+    result = pi.run(["--agent", "coder"])
+
+    assert result == 16
+    assert observed["command"] == [
+        "pi",
+        "--agent",
+        "coder",
+        "--tools",
+        "read,bash,edit,write,grep,find,ls",
+    ]
+    assert observed["kwargs"] == {}
+
+
+@pytest.mark.parametrize(
+    "tools_args",
+    [
+        ["--tools", "read,bash"],
+        ["--tools=read,bash"],
+    ],
+)
+def test_pi_preserves_tools_override_without_appending_default(
+    monkeypatch,
+    tools_args,
+):
+    """
+    @brief Validate pi command explicit tools override behavior.
+    @details Verifies argument forwarding remains unchanged when any `--tools`
+      token is present, and confirms default tools argument is not appended.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tools_args {list[str]} Explicit tools-option argument vectors.
+    @return {None} Assertions only.
+    @satisfies TST-005, REQ-069, REQ-064
+    """
+
+    observed = {}
+
+    def _fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return types.SimpleNamespace(returncode=19)
+
+    monkeypatch.setattr(pi, "require_project_root", lambda: Path("/tmp/p"))
+    monkeypatch.setattr(pi, "require_commands", lambda *cmds: cmds[0])
+    monkeypatch.setattr(pi.subprocess, "run", _fake_run)
+
+    result = pi.run(tools_args + ["--mode", "fast"])
+
+    assert result == 19
+    assert observed["command"] == ["pi"] + tools_args + ["--mode", "fast"]
+    assert observed["kwargs"] == {}
+
+
 @pytest.mark.parametrize(
     ("module", "args", "expected_tail"),
     [
-        (copilot, ["--extra"], ["--yolo", "--allow-all-tools", "--no-auto-update", "--extra"]),
+        (
+            copilot,
+            ["--extra"],
+            ["--yolo", "--allow-all-tools", "--no-auto-update", "--extra"],
+        ),
         (gemini, ["--flag"], ["--yolo", "--flag"]),
         (opencode, ["--inspect"], ["--inspect"]),
+        (
+            pi,
+            ["--agent", "coder"],
+            ["--agent", "coder", "--tools", "read,bash,edit,write,grep,find,ls"],
+        ),
         (kiro, ["--ai"], ["--ai"]),
         (claude, ["--session"], ["--dangerously-skip-permissions", "--session"]),
     ],
@@ -350,7 +434,7 @@ def test_ai_launchers_use_resolved_executable_path_from_require_commands(
     @param args {list[str]} Pass-through command arguments.
     @param expected_tail {list[str]} Expected fixed and forwarded argument tail.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-055, REQ-056, REQ-064
+    @satisfies TST-005, REQ-055, REQ-056, REQ-064, REQ-068
     """
 
     observed = {}
