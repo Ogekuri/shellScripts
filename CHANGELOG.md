@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.16.0](https://github.com/Ogekuri/shellScripts/compare/v0.15.0..v0.16.0) - 2026-04-12
+### 🚜  Changes
+- add .pi/skills to CLEANUP_PATHS [useReq] *(req_cmd)*
+  - src/shell_scripts/commands/req_cmd.py: appended ".pi/skills" to CLEANUP_PATHS tuple
+  - REQ-048 coverage extended: .pi/skills is now removed alongside .pi/prompts on req run
+  - docs/REQUIREMENTS.md: version 0.6.18 → 0.6.19 (YAML front matter bump)
+- add pi:prompts provider and .pi/prompts cleanup path [useReq] *(req_cmd)*
+  - REQ-050 updated: hardcoded default providers now include pi:prompts alongside codex:skills
+  - src/shell_scripts/config.py: appended "pi:prompts" to DEFAULT_RUNTIME_CONFIG["req"]["providers"]
+  - src/shell_scripts/commands/req_cmd.py: appended ".pi/prompts" to CLEANUP_PATHS tuple
+  - docs/WORKFLOW.md: updated get_req_profile call-trace description to reflect new defaults
+  - docs/REQUIREMENTS.md: version 0.6.17 → 0.6.18
+
 ## [0.15.0](https://github.com/Ogekuri/shellScripts/compare/v0.14.0..v0.15.0) - 2026-04-12
 ### ⛰️  Features
 - enforce git-root skip behavior for req and req --dirs [useReq] *(req_cmd)*
@@ -592,6 +605,7 @@
 - \[0.13.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.13.0
 - \[0.14.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.14.0
 - \[0.15.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.15.0
+- \[0.16.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.16.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -608,3 +622,4 @@
 [0.13.0]: https://github.com/Ogekuri/shellScripts/compare/v0.12.0..v0.13.0
 [0.14.0]: https://github.com/Ogekuri/shellScripts/compare/v0.13.0..v0.14.0
 [0.15.0]: https://github.com/Ogekuri/shellScripts/compare/v0.14.0..v0.15.0
+[0.16.0]: https://github.com/Ogekuri/shellScripts/compare/v0.15.0..v0.16.0
