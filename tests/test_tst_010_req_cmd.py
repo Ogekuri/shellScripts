@@ -5,7 +5,7 @@
   runtime-configured provider/static-check argument injection while preserving
   hardcoded non-overridable args.
 @satisfies TST-010, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053,
-  REQ-054, REQ-062, REQ-063
+  REQ-054, REQ-062, REQ-063, REQ-070, REQ-071
 @return {None} Pytest module scope.
 """
 
@@ -60,6 +60,7 @@ def test_req_default_targets_current_directory(monkeypatch, tmp_path, capsys):
     codex_prompt_file.parent.mkdir(parents=True, exist_ok=True)
     codex_prompt_file.write_text("prompt-body", encoding="utf-8")
     monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(req_cmd, "_is_git_repository_root", lambda _path: True)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(
         req_cmd,
@@ -114,6 +115,7 @@ def test_req_dirs_targets_only_first_level_children(monkeypatch, tmp_path, capsy
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(req_cmd, "_is_git_repository_root", lambda _path: True)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
 
@@ -249,6 +251,7 @@ def test_req_returns_error_code_when_external_req_fails(monkeypatch, tmp_path):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(req_cmd, "_is_git_repository_root", lambda _path: True)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(req_cmd, "print_error", _fake_print_error)
     monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
@@ -287,6 +290,7 @@ def test_req_builds_hardcoded_and_configurable_args(monkeypatch, tmp_path):
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(req_cmd, "_is_git_repository_root", lambda _path: True)
     monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
     monkeypatch.setattr(
         req_cmd,
@@ -352,3 +356,114 @@ def test_req_prepare_target_directory_reports_deleted_file_and_skip(tmp_path):
     assert not cleanup_file.exists()
     assert ("deleted", "file", cleanup_file) in evidence
     assert ("skip", "missing", missing_path) in evidence
+
+
+def test_req_current_directory_skips_when_not_git_root(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    """
+    @brief Validate skip flow for non-root current directory.
+    @details Runs default mode with Git-root predicate returning `False` and
+      asserts command prints one skip evidence line containing `skippata` while
+      avoiding cleanup and external req execution.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
+    @return {None} Assertions only.
+    @satisfies TST-010, REQ-070
+    """
+
+    observed = {"prepare_calls": 0, "run_calls": 0}
+
+    def _fake_prepare(_target_dir: Path):
+        """
+        @brief Track unexpected cleanup preparation invocation.
+        @details Increments local counter when called.
+        @param _target_dir {Path} Unused target path.
+        @return {list[tuple[str, str, Path]]} Empty cleanup evidence list.
+        """
+
+        observed["prepare_calls"] += 1
+        return []
+
+    def _fake_run(command, check):
+        """
+        @brief Track unexpected external req invocation.
+        @details Increments local counter and returns deterministic success.
+        @param command {list[str]} Command argv vector.
+        @param check {bool} Subprocess check flag.
+        @return {types.SimpleNamespace} Deterministic return code object.
+        """
+
+        del command, check
+        observed["run_calls"] += 1
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(req_cmd, "_is_git_repository_root", lambda _path: False)
+    monkeypatch.setattr(req_cmd, "_prepare_target_directory", _fake_prepare)
+    monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
+
+    result = req_cmd.run([])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert observed["prepare_calls"] == 0
+    assert observed["run_calls"] == 0
+    assert "install | skip |" in output
+    assert "skippata" in output
+    assert str(tmp_path) in output
+
+
+def test_req_dirs_skips_non_root_directories_only(monkeypatch, tmp_path, capsys):
+    """
+    @brief Validate `--dirs` selective skip and continue behavior.
+    @details Creates two first-level directories, marks only one as Git root,
+      and asserts external req executes only for eligible directory while
+      skipped directory emits one skip evidence line containing `skippata`.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {Path} Isolated filesystem fixture.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
+    @return {None} Assertions only.
+    @satisfies TST-010, REQ-071
+    """
+
+    git_root_dir = tmp_path / "a"
+    skipped_dir = tmp_path / "b"
+    _create_dir(git_root_dir)
+    _create_dir(skipped_dir)
+    observed_bases: list[str] = []
+
+    def _fake_run(command, check):
+        """
+        @brief Capture executed req base paths in mixed-skip flow.
+        @details Records `--base` argument of external req invocations.
+        @param command {list[str]} Command argv vector.
+        @param check {bool} Subprocess check flag.
+        @return {types.SimpleNamespace} Deterministic return code object.
+        """
+
+        del check
+        observed_bases.append(command[command.index("--base") + 1])
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(req_cmd, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(
+        req_cmd,
+        "_is_git_repository_root",
+        lambda path: path == git_root_dir,
+    )
+    monkeypatch.setattr(req_cmd.subprocess, "run", _fake_run)
+    monkeypatch.setattr(req_cmd, "get_req_profile", lambda: ([], []))
+
+    result = req_cmd.run(["--dirs"])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert observed_bases == [str(git_root_dir)]
+    assert f"install | skip | {skipped_dir}" in output
+    assert "skippata" in output

@@ -1245,7 +1245,7 @@ arguments.
 
 ---
 
-# req_cmd.py | Python | 298L | 11 symbols | 6 imports | 11 comments
+# req_cmd.py | Python | 360L | 13 symbols | 6 imports | 13 comments
 > Path: `src/shell_scripts/commands/req_cmd.py`
 
 ## Imports
@@ -1319,13 +1319,27 @@ from shell_scripts.utils import print_error, require_commands
 - @return {list[CleanupEvidence]} Cleanup evidence entries in configured path order.
 - @satisfies REQ-048, REQ-062, REQ-063
 
-### fn `def run(args: list[str]) -> int` (L230-298)
+### fn `def _is_git_repository_root(target_dir: Path) -> bool` `priv` (L230-255)
+- @brief Check whether target directory is a Git repository root.
+- @details Executes `git -C <target> rev-parse --show-toplevel`, returns `False` on command failure, and compares normalized absolute paths to ensure the target directory matches the repository root exactly. Time complexity is O(1) excluding external process startup overhead.
+- @param target_dir {Path} Candidate target directory.
+- @return {bool} `True` when target directory is Git root; otherwise `False`.
+- @satisfies REQ-070, REQ-071
+
+### fn `def _print_install_skipped(target_dir: Path) -> None` `priv` (L256-272)
+- @brief Emit skip evidence when target directory is not Git root.
+- @details Prints one parser-stable line containing `skip` and token `skippata` to document installation omission for non-root directories in current-directory and `--dirs` modes. Time complexity is O(1).
+- @param target_dir {Path} Directory skipped from cleanup and installation.
+- @return {None} Writes one stdout line.
+- @satisfies REQ-070, REQ-071
+
+### fn `def run(args: list[str]) -> int` (L273-360)
 - @brief Execute `req` orchestration for selected directory targets.
 - @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase with per-path evidence emission, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options. Converts external `req` non-zero exits into explicit error output and propagated return codes.
 - @param args {list[str]} Command arguments excluding `req` token.
 - @return {int} `0` on success; non-zero for option or subprocess failures.
 - @exception {subprocess.CalledProcessError} Internally handled and converted to deterministic return code + error output.
-- @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-062, REQ-063
+- @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-062, REQ-063, REQ-070, REQ-071
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1340,7 +1354,9 @@ from shell_scripts.utils import print_error, require_commands
 |`_delete_cleanup_path`|fn|priv|166-188|def _delete_cleanup_path(cleanup_path: Path) -> tuple[str...|
 |`_print_cleanup_evidence`|fn|priv|189-205|def _print_cleanup_evidence(evidence: CleanupEvidence) ->...|
 |`_prepare_target_directory`|fn|priv|206-229|def _prepare_target_directory(target_dir: Path) -> list[C...|
-|`run`|fn|pub|230-298|def run(args: list[str]) -> int|
+|`_is_git_repository_root`|fn|priv|230-255|def _is_git_repository_root(target_dir: Path) -> bool|
+|`_print_install_skipped`|fn|priv|256-272|def _print_install_skipped(target_dir: Path) -> None|
+|`run`|fn|pub|273-360|def run(args: list[str]) -> int|
 
 
 ---

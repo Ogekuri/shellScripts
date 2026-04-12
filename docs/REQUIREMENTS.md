@@ -1,7 +1,7 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.16"
+version: "0.6.17"
 date: "2026-04-12"
 author: "Auto-generated from repository evidence"
 scope:
@@ -141,6 +141,8 @@ No explicit performance optimizations identified.
 - **REQ-018**: MUST execute `opencode` in `opencode` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-068**: MUST execute `pi` with all CLI arguments forwarded unchanged and inherited stdio blocking behavior when no `--tools` option is provided, appending default `--tools read,bash,edit,write,grep,find,ls`.
 - **REQ-069**: MUST execute `pi` with all CLI arguments forwarded unchanged and inherited stdio blocking behavior when any `--tools` option is provided, and MUST NOT append a default `--tools` argument.
+- **REQ-070**: MUST make `req` skip cleanup and installation when current directory is not a Git repository root and MUST print one skip evidence line for that directory.
+- **REQ-071**: MUST make `req --dirs` skip cleanup and installation per non-root child directory, print one skip evidence line per skipped directory, and continue remaining child-directory processing.
 - **REQ-019**: MUST execute `kiro-cli` in `kiro` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-020**: MUST open the project root in VS Code and VS Code Insiders commands, append the project path as final argument, and execute each launcher via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-021**: MUST set `CODEX_HOME` to `<project-root>/.codex` before VS Code and VS Code Insiders command execution.
@@ -201,7 +203,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 - **TST-005**: MUST verify REQ-014 through REQ-021, REQ-043 through REQ-044, and REQ-068 through REQ-069 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, codex auth synchronization, and propagated return codes match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
 - **TST-009**: MUST verify REQ-045 and REQ-046 by monkeypatching config I/O boundaries and asserting startup load invocation plus `--write-config` success behavior.
-- **TST-010**: MUST verify REQ-048 through REQ-054 and REQ-062 through REQ-063 by monkeypatching filesystem and subprocess boundaries, passing only if target selection, cleanup evidence output, and generated `req` argument vectors match required behavior.
+- **TST-010**: MUST verify REQ-048 through REQ-054, REQ-062 through REQ-063, and REQ-070 through REQ-071 by monkeypatching filesystem and subprocess boundaries, passing only if target selection, git-root skip behavior, cleanup evidence output, and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
 - **TST-011**: MUST verify REQ-057 and REQ-058 by monkeypatching executable checks and `subprocess.run`, passing only if FFmpeg argv vectors, `<input>.mp4` output naming, and propagated return codes are exact.

@@ -8,7 +8,7 @@ directory by default, first-level child directories with `--dirs`, or all
 descendant directories with `--recursive`. Provider/static-check argument lists
 are resolved from runtime config with hardcoded fallback defaults.
 @satisfies PRJ-003, DES-008, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052,
-  REQ-053, REQ-054, REQ-056, REQ-062, REQ-063
+  REQ-053, REQ-054, REQ-056, REQ-062, REQ-063, REQ-070, REQ-071
 """
 
 from __future__ import annotations
@@ -227,6 +227,49 @@ def _prepare_target_directory(target_dir: Path) -> list[CleanupEvidence]:
     return evidence
 
 
+def _is_git_repository_root(target_dir: Path) -> bool:
+    """@brief Check whether target directory is a Git repository root.
+
+    @details Executes `git -C <target> rev-parse --show-toplevel`, returns
+    `False` on command failure, and compares normalized absolute paths to ensure
+    the target directory matches the repository root exactly. Time complexity is
+    O(1) excluding external process startup overhead.
+    @param target_dir {Path} Candidate target directory.
+    @return {bool} `True` when target directory is Git root; otherwise `False`.
+    @satisfies REQ-070, REQ-071
+    """
+
+    result = subprocess.run(
+        ["git", "-C", str(target_dir), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return False
+    repo_root = result.stdout.strip()
+    if not repo_root:
+        return False
+    return Path(repo_root).resolve() == target_dir.resolve()
+
+
+def _print_install_skipped(target_dir: Path) -> None:
+    """@brief Emit skip evidence when target directory is not Git root.
+
+    @details Prints one parser-stable line containing `skip` and token
+    `skippata` to document installation omission for non-root directories in
+    current-directory and `--dirs` modes. Time complexity is O(1).
+    @param target_dir {Path} Directory skipped from cleanup and installation.
+    @return {None} Writes one stdout line.
+    @satisfies REQ-070, REQ-071
+    """
+
+    print(
+        "install | skip | "
+        f"{target_dir} | installation skippata: target is not a git root"
+    )
+
+
 def run(args: list[str]) -> int:
     """@brief Execute `req` orchestration for selected directory targets.
 
@@ -240,7 +283,7 @@ def run(args: list[str]) -> int:
     @exception {subprocess.CalledProcessError} Internally handled and converted
       to deterministic return code + error output.
     @satisfies REQ-048, REQ-049, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056,
-      REQ-062, REQ-063
+      REQ-062, REQ-063, REQ-070, REQ-071
     """
 
     mode_current = True
@@ -271,9 +314,22 @@ def run(args: list[str]) -> int:
     else:
         targets = _iter_descendant_dirs(base_dir)
 
-    print("-----------------------------------------------------------------------------------------------------------------")
+    if mode_current or mode_dirs:
+        eligible_targets: list[Path] = []
+        for target_dir in targets:
+            if _is_git_repository_root(target_dir):
+                eligible_targets.append(target_dir)
+            else:
+                _print_install_skipped(target_dir)
+        targets = eligible_targets
+
+    print(
+        "-----------------------------------------------------------------------------------------------------------------"
+    )
     print("Clean previous install")
-    print("-----------------------------------------------------------------------------------------------------------------")
+    print(
+        "-----------------------------------------------------------------------------------------------------------------"
+    )
     for target_dir in targets:
         print(f"Cleanup target: {target_dir}")
         for evidence in _prepare_target_directory(target_dir):
@@ -281,9 +337,13 @@ def run(args: list[str]) -> int:
         print()
 
     for target_dir in targets:
-        print("-----------------------------------------------------------------------------------------------------------------")
+        print(
+            "-----------------------------------------------------------------------------------------------------------------"
+        )
         print(f"Install useReq: {target_dir}")
-        print("-----------------------------------------------------------------------------------------------------------------")
+        print(
+            "-----------------------------------------------------------------------------------------------------------------"
+        )
         if not target_dir.is_dir():
             print_error(f"Path does not exist: {target_dir}")
             return 1
@@ -292,7 +352,9 @@ def run(args: list[str]) -> int:
         except subprocess.CalledProcessError as exc:
             print_error(f"req failed for {target_dir} with exit code {exc.returncode}.")
             return int(exc.returncode)
-        print("-----------------------------------------------------------------------------------------------------------------")
+        print(
+            "-----------------------------------------------------------------------------------------------------------------"
+        )
         print()
 
     return 0
