@@ -266,7 +266,7 @@
           - `req_cmd._delete_cleanup_path(...)`: Classify one cleanup path as deleted directory, deleted file, or skipped missing entry before filesystem mutation [`src/shell_scripts/commands/req_cmd.py`]
         - `req_cmd._print_cleanup_evidence(...)`: Emit deterministic `clean | status | kind | path` lines for each cleanup path [`src/shell_scripts/commands/req_cmd.py`]
         - `req_cmd._build_req_args(...)`: Build external `req` argv with hardcoded base flags plus runtime-configured provider/static-check vectors [`src/shell_scripts/commands/req_cmd.py`]
-          - `get_req_profile(...)`: Resolve `req.providers` and `req.static_checks` runtime profile values with fallback to defaults where Codex provider default is skills-mode [`src/shell_scripts/config.py`]
+          - `get_req_profile(...)`: Resolve `req.providers` and `req.static_checks` runtime profile values with fallback to hardcoded defaults including providers `codex:skills` and `pi:prompts` [`src/shell_scripts/config.py`]
             - `_normalize_string_list(...)`: Validate provider/static-check vectors as non-empty string lists [`src/shell_scripts/config.py`]
       - `tests_cmd.run(...)`: Ensure `.venv`, optional dependency install, and execute pytest with project PYTHONPATH [`src/shell_scripts/commands/tests_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]

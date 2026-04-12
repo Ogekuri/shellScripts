@@ -40,6 +40,7 @@ CLEANUP_PATHS: tuple[str, ...] = (
     ".opencode/prompt",
     ".opencode/command",
     ".opencode/skill",
+    ".pi/prompts",
 )
 
 REQUIRED_DIRS: tuple[str, ...] = (

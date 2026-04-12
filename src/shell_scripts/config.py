@@ -74,6 +74,7 @@ DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
             "opencode:prompts",
             "gemini:prompts",
             "kiro:agents",
+            "pi:prompts",
         ],
         "static_checks": [
             "C=Command,cppcheck,--error-exitcode=1,\"--enable=warning,style,performance,portability\",--std=c11",

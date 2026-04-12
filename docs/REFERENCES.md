@@ -1245,7 +1245,7 @@ arguments.
 
 ---
 
-# req_cmd.py | Python | 360L | 13 symbols | 6 imports | 13 comments
+# req_cmd.py | Python | 361L | 13 symbols | 6 imports | 13 comments
 > Path: `src/shell_scripts/commands/req_cmd.py`
 
 ## Imports
@@ -1262,7 +1262,7 @@ from shell_scripts.utils import print_error, require_commands
 
 - var `PROGRAM = "shellscripts"` (L23)
 - var `DESCRIPTION = "Run useReq bootstrap on current or discovered directories."` (L24)
-### fn `def _is_hidden_path(path: Path, base_dir: Path) -> bool` `priv` (L57-71)
+### fn `def _is_hidden_path(path: Path, base_dir: Path) -> bool` `priv` (L58-72)
 - @brief Determine whether path contains hidden segments below base.
 - @details Computes relative parts from `base_dir` and returns `True` when any path segment starts with a dot-prefix, preventing accidental traversal of hidden metadata directories (for example `.git`).
 - @param path {Path} Candidate directory path.
@@ -1270,70 +1270,70 @@ from shell_scripts.utils import print_error, require_commands
 - @return {bool} `True` when candidate has hidden relative segments.
 - @satisfies REQ-052, REQ-053
 
-### fn `def print_help(version: str) -> None` (L72-89)
+### fn `def print_help(version: str) -> None` (L73-90)
 - @brief Render command help for `req`.
 - @details Prints selector options and behavior contract for target directory discovery and external `req` invocation flow.
 - @param version {str} CLI version string appended in usage output.
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def _iter_first_level_dirs(base_dir: Path) -> list[Path]` `priv` (L90-109)
+### fn `def _iter_first_level_dirs(base_dir: Path) -> list[Path]` `priv` (L91-110)
 - @brief Collect first-level child directories in deterministic order.
 - @details Enumerates direct children of `base_dir`, keeps only directories, and sorts by path string for stable command behavior.
 - @param base_dir {Path} Directory whose first-level children are listed.
 - @return {list[Path]} Sorted first-level child directories.
 - @satisfies REQ-052
 
-### fn `def _iter_descendant_dirs(base_dir: Path) -> list[Path]` `priv` (L110-129)
+### fn `def _iter_descendant_dirs(base_dir: Path) -> list[Path]` `priv` (L111-130)
 - @brief Collect descendant directories recursively in deterministic order.
 - @details Traverses all descendants via glob expansion, excludes `base_dir` itself, keeps only directories, and sorts by path string.
 - @param base_dir {Path} Directory whose descendants are listed.
 - @return {list[Path]} Sorted descendant directory list excluding `base_dir`.
 - @satisfies REQ-053
 
-### fn `def _build_req_args(target_dir: Path) -> list[str]` `priv` (L130-165)
+### fn `def _build_req_args(target_dir: Path) -> list[str]` `priv` (L131-166)
 - @brief Build external `req` argument vector for one target directory.
 - @details Uses hardcoded non-overridable arguments and appends repeated runtime-configured providers/static-check entries sourced from `get_req_profile`.
 - @param target_dir {Path} Target directory used to parameterize path flags.
 - @return {list[str]} External `req` argv vector.
 - @satisfies REQ-049, REQ-050
 
-### fn `def _delete_cleanup_path(cleanup_path: Path) -> tuple[str, str]` `priv` (L166-188)
+### fn `def _delete_cleanup_path(cleanup_path: Path) -> tuple[str, str]` `priv` (L167-189)
 - @brief Remove one predefined cleanup path when it exists.
 - @details Evaluates one cleanup candidate path, returns `skip` when the path is absent, removes directories with `shutil.rmtree`, removes non-directory filesystem entries with `Path.unlink`, and classifies deleted entries as `dir` or `file`. Time complexity is O(n) for directory trees and O(1) for non-directory entries.
 - @param cleanup_path {Path} Absolute candidate cleanup path for one target.
 - @return {tuple[str, str]} Status-kind pair shaped as (`deleted`, `dir`), (`deleted`, `file`), or (`skip`, `missing`).
 - @satisfies REQ-048, REQ-062, REQ-063
 
-### fn `def _print_cleanup_evidence(evidence: CleanupEvidence) -> None` `priv` (L189-205)
+### fn `def _print_cleanup_evidence(evidence: CleanupEvidence) -> None` `priv` (L190-206)
 - @brief Emit one cleanup evidence line in deterministic token order.
 - @details Prints a parser-friendly line using fixed `clean | <status> | <kind> | <path>` tokens so downstream checks can differentiate deleted files, deleted directories, and skipped missing paths without reading surrounding prose. Time complexity is O(1).
 - @param evidence {CleanupEvidence} Tuple `(status, kind, path)` produced by cleanup preparation logic.
 - @return {None} Writes one stdout line.
 - @satisfies REQ-062, REQ-063
 
-### fn `def _prepare_target_directory(target_dir: Path) -> list[CleanupEvidence]` `priv` (L206-229)
+### fn `def _prepare_target_directory(target_dir: Path) -> list[CleanupEvidence]` `priv` (L207-230)
 - @brief Apply cleanup and scaffold operations for one target directory.
 - @details Evaluates every predefined cleanup path, records deterministic cleanup evidence tuples, removes existing filesystem entries, and ensures required project subdirectories exist before external `req` call. Time complexity is O(m + d) where `m` is cleanup-path count and `d` is total removed directory-tree entries.
 - @param target_dir {Path} Target directory to mutate.
 - @return {list[CleanupEvidence]} Cleanup evidence entries in configured path order.
 - @satisfies REQ-048, REQ-062, REQ-063
 
-### fn `def _is_git_repository_root(target_dir: Path) -> bool` `priv` (L230-255)
+### fn `def _is_git_repository_root(target_dir: Path) -> bool` `priv` (L231-256)
 - @brief Check whether target directory is a Git repository root.
 - @details Executes `git -C <target> rev-parse --show-toplevel`, returns `False` on command failure, and compares normalized absolute paths to ensure the target directory matches the repository root exactly. Time complexity is O(1) excluding external process startup overhead.
 - @param target_dir {Path} Candidate target directory.
 - @return {bool} `True` when target directory is Git root; otherwise `False`.
 - @satisfies REQ-070, REQ-071
 
-### fn `def _print_install_skipped(target_dir: Path) -> None` `priv` (L256-272)
+### fn `def _print_install_skipped(target_dir: Path) -> None` `priv` (L257-273)
 - @brief Emit skip evidence when target directory is not Git root.
 - @details Prints one parser-stable line containing `skip` and token `skippata` to document installation omission for non-root directories in current-directory and `--dirs` modes. Time complexity is O(1).
 - @param target_dir {Path} Directory skipped from cleanup and installation.
 - @return {None} Writes one stdout line.
 - @satisfies REQ-070, REQ-071
 
-### fn `def run(args: list[str]) -> int` (L273-360)
+### fn `def run(args: list[str]) -> int` (L274-361)
 - @brief Execute `req` orchestration for selected directory targets.
 - @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase with per-path evidence emission, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options. Converts external `req` non-zero exits into explicit error output and propagated return codes.
 - @param args {list[str]} Command arguments excluding `req` token.
@@ -1346,17 +1346,17 @@ from shell_scripts.utils import print_error, require_commands
 |---|---|---|---|---|
 |`PROGRAM`|var|pub|23||
 |`DESCRIPTION`|var|pub|24||
-|`_is_hidden_path`|fn|priv|57-71|def _is_hidden_path(path: Path, base_dir: Path) -> bool|
-|`print_help`|fn|pub|72-89|def print_help(version: str) -> None|
-|`_iter_first_level_dirs`|fn|priv|90-109|def _iter_first_level_dirs(base_dir: Path) -> list[Path]|
-|`_iter_descendant_dirs`|fn|priv|110-129|def _iter_descendant_dirs(base_dir: Path) -> list[Path]|
-|`_build_req_args`|fn|priv|130-165|def _build_req_args(target_dir: Path) -> list[str]|
-|`_delete_cleanup_path`|fn|priv|166-188|def _delete_cleanup_path(cleanup_path: Path) -> tuple[str...|
-|`_print_cleanup_evidence`|fn|priv|189-205|def _print_cleanup_evidence(evidence: CleanupEvidence) ->...|
-|`_prepare_target_directory`|fn|priv|206-229|def _prepare_target_directory(target_dir: Path) -> list[C...|
-|`_is_git_repository_root`|fn|priv|230-255|def _is_git_repository_root(target_dir: Path) -> bool|
-|`_print_install_skipped`|fn|priv|256-272|def _print_install_skipped(target_dir: Path) -> None|
-|`run`|fn|pub|273-360|def run(args: list[str]) -> int|
+|`_is_hidden_path`|fn|priv|58-72|def _is_hidden_path(path: Path, base_dir: Path) -> bool|
+|`print_help`|fn|pub|73-90|def print_help(version: str) -> None|
+|`_iter_first_level_dirs`|fn|priv|91-110|def _iter_first_level_dirs(base_dir: Path) -> list[Path]|
+|`_iter_descendant_dirs`|fn|priv|111-130|def _iter_descendant_dirs(base_dir: Path) -> list[Path]|
+|`_build_req_args`|fn|priv|131-166|def _build_req_args(target_dir: Path) -> list[str]|
+|`_delete_cleanup_path`|fn|priv|167-189|def _delete_cleanup_path(cleanup_path: Path) -> tuple[str...|
+|`_print_cleanup_evidence`|fn|priv|190-206|def _print_cleanup_evidence(evidence: CleanupEvidence) ->...|
+|`_prepare_target_directory`|fn|priv|207-230|def _prepare_target_directory(target_dir: Path) -> list[C...|
+|`_is_git_repository_root`|fn|priv|231-256|def _is_git_repository_root(target_dir: Path) -> bool|
+|`_print_install_skipped`|fn|priv|257-273|def _print_install_skipped(target_dir: Path) -> None|
+|`run`|fn|pub|274-361|def run(args: list[str]) -> int|
 
 
 ---
@@ -1659,7 +1659,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ---
 
-# config.py | Python | 326L | 11 symbols | 6 imports | 22 comments
+# config.py | Python | 327L | 11 symbols | 6 imports | 22 comments
 > Path: `src/shell_scripts/config.py`
 
 ## Imports
@@ -1674,7 +1674,7 @@ from shell_scripts.utils import print_warn
 
 ## Definitions
 
-### fn `def get_config_path() -> Path` (L97-108)
+### fn `def get_config_path() -> Path` (L98-109)
 - @brief In-memory runtime configuration snapshot.
 - @brief Return canonical runtime config location.
 - @details Initialized from defaults; updated only by `load_runtime_config`.
@@ -1683,13 +1683,13 @@ from shell_scripts.utils import print_warn
 - @satisfies DES-011, REQ-045
 - @satisfies DES-011, DES-012, REQ-045, REQ-046
 
-### fn `def get_default_runtime_config() -> dict[str, Any]` (L109-120)
+### fn `def get_default_runtime_config() -> dict[str, Any]` (L110-121)
 - @brief Return deep-copied default configuration payload.
 - @details Produces an isolated copy to avoid external mutation of the global defaults constant and to keep write/load operations deterministic.
 - @return {dict[str, Any]} Fresh deep copy of `DEFAULT_RUNTIME_CONFIG`.
 - @satisfies DES-011, DES-012
 
-### fn `def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]` `priv` (L121-140)
+### fn `def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]` `priv` (L122-141)
 - @brief Recursively merge nested mapping values.
 - @details For keys where both base and override values are dictionaries, recursively merges child keys; otherwise replaces base value with override. Time complexity O(N) over override node count.
 - @param base {dict[str, Any]} Target mapping mutated in place.
@@ -1697,28 +1697,28 @@ from shell_scripts.utils import print_warn
 - @return {dict[str, Any]} The mutated `base` reference.
 - @satisfies DES-011, REQ-045
 
-### fn `def _normalize_command_vector(value: Any) -> list[str] | None` `priv` (L141-157)
+### fn `def _normalize_command_vector(value: Any) -> list[str] | None` `priv` (L142-158)
 - @brief Validate and normalize an executable argv vector.
 - @details Accepts only non-empty lists of non-empty strings and returns a cloned list for defensive immutability.
 - @param value {Any} Candidate command vector.
 - @return {list[str]|None} Sanitized vector or `None` if invalid.
 - @satisfies DES-011, REQ-045
 
-### fn `def _normalize_string_list(value: Any) -> list[str] | None` `priv` (L158-174)
+### fn `def _normalize_string_list(value: Any) -> list[str] | None` `priv` (L159-175)
 - @brief Validate and normalize a list of non-empty strings.
 - @details Accepts only list payloads containing non-empty string elements and returns a cloned list for defensive immutability. Empty lists are valid.
 - @param value {Any} Candidate list payload.
 - @return {list[str]|None} Sanitized list or `None` if invalid.
 - @satisfies DES-011, REQ-045, REQ-050
 
-### fn `def _normalize_categories(value: Any) -> dict[str, list[str]] | None` `priv` (L175-197)
+### fn `def _normalize_categories(value: Any) -> dict[str, list[str]] | None` `priv` (L176-198)
 - @brief Validate category-to-command mapping payload.
 - @details Keeps only entries with string keys and valid command vectors. Invalid entries are dropped and can trigger fallback usage upstream.
 - @param value {Any} Candidate category map payload.
 - @return {dict[str, list[str]]|None} Sanitized category map or `None`.
 - @satisfies DES-011, REQ-024, REQ-045
 
-### fn `def load_runtime_config(path: Path | None = None) -> dict[str, Any]` (L198-237)
+### fn `def load_runtime_config(path: Path | None = None) -> dict[str, Any]` (L199-238)
 - @brief Load runtime configuration file and merge into defaults.
 - @details Resets in-memory state to defaults for each call, then attempts to read and parse JSON payload from target path and recursively merge override keys. Missing file, invalid JSON, non-object root, or read errors preserve defaults and emit warnings.
 - @param path {Path|None} Optional override path; default is canonical path.
@@ -1727,27 +1727,27 @@ from shell_scripts.utils import print_warn
 - @exception {OSError} Handled internally and downgraded to warn.
 - @satisfies DES-011, REQ-045
 
-### fn `def get_management_command(name: str) -> str` (L238-254)
+### fn `def get_management_command(name: str) -> str` (L239-255)
 - @brief Resolve management command string with safe default fallback.
 - @details Reads runtime key under `management.<name>`; returns default value when key is absent or not a non-empty string.
 - @param name {str} Management operation key (`upgrade` or `uninstall`).
 - @return {str} Shell command string to execute.
 - @satisfies REQ-004, REQ-005, REQ-045
 
-### fn `def get_dispatch_profile(name: str) -> tuple[dict[str, list[str]], list[str]]` (L255-280)
+### fn `def get_dispatch_profile(name: str) -> tuple[dict[str, list[str]], list[str]]` (L256-281)
 - @brief Resolve dispatch profile for diff/edit/view command wrappers.
 - @details Builds profile from `dispatch.<name>` runtime payload with typed normalization and per-section fallback to hardcoded defaults for missing or invalid values.
 - @param name {str} Dispatch command key (`diff`, `edit`, or `view`).
 - @return {tuple[dict[str, list[str]], list[str]]} `(categories, fallback)`.
 - @satisfies DES-007, REQ-024, REQ-045
 
-### fn `def get_req_profile() -> tuple[list[str], list[str]]` (L281-308)
+### fn `def get_req_profile() -> tuple[list[str], list[str]]` (L282-309)
 - @brief Resolve `req` providers and static checks from runtime config.
 - @details Builds profile from `req.providers` and `req.static_checks` runtime payload with typed normalization and per-section fallback to hardcoded defaults for missing or invalid values.
 - @return {tuple[list[str], list[str]]} `(providers, static_checks)`.
 - @satisfies DES-011, REQ-045, REQ-050
 
-### fn `def write_default_runtime_config(path: Path | None = None) -> Path` (L309-326)
+### fn `def write_default_runtime_config(path: Path | None = None) -> Path` (L310-327)
 - @brief Write default runtime configuration file to disk.
 - @details Creates parent directories when missing and writes canonical JSON payload using sorted keys and indentation for deterministic content.
 - @param path {Path|None} Optional override path; default is canonical path.
@@ -1758,17 +1758,17 @@ from shell_scripts.utils import print_warn
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_config_path`|fn|pub|97-108|def get_config_path() -> Path|
-|`get_default_runtime_config`|fn|pub|109-120|def get_default_runtime_config() -> dict[str, Any]|
-|`_deep_merge_dict`|fn|priv|121-140|def _deep_merge_dict(base: dict[str, Any], override: dict...|
-|`_normalize_command_vector`|fn|priv|141-157|def _normalize_command_vector(value: Any) -> list[str] | ...|
-|`_normalize_string_list`|fn|priv|158-174|def _normalize_string_list(value: Any) -> list[str] | None|
-|`_normalize_categories`|fn|priv|175-197|def _normalize_categories(value: Any) -> dict[str, list[s...|
-|`load_runtime_config`|fn|pub|198-237|def load_runtime_config(path: Path | None = None) -> dict...|
-|`get_management_command`|fn|pub|238-254|def get_management_command(name: str) -> str|
-|`get_dispatch_profile`|fn|pub|255-280|def get_dispatch_profile(name: str) -> tuple[dict[str, li...|
-|`get_req_profile`|fn|pub|281-308|def get_req_profile() -> tuple[list[str], list[str]]|
-|`write_default_runtime_config`|fn|pub|309-326|def write_default_runtime_config(path: Path | None = None...|
+|`get_config_path`|fn|pub|98-109|def get_config_path() -> Path|
+|`get_default_runtime_config`|fn|pub|110-121|def get_default_runtime_config() -> dict[str, Any]|
+|`_deep_merge_dict`|fn|priv|122-141|def _deep_merge_dict(base: dict[str, Any], override: dict...|
+|`_normalize_command_vector`|fn|priv|142-158|def _normalize_command_vector(value: Any) -> list[str] | ...|
+|`_normalize_string_list`|fn|priv|159-175|def _normalize_string_list(value: Any) -> list[str] | None|
+|`_normalize_categories`|fn|priv|176-198|def _normalize_categories(value: Any) -> dict[str, list[s...|
+|`load_runtime_config`|fn|pub|199-238|def load_runtime_config(path: Path | None = None) -> dict...|
+|`get_management_command`|fn|pub|239-255|def get_management_command(name: str) -> str|
+|`get_dispatch_profile`|fn|pub|256-281|def get_dispatch_profile(name: str) -> tuple[dict[str, li...|
+|`get_req_profile`|fn|pub|282-309|def get_req_profile() -> tuple[list[str], list[str]]|
+|`write_default_runtime_config`|fn|pub|310-327|def write_default_runtime_config(path: Path | None = None...|
 
 
 ---
