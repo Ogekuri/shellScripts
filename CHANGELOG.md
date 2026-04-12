@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.0](https://github.com/Ogekuri/shellScripts/compare/v0.17.0..v0.18.0) - 2026-04-12
+### 🚜  Changes
+- gate pi extension install behind --extra [useReq] *(ai-install)*
+  - update REQ-073 and add REQ-074 for --extra semantics
+  - implement ai-install optional --extra parser and gated _install_pi flow
+  - extend TST-003 coverage for selector forwarding and extension gating
+  - refresh WORKFLOW and REFERENCES entries for updated runtime behavior
+- add pi.dev ai-install flow [useReq] *(ai_install)*
+  - update REQUIREMENTS with REQ-072/REQ-073 and TST-003 traceability
+  - add pi.dev npm install plus extension install sequence in ai_install
+  - update ai-install help, WORKFLOW call trace, and REFERENCES index
+
 ## [0.17.0](https://github.com/Ogekuri/shellScripts/compare/v0.16.0..v0.17.0) - 2026-04-12
 ### 🚜  Changes
 - remove sudo from linux npm installs [useReq] *(ai-install)*
@@ -621,6 +633,7 @@
 - \[0.15.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.15.0
 - \[0.16.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.16.0
 - \[0.17.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.17.0
+- \[0.18.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.18.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -639,3 +652,4 @@
 [0.15.0]: https://github.com/Ogekuri/shellScripts/compare/v0.14.0..v0.15.0
 [0.16.0]: https://github.com/Ogekuri/shellScripts/compare/v0.15.0..v0.16.0
 [0.17.0]: https://github.com/Ogekuri/shellScripts/compare/v0.16.0..v0.17.0
+[0.18.0]: https://github.com/Ogekuri/shellScripts/compare/v0.17.0..v0.18.0
