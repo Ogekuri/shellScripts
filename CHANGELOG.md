@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.15.0](https://github.com/Ogekuri/shellScripts/compare/v0.14.0..v0.15.0) - 2026-04-12
+### ⛰️  Features
+- enforce git-root skip behavior for req and req --dirs [useReq] *(req_cmd)*
+  - Add REQ-070/REQ-071 and update TST-010 coverage for git-root validation.
+  - Implement target pre-checks that skip non-root directories with deterministic skippata evidence.
+  - Extend req command tests and refresh WORKFLOW/REFERENCES traceability artifacts.
+- add pi.dev launcher with default tools behavior [useReq] *(pi)*
+  - Add the new  command to the command registry and AI help section.
+  - Define launcher behavior that forwards CLI args unchanged while appending default  only when no explicit tools option is provided.
+  - Update requirements, workflow, references, and launcher tests for REQ-068/REQ-069 traceability.
+
+### 📚  Documentation
+- Update README.md file.
+
 ## [0.14.0](https://github.com/Ogekuri/shellScripts/compare/v0.13.0..v0.14.0) - 2026-04-09
 ### 🚜  Changes
 - enforce no-auto-update flag [useReq] *(copilot)*
@@ -577,6 +591,7 @@
 - \[0.12.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.12.0
 - \[0.13.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.13.0
 - \[0.14.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.14.0
+- \[0.15.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.15.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -592,3 +607,4 @@
 [0.12.0]: https://github.com/Ogekuri/shellScripts/compare/v0.11.0..v0.12.0
 [0.13.0]: https://github.com/Ogekuri/shellScripts/compare/v0.12.0..v0.13.0
 [0.14.0]: https://github.com/Ogekuri/shellScripts/compare/v0.13.0..v0.14.0
+[0.15.0]: https://github.com/Ogekuri/shellScripts/compare/v0.14.0..v0.15.0
