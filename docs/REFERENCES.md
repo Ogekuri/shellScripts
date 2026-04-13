@@ -1204,7 +1204,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# pi.py | Python | 84L | 5 symbols | 2 imports | 16 comments
+# pi.py | Python | 61L | 4 symbols | 2 imports | 10 comments
 > Path: `src/shell_scripts/commands/pi.py`
 
 ## Imports
@@ -1215,33 +1215,22 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L17)
+- var `PROGRAM = "shellscripts"` (L18)
 - @brief Base CLI program name used in help output.
 - @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch pi.dev CLI in the project context."` (L22)
+- var `DESCRIPTION = "Launch pi.dev CLI in the project context."` (L23)
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version)` (L32-51)
-- @brief Default `--tools` payload for `pi` command invocations.
+### fn `def print_help(version: str) -> None` (L26-45)
 - @brief Print command-specific help for `pi`.
-- @details Applied only when no `--tools` option token is present in forwarded
-arguments.
-- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; documents default `--tools` append semantics and override behavior when `--tools` is explicitly provided.
+- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; documents that every CLI argument is forwarded to the pi.dev CLI without mutation or implicit option injection. Time complexity O(1).
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
-- @satisfies REQ-068, REQ-069
 - @satisfies DES-008, REQ-068, REQ-069
 
-### fn `def _has_tools_option(args)` `priv` (L52-66)
-- @brief Detect whether forwarded args include a `--tools` option token.
-- @details Detects both tokenized forms `--tools <value>` and single-token form `--tools=<value>` using exact prefix matching on each argument element. Time complexity O(n), where n is the argument count.
-- @param args {list[str]} Forwarded CLI args for `pi` launcher.
-- @return {bool} `True` when any argument token provides `--tools`; `False` otherwise.
-- @satisfies REQ-068, REQ-069
-
-### fn `def run(args)` (L67-84)
+### fn `def run(args: list[str]) -> int` (L46-61)
 - @brief Launch pi.dev CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `pi`, forwards all CLI arguments unchanged, and appends default tools option only when no `--tools` token exists in input args.
+- @details Resolves project root, checks executable availability for `pi`, and forwards all CLI arguments unchanged to the child process. The command vector shape is `[resolved_pi_exec] + args`. Time complexity O(n), where n is forwarded argument count.
 - @param args {list[str]} Additional CLI args forwarded to pi.dev.
 - @return {int} Child process return code.
 - @satisfies REQ-055, REQ-056, REQ-064, REQ-068, REQ-069
@@ -1249,11 +1238,10 @@ arguments.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|17||
-|`DESCRIPTION`|var|pub|22||
-|`print_help`|fn|pub|32-51|def print_help(version)|
-|`_has_tools_option`|fn|priv|52-66|def _has_tools_option(args)|
-|`run`|fn|pub|67-84|def run(args)|
+|`PROGRAM`|var|pub|18||
+|`DESCRIPTION`|var|pub|23||
+|`print_help`|fn|pub|26-45|def print_help(version: str) -> None|
+|`run`|fn|pub|46-61|def run(args: list[str]) -> int|
 
 
 ---

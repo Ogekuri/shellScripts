@@ -324,15 +324,15 @@ def test_kiro_executes_expected_command(monkeypatch):
     assert observed["kwargs"] == {}
 
 
-def test_pi_appends_default_tools_when_option_is_absent(monkeypatch):
+def test_pi_forwards_args_without_implicit_tools_injection(monkeypatch):
     """
-    @brief Validate pi command default tools append behavior.
-    @details Stubs project-root guard and subprocess boundary to assert default
-      `--tools` parameter is appended only when CLI args do not include
-      `--tools` option tokens.
+    @brief Validate pi command pass-through behavior without tools mutation.
+    @details Stubs project-root guard and subprocess boundary to assert the
+      pi launcher forwards CLI arguments unchanged and never appends an
+      implicit `--tools` option.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-068, REQ-064
+    @satisfies TST-005, REQ-068, REQ-069, REQ-064
     """
 
     observed = {}
@@ -349,13 +349,7 @@ def test_pi_appends_default_tools_when_option_is_absent(monkeypatch):
     result = pi.run(["--agent", "coder"])
 
     assert result == 16
-    assert observed["command"] == [
-        "pi",
-        "--agent",
-        "coder",
-        "--tools",
-        "read,bash,edit,write,grep,find,ls",
-    ]
+    assert observed["command"] == ["pi", "--agent", "coder"]
     assert observed["kwargs"] == {}
 
 
@@ -366,18 +360,18 @@ def test_pi_appends_default_tools_when_option_is_absent(monkeypatch):
         ["--tools=read,bash"],
     ],
 )
-def test_pi_preserves_tools_override_without_appending_default(
+def test_pi_preserves_tools_override_without_argument_mutation(
     monkeypatch,
     tools_args,
 ):
     """
-    @brief Validate pi command explicit tools override behavior.
+    @brief Validate pi command preservation of explicit tools arguments.
     @details Verifies argument forwarding remains unchanged when any `--tools`
-      token is present, and confirms default tools argument is not appended.
+      token is present and confirms no implicit argument injection occurs.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tools_args {list[str]} Explicit tools-option argument vectors.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-069, REQ-064
+    @satisfies TST-005, REQ-068, REQ-069, REQ-064
     """
 
     observed = {}
@@ -411,7 +405,7 @@ def test_pi_preserves_tools_override_without_appending_default(
         (
             pi,
             ["--agent", "coder"],
-            ["--agent", "coder", "--tools", "read,bash,edit,write,grep,find,ls"],
+            ["--agent", "coder"],
         ),
         (kiro, ["--ai"], ["--ai"]),
         (claude, ["--session"], ["--dangerously-skip-permissions", "--session"]),
@@ -434,7 +428,7 @@ def test_ai_launchers_use_resolved_executable_path_from_require_commands(
     @param args {list[str]} Pass-through command arguments.
     @param expected_tail {list[str]} Expected fixed and forwarded argument tail.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-055, REQ-056, REQ-064, REQ-068
+    @satisfies TST-005, REQ-055, REQ-056, REQ-064, REQ-068, REQ-069
     """
 
     observed = {}

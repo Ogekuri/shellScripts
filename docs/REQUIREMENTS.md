@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.22"
-date: "2026-04-12T18:06:25Z"
+version: "0.6.23"
+date: "2026-04-13T09:46:30Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -142,8 +142,8 @@ No explicit performance optimizations identified.
 - **REQ-016**: MUST execute `gemini --yolo` in `gemini` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-017**: MUST execute `~/.claude/bin/claude --dangerously-skip-permissions` in `claude` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-018**: MUST execute `opencode` in `opencode` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-068**: MUST execute `pi` with all CLI arguments forwarded unchanged and inherited stdio blocking behavior when no `--tools` option is provided, appending default `--tools read,bash,edit,write,grep,find,ls`.
-- **REQ-069**: MUST execute `pi` with all CLI arguments forwarded unchanged and inherited stdio blocking behavior when any `--tools` option is provided, and MUST NOT append a default `--tools` argument.
+- **REQ-068**: MUST execute `pi` with all CLI arguments forwarded unchanged and inherited stdio blocking behavior.
+- **REQ-069**: MUST NOT append, inject, or synthesize any implicit `--tools` argument during `pi` command execution.
 - **REQ-070**: MUST make `req` skip cleanup and installation when current directory is not a Git repository root and MUST print one skip evidence line for that directory.
 - **REQ-071**: MUST make `req --dirs` skip cleanup and installation per non-root child directory, print one skip evidence line per skipped directory, and continue remaining child-directory processing.
 - **REQ-019**: MUST execute `kiro-cli` in `kiro` via `subprocess.run` with inherited stdio and blocking wait.
@@ -203,7 +203,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting command values resolved from runtime config with default command fallback and propagated return codes.
 - **TST-003**: MUST verify REQ-006 through REQ-010, REQ-067, and REQ-072 through REQ-074 by monkeypatching installer call sites and passing only if selector parsing, npm sudo policy, pi notify install order, and Kiro platform gates are correct.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
-- **TST-005**: MUST verify REQ-014 through REQ-021, REQ-043 through REQ-044, and REQ-068 through REQ-069 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, codex auth synchronization, and propagated return codes match requirements.
+- **TST-005**: MUST verify REQ-014 through REQ-021, REQ-043 through REQ-044, and REQ-068 through REQ-069 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, codex auth synchronization, absence of implicit `--tools` injection, and propagated return codes match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
 - **TST-009**: MUST verify REQ-045 and REQ-046 by monkeypatching config I/O boundaries and asserting startup load invocation plus `--write-config` success behavior.
 - **TST-010**: MUST verify REQ-048 through REQ-054, REQ-062 through REQ-063, and REQ-070 through REQ-071 by monkeypatching filesystem and subprocess boundaries, passing only if target selection, git-root skip behavior, cleanup evidence output, and generated `req` argument vectors match required behavior.
