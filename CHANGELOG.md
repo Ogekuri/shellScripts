@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.19.0](https://github.com/Ogekuri/shellScripts/compare/v0.18.0..v0.19.0) - 2026-04-13
+### 🚜  Changes
+- BREAKING CHANGE: remove implicit --tools injection [useReq] *(pi)*
+  - Worktree: useReq-shellScripts-work-20260413094554
+  - Requirements: update REQ-068, REQ-069, and TST-005
+  - Implementation: remove default --tools handling from pi launcher
+  - Tests: verify unchanged pi argument forwarding in cli launcher suite
+  - Docs: update WORKFLOW.md and regenerate REFERENCES.md
+- BREAKING CHANGE: remove --extra and always install pi notify [useReq] *(ai-install)*
+  - update REQ-073 and REQ-074 for mandatory pi-notify installation
+  - remove ai-install --extra parsing and install git:github.com/ferologics/pi-notify after pi CLI
+  - refresh TST-003 coverage and regenerate WORKFLOW and REFERENCES
+
 ## [0.18.0](https://github.com/Ogekuri/shellScripts/compare/v0.17.0..v0.18.0) - 2026-04-12
 ### 🚜  Changes
 - gate pi extension install behind --extra [useReq] *(ai-install)*
@@ -634,6 +647,7 @@
 - \[0.16.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.16.0
 - \[0.17.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.17.0
 - \[0.18.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.18.0
+- \[0.19.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.19.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -653,3 +667,4 @@
 [0.16.0]: https://github.com/Ogekuri/shellScripts/compare/v0.15.0..v0.16.0
 [0.17.0]: https://github.com/Ogekuri/shellScripts/compare/v0.16.0..v0.17.0
 [0.18.0]: https://github.com/Ogekuri/shellScripts/compare/v0.17.0..v0.18.0
+[0.19.0]: https://github.com/Ogekuri/shellScripts/compare/v0.18.0..v0.19.0
