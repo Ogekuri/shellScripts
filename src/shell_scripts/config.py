@@ -20,11 +20,9 @@ from shell_scripts.utils import print_warn
 
 ## @var DEFAULT_RUNTIME_CONFIG
 #  @brief Hardcoded default runtime configuration payload.
-#  @details Defines management command templates, dispatch command profiles,
-#  and `req` provider/static-check defaults. Serialized by
-#  `write_default_runtime_config`. Default `req.providers` excludes
-#  deprecated `pi:prompts` emission.
-#  @satisfies DES-011, DES-012, REQ-050
+#  @details Defines management command templates and dispatch command profiles
+#  for `diff`, `edit`, and `view`. Serialized by `write_default_runtime_config`.
+#  @satisfies DES-011, DES-012
 DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
     "management": {
         "upgrade": (
@@ -76,6 +74,7 @@ DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
             "opencode:prompts",
             "gemini:prompts",
             "kiro:agents",
+            "pi:prompts",
         ],
         "static_checks": [
             "C=Command,cppcheck,--error-exitcode=1,\"--enable=warning,style,performance,portability\",--std=c11",

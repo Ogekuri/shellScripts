@@ -234,7 +234,7 @@ def test_get_default_req_profile_uses_codex_skills_provider():
     """
     @brief Validate default req provider contract for Codex.
     @details Asserts default runtime req providers include `codex:skills`
-      and exclude removed `codex:prompts` and `pi:prompts` tokens.
+      and exclude legacy `codex:prompts` token.
     @return {None} Assertions only.
     @satisfies TST-010, REQ-050
     """
@@ -243,7 +243,6 @@ def test_get_default_req_profile_uses_codex_skills_provider():
 
     assert "codex:skills" in defaults["providers"]
     assert "codex:prompts" not in defaults["providers"]
-    assert "pi:prompts" not in defaults["providers"]
 
 
 def test_is_executable_command_checks_name_and_path(monkeypatch, tmp_path):

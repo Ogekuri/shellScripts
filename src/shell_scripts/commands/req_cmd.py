@@ -6,8 +6,7 @@ for every predefined cleanup path, then executes external `req` installation
 arguments for selected target directories. Target selection mode is current
 directory by default, first-level child directories with `--dirs`, or all
 descendant directories with `--recursive`. Provider/static-check argument lists
-are resolved from runtime config with hardcoded fallback defaults, and emitted
-provider flags omit deprecated `pi:prompts` integration.
+are resolved from runtime config with hardcoded fallback defaults.
 @satisfies PRJ-003, DES-008, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052,
   REQ-053, REQ-054, REQ-056, REQ-062, REQ-063, REQ-070, REQ-071
 """
@@ -44,13 +43,6 @@ CLEANUP_PATHS: tuple[str, ...] = (
     ".pi/prompts",
     ".pi/skills",
 )
-
-## @var OMITTED_REQ_PROVIDERS
-#  @brief Provider tokens never forwarded to external `req`.
-#  @details Enforces command-level omission of deprecated integrations even
-#  when runtime configuration still contains legacy provider identifiers.
-#  @satisfies REQ-050
-OMITTED_REQ_PROVIDERS: tuple[str, ...] = ("pi:prompts",)
 
 REQUIRED_DIRS: tuple[str, ...] = (
     "guidelines",
@@ -141,9 +133,7 @@ def _build_req_args(target_dir: Path) -> list[str]:
     """@brief Build external `req` argument vector for one target directory.
 
     @details Uses hardcoded non-overridable arguments and appends repeated
-    runtime-configured providers/static-check entries sourced from
-    `get_req_profile`. Provider emission skips every token listed in
-    `OMITTED_REQ_PROVIDERS` to prevent deprecated pi prompt installation.
+    runtime-configured providers/static-check entries sourced from `get_req_profile`.
     @param target_dir {Path} Target directory used to parameterize path flags.
     @return {list[str]} External `req` argv vector.
     @satisfies REQ-049, REQ-050
@@ -168,8 +158,6 @@ def _build_req_args(target_dir: Path) -> list[str]:
         str(target_dir / "tests"),
     ]
     for provider in providers:
-        if provider in OMITTED_REQ_PROVIDERS:
-            continue
         args.extend(["--provider", provider])
     args.append("--upgrade-guidelines")
     for static_check in static_checks:
