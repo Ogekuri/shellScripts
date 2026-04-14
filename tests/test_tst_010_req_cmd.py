@@ -265,8 +265,9 @@ def test_req_returns_error_code_when_external_req_fails(monkeypatch, tmp_path):
 def test_req_builds_hardcoded_and_configurable_args(monkeypatch, tmp_path):
     """
     @brief Validate req argv assembly contract.
-    @details Asserts hardcoded base args are always present and provider/static
-      check lists are appended from runtime profile.
+    @details Asserts hardcoded base args are always present, provider/static
+      check lists are appended from runtime profile, and deprecated
+      `pi:prompts` is omitted from emitted provider flags.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @return {None} Assertions only.
@@ -295,7 +296,10 @@ def test_req_builds_hardcoded_and_configurable_args(monkeypatch, tmp_path):
     monkeypatch.setattr(
         req_cmd,
         "get_req_profile",
-        lambda: (["a:b", "c:d"], ["Python=Ruff", "JavaScript=Command,node,--check"]),
+        lambda: (
+            ["a:b", "pi:prompts", "c:d"],
+            ["Python=Ruff", "JavaScript=Command,node,--check"],
+        ),
     )
 
     result = req_cmd.run([])
@@ -307,6 +311,7 @@ def test_req_builds_hardcoded_and_configurable_args(monkeypatch, tmp_path):
     assert command.count("--src-dir") == 3
     assert "--tests-dir" in command
     assert command.count("--provider") == 2
+    assert "pi:prompts" not in command
     assert command.count("--enable-static-check") == 2
     assert "--upgrade-guidelines" in command
 
