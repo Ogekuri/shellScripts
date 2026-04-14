@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.21.0](https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0) - 2026-04-14
+### ◀️  Revert
+- Roll back branch to 4fff5017 (4fff5017777d51608cf7bcbe7e956e970bf95576).
+
+## [0.20.0](https://github.com/Ogekuri/shellScripts/compare/v0.19.0..v0.20.0) - 2026-04-14
+### 🚜  Changes
+- stop installing pi prompts in req bootstrap [useReq] *(req_cmd)*
+  - update REQ-050 and TST-010
+  - remove pi:prompts from default req providers
+  - filter pi:prompts from emitted req argv
+  - refresh workflow, references, and targeted tests
+
 ## [0.19.0](https://github.com/Ogekuri/shellScripts/compare/v0.18.0..v0.19.0) - 2026-04-13
 ### 🚜  Changes
 - BREAKING CHANGE: remove implicit --tools injection [useReq] *(pi)*
@@ -648,6 +660,8 @@
 - \[0.17.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.17.0
 - \[0.18.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.18.0
 - \[0.19.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.19.0
+- \[0.20.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.20.0
+- \[0.21.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.21.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -668,3 +682,5 @@
 [0.17.0]: https://github.com/Ogekuri/shellScripts/compare/v0.16.0..v0.17.0
 [0.18.0]: https://github.com/Ogekuri/shellScripts/compare/v0.17.0..v0.18.0
 [0.19.0]: https://github.com/Ogekuri/shellScripts/compare/v0.18.0..v0.19.0
+[0.20.0]: https://github.com/Ogekuri/shellScripts/compare/v0.19.0..v0.20.0
+[0.21.0]: https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0
