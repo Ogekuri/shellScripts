@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.22.0](https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0) - 2026-07-08
+### 🐛  Bug Fixes
+- Update README.md file.
+
 ## [0.21.0](https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0) - 2026-04-14
 ### ◀️  Revert
 - Roll back branch to 4fff5017 (4fff5017777d51608cf7bcbe7e956e970bf95576).
@@ -662,6 +666,7 @@
 - \[0.19.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.19.0
 - \[0.20.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.20.0
 - \[0.21.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.21.0
+- \[0.22.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -684,3 +689,4 @@
 [0.19.0]: https://github.com/Ogekuri/shellScripts/compare/v0.18.0..v0.19.0
 [0.20.0]: https://github.com/Ogekuri/shellScripts/compare/v0.19.0..v0.20.0
 [0.21.0]: https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0
+[0.22.0]: https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0
