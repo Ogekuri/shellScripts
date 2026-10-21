@@ -29,16 +29,16 @@
 !src/**/*
 !docs/
 !docs/**/*
-!guidelines/
-!guidelines/**/*
 !tests/
 !tests/**/*
-!other-stuff/
-!other-stuff/**/*
 !scripts/
 !scripts/**/*.sh
 !images/
 !images/**/*
+!.pi-usereq.json
+!pi-usereq/
+!pi-usereq/docs/
+!pi-usereq/docs/**/*.md
 
 ##########################################
 # Exlucde specific files and directories #
