@@ -36,9 +36,9 @@
 !images/
 !images/**/*
 !.pi-usereq.json
-!pi-usereq/
-!pi-usereq/docs/
-!pi-usereq/docs/**/*.md
+!usereq/
+!usereq/docs/
+!usereq/docs/**/*.md
 
 ##########################################
 # Exlucde specific files and directories #
