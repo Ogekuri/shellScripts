@@ -25,7 +25,7 @@ WORKFLOW_PATH = (
 NODE24_NATIVE_ACTION_RUNTIMES = {
     "actions/checkout": "v7",
     "actions/setup-python": "v7",
-    "astral-sh/setup-uv": "v10",
+    "astral-sh/setup-uv": "v10.3.3",
     "actions/attest-build-provenance": "v4",
     "mikepenz/release-changelog-builder-action": "v6",
     "softprops/action-gh-release": "v3",
@@ -38,9 +38,9 @@ NODE20_COMPATIBILITY_OVERRIDE_TOKENS = (
     "ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION",
 )
 
-# @var USES_PIN_PATTERN {re.Pattern[str]} Regex extracting `(action_slug, runtime_ref)` pairs from every `uses: <owner>/<repo>@<ref>` reference; `finditer` preserves declaration order.
+# @var USES_PIN_PATTERN {re.Pattern[str]} Regex extracting `(action_slug, runtime_ref)` pairs from every `uses: <owner>/<repo>@<ref>` reference; accepts floating major refs (`v7`), full semver tags (`v10.3.3`), and branch refs (`release/v1`); `finditer` preserves declaration order.
 USES_PIN_PATTERN = re.compile(
-    r"uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(v\d+|release/v\d+)"
+    r"uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(v\d+(?:\.\d+)*|release/v\d+)"
 )
 
 
