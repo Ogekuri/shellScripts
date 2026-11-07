@@ -316,7 +316,7 @@
 - Internal Call-Trace Tree:
   - No internal function declarations detected in workflow YAML.
 - External Boundaries:
-  - GitHub Actions boundaries: reusable actions (`actions/checkout`, `actions/setup-python`, `softprops/action-gh-release`).
+  - GitHub Actions boundaries: reusable actions executing on Node24 runtime (CTN-006: `actions/checkout`, `actions/setup-python`, `astral-sh/setup-uv`, `actions/attest-build-provenance`, `mikepenz/release-changelog-builder-action`, `softprops/action-gh-release`).
   - Tooling boundaries: external shell commands (`git`, `uv`, `python -m build`).
   - Network/API boundary: GitHub Releases publication with built artifacts.
 

@@ -12,6 +12,7 @@ permissions:
   attestations: write
 
 jobs:
+  # All action references below pin Node24-native major runtimes (CTN-006, DES-015).
   # 1. Controlla se siamo sul branch corretto
   check-branch:
     runs-on: ubuntu-latest
@@ -19,7 +20,7 @@ jobs:
       is_master: ${{ steps.check.outputs.is_master }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 
 
@@ -44,23 +45,23 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v10
 
       - name: Build distributions
         run: uv run --frozen --with build python -m build
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*
 
@@ -113,7 +114,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release and upload assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           draft: false
           prerelease: false

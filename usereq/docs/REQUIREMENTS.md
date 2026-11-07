@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.23"
-date: "2026-04-13T09:46:30Z"
+version: "0.6.24"
+date: "2026-11-07T15:39:19Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -100,6 +100,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **CTN-003**: MUST depend on external system executables for multiple subcommands and MUST fail fast when required executables are unavailable.
 - **CTN-004**: MUST restrict automatic self-upgrade and self-uninstall actions to Linux platforms and MUST print manual fallback commands on non-Linux platforms.
 - **CTN-005**: MUST treat Git repository root detection as a hard prerequisite for project-context commands.
+- **CTN-006**: MUST execute all GitHub Actions JavaScript action runtimes in `.github/workflows/release-uvx.yml` on Node24 or newer.
 
 ## 3. Requirements
 
@@ -118,6 +119,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-012**: MUST provide a management operation that writes default runtime configuration JSON to `~/.config/shellScripts/config.json`, creating parent directories when absent.
 - **DES-013**: MUST resolve `ai-install` installer payload sources from detected runtime OS, including Linux npm no-`sudo` policy and Kiro package resolution via `https://prod.download.cli.kiro.dev/stable/latest/manifest.json`.
 - **DES-014**: MUST generate global help command listing from a fixed section-to-command mapping preserving section order and per-section command order.
+- **DES-015**: MUST pin every action referenced by `.github/workflows/release-uvx.yml` to a major version whose declared runtime is Node24 or newer.
 
 No explicit performance optimizations identified.
 
@@ -194,7 +196,7 @@ No explicit performance optimizations identified.
 ## 4. Test Requirements
 
 ### 4.1 Coverage Summary
-Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, AI installers, command dispatch wrappers, and PDF pipelines.
+Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, AI installers, command dispatch wrappers, PDF pipelines, and release-workflow Node24 runtime pinning.
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
 High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
 
@@ -210,6 +212,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
 - **TST-011**: MUST verify REQ-057 and REQ-058 by monkeypatching executable checks and `subprocess.run`, passing only if FFmpeg argv vectors, `<input>.mp4` output naming, and propagated return codes are exact.
+- **TST-012**: MUST verify CTN-006 and DES-015 by parsing `.github/workflows/release-uvx.yml`, passing only if every referenced action major version matches the approved Node24-native mapping and no Node20 compatibility override environment variables are present.
 
 ## 5. Evidence
 
@@ -219,6 +222,7 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
 | PRJ-004, DES-002..DES-006, REQ-003, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_is_forced_version_check`, `_write_idle_config`, `_should_check` | Forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every request outcome, applies 3600s on success and 86400s on request errors, and prints colored update/error lines. |
 | PRJ-005 | `.github/workflows/release-uvx.yml` | `jobs.check-branch`, `jobs.build-release` | Workflow script is present at required path and defines release automation jobs. |
+| CTN-006, DES-015 | `.github/workflows/release-uvx.yml`; `tests/test_tst_012_workflow_runtime.py` | `jobs.check-branch.steps`, `jobs.build-release.steps`, `NODE24_NATIVE_ACTION_MAJORS` | Every `uses` reference pins a Node24-native major (`checkout@v7`, `setup-python@v7`, `setup-uv@v10`, `attest-build-provenance@v4`, `release-changelog-builder-action@v6`, `action-gh-release@v3`); static test asserts full mapping coverage and absence of Node20 compatibility override variables. |
 | PRJ-006, REQ-057, REQ-058, REQ-064 | `src/shell_scripts/commands/video2h264.py`; `src/shell_scripts/commands/video2h265.py`; `src/shell_scripts/commands/__init__.py` | `run`, `_COMMAND_MODULES` | Command registry exposes `video2h264`/`video2h265`; runners launch fixed FFmpeg argv vectors via `subprocess.run` and output `<input>.mp4` in the input directory. |
 | CTN-001 | `pyproject.toml` | `[project].requires-python` | `requires-python = ">=3.11"`. |
 | CTN-002 | `pyproject.toml` | `[project.scripts]` | `shellscripts = "shell_scripts.core:main"`, `s = "shell_scripts.core:main"`. |
@@ -248,4 +252,4 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 | REQ-034, REQ-035 | `src/shell_scripts/commands/pdf_crop.py` | `run`, `_parse_page_range`, `_compute_auto_bbox` | Supports bbox/margins/analyze-pages/pages options and validates range syntax `N`, `N-`, `-N`, `N-M`. |
 | REQ-036, REQ-037 | `src/shell_scripts/commands/tests_cmd.py` | `run` | Creates `.venv` if missing, conditionally installs `requirements.txt`, runs pytest with `PYTHONPATH` prefixed by `src`. |
 | REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-062, REQ-063 | `src/shell_scripts/commands/req_cmd.py`; `src/shell_scripts/config.py` | `run`, `_prepare_target_directory`, `_build_req_args`, `get_req_profile` | `req` command resolves targets by selector mode, removes predefined cleanup paths, emits `deleted`/`skip` cleanup evidence with file-or-dir labels for removals, and executes external `req` with hardcoded base args plus runtime-configured providers/static checks. |
-| TST-001..TST-011 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
+| TST-001..TST-012 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |

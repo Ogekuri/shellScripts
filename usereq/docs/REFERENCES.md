@@ -1,8 +1,6 @@
 # Files Structure
 ```
 .
-├── scripts
-│   └── s.sh
 └── src
     └── shell_scripts
         ├── __init__.py
@@ -46,35 +44,6 @@
         ├── utils.py
         └── version_check.py
 ```
-
-# s.sh | Shell | 51L | 6 symbols | 0 imports | 9 comments
-> Path: `scripts/s.sh`
-
-## Definitions
-
-- fn `normalize_path() {` (L11)
-- @brief Normalize a path for cross-platform comparison.
-- @details Uses cygpath when available (Git Bash/MSYS) and falls back to
-canonical directory resolution via cd/pwd -P.
-- @param $1 Raw path to normalize.
-- @return Prints the normalized path to stdout.
-- var `SCRIPT_PATH=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd -P)` (L32)
-- var `BASE_DIR=$(CDPATH= cd -- "${SCRIPT_PATH}/.." 2>/dev/null && pwd -P)` (L33)
-- var `PROJECT_ROOT=$(git -C "${BASE_DIR}" rev-parse --show-toplevel 2>/dev/null)` (L35)
-- var `PROJECT_ROOT=$(normalize_path "${PROJECT_ROOT}")` (L41)
-- var `BASE_DIR=$(normalize_path "${BASE_DIR}")` (L42)
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`normalize_path`|fn||11|normalize_path()|
-|`SCRIPT_PATH`|var||32||
-|`BASE_DIR`|var||33||
-|`PROJECT_ROOT`|var||35||
-|`PROJECT_ROOT`|var||41||
-|`BASE_DIR`|var||42||
-
-
----
 
 # __init__.py | Python | 5L | 0 symbols | 1 imports | 0 comments
 > Path: `src/shell_scripts/__init__.py`
@@ -122,7 +91,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @satisfies PRJ-003, DES-001
 - @satisfies PRJ-001, DES-001, DES-008, REQ-057, REQ-058
 
-### fn `def get_all_commands() -> dict[str, str]` (L67-81)
+### fn `def get_all_commands() -> dict[str, str]` (L67-82)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
@@ -133,7 +102,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
 |`get_command`|fn|pub|51-66|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|67-81|def get_all_commands() -> dict[str, str]|
+|`get_all_commands`|fn|pub|67-82|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -173,7 +142,7 @@ from shell_scripts.utils import is_executable_command, print_error
 - @return {list[str]} Selected executable command vector.
 - @satisfies REQ-024, REQ-055
 
-### fn `def dispatch(category_cmds, fallback_cmd, filepath, extra_args)` (L115-138)
+### fn `def dispatch(category_cmds, fallback_cmd, filepath, extra_args)` (L115-139)
 - @brief Dispatch diff/edit/view command by detected file category.
 - @details Resolves category-specific command vector, validates executable availability, and executes selected command via blocking subprocess run.
 - @param category_cmds {dict[str, list[str]]} Category-to-command mapping.
@@ -194,7 +163,7 @@ from shell_scripts.utils import is_executable_command, print_error
 |`detect_mime`|fn|pub|34-60|def detect_mime(filepath)|
 |`categorize`|fn|pub|61-98|def categorize(filepath)|
 |`pick_cmd`|fn|pub|99-114|def pick_cmd(primary, fallback)|
-|`dispatch`|fn|pub|115-138|def dispatch(category_cmds, fallback_cmd, filepath, extra...|
+|`dispatch`|fn|pub|115-139|def dispatch(category_cmds, fallback_cmd, filepath, extra...|
 
 
 ---
@@ -299,7 +268,7 @@ import urllib.request
 - @satisfies DES-013, REQ-010, REQ-067
 
 - var `ALL_INSTALLERS = {` (L405)
-### fn `def run(args: list[str]) -> int` (L416-453)
+### fn `def run(args: list[str]) -> int` (L416-454)
 - @brief Parse selectors and execute selected AI installer routines.
 - @details Accepts explicit selectors or defaults to the full installer set when omitted. Unknown selectors are rejected with return code `1`; no compatibility parsing exists for removed `--extra` behavior.
 - @param args {list[str]} CLI selector tokens for installer filtering.
@@ -327,7 +296,7 @@ import urllib.request
 |`_install_pi`|fn|priv|296-323|def _install_pi() -> None|
 |`_install_kiro`|fn|priv|324-404|def _install_kiro()|
 |`ALL_INSTALLERS`|var|pub|405||
-|`run`|fn|pub|416-453|def run(args: list[str]) -> int|
+|`run`|fn|pub|416-454|def run(args: list[str]) -> int|
 
 
 ---
@@ -348,7 +317,7 @@ from shell_scripts.utils import print_error
 - var `DESCRIPTION = "Create or update command symlinks in $HOME/bin."` (L8)
 ### fn `def print_help(version)` (L11-21)
 
-### fn `def run(args)` (L22-78)
+### fn `def run(args)` (L22-79)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -356,7 +325,7 @@ from shell_scripts.utils import print_error
 |`PROGRAM`|var|pub|7||
 |`DESCRIPTION`|var|pub|8||
 |`print_help`|fn|pub|11-21|def print_help(version)|
-|`run`|fn|pub|22-78|def run(args)|
+|`run`|fn|pub|22-79|def run(args)|
 
 
 ---
@@ -386,7 +355,7 @@ from shell_scripts.utils import require_project_root, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L41-56)
+### fn `def run(args)` (L41-57)
 - @brief Launch Claude CLI after external executable validation.
 - @details Resolves project root, resolves user-local Claude executable path, validates executable availability, then executes command via subprocess.
 - @param args {list[str]} Additional CLI args forwarded to Claude.
@@ -399,7 +368,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|17||
 |`DESCRIPTION`|var|pub|21||
 |`print_help`|fn|pub|24-40|def print_help(version)|
-|`run`|fn|pub|41-56|def run(args)|
+|`run`|fn|pub|41-57|def run(args)|
 
 
 ---
@@ -422,7 +391,7 @@ from shell_scripts.utils import require_project_root, print_error
 - var `CACHE_DIRS = [` (L11)
 ### fn `def print_help(version)` (L25-33)
 
-### fn `def run(args)` (L34-98)
+### fn `def run(args)` (L34-99)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -431,7 +400,7 @@ from shell_scripts.utils import require_project_root, print_error
 |`DESCRIPTION`|var|pub|9||
 |`CACHE_DIRS`|var|pub|11||
 |`print_help`|fn|pub|25-33|def print_help(version)|
-|`run`|fn|pub|34-98|def run(args)|
+|`run`|fn|pub|34-99|def run(args)|
 
 
 ---
@@ -465,7 +434,7 @@ from shell_scripts.utils import print_info, require_project_root, require_comman
 
 ### fn `def _copy_auth_file(` `priv` (L46-49)
 
-### fn `def run(args: list[str]) -> int` (L74-107)
+### fn `def run(args: list[str]) -> int` (L74-108)
 - @brief Copy Codex auth file while replacing destination file or symlink.
 - @brief Launch Codex CLI with project-scoped environment preparation.
 - @details Ensures destination parent directory exists, removes an existing
@@ -492,7 +461,7 @@ n is auth file size.
 |`DESCRIPTION`|var|pub|27||
 |`print_help`|fn|pub|30-45|def print_help(version: str) -> None|
 |`_copy_auth_file`|fn|priv|46-49|def _copy_auth_file(|
-|`run`|fn|pub|74-107|def run(args: list[str]) -> int|
+|`run`|fn|pub|74-108|def run(args: list[str]) -> int|
 
 
 ---
@@ -521,7 +490,7 @@ from shell_scripts.utils import require_project_root, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L40-54)
+### fn `def run(args)` (L40-55)
 - @brief Launch Copilot CLI after external executable validation.
 - @details Resolves project root, checks executable availability for `copilot`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Copilot.
@@ -534,7 +503,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|16||
 |`DESCRIPTION`|var|pub|20||
 |`print_help`|fn|pub|23-39|def print_help(version)|
-|`run`|fn|pub|40-54|def run(args)|
+|`run`|fn|pub|40-55|def run(args)|
 
 
 ---
@@ -561,7 +530,7 @@ from shell_scripts.utils import print_error, require_commands
 
 ### fn `def _find_jars(*jar_names)` `priv` (L37-48)
 
-### fn `def run(args)` (L49-98)
+### fn `def run(args)` (L49-99)
 - @brief Run PixelMed converter after executable validation.
 - @details Validates Java runtime availability and command executability for the selected Java binary before invoking conversion class.
 - @param args {list[str]} Expected `[input_dicom, output_jpeg]` arguments.
@@ -577,7 +546,7 @@ from shell_scripts.utils import print_error, require_commands
 |`print_help`|fn|pub|21-29|def print_help(version)|
 |`_find_java`|fn|priv|30-36|def _find_java()|
 |`_find_jars`|fn|priv|37-48|def _find_jars(*jar_names)|
-|`run`|fn|pub|49-98|def run(args)|
+|`run`|fn|pub|49-99|def run(args)|
 
 
 ---
@@ -604,7 +573,7 @@ from shell_scripts.utils import print_error, require_commands
 
 ### fn `def _find_jars(*jar_names)` `priv` (L36-47)
 
-### fn `def run(args)` (L48-83)
+### fn `def run(args)` (L48-84)
 - @brief Run PixelMed DICOM viewer after executable validation.
 - @details Validates Java runtime availability and command executability for the selected Java binary before invoking the viewer class.
 - @param args {list[str]} DICOM file arguments forwarded to PixelMed viewer.
@@ -620,7 +589,7 @@ from shell_scripts.utils import print_error, require_commands
 |`print_help`|fn|pub|21-28|def print_help(version)|
 |`_find_java`|fn|priv|29-35|def _find_java()|
 |`_find_jars`|fn|priv|36-47|def _find_jars(*jar_names)|
-|`run`|fn|pub|48-83|def run(args)|
+|`run`|fn|pub|48-84|def run(args)|
 
 
 ---
@@ -646,7 +615,7 @@ from shell_scripts.commands._dc_common import dispatch
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L35-50)
+### fn `def run(args)` (L35-51)
 - @brief Execute MIME-routed diff dispatch.
 - @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise resolves runtime dispatch profile and delegates by file category through shared `_dc_common`.
 - @param args {list[str]} CLI args where `args[0]` is file path.
@@ -659,7 +628,7 @@ from shell_scripts.commands._dc_common import dispatch
 |`PROGRAM`|var|pub|14||
 |`DESCRIPTION`|var|pub|15||
 |`print_help`|fn|pub|18-34|def print_help(version)|
-|`run`|fn|pub|35-50|def run(args)|
+|`run`|fn|pub|35-51|def run(args)|
 
 
 ---
@@ -691,7 +660,7 @@ from shell_scripts.utils import command_exists
 
 ### fn `def _generate_markdown_fallback(xml_dir, markdown_dir)` `priv` (L76-98)
 
-### fn `def run(args)` (L99-159)
+### fn `def run(args)` (L99-160)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -702,7 +671,7 @@ from shell_scripts.utils import command_exists
 |`_supports_generate_markdown`|fn|priv|25-38|def _supports_generate_markdown()|
 |`_write_doxyfile`|fn|priv|39-40|def _write_doxyfile(path, project_root, src_dir, doxygen_...|
 |`_generate_markdown_fallback`|fn|priv|76-98|def _generate_markdown_fallback(xml_dir, markdown_dir)|
-|`run`|fn|pub|99-159|def run(args)|
+|`run`|fn|pub|99-160|def run(args)|
 
 
 ---
@@ -728,7 +697,7 @@ from shell_scripts.commands._dc_common import dispatch
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L35-50)
+### fn `def run(args)` (L35-51)
 - @brief Execute MIME-routed edit dispatch.
 - @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise resolves runtime dispatch profile and delegates by file category through shared `_dc_common`.
 - @param args {list[str]} CLI args where `args[0]` is file path.
@@ -741,7 +710,7 @@ from shell_scripts.commands._dc_common import dispatch
 |`PROGRAM`|var|pub|14||
 |`DESCRIPTION`|var|pub|15||
 |`print_help`|fn|pub|18-34|def print_help(version)|
-|`run`|fn|pub|35-50|def run(args)|
+|`run`|fn|pub|35-51|def run(args)|
 
 
 ---
@@ -770,7 +739,7 @@ from shell_scripts.utils import require_project_root, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L40-54)
+### fn `def run(args)` (L40-55)
 - @brief Launch Gemini CLI after external executable validation.
 - @details Resolves project root, checks executable availability for `gemini`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Gemini.
@@ -783,7 +752,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|16||
 |`DESCRIPTION`|var|pub|20||
 |`print_help`|fn|pub|23-39|def print_help(version)|
-|`run`|fn|pub|40-54|def run(args)|
+|`run`|fn|pub|40-55|def run(args)|
 
 
 ---
@@ -812,7 +781,7 @@ from shell_scripts.utils import require_project_root, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L40-54)
+### fn `def run(args)` (L40-55)
 - @brief Launch Kiro CLI after external executable validation.
 - @details Resolves project root, validates executable availability for `kiro-cli`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to Kiro.
@@ -825,7 +794,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|16||
 |`DESCRIPTION`|var|pub|20||
 |`print_help`|fn|pub|23-39|def print_help(version)|
-|`run`|fn|pub|40-54|def run(args)|
+|`run`|fn|pub|40-55|def run(args)|
 
 
 ---
@@ -854,7 +823,7 @@ from shell_scripts.utils import require_project_root, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L40-54)
+### fn `def run(args)` (L40-55)
 - @brief Launch OpenCode CLI after external executable validation.
 - @details Resolves project root, checks executable availability for `opencode`, then executes pass-through args through blocking subprocess run.
 - @param args {list[str]} Additional CLI args forwarded to OpenCode.
@@ -867,7 +836,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|16||
 |`DESCRIPTION`|var|pub|20||
 |`print_help`|fn|pub|23-39|def print_help(version)|
-|`run`|fn|pub|40-54|def run(args)|
+|`run`|fn|pub|40-55|def run(args)|
 
 
 ---
@@ -990,7 +959,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ### fn `def _get_num_pages(dump_file)` `priv` (L44-51)
 
-### fn `def run(args)` (L52-180)
+### fn `def run(args)` (L52-181)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1000,7 +969,7 @@ from shell_scripts.utils import require_commands, print_error
 |`print_help`|fn|pub|12-22|def print_help(version)|
 |`_parse_bookmarks`|fn|priv|23-43|def _parse_bookmarks(dump_file)|
 |`_get_num_pages`|fn|priv|44-51|def _get_num_pages(dump_file)|
-|`run`|fn|pub|52-180|def run(args)|
+|`run`|fn|pub|52-181|def run(args)|
 
 
 ---
@@ -1033,7 +1002,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ### fn `def _apply_toc(output_file, toc_content)` `priv` (L105-137)
 
-### fn `def run(args)` (L138-243)
+### fn `def run(args)` (L138-244)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1046,7 +1015,7 @@ from shell_scripts.utils import require_commands, print_error
 |`_has_toc`|fn|priv|51-69|def _has_toc(pdf)|
 |`_extract_toc_for_range`|fn|priv|70-104|def _extract_toc_for_range(data_file, start, end)|
 |`_apply_toc`|fn|priv|105-137|def _apply_toc(output_file, toc_content)|
-|`run`|fn|pub|138-243|def run(args)|
+|`run`|fn|pub|138-244|def run(args)|
 
 
 ---
@@ -1077,7 +1046,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ### fn `def _apply_toc_to_file(output_file, toc_content)` `priv` (L79-108)
 
-### fn `def run(args)` (L109-197)
+### fn `def run(args)` (L109-198)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1089,7 +1058,7 @@ from shell_scripts.utils import require_commands, print_error
 |`_extract_toc_for_range`|fn|priv|40-72|def _extract_toc_for_range(dump_content, start, end)|
 |`_sanitize_title`|fn|priv|73-78|def _sanitize_title(title)|
 |`_apply_toc_to_file`|fn|priv|79-108|def _apply_toc_to_file(output_file, toc_content)|
-|`run`|fn|pub|109-197|def run(args)|
+|`run`|fn|pub|109-198|def run(args)|
 
 
 ---
@@ -1110,7 +1079,7 @@ from shell_scripts.utils import require_commands, print_error
 - var `DESCRIPTION = "Tile PDF to A4 pages at 90% scale using plakativ."` (L8)
 ### fn `def print_help(version)` (L11-20)
 
-### fn `def run(args)` (L21-61)
+### fn `def run(args)` (L21-62)
 - @brief Execute `pdf-tiler-090` command with blocking subprocess launch.
 - @details Validates input argument and file presence, builds `plakativ` command vector with fixed A4/0.90 parameters, then executes it via `subprocess.run` while inheriting stdio streams.
 - @param args {list[str]} Command arguments excluding command token.
@@ -1123,7 +1092,7 @@ from shell_scripts.utils import require_commands, print_error
 |`PROGRAM`|var|pub|7||
 |`DESCRIPTION`|var|pub|8||
 |`print_help`|fn|pub|11-20|def print_help(version)|
-|`run`|fn|pub|21-61|def run(args)|
+|`run`|fn|pub|21-62|def run(args)|
 
 
 ---
@@ -1144,7 +1113,7 @@ from shell_scripts.utils import require_commands, print_error
 - var `DESCRIPTION = "Tile PDF to A4 pages at original A1 size using plakativ."` (L8)
 ### fn `def print_help(version)` (L11-20)
 
-### fn `def run(args)` (L21-61)
+### fn `def run(args)` (L21-62)
 - @brief Execute `pdf-tiler-100` command with blocking subprocess launch.
 - @details Validates input argument and file presence, builds `plakativ` command vector with fixed A1 source size and A4 tiling parameters, then executes it via `subprocess.run` while inheriting stdio streams.
 - @param args {list[str]} Command arguments excluding command token.
@@ -1157,7 +1126,7 @@ from shell_scripts.utils import require_commands, print_error
 |`PROGRAM`|var|pub|7||
 |`DESCRIPTION`|var|pub|8||
 |`print_help`|fn|pub|11-20|def print_help(version)|
-|`run`|fn|pub|21-61|def run(args)|
+|`run`|fn|pub|21-62|def run(args)|
 
 
 ---
@@ -1187,7 +1156,7 @@ from shell_scripts.utils import require_commands, print_error
 
 ### fn `def _clean_one(input_pdf)` `priv` (L74-161)
 
-### fn `def run(args)` (L162-175)
+### fn `def run(args)` (L162-176)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -1199,7 +1168,7 @@ from shell_scripts.utils import require_commands, print_error
 |`_get_num_pages`|fn|priv|49-55|def _get_num_pages(dump_content)|
 |`_has_out_of_range`|fn|priv|56-73|def _has_out_of_range(dump_content, max_pages)|
 |`_clean_one`|fn|priv|74-161|def _clean_one(input_pdf)|
-|`run`|fn|pub|162-175|def run(args)|
+|`run`|fn|pub|162-176|def run(args)|
 
 
 ---
@@ -1228,7 +1197,7 @@ from shell_scripts.utils import require_project_root, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008, REQ-068, REQ-069
 
-### fn `def run(args: list[str]) -> int` (L46-61)
+### fn `def run(args: list[str]) -> int` (L46-62)
 - @brief Launch pi.dev CLI after external executable validation.
 - @details Resolves project root, checks executable availability for `pi`, and forwards all CLI arguments unchanged to the child process. The command vector shape is `[resolved_pi_exec] + args`. Time complexity O(n), where n is forwarded argument count.
 - @param args {list[str]} Additional CLI args forwarded to pi.dev.
@@ -1241,7 +1210,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|18||
 |`DESCRIPTION`|var|pub|23||
 |`print_help`|fn|pub|26-45|def print_help(version: str) -> None|
-|`run`|fn|pub|46-61|def run(args: list[str]) -> int|
+|`run`|fn|pub|46-62|def run(args: list[str]) -> int|
 
 
 ---
@@ -1334,7 +1303,7 @@ from shell_scripts.utils import print_error, require_commands
 - @return {None} Writes one stdout line.
 - @satisfies REQ-070, REQ-071
 
-### fn `def run(args: list[str]) -> int` (L275-362)
+### fn `def run(args: list[str]) -> int` (L275-363)
 - @brief Execute `req` orchestration for selected directory targets.
 - @details Parses mutually exclusive selector options, resolves target set, applies cleanup/scaffold phase with per-path evidence emission, and executes external `req` for each target. Returns `1` on invalid option combinations or unknown options. Converts external `req` non-zero exits into explicit error output and propagated return codes.
 - @param args {list[str]} Command arguments excluding `req` token.
@@ -1357,7 +1326,7 @@ from shell_scripts.utils import print_error, require_commands
 |`_prepare_target_directory`|fn|priv|208-231|def _prepare_target_directory(target_dir: Path) -> list[C...|
 |`_is_git_repository_root`|fn|priv|232-257|def _is_git_repository_root(target_dir: Path) -> bool|
 |`_print_install_skipped`|fn|priv|258-274|def _print_install_skipped(target_dir: Path) -> None|
-|`run`|fn|pub|275-362|def run(args: list[str]) -> int|
+|`run`|fn|pub|275-363|def run(args: list[str]) -> int|
 
 
 ---
@@ -1379,7 +1348,7 @@ from shell_scripts.utils import (
 - var `DESCRIPTION = "Run pytest test suite in a Python virtual environment."` (L21)
 ### fn `def print_help(version)` (L24-31)
 
-### fn `def run(args)` (L32-87)
+### fn `def run(args)` (L32-88)
 - @brief Execute managed pytest workflow with executable pre-checks.
 - @details Validates `sys.executable` and flow-conditional executables (`pip`, `playwright`, `.venv/bin/python3`) before each subprocess invocation.
 - @param args {list[str]} Additional arguments forwarded to pytest.
@@ -1392,7 +1361,7 @@ from shell_scripts.utils import (
 |`PROGRAM`|var|pub|20||
 |`DESCRIPTION`|var|pub|21||
 |`print_help`|fn|pub|24-31|def print_help(version)|
-|`run`|fn|pub|32-87|def run(args)|
+|`run`|fn|pub|32-88|def run(args)|
 
 
 ---
@@ -1413,7 +1382,7 @@ import os
 - var `DESCRIPTION = "Apply GNOME and Qt dark theme settings."` (L13)
 ### fn `def print_help(version)` (L16-25)
 
-### fn `def run(args)` (L26-64)
+### fn `def run(args)` (L26-65)
 - @brief Apply dark-theme settings with conditional executable checks.
 - @details For each available theme tool (`gsettings`, `gtk-chtheme`, `qt5ct`, `qt6ct`), validates command executability before subprocess invocation.
 - @param args {list[str]} Unused command arguments.
@@ -1426,7 +1395,7 @@ import os
 |`PROGRAM`|var|pub|12||
 |`DESCRIPTION`|var|pub|13||
 |`print_help`|fn|pub|16-25|def print_help(version)|
-|`run`|fn|pub|26-64|def run(args)|
+|`run`|fn|pub|26-65|def run(args)|
 
 
 ---
@@ -1449,7 +1418,7 @@ from shell_scripts.utils import (
 - var `DESCRIPTION = "Create or recreate Python virtual environment with requirements."` (L22)
 ### fn `def print_help(version)` (L25-32)
 
-### fn `def run(args)` (L33-82)
+### fn `def run(args)` (L33-83)
 - @brief Recreate virtual environment with executable pre-checks.
 - @details Validates `sys.executable` and flow-conditional `pip` executable before corresponding subprocess invocations.
 - @param args {list[str]} Command arguments (`--force` accepted).
@@ -1462,7 +1431,7 @@ from shell_scripts.utils import (
 |`PROGRAM`|var|pub|21||
 |`DESCRIPTION`|var|pub|22||
 |`print_help`|fn|pub|25-32|def print_help(version)|
-|`run`|fn|pub|33-82|def run(args)|
+|`run`|fn|pub|33-83|def run(args)|
 
 
 ---
@@ -1492,7 +1461,7 @@ from shell_scripts.utils import print_error, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008, REQ-057
 
-### fn `def run(args)` (L44-89)
+### fn `def run(args)` (L44-90)
 - @brief Execute H.264 transcode command with fixed FFmpeg parameters.
 - @details Validates input argument presence and file existence, then executes `ffmpeg` using required libx264 profile, level, CRF, pixel format, and AAC audio bitrate options through blocking subprocess invocation.
 - @param args {list[str]} Expected single positional input-video path.
@@ -1505,7 +1474,7 @@ from shell_scripts.utils import print_error, require_commands
 |`PROGRAM`|var|pub|18||
 |`DESCRIPTION`|var|pub|22||
 |`print_help`|fn|pub|25-43|def print_help(version)|
-|`run`|fn|pub|44-89|def run(args)|
+|`run`|fn|pub|44-90|def run(args)|
 
 
 ---
@@ -1535,7 +1504,7 @@ from shell_scripts.utils import print_error, require_commands
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008, REQ-058
 
-### fn `def run(args)` (L44-87)
+### fn `def run(args)` (L44-88)
 - @brief Execute H.265 transcode command with fixed FFmpeg parameters.
 - @details Validates input argument presence and file existence, then executes `ffmpeg` using required libx265 CRF, codec tag, pixel format, and AAC audio bitrate options through blocking subprocess invocation.
 - @param args {list[str]} Expected single positional input-video path.
@@ -1548,7 +1517,7 @@ from shell_scripts.utils import print_error, require_commands
 |`PROGRAM`|var|pub|18||
 |`DESCRIPTION`|var|pub|22||
 |`print_help`|fn|pub|25-43|def print_help(version)|
-|`run`|fn|pub|44-87|def run(args)|
+|`run`|fn|pub|44-88|def run(args)|
 
 
 ---
@@ -1574,7 +1543,7 @@ from shell_scripts.commands._dc_common import dispatch
 - @return {None} Writes help text to stdout.
 - @satisfies DES-008
 
-### fn `def run(args)` (L35-50)
+### fn `def run(args)` (L35-51)
 - @brief Execute MIME-routed view dispatch.
 - @details Validates that a file argument exists; on missing argument prints error plus help and returns status code `2`; otherwise resolves runtime dispatch profile and delegates by file category through shared `_dc_common`.
 - @param args {list[str]} CLI args where `args[0]` is file path.
@@ -1587,7 +1556,7 @@ from shell_scripts.commands._dc_common import dispatch
 |`PROGRAM`|var|pub|14||
 |`DESCRIPTION`|var|pub|15||
 |`print_help`|fn|pub|18-34|def print_help(version)|
-|`run`|fn|pub|35-50|def run(args)|
+|`run`|fn|pub|35-51|def run(args)|
 
 
 ---
@@ -1608,7 +1577,7 @@ from shell_scripts.utils import require_project_root, require_commands
 - var `DESCRIPTION = "Open VS Code in the project root with Codex integration."` (L15)
 ### fn `def print_help(version)` (L18-25)
 
-### fn `def run(args)` (L26-42)
+### fn `def run(args)` (L26-43)
 - @brief Launch VS Code after executable validation.
 - @details Sets `CODEX_HOME`, validates executable availability for VS Code binary, and executes the command with project-root working directory.
 - @param args {list[str]} Additional CLI args forwarded to VS Code.
@@ -1621,7 +1590,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|14||
 |`DESCRIPTION`|var|pub|15||
 |`print_help`|fn|pub|18-25|def print_help(version)|
-|`run`|fn|pub|26-42|def run(args)|
+|`run`|fn|pub|26-43|def run(args)|
 
 
 ---
@@ -1642,7 +1611,7 @@ from shell_scripts.utils import require_project_root, require_commands
 - var `DESCRIPTION = "Open VS Code Insiders in the project root with Codex integration."` (L15)
 ### fn `def print_help(version)` (L18-25)
 
-### fn `def run(args)` (L26-42)
+### fn `def run(args)` (L26-43)
 - @brief Launch VS Code Insiders after executable validation.
 - @details Sets `CODEX_HOME`, validates executable availability for VS Code Insiders binary, and executes the command with project-root working directory.
 - @param args {list[str]} Additional CLI args forwarded to VS Code Insiders.
@@ -1655,7 +1624,7 @@ from shell_scripts.utils import require_project_root, require_commands
 |`PROGRAM`|var|pub|14||
 |`DESCRIPTION`|var|pub|15||
 |`print_help`|fn|pub|18-25|def print_help(version)|
-|`run`|fn|pub|26-42|def run(args)|
+|`run`|fn|pub|26-43|def run(args)|
 
 
 ---
@@ -1748,7 +1717,7 @@ from shell_scripts.utils import print_warn
 - @return {tuple[list[str], list[str]]} `(providers, static_checks)`.
 - @satisfies DES-011, REQ-045, REQ-050
 
-### fn `def write_default_runtime_config(path: Path | None = None) -> Path` (L310-327)
+### fn `def write_default_runtime_config(path: Path | None = None) -> Path` (L310-328)
 - @brief Write default runtime configuration file to disk.
 - @details Creates parent directories when missing and writes canonical JSON payload using sorted keys and indentation for deterministic content.
 - @param path {Path|None} Optional override path; default is canonical path.
@@ -1769,7 +1738,7 @@ from shell_scripts.utils import print_warn
 |`get_management_command`|fn|pub|239-255|def get_management_command(name: str) -> str|
 |`get_dispatch_profile`|fn|pub|256-281|def get_dispatch_profile(name: str) -> tuple[dict[str, li...|
 |`get_req_profile`|fn|pub|282-309|def get_req_profile() -> tuple[list[str], list[str]]|
-|`write_default_runtime_config`|fn|pub|310-327|def write_default_runtime_config(path: Path | None = None...|
+|`write_default_runtime_config`|fn|pub|310-328|def write_default_runtime_config(path: Path | None = None...|
 
 
 ---
@@ -1829,7 +1798,7 @@ maps directly to REQ-066 output expectations.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L221-279)
+### fn `def main()` (L221-280)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
@@ -1845,7 +1814,7 @@ maps directly to REQ-066 output expectations.
 |`do_upgrade`|fn|pub|159-181|def do_upgrade()|
 |`do_uninstall`|fn|pub|182-204|def do_uninstall()|
 |`do_write_config`|fn|pub|205-220|def do_write_config()|
-|`main`|fn|pub|221-279|def main()|
+|`main`|fn|pub|221-280|def main()|
 
 
 ---
@@ -2003,7 +1972,7 @@ common xterm mouse tracking modes (`?1000l`..`?1016l`).
 - @return {None} Performs best-effort terminal-state restoration.
 - @satisfies REQ-064, REQ-065
 
-### fn `def run_cmd(cmd, **kwargs)` (L454-455)
+### fn `def run_cmd(cmd, **kwargs)` (L454-456)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -2049,7 +2018,7 @@ common xterm mouse tracking modes (`?1000l`..`?1016l`).
 |`_is_tty_stream`|fn|priv|359-378|def _is_tty_stream(stream)|
 |`capture_terminal_state`|fn|pub|379-403|def capture_terminal_state()|
 |`reset_terminal_state`|fn|pub|404-453|def reset_terminal_state(saved_tty=None)|
-|`run_cmd`|fn|pub|454-455|def run_cmd(cmd, **kwargs)|
+|`run_cmd`|fn|pub|454-456|def run_cmd(cmd, **kwargs)|
 
 
 ---
@@ -2142,7 +2111,7 @@ from pathlib import Path
 - @return {bool} `True` when the remote version is newer.
 - @satisfies PRJ-004, REQ-060
 
-### fn `def check_for_updates(current_version: str) -> None` (L190-230)
+### fn `def check_for_updates(current_version: str) -> None` (L190-231)
 - @brief Execute the startup GitHub release version check.
 - @details Applies cooldown gating unless the current CLI invocation requests `--version` or `--ver`, performs the latest-release HTTP request, prints a bright-green update line for newer releases, persists a 3600-second success cooldown or an 86400-second request-error cooldown for every request outcome, prints bright-red request errors, and suppresses propagation of non-HTTP request exceptions. Complexity: O(1) excluding network latency and JSON parsing.
 - @param current_version {str} Installed package version string.
@@ -2173,5 +2142,5 @@ from pathlib import Path
 |`_should_check`|fn|priv|136-157|def _should_check(force_check: bool = False) -> bool|
 |`_parse_version`|fn|priv|158-171|def _parse_version(version_value: str) -> tuple[int, ...]|
 |`_compare_versions`|fn|priv|172-189|def _compare_versions(current: str, latest: str) -> bool|
-|`check_for_updates`|fn|pub|190-230|def check_for_updates(current_version: str) -> None|
+|`check_for_updates`|fn|pub|190-231|def check_for_updates(current_version: str) -> None|
 
