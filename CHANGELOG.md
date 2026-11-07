@@ -1,7 +1,11 @@
 # Changelog
 
-## [0.22.1](https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.22.1) - 2026-11-07
+## [0.22.2](https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.22.2) - 2026-11-07
 ### 🐛  Bug Fixes
+- pin setup-uv to resolvable v10.3.3 tag [useReq] *(release-pypi)*
+  - GitHub runner 2.338.2 failed at 'Prepare all required actions': astral-sh/setup-uv@v10 is an unresolvable ref (no v10 major tag exists upstream; verified via GitHub API - only full semver tags like v10.3.3 exist).
+  - Pin the exact verified tag v10.3.3 (major 10, Node24 runtime, confirmed via upstream action.yml), keeping CTN-006/DES-015 compliance and restoring PRJ-005/PRJ-007/DES-016 workflow execution.
+  - Update TST-012 reproducer: extend pin-extraction regex to full-semver refs and set the approved setup-uv ref to v10.3.3 (failed pre-fix, passes post-fix). All other pinned refs verified resolvable; suite 120 passing.
 - Fix .gitignore file.
 - .gitignore file.
 
@@ -687,7 +691,7 @@
 - \[0.20.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.20.0
 - \[0.21.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.21.0
 - \[0.22.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.0
-- \[0.22.1\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.1
+- \[0.22.2\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.2
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -711,4 +715,4 @@
 [0.20.0]: https://github.com/Ogekuri/shellScripts/compare/v0.19.0..v0.20.0
 [0.21.0]: https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0
 [0.22.0]: https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0
-[0.22.1]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.22.1
+[0.22.2]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.22.2
