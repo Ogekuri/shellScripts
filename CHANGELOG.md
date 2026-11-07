@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.22.1](https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.22.1) - 2026-11-07
+### 🐛  Bug Fixes
+- Fix .gitignore file.
+- .gitignore file.
+
+### 🚜  Changes
+- BREAKING CHANGE: migrate version checks and release to PyPI trusted publishing [useReq] *(core)*
+  - Rename release-uvx.yml to release-pypi.yml and add an OIDC Trusted Publishing step gated on master tags (PRJ-007, DES-016, DES-017); release steps run for develop tags without PyPI publication.
+  - Startup update checks now query the PyPI JSON API (PRJ-004, DES-018); --ver/--version prints installed plus PyPI latest and GitHub latest lines (REQ-003, REQ-075, DES-020).
+  - --upgrade defaults to uv tool install shellscripts --force from PyPI (REQ-004); new --dev/--develop selector upgrades from the latest GitHub release tag (REQ-076, DES-019); bare selector rejected with code 1 (REQ-077); tag-resolution failure emits bright-red error and code 1 (REQ-078).
+  - README documents PyPI primary install and GitHub alternative; pyproject adds OS classifier; SRS 0.6.25; WORKFLOW.md and REFERENCES.md updated; tests updated and extended (TST-012..TST-014, 120 passing).
+- migrate release workflow actions to Node24 runtimes [useReq] *(release-uvx)*
+  - Bump actions to Node24-native majors: checkout v4->v7, setup-python v5->v7, setup-uv v3->v10, attest-build-provenance v1->v4, action-gh-release v2->v3; changelog-builder stays v6 (v6.5 node24), all verified upstream.
+  - Add CTN-006 and DES-015 mandating Node24-or-newer JavaScript action runtimes in release-uvx.yml (SRS 0.6.24).
+  - Add TST-012 with tests/test_tst_012_workflow_runtime.py verifying the Node24 pin mapping and absence of transitional Node20 override env vars (FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 / ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION).
+  - Update WORKFLOW.md release unit boundaries, regenerate REFERENCES.md; release automation behavior unchanged, full pytest suite passes (105 tests).
+
+### 📚  Documentation
+- Update README.md file.
+
 ## [0.22.0](https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0) - 2026-07-08
 ### 🐛  Bug Fixes
 - Update README.md file.
@@ -667,6 +687,7 @@
 - \[0.20.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.20.0
 - \[0.21.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.21.0
 - \[0.22.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.0
+- \[0.22.1\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.1
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -690,3 +711,4 @@
 [0.20.0]: https://github.com/Ogekuri/shellScripts/compare/v0.19.0..v0.20.0
 [0.21.0]: https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0
 [0.22.0]: https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0
+[0.22.1]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.22.1
