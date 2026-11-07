@@ -2,9 +2,10 @@
 """@brief Main shellscripts CLI dispatcher and management operation handler.
 
 @details Provides global help rendering, management command execution
-(`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`), runtime
+(`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`,
+`--develop`/`--dev` upgrade selector), runtime
 configuration bootstrap, and subcommand delegation to lazily imported modules.
-@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069
+@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078
 """
 
 import sys
@@ -16,7 +17,7 @@ from shell_scripts.config import (
     load_runtime_config,
     write_default_runtime_config,
 )
-from shell_scripts.version_check import check_for_updates
+from shell_scripts.version_check import check_for_updates, fetch_github_latest_release, print_remote_latest_versions
 from shell_scripts.commands import get_command
 from shell_scripts.utils import (
     capture_terminal_state,
@@ -138,11 +139,19 @@ def print_help(command_name=None):
         f"  --upgrade    - Reinstall {PROGRAM} on Linux; print manual command elsewhere."
     )
     print(
+        "  --dev        - With --upgrade: upgrade from the latest GitHub release tag"
+    )
+    print("                 instead of PyPI (alias: --develop).")
+    print(
         f"  --uninstall  - Uninstall {PROGRAM} on Linux; print manual command elsewhere."
     )
     print("  --write-config - Write default runtime config to user config directory.")
-    print(f"  --ver        - Print the {PROGRAM} version.")
-    print(f"  --version    - Print the {PROGRAM} version.")
+    print(
+        f"  --ver        - Print the {PROGRAM} version plus latest PyPI and GitHub versions."
+    )
+    print(
+        f"  --version    - Print the {PROGRAM} version plus latest PyPI and GitHub versions."
+    )
     print(
         "  --help       - Print the full help screen or the help text of a specific command."
     )
@@ -156,17 +165,45 @@ def print_help(command_name=None):
             print(f"  {command_name:<{HELP_COMMAND_COLUMN_WIDTH}} - {description}")
 
 
-def do_upgrade():
+def _build_develop_upgrade_command(latest_tag: str) -> str:
+    """@brief Compose the develop upgrade command for one GitHub release tag.
+
+    @details Resolves the `management.upgrade_develop` runtime-config template,
+    substitutes the `{tag}` placeholder with the supplied tag, and returns the
+    shell command that installs the package from the GitHub tag archive.
+    Complexity O(n) over template length.
+    @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
+    @return {str} Fully substituted shell upgrade command.
+    @satisfies REQ-076, DES-019
+    """
+
+    template = get_management_command("upgrade_develop")
+    return template.replace("{tag}", latest_tag)
+
+
+def do_upgrade(develop: bool = False) -> int:
     """@brief Execute Linux-only upgrade command resolved from runtime config.
 
     @details Reads management command string from runtime config key
-    `management.upgrade`, executes it on Linux via shell invocation, and prints
-    manual fallback command on non-Linux systems.
-    @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
-    @satisfies REQ-004, REQ-045, REQ-056
+    `management.upgrade` (PyPI default) or, when `develop` is set, resolves
+    the latest GitHub release tag and composes the tag-pinned upgrade command;
+    executes it on Linux via shell invocation and prints the manual fallback
+    command on non-Linux systems.
+    @param develop {bool} Force upgrade from the latest GitHub release tag.
+    @return {int} `1` when develop tag resolution fails; subprocess return code
+      on Linux; `0` on non-Linux fallback.
+    @satisfies REQ-004, REQ-076, REQ-078, REQ-045, REQ-056
     """
 
-    install_cmd = get_management_command("upgrade")
+    if develop:
+        try:
+            latest_tag = fetch_github_latest_release(__version__)
+        except Exception as error:
+            print_error(f"GitHub latest release resolution failed: {error}.")
+            return 1
+        install_cmd = _build_develop_upgrade_command(latest_tag)
+    else:
+        install_cmd = get_management_command("upgrade")
     if is_linux():
         require_shell_command_executables(install_cmd)
         print(f"Upgrading {PROGRAM}...")
@@ -222,12 +259,14 @@ def main():
     """@brief Entrypoint for shellscripts argument dispatch.
 
     @details Performs runtime OS detection, update check, runtime configuration
-    load, and argument dispatch through management flags and subcommands, then
-    restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes
-    (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`,
-    `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
+    load, and argument dispatch through management flags (`--version` prints
+    installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI
+    or, with `--develop`/`--dev`, from the latest GitHub release tag) and
+    subcommands, then restores terminal raw/cbreak and disables legacy+xterm
+    mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`,
+    `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078
     """
     saved_tty = capture_terminal_state()
     try:
@@ -245,10 +284,16 @@ def main():
 
         if first_arg in ("--version", "--ver"):
             print(__version__)
+            print_remote_latest_versions(__version__)
             return 0
 
         if first_arg == "--upgrade":
-            return do_upgrade()
+            develop = any(arg in ("--develop", "--dev") for arg in args[1:])
+            return do_upgrade(develop=develop)
+
+        if first_arg in ("--develop", "--dev"):
+            print_error("--develop/--dev must be used together with --upgrade.")
+            return 1
 
         if first_arg == "--uninstall":
             return do_uninstall()

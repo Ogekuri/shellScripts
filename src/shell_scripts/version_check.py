@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """@brief Update-check orchestration for shellscripts startup.
 
-@details Performs cooldown-gated GitHub release checks, persists cache metadata
-for every request outcome, and prints terminal-visible update or error status
-lines. Successful requests apply the default cooldown. Request errors apply the
-enlarged cooldown without aborting CLI startup continuity.
-@satisfies PRJ-004, DES-002, DES-003, DES-004, DES-005, DES-006, REQ-003, REQ-059, REQ-060, REQ-061
+@details Performs cooldown-gated PyPI registry checks for the startup update
+notification, resolves GitHub release tags for develop upgrades and version
+display, persists cache metadata for every request outcome, and prints
+terminal-visible update or error status lines. Successful requests apply the
+default cooldown. Request errors apply the enlarged cooldown without aborting
+CLI startup continuity.
+@satisfies PRJ-004, DES-002, DES-003, DES-004, DES-005, DES-006, DES-018, DES-019, DES-020, REQ-003, REQ-075, REQ-059, REQ-060, REQ-061
 """
 
 import json
@@ -15,6 +17,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 PROGRAM = "shellscripts"
 OWNER = "Ogekuri"
@@ -23,6 +26,7 @@ IDLE_DELAY = 3600
 HTTP_ERROR_IDLE_DELAY = 86400
 HTTP_TIMEOUT = 2
 GITHUB_API_URL = f"https://api.github.com/repos/{OWNER}/{REPOSITORY}/releases/latest"
+PYPI_API_URL = f"https://pypi.org/pypi/{PROGRAM}/json"
 CACHE_DIR = Path.home() / ".cache" / PROGRAM
 IDLE_TIME_FILE = CACHE_DIR / "check_version_idle-time.json"
 
@@ -187,20 +191,114 @@ def _compare_versions(current: str, latest: str) -> bool:
         return False
 
 
+def _fetch_json_payload(
+    url: str, current_version: str, accept_header: str
+) -> dict[str, Any]:
+    """@brief Fetch and decode one JSON payload over HTTP.
+
+    @details Issues a GET request with caller-supplied `Accept` header and a
+    program/version `User-Agent`, then decodes the response body as a JSON
+    object. Time complexity O(n) over payload size.
+    @param url {str} Remote JSON endpoint URL.
+    @param current_version {str} Installed package version used in User-Agent.
+    @param accept_header {str} Value of the HTTP `Accept` header.
+    @return {dict[str, Any]} Parsed JSON response object.
+    @throws {urllib.error.HTTPError} On HTTP error responses.
+    @throws {urllib.error.URLError} On connection failures.
+    @throws {json.JSONDecodeError} On malformed payload bodies.
+    @satisfies DES-018, DES-019
+    """
+
+    request = urllib.request.Request(url)
+    request.add_header("Accept", accept_header)
+    request.add_header("User-Agent", f"{PROGRAM}/{current_version}")
+    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
+        return json.loads(response.read().decode())
+
+
+def fetch_pypi_latest_version(current_version: str) -> str:
+    """@brief Resolve the latest published version from the PyPI registry.
+
+    @details Queries the PyPI JSON API for this program and extracts field
+    `info.version`. Complexity O(1) over response object size.
+    @param current_version {str} Installed package version used in User-Agent.
+    @return {str} Latest published version token (for example `1.2.3`).
+    @throws {urllib.error.HTTPError} On HTTP error responses.
+    @throws {urllib.error.URLError} On connection failures.
+    @throws {json.JSONDecodeError} On malformed payload bodies.
+    @throws {KeyError} When `info.version` fields are absent.
+    @satisfies DES-018, PRJ-004
+    """
+
+    payload = _fetch_json_payload(
+        PYPI_API_URL, current_version, "application/vnd.pypi.simple.v1+json"
+    )
+    info = payload["info"]
+    return str(info["version"])
+
+
+def fetch_github_latest_release(current_version: str) -> str:
+    """@brief Resolve the latest GitHub release tag regardless of its branch.
+
+    @details Queries the GitHub Releases API `latest` endpoint and extracts
+    field `tag_name`, which tracks the newest published tagged release across
+    any branch. Complexity O(1) over response object size.
+    @param current_version {str} Installed package version used in User-Agent.
+    @return {str} Latest release tag token preserving its `v` prefix.
+    @throws {urllib.error.HTTPError} On HTTP error responses.
+    @throws {urllib.error.URLError} On connection failures.
+    @throws {json.JSONDecodeError} On malformed payload bodies.
+    @throws {KeyError} When `tag_name` field is absent.
+    @satisfies DES-019, REQ-076
+    """
+
+    payload = _fetch_json_payload(
+        GITHUB_API_URL, current_version, "application/vnd.github.v3+json"
+    )
+    return str(payload["tag_name"])
+
+
+def print_remote_latest_versions(current_version: str) -> None:
+    """@brief Print PyPI and GitHub latest-version report lines.
+
+    @details Emits one `<source> latest: <version>` line per remote source in
+    fixed order (PyPI, GitHub). A failed source lookup prints one bright-red
+    error line instead of its version line, and the remaining source is still
+    processed. Complexity O(1) excluding network latency.
+    @param current_version {str} Installed package version used in User-Agent.
+    @return {None} Writes two report or error lines to stdout.
+    @satisfies REQ-003, REQ-075, DES-020
+    """
+
+    for source_label, fetch_version in (
+        ("PyPI", fetch_pypi_latest_version),
+        ("GitHub", fetch_github_latest_release),
+    ):
+        try:
+            latest_version = fetch_version(current_version).lstrip("v")
+        except Exception as error:
+            print(
+                f"{BRIGHT_RED}{source_label} latest check failed: "
+                f"{_format_request_error(error)}.{RESET}"
+            )
+            continue
+        print(f"{source_label} latest: {latest_version}")
+
+
 def check_for_updates(current_version: str) -> None:
-    """@brief Execute the startup GitHub release version check.
+    """@brief Execute the startup PyPI registry version check.
 
     @details Applies cooldown gating unless the current CLI invocation requests
-    `--version` or `--ver`, performs the latest-release HTTP request, prints a
-    bright-green update line for newer releases, persists a 3600-second success
-    cooldown or an 86400-second request-error cooldown for every request
-    outcome, prints bright-red request errors, and suppresses propagation of
-    non-HTTP request exceptions. Complexity: O(1) excluding network latency and
-    JSON parsing.
+    `--version` or `--ver`, performs the PyPI latest-version HTTP request,
+    prints a bright-green update line for newer releases, persists a
+    3600-second success cooldown or an 86400-second request-error cooldown for
+    every request outcome, prints bright-red request errors, and suppresses
+    propagation of non-HTTP request exceptions. Complexity O(1) excluding
+    network latency and JSON parsing.
     @param current_version {str} Installed package version string.
     @return {None} No return value.
     @throws {urllib.error.HTTPError} Internally handled and converted to output.
-    @satisfies PRJ-004, DES-004, DES-005, DES-006, REQ-003, REQ-059, REQ-060, REQ-061
+    @satisfies PRJ-004, DES-004, DES-005, DES-006, DES-018, REQ-003, REQ-059, REQ-060, REQ-061
     """
 
     if not _should_check(force_check=_is_forced_version_check()):
@@ -209,20 +307,15 @@ def check_for_updates(current_version: str) -> None:
     now = time.time()
 
     try:
-        req = urllib.request.Request(GITHUB_API_URL)
-        req.add_header("Accept", "application/vnd.github.v3+json")
-        req.add_header("User-Agent", f"{PROGRAM}/{current_version}")
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
-            data = json.loads(resp.read().decode())
-            latest = data.get("tag_name", "").lstrip("v")
+        latest = fetch_pypi_latest_version(current_version)
 
-            if latest and _compare_versions(current_version, latest):
-                print(
-                    f"{BRIGHT_GREEN}Versione Disponibile: {latest} | "
-                    f"Versione Installata: {current_version}{RESET}"
-                )
+        if latest and _compare_versions(current_version, latest):
+            print(
+                f"{BRIGHT_GREEN}Versione Disponibile: {latest} | "
+                f"Versione Installata: {current_version}{RESET}"
+            )
 
-            _write_idle_config(now, IDLE_DELAY)
+        _write_idle_config(now, IDLE_DELAY)
 
     except urllib.error.HTTPError as error:
         _handle_request_error(now, error)

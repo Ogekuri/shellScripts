@@ -1,10 +1,10 @@
 """
 @brief Validate release workflow Node24 runtime pinning contract.
 @details Parses the repository workflow artifact
-  `.github/workflows/release-uvx.yml` as static text and verifies that every
-  referenced GitHub action resolves to the approved Node24-native major
-  version mapping (CTN-006, DES-015) and that no Node20 compatibility
-  override environment variables are declared anywhere in the file.
+  `.github/workflows/release-pypi.yml` as static text and verifies that every
+  referenced GitHub action resolves to the approved Node24-native runtime
+  mapping (CTN-006, DES-015) and that no Node20 compatibility override
+  environment variables are declared anywhere in the file.
   Level classification: all helpers are Level 0 (pure text parsing over a
   tracked static artifact); test functions are Level 1 consumers with no
   cross-test dependencies and no network, filesystem side effects, clock,
@@ -18,17 +18,18 @@ from pathlib import Path
 
 # @var WORKFLOW_PATH {Path} Absolute path of the release workflow artifact under verification; resolved from this test file location to remain working-directory independent.
 WORKFLOW_PATH = (
-    Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release-uvx.yml"
+    Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release-pypi.yml"
 )
 
-# @var NODE24_NATIVE_ACTION_MAJORS {dict[str, int]} Approved mapping of allowed action slugs to their required Node24-native major version (CTN-006, DES-015).
-NODE24_NATIVE_ACTION_MAJORS = {
-    "actions/checkout": 7,
-    "actions/setup-python": 7,
-    "astral-sh/setup-uv": 10,
-    "actions/attest-build-provenance": 4,
-    "mikepenz/release-changelog-builder-action": 6,
-    "softprops/action-gh-release": 3,
+# @var NODE24_NATIVE_ACTION_RUNTIMES {dict[str, str]} Approved mapping of allowed action slugs to their required Node24-native runtime ref (CTN-006, DES-015).
+NODE24_NATIVE_ACTION_RUNTIMES = {
+    "actions/checkout": "v7",
+    "actions/setup-python": "v7",
+    "astral-sh/setup-uv": "v10",
+    "actions/attest-build-provenance": "v4",
+    "mikepenz/release-changelog-builder-action": "v6",
+    "softprops/action-gh-release": "v3",
+    "pypa/gh-action-pypi-publish": "release/v1",
 }
 
 # @var NODE20_COMPATIBILITY_OVERRIDE_TOKENS {tuple[str, ...]} Transitional Node20 opt-in/opt-out environment variable names that MUST NOT appear in the workflow (TST-012 regression guard).
@@ -37,8 +38,10 @@ NODE20_COMPATIBILITY_OVERRIDE_TOKENS = (
     "ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION",
 )
 
-# @var USES_PIN_PATTERN {re.Pattern[str]} Regex extracting `(action_slug, major_version)` pairs from every `uses: <owner>/<repo>@vN` reference; `finditer` preserves declaration order.
-USES_PIN_PATTERN = re.compile(r"uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@v(\d+)")
+# @var USES_PIN_PATTERN {re.Pattern[str]} Regex extracting `(action_slug, runtime_ref)` pairs from every `uses: <owner>/<repo>@<ref>` reference; `finditer` preserves declaration order.
+USES_PIN_PATTERN = re.compile(
+    r"uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(v\d+|release/v\d+)"
+)
 
 
 def _read_workflow_text() -> str:
@@ -55,19 +58,19 @@ def _read_workflow_text() -> str:
     return WORKFLOW_PATH.read_text(encoding="utf-8")
 
 
-def _extract_action_pins(workflow_text: str) -> list[tuple[str, int]]:
+def _extract_action_pins(workflow_text: str) -> list[tuple[str, str]]:
     """
-    @brief Extract ordered action-version pin pairs from workflow text.
+    @brief Extract ordered action-runtime pin pairs from workflow text.
     @details Applies `USES_PIN_PATTERN` over the whole payload and converts
-      each `uses: <owner>/<repo>@vN` match into an `(action_slug, major)`
+      each `uses: <owner>/<repo>@<ref>` match into an `(action_slug, ref)`
       tuple while preserving declaration order. Time complexity O(n) over
       payload length.
     @param workflow_text {str} Full workflow file content.
-    @return {list[tuple[str, int]]} Ordered `(action_slug, major_version)` pairs; empty when no `uses` references exist.
+    @return {list[tuple[str, str]]} Ordered `(action_slug, runtime_ref)` pairs; empty when no `uses` references exist.
     @satisfies TST-012, DES-015
     """
     return [
-        (match.group(1), int(match.group(2)))
+        (match.group(1), match.group(2))
         for match in USES_PIN_PATTERN.finditer(workflow_text)
     ]
 
@@ -87,13 +90,13 @@ def test_release_workflow_artifact_exists():
     assert workflow_text.strip(), "workflow artifact is empty"
 
 
-def test_release_workflow_pins_only_node24_native_action_majors():
+def test_release_workflow_pins_only_node24_native_action_runtimes():
     """@brief Verify every action pin matches the approved Node24-native mapping.
 
     @details Happy path plus boundary coverage: each extracted
-      `(action_slug, major)` pair must exist in `NODE24_NATIVE_ACTION_MAJORS`
-      with the exact expected major, unknown action slugs are rejected, and
-      the mapping must be fully covered so no approved action is silently
+      `(action_slug, ref)` pair must exist in `NODE24_NATIVE_ACTION_RUNTIMES`
+      with the exact expected runtime ref, unknown action slugs are rejected,
+      and the mapping must be fully covered so no approved action is silently
       dropped from the workflow.
     @return {None} Asserts bidirectional mapping conformance only.
     @satisfies TST-012, CTN-006, DES-015
@@ -101,19 +104,19 @@ def test_release_workflow_pins_only_node24_native_action_majors():
     workflow_text = _read_workflow_text()
     observed_pins = _extract_action_pins(workflow_text)
 
-    expected_output = sorted(NODE24_NATIVE_ACTION_MAJORS.items())
-    observed_slugs = [slug for slug, _major in observed_pins]
+    expected_output = sorted(NODE24_NATIVE_ACTION_RUNTIMES.items())
+    observed_slugs = [slug for slug, _ref in observed_pins]
 
     assert observed_pins, "no action pins parsed from workflow artifact"
-    for action_slug, major_version in observed_pins:
-        expected_major = NODE24_NATIVE_ACTION_MAJORS.get(action_slug)
-        assert expected_major is not None, f"unapproved action reference: {action_slug}"
-        assert major_version == expected_major, (
-            f"{action_slug}: expected Node24-native major v{expected_major}, "
-            f"found v{major_version}"
+    for action_slug, runtime_ref in observed_pins:
+        expected_ref = NODE24_NATIVE_ACTION_RUNTIMES.get(action_slug)
+        assert expected_ref is not None, f"unapproved action reference: {action_slug}"
+        assert runtime_ref == expected_ref, (
+            f"{action_slug}: expected Node24-native runtime {expected_ref}, "
+            f"found {runtime_ref}"
         )
 
-    assert sorted(set(observed_slugs)) == [slug for slug, _major in expected_output], (
+    assert sorted(set(observed_slugs)) == [slug for slug, _ref in expected_output], (
         "approved Node24-native action set is not fully covered by workflow pins"
     )
 

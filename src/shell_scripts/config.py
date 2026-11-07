@@ -25,9 +25,10 @@ from shell_scripts.utils import print_warn
 #  @satisfies DES-011, DES-012
 DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
     "management": {
-        "upgrade": (
+        "upgrade": "uv tool install shellscripts --force",
+        "upgrade_develop": (
             "uv tool install shellscripts --force "
-            "--from git+https://github.com/Ogekuri/shellScripts.git"
+            "--from git+https://github.com/Ogekuri/shellScripts.git@{tag}"
         ),
         "uninstall": "uv tool uninstall shellscripts",
     },

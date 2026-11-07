@@ -1,4 +1,4 @@
-name: Release (uvx)
+name: Release (PyPI)
 
 on:
   workflow_dispatch:
@@ -39,8 +39,6 @@ jobs:
   # 2. Effetua la build
   build-release:
     needs: check-branch
-    # Esegue questo job SOLO se l'output del job precedente è 'true'
-    if: needs.check-branch.outputs.is_master == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -126,3 +124,11 @@ jobs:
           body: ${{ steps.build_changelog.outputs.changelog }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to PyPI via OIDC Trusted Publishing
+        # CTN-006/DES-016: PyPI publication only for tags reachable from master;
+        # develop (and other branch) tags run the release steps without publishing.
+        if: needs.check-branch.outputs.is_master == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

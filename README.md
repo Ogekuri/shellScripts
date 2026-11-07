@@ -49,7 +49,7 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 - PDF workflow commands for crop, merge, split, TOC cleanup, and tiling.
 - DICOM helpers (`dicom2jpg`, `dicomviewer`) and video transcoders (`video2h264`, `video2h265`).
 - Project maintenance and automation commands (`req`, `clean`, `venv`, `tests`, `doxygen`, `ubuntu-dark-theme`).
-- Startup update notification with rate-limited checks against GitHub Releases.
+- Startup update notification with rate-limited checks against the PyPI registry.
 
 
 ## Requirements
@@ -75,15 +75,23 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 
 ### Install / Upgrade
 
+Install from PyPI (primary distribution channel):
+
 ```bash
-uv tool install shellscripts --force --from git+https://github.com/Ogekuri/shellScripts.git
+uv tool install shellscripts
+```
+
+Upgrade to the latest published PyPI release:
+
+```bash
+s --upgrade
 ```
 
 
 ### Run Without Installing (uvx)
 
 ```bash
-uvx --from git+https://github.com/Ogekuri/shellScripts.git shellscripts <command> [args...]
+uvx shellscripts <command> [args...]
 ```
 
 
@@ -100,6 +108,25 @@ uv run --project . python -m shell_scripts <command> [args...]
 ```
 
 
+## Install from GitHub (Alternative)
+
+PyPI is the primary distribution channel. As an alternative, the package can be installed from GitHub Releases, which also hosts intermediate and test releases that are not published on PyPI:
+
+```bash
+uv tool install shellscripts --force --from git+https://github.com/Ogekuri/shellScripts.git@vX.Y.Z
+```
+
+Intermediate and test releases are available at: [https://github.com/Ogekuri/shellScripts/releases](https://github.com/Ogekuri/shellScripts/releases).
+
+To upgrade to the newest tagged GitHub release, regardless of the branch that carries the tag, use the `--dev` (alias `--develop`) flag together with `--upgrade`:
+
+```bash
+s --upgrade --dev
+# or
+s --upgrade --develop
+```
+
+
 ## Management Commands
 
 Global syntax:
@@ -113,8 +140,9 @@ s [command] [options]
 Built-in management flags:
 
 - `--help` : show full help or command help (`shellscripts --help <command>`).
-- `--version` / `--ver` : print installed version.
-- `--upgrade` : run configured upgrade command automatically on Linux, otherwise print the manual command.
+- `--version` / `--ver` : print the installed version plus the latest versions available on PyPI and GitHub.
+- `--upgrade` : run the configured upgrade command automatically on Linux (installs the latest PyPI release by default), otherwise print the manual command.
+- `--upgrade --dev` / `--upgrade --develop` : upgrade from the latest tagged GitHub release instead of PyPI, regardless of its source branch.
 - `--uninstall` : run configured uninstall command automatically on Linux, otherwise print the manual command.
 - `--write-config` : write the default runtime configuration file.
 
@@ -135,7 +163,8 @@ Default location:
 Top-level configuration keys:
 
 - `management`
-  - `upgrade`: command string executed by `--upgrade`.
+  - `upgrade`: command string executed by `--upgrade` (PyPI install by default).
+  - `upgrade_develop`: command template executed by `--upgrade --dev`; the `{tag}` placeholder is replaced with the latest GitHub release tag.
   - `uninstall`: command string executed by `--uninstall`.
 - `dispatch`
   - `diff`, `edit`, `view`: each command supports `categories` and `fallback` command vectors.

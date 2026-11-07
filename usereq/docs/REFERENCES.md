@@ -1629,7 +1629,7 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ---
 
-# config.py | Python | 327L | 11 symbols | 6 imports | 22 comments
+# config.py | Python | 328L | 11 symbols | 6 imports | 22 comments
 > Path: `src/shell_scripts/config.py`
 
 ## Imports
@@ -1644,7 +1644,7 @@ from shell_scripts.utils import print_warn
 
 ## Definitions
 
-### fn `def get_config_path() -> Path` (L98-109)
+### fn `def get_config_path() -> Path` (L99-110)
 - @brief In-memory runtime configuration snapshot.
 - @brief Return canonical runtime config location.
 - @details Initialized from defaults; updated only by `load_runtime_config`.
@@ -1653,13 +1653,13 @@ from shell_scripts.utils import print_warn
 - @satisfies DES-011, REQ-045
 - @satisfies DES-011, DES-012, REQ-045, REQ-046
 
-### fn `def get_default_runtime_config() -> dict[str, Any]` (L110-121)
+### fn `def get_default_runtime_config() -> dict[str, Any]` (L111-122)
 - @brief Return deep-copied default configuration payload.
 - @details Produces an isolated copy to avoid external mutation of the global defaults constant and to keep write/load operations deterministic.
 - @return {dict[str, Any]} Fresh deep copy of `DEFAULT_RUNTIME_CONFIG`.
 - @satisfies DES-011, DES-012
 
-### fn `def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]` `priv` (L122-141)
+### fn `def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]` `priv` (L123-142)
 - @brief Recursively merge nested mapping values.
 - @details For keys where both base and override values are dictionaries, recursively merges child keys; otherwise replaces base value with override. Time complexity O(N) over override node count.
 - @param base {dict[str, Any]} Target mapping mutated in place.
@@ -1667,28 +1667,28 @@ from shell_scripts.utils import print_warn
 - @return {dict[str, Any]} The mutated `base` reference.
 - @satisfies DES-011, REQ-045
 
-### fn `def _normalize_command_vector(value: Any) -> list[str] | None` `priv` (L142-158)
+### fn `def _normalize_command_vector(value: Any) -> list[str] | None` `priv` (L143-159)
 - @brief Validate and normalize an executable argv vector.
 - @details Accepts only non-empty lists of non-empty strings and returns a cloned list for defensive immutability.
 - @param value {Any} Candidate command vector.
 - @return {list[str]|None} Sanitized vector or `None` if invalid.
 - @satisfies DES-011, REQ-045
 
-### fn `def _normalize_string_list(value: Any) -> list[str] | None` `priv` (L159-175)
+### fn `def _normalize_string_list(value: Any) -> list[str] | None` `priv` (L160-176)
 - @brief Validate and normalize a list of non-empty strings.
 - @details Accepts only list payloads containing non-empty string elements and returns a cloned list for defensive immutability. Empty lists are valid.
 - @param value {Any} Candidate list payload.
 - @return {list[str]|None} Sanitized list or `None` if invalid.
 - @satisfies DES-011, REQ-045, REQ-050
 
-### fn `def _normalize_categories(value: Any) -> dict[str, list[str]] | None` `priv` (L176-198)
+### fn `def _normalize_categories(value: Any) -> dict[str, list[str]] | None` `priv` (L177-199)
 - @brief Validate category-to-command mapping payload.
 - @details Keeps only entries with string keys and valid command vectors. Invalid entries are dropped and can trigger fallback usage upstream.
 - @param value {Any} Candidate category map payload.
 - @return {dict[str, list[str]]|None} Sanitized category map or `None`.
 - @satisfies DES-011, REQ-024, REQ-045
 
-### fn `def load_runtime_config(path: Path | None = None) -> dict[str, Any]` (L199-238)
+### fn `def load_runtime_config(path: Path | None = None) -> dict[str, Any]` (L200-239)
 - @brief Load runtime configuration file and merge into defaults.
 - @details Resets in-memory state to defaults for each call, then attempts to read and parse JSON payload from target path and recursively merge override keys. Missing file, invalid JSON, non-object root, or read errors preserve defaults and emit warnings.
 - @param path {Path|None} Optional override path; default is canonical path.
@@ -1697,27 +1697,27 @@ from shell_scripts.utils import print_warn
 - @exception {OSError} Handled internally and downgraded to warn.
 - @satisfies DES-011, REQ-045
 
-### fn `def get_management_command(name: str) -> str` (L239-255)
+### fn `def get_management_command(name: str) -> str` (L240-256)
 - @brief Resolve management command string with safe default fallback.
 - @details Reads runtime key under `management.<name>`; returns default value when key is absent or not a non-empty string.
 - @param name {str} Management operation key (`upgrade` or `uninstall`).
 - @return {str} Shell command string to execute.
 - @satisfies REQ-004, REQ-005, REQ-045
 
-### fn `def get_dispatch_profile(name: str) -> tuple[dict[str, list[str]], list[str]]` (L256-281)
+### fn `def get_dispatch_profile(name: str) -> tuple[dict[str, list[str]], list[str]]` (L257-282)
 - @brief Resolve dispatch profile for diff/edit/view command wrappers.
 - @details Builds profile from `dispatch.<name>` runtime payload with typed normalization and per-section fallback to hardcoded defaults for missing or invalid values.
 - @param name {str} Dispatch command key (`diff`, `edit`, or `view`).
 - @return {tuple[dict[str, list[str]], list[str]]} `(categories, fallback)`.
 - @satisfies DES-007, REQ-024, REQ-045
 
-### fn `def get_req_profile() -> tuple[list[str], list[str]]` (L282-309)
+### fn `def get_req_profile() -> tuple[list[str], list[str]]` (L283-310)
 - @brief Resolve `req` providers and static checks from runtime config.
 - @details Builds profile from `req.providers` and `req.static_checks` runtime payload with typed normalization and per-section fallback to hardcoded defaults for missing or invalid values.
 - @return {tuple[list[str], list[str]]} `(providers, static_checks)`.
 - @satisfies DES-011, REQ-045, REQ-050
 
-### fn `def write_default_runtime_config(path: Path | None = None) -> Path` (L310-328)
+### fn `def write_default_runtime_config(path: Path | None = None) -> Path` (L311-329)
 - @brief Write default runtime configuration file to disk.
 - @details Creates parent directories when missing and writes canonical JSON payload using sorted keys and indentation for deterministic content.
 - @param path {Path|None} Optional override path; default is canonical path.
@@ -1728,22 +1728,22 @@ from shell_scripts.utils import print_warn
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_config_path`|fn|pub|98-109|def get_config_path() -> Path|
-|`get_default_runtime_config`|fn|pub|110-121|def get_default_runtime_config() -> dict[str, Any]|
-|`_deep_merge_dict`|fn|priv|122-141|def _deep_merge_dict(base: dict[str, Any], override: dict...|
-|`_normalize_command_vector`|fn|priv|142-158|def _normalize_command_vector(value: Any) -> list[str] | ...|
-|`_normalize_string_list`|fn|priv|159-175|def _normalize_string_list(value: Any) -> list[str] | None|
-|`_normalize_categories`|fn|priv|176-198|def _normalize_categories(value: Any) -> dict[str, list[s...|
-|`load_runtime_config`|fn|pub|199-238|def load_runtime_config(path: Path | None = None) -> dict...|
-|`get_management_command`|fn|pub|239-255|def get_management_command(name: str) -> str|
-|`get_dispatch_profile`|fn|pub|256-281|def get_dispatch_profile(name: str) -> tuple[dict[str, li...|
-|`get_req_profile`|fn|pub|282-309|def get_req_profile() -> tuple[list[str], list[str]]|
-|`write_default_runtime_config`|fn|pub|310-328|def write_default_runtime_config(path: Path | None = None...|
+|`get_config_path`|fn|pub|99-110|def get_config_path() -> Path|
+|`get_default_runtime_config`|fn|pub|111-122|def get_default_runtime_config() -> dict[str, Any]|
+|`_deep_merge_dict`|fn|priv|123-142|def _deep_merge_dict(base: dict[str, Any], override: dict...|
+|`_normalize_command_vector`|fn|priv|143-159|def _normalize_command_vector(value: Any) -> list[str] | ...|
+|`_normalize_string_list`|fn|priv|160-176|def _normalize_string_list(value: Any) -> list[str] | None|
+|`_normalize_categories`|fn|priv|177-199|def _normalize_categories(value: Any) -> dict[str, list[s...|
+|`load_runtime_config`|fn|pub|200-239|def load_runtime_config(path: Path | None = None) -> dict...|
+|`get_management_command`|fn|pub|240-256|def get_management_command(name: str) -> str|
+|`get_dispatch_profile`|fn|pub|257-282|def get_dispatch_profile(name: str) -> tuple[dict[str, li...|
+|`get_req_profile`|fn|pub|283-310|def get_req_profile() -> tuple[list[str], list[str]]|
+|`write_default_runtime_config`|fn|pub|311-329|def write_default_runtime_config(path: Path | None = None...|
 
 
 ---
 
-# core.py | Python | 279L | 8 symbols | 7 imports | 18 comments
+# core.py | Python | 324L | 9 symbols | 7 imports | 19 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1752,26 +1752,26 @@ import sys
 import subprocess
 from shell_scripts import __version__
 from shell_scripts.config import (
-from shell_scripts.version_check import check_for_updates
+from shell_scripts.version_check import check_for_updates, fetch_github_latest_release, print_remote_latest_versions
 from shell_scripts.commands import get_command
 from shell_scripts.utils import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L31)
-- var `HELP_COMMAND_COLUMN_WIDTH = 16` (L37)
+- var `PROGRAM = "shellscripts"` (L32)
+- var `HELP_COMMAND_COLUMN_WIDTH = 16` (L38)
 - @brief Fixed command-name column width for grouped help rendering.
 - @details Forces deterministic spacing for all command rows across grouped
 global help sections.
 - @satisfies REQ-066
-- var `HELP_SECTION_COMMANDS = (` (L45)
+- var `HELP_SECTION_COMMANDS = (` (L46)
 - @brief Ordered command groups for global help rendering.
 - @details Defines deterministic section order and command-token order used by
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L112-158)
+### fn `def print_help(command_name=None)` (L113-167)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -1779,42 +1779,51 @@ maps directly to REQ-066 output expectations.
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def do_upgrade()` (L159-181)
-- @brief Execute Linux-only upgrade command resolved from runtime config.
-- @details Reads management command string from runtime config key `management.upgrade`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
-- @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
-- @satisfies REQ-004, REQ-045, REQ-056
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L168-183)
+- @brief Compose the develop upgrade command for one GitHub release tag.
+- @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
+- @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
+- @return {str} Fully substituted shell upgrade command.
+- @satisfies REQ-076, DES-019
 
-### fn `def do_uninstall()` (L182-204)
+### fn `def do_upgrade(develop: bool = False) -> int` (L184-218)
+- @brief Execute Linux-only upgrade command resolved from runtime config.
+- @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; executes it on Linux via shell invocation and prints the manual fallback command on non-Linux systems.
+- @param develop {bool} Force upgrade from the latest GitHub release tag.
+- @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
+- @satisfies REQ-004, REQ-076, REQ-078, REQ-045, REQ-056
+
+### fn `def do_uninstall()` (L219-241)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L205-220)
+### fn `def do_write_config()` (L242-257)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L221-280)
+### fn `def main()` (L258-325)
 - @brief Entrypoint for shellscripts argument dispatch.
-- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
+- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
-- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|31||
-|`HELP_COMMAND_COLUMN_WIDTH`|var|pub|37||
-|`HELP_SECTION_COMMANDS`|var|pub|45||
-|`print_help`|fn|pub|112-158|def print_help(command_name=None)|
-|`do_upgrade`|fn|pub|159-181|def do_upgrade()|
-|`do_uninstall`|fn|pub|182-204|def do_uninstall()|
-|`do_write_config`|fn|pub|205-220|def do_write_config()|
-|`main`|fn|pub|221-280|def main()|
+|`PROGRAM`|var|pub|32||
+|`HELP_COMMAND_COLUMN_WIDTH`|var|pub|38||
+|`HELP_SECTION_COMMANDS`|var|pub|46||
+|`print_help`|fn|pub|113-167|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|168-183|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|184-218|def do_upgrade(develop: bool = False) -> int|
+|`do_uninstall`|fn|pub|219-241|def do_uninstall()|
+|`do_write_config`|fn|pub|242-257|def do_write_config()|
+|`main`|fn|pub|258-325|def main()|
 
 
 ---
@@ -2023,7 +2032,7 @@ common xterm mouse tracking modes (`?1000l`..`?1016l`).
 
 ---
 
-# version_check.py | Python | 230L | 21 symbols | 7 imports | 11 comments
+# version_check.py | Python | 323L | 26 symbols | 8 imports | 15 comments
 > Path: `src/shell_scripts/version_check.py`
 
 ## Imports
@@ -2035,29 +2044,31 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L19)
-- var `OWNER = "Ogekuri"` (L20)
-- var `REPOSITORY = "shellScripts"` (L21)
-- var `IDLE_DELAY = 3600` (L22)
-- var `HTTP_ERROR_IDLE_DELAY = 86400` (L23)
-- var `HTTP_TIMEOUT = 2` (L24)
-- var `GITHUB_API_URL = f"https://api.github.com/repos/{OWNER}/{REPOSITORY}/releases/latest"` (L25)
-- var `CACHE_DIR = Path.home() / ".cache" / PROGRAM` (L26)
-- var `IDLE_TIME_FILE = CACHE_DIR / "check_version_idle-time.json"` (L27)
-- var `BRIGHT_GREEN = "\033[92m"` (L29)
-- var `BRIGHT_RED = "\033[91m"` (L30)
-- var `RESET = "\033[0m"` (L31)
-### fn `def _read_idle_config() -> dict[str, object] | None` `priv` (L34-52)
+- var `PROGRAM = "shellscripts"` (L22)
+- var `OWNER = "Ogekuri"` (L23)
+- var `REPOSITORY = "shellScripts"` (L24)
+- var `IDLE_DELAY = 3600` (L25)
+- var `HTTP_ERROR_IDLE_DELAY = 86400` (L26)
+- var `HTTP_TIMEOUT = 2` (L27)
+- var `GITHUB_API_URL = f"https://api.github.com/repos/{OWNER}/{REPOSITORY}/releases/latest"` (L28)
+- var `PYPI_API_URL = f"https://pypi.org/pypi/{PROGRAM}/json"` (L29)
+- var `CACHE_DIR = Path.home() / ".cache" / PROGRAM` (L30)
+- var `IDLE_TIME_FILE = CACHE_DIR / "check_version_idle-time.json"` (L31)
+- var `BRIGHT_GREEN = "\033[92m"` (L33)
+- var `BRIGHT_RED = "\033[91m"` (L34)
+- var `RESET = "\033[0m"` (L35)
+### fn `def _read_idle_config() -> dict[str, object] | None` `priv` (L38-56)
 - @brief Load cached cooldown metadata for the version check.
 - @details Reads the cooldown JSON payload from the user cache directory. Absent files and unreadable JSON payloads resolve to `None`. Complexity: O(1) for fixed-size payload parsing.
 - @return {dict[str, object] | None} Cached cooldown payload or `None`.
 - @satisfies DES-003, REQ-059
 
-### fn `def _write_idle_config(last_check_ts: float, idle_delay_seconds: int) -> None` `priv` (L53-82)
+### fn `def _write_idle_config(last_check_ts: float, idle_delay_seconds: int) -> None` `priv` (L57-86)
 - @brief Persist cooldown timestamps for the next version-check gate.
 - @details Derives the idle-until timestamp from the supplied delay, writes both machine-readable timestamps and UTC-rendered strings, and stores the applied delay for downstream inspection. Complexity: O(1).
 - @param last_check_ts {float} UNIX timestamp recorded for the current check.
@@ -2066,20 +2077,20 @@ from pathlib import Path
 - @throws {OSError} Propagated when cache directory creation or file write fails.
 - @satisfies DES-003, DES-004, DES-005, REQ-061
 
-### fn `def _is_forced_version_check() -> bool` `priv` (L83-95)
+### fn `def _is_forced_version_check() -> bool` `priv` (L87-99)
 - @brief Detect CLI flags that force the version-check HTTP request.
 - @details Evaluates the live process argument vector and returns `True` when the current invocation requested `--version` or `--ver`. Complexity: O(N) where N is the number of CLI arguments.
 - @return {bool} `True` when the request must bypass cooldown gating.
 - @satisfies REQ-003, REQ-059
 
-### fn `def _format_request_error(error: Exception) -> str` `priv` (L96-118)
+### fn `def _format_request_error(error: Exception) -> str` `priv` (L100-122)
 - @brief Convert a request exception into terminal output detail text.
 - @details Returns a stable, parser-friendly error descriptor for HTTP and non-HTTP request failures. HTTP errors preserve the status code. Non-HTTP errors expose the exception type and optional message. Complexity: O(1).
 - @param error {Exception} Request failure captured during update checking.
 - @return {str} Error detail suffix without terminal color codes.
 - @satisfies DES-005, DES-006, REQ-061
 
-### fn `def _handle_request_error(last_check_ts: float, error: Exception) -> None` `priv` (L119-135)
+### fn `def _handle_request_error(last_check_ts: float, error: Exception) -> None` `priv` (L123-139)
 - @brief Persist cooldown metadata and print the request error line.
 - @details Applies the fixed HTTP-error cooldown, updates the cooldown JSON, and emits a bright-red terminal line for the supplied request failure. Complexity: O(1) excluding filesystem latency.
 - @param last_check_ts {float} UNIX timestamp recorded for the failed check.
@@ -2088,14 +2099,14 @@ from pathlib import Path
 - @throws {OSError} Propagated when cache directory creation or file write fails.
 - @satisfies DES-003, DES-005, DES-006, REQ-061
 
-### fn `def _should_check(force_check: bool = False) -> bool` `priv` (L136-157)
+### fn `def _should_check(force_check: bool = False) -> bool` `priv` (L140-161)
 - @brief Evaluate whether the GitHub version-check request should run.
 - @details Forces execution when `force_check` is `True`; otherwise reads the cached idle-until timestamp and compares it against the current wall-clock time. Complexity: O(1).
 - @param force_check {bool} Cooldown-bypass flag derived from CLI arguments.
 - @return {bool} `True` when the HTTP request is allowed or forced.
 - @satisfies REQ-003, REQ-059
 
-### fn `def _parse_version(version_value: str) -> tuple[int, ...]` `priv` (L158-171)
+### fn `def _parse_version(version_value: str) -> tuple[int, ...]` `priv` (L162-175)
 - @brief Convert a semantic-version string into an integer tuple.
 - @details Strips a leading `v` prefix, splits by `.`, and converts each segment to `int`. Complexity: O(N) where N is the number of segments.
 - @param version_value {str} Raw semantic version token.
@@ -2103,7 +2114,7 @@ from pathlib import Path
 - @throws {ValueError} Propagated when a segment is not numeric.
 - @satisfies PRJ-004
 
-### fn `def _compare_versions(current: str, latest: str) -> bool` `priv` (L172-189)
+### fn `def _compare_versions(current: str, latest: str) -> bool` `priv` (L176-193)
 - @brief Compare installed and latest semantic versions.
 - @details Parses both version strings into integer tuples and returns `True` only when `latest` is newer than `current`. Invalid inputs collapse to `False`. Complexity: O(N).
 - @param current {str} Installed package version.
@@ -2111,36 +2122,84 @@ from pathlib import Path
 - @return {bool} `True` when the remote version is newer.
 - @satisfies PRJ-004, REQ-060
 
-### fn `def check_for_updates(current_version: str) -> None` (L190-231)
-- @brief Execute the startup GitHub release version check.
-- @details Applies cooldown gating unless the current CLI invocation requests `--version` or `--ver`, performs the latest-release HTTP request, prints a bright-green update line for newer releases, persists a 3600-second success cooldown or an 86400-second request-error cooldown for every request outcome, prints bright-red request errors, and suppresses propagation of non-HTTP request exceptions. Complexity: O(1) excluding network latency and JSON parsing.
+### fn `def _fetch_json_payload(` `priv` (L194-195)
+
+### fn `def fetch_pypi_latest_version(current_version: str) -> str` (L219-239)
+- @brief Fetch and decode one JSON payload over HTTP.
+- @brief Resolve the latest published version from the PyPI registry.
+- @details Issues a GET request with caller-supplied `Accept` header and a
+program/version `User-Agent`, then decodes the response body as a JSON
+object. Time complexity O(n) over payload size.
+- @details Queries the PyPI JSON API for this program and extracts field `info.version`. Complexity O(1) over response object size.
+- @param url {str} Remote JSON endpoint URL.
+- @param current_version {str} Installed package version used in User-Agent.
+- @param accept_header {str} Value of the HTTP `Accept` header.
+- @param current_version {str} Installed package version used in User-Agent.
+- @return {dict[str, Any]} Parsed JSON response object.
+- @return {str} Latest published version token (for example `1.2.3`).
+- @throws {urllib.error.HTTPError} On HTTP error responses.
+- @throws {urllib.error.URLError} On connection failures.
+- @throws {json.JSONDecodeError} On malformed payload bodies.
+- @throws {urllib.error.HTTPError} On HTTP error responses.
+- @throws {urllib.error.URLError} On connection failures.
+- @throws {json.JSONDecodeError} On malformed payload bodies.
+- @throws {KeyError} When `info.version` fields are absent.
+- @satisfies DES-018, DES-019
+- @satisfies DES-018, PRJ-004
+
+### fn `def fetch_github_latest_release(current_version: str) -> str` (L240-260)
+- @brief Resolve the latest GitHub release tag regardless of its branch.
+- @details Queries the GitHub Releases API `latest` endpoint and extracts field `tag_name`, which tracks the newest published tagged release across any branch. Complexity O(1) over response object size.
+- @param current_version {str} Installed package version used in User-Agent.
+- @return {str} Latest release tag token preserving its `v` prefix.
+- @throws {urllib.error.HTTPError} On HTTP error responses.
+- @throws {urllib.error.URLError} On connection failures.
+- @throws {json.JSONDecodeError} On malformed payload bodies.
+- @throws {KeyError} When `tag_name` field is absent.
+- @satisfies DES-019, REQ-076
+
+### fn `def print_remote_latest_versions(current_version: str) -> None` (L261-287)
+- @brief Print PyPI and GitHub latest-version report lines.
+- @details Emits one `<source> latest: <version>` line per remote source in fixed order (PyPI, GitHub). A failed source lookup prints one bright-red error line instead of its version line, and the remaining source is still processed. Complexity O(1) excluding network latency.
+- @param current_version {str} Installed package version used in User-Agent.
+- @return {None} Writes two report or error lines to stdout.
+- @satisfies REQ-003, REQ-075, DES-020
+
+### fn `def check_for_updates(current_version: str) -> None` (L288-324)
+- @brief Execute the startup PyPI registry version check.
+- @details Applies cooldown gating unless the current CLI invocation requests `--version` or `--ver`, performs the PyPI latest-version HTTP request, prints a bright-green update line for newer releases, persists a 3600-second success cooldown or an 86400-second request-error cooldown for every request outcome, prints bright-red request errors, and suppresses propagation of non-HTTP request exceptions. Complexity O(1) excluding network latency and JSON parsing.
 - @param current_version {str} Installed package version string.
 - @return {None} No return value.
 - @throws {urllib.error.HTTPError} Internally handled and converted to output.
-- @satisfies PRJ-004, DES-004, DES-005, DES-006, REQ-003, REQ-059, REQ-060, REQ-061
+- @satisfies PRJ-004, DES-004, DES-005, DES-006, DES-018, REQ-003, REQ-059, REQ-060, REQ-061
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|19||
-|`OWNER`|var|pub|20||
-|`REPOSITORY`|var|pub|21||
-|`IDLE_DELAY`|var|pub|22||
-|`HTTP_ERROR_IDLE_DELAY`|var|pub|23||
-|`HTTP_TIMEOUT`|var|pub|24||
-|`GITHUB_API_URL`|var|pub|25||
-|`CACHE_DIR`|var|pub|26||
-|`IDLE_TIME_FILE`|var|pub|27||
-|`BRIGHT_GREEN`|var|pub|29||
-|`BRIGHT_RED`|var|pub|30||
-|`RESET`|var|pub|31||
-|`_read_idle_config`|fn|priv|34-52|def _read_idle_config() -> dict[str, object] | None|
-|`_write_idle_config`|fn|priv|53-82|def _write_idle_config(last_check_ts: float, idle_delay_s...|
-|`_is_forced_version_check`|fn|priv|83-95|def _is_forced_version_check() -> bool|
-|`_format_request_error`|fn|priv|96-118|def _format_request_error(error: Exception) -> str|
-|`_handle_request_error`|fn|priv|119-135|def _handle_request_error(last_check_ts: float, error: Ex...|
-|`_should_check`|fn|priv|136-157|def _should_check(force_check: bool = False) -> bool|
-|`_parse_version`|fn|priv|158-171|def _parse_version(version_value: str) -> tuple[int, ...]|
-|`_compare_versions`|fn|priv|172-189|def _compare_versions(current: str, latest: str) -> bool|
-|`check_for_updates`|fn|pub|190-231|def check_for_updates(current_version: str) -> None|
+|`PROGRAM`|var|pub|22||
+|`OWNER`|var|pub|23||
+|`REPOSITORY`|var|pub|24||
+|`IDLE_DELAY`|var|pub|25||
+|`HTTP_ERROR_IDLE_DELAY`|var|pub|26||
+|`HTTP_TIMEOUT`|var|pub|27||
+|`GITHUB_API_URL`|var|pub|28||
+|`PYPI_API_URL`|var|pub|29||
+|`CACHE_DIR`|var|pub|30||
+|`IDLE_TIME_FILE`|var|pub|31||
+|`BRIGHT_GREEN`|var|pub|33||
+|`BRIGHT_RED`|var|pub|34||
+|`RESET`|var|pub|35||
+|`_read_idle_config`|fn|priv|38-56|def _read_idle_config() -> dict[str, object] | None|
+|`_write_idle_config`|fn|priv|57-86|def _write_idle_config(last_check_ts: float, idle_delay_s...|
+|`_is_forced_version_check`|fn|priv|87-99|def _is_forced_version_check() -> bool|
+|`_format_request_error`|fn|priv|100-122|def _format_request_error(error: Exception) -> str|
+|`_handle_request_error`|fn|priv|123-139|def _handle_request_error(last_check_ts: float, error: Ex...|
+|`_should_check`|fn|priv|140-161|def _should_check(force_check: bool = False) -> bool|
+|`_parse_version`|fn|priv|162-175|def _parse_version(version_value: str) -> tuple[int, ...]|
+|`_compare_versions`|fn|priv|176-193|def _compare_versions(current: str, latest: str) -> bool|
+|`_fetch_json_payload`|fn|priv|194-195|def _fetch_json_payload(|
+|`fetch_pypi_latest_version`|fn|pub|219-239|def fetch_pypi_latest_version(current_version: str) -> str|
+|`fetch_github_latest_release`|fn|pub|240-260|def fetch_github_latest_release(current_version: str) -> str|
+|`print_remote_latest_versions`|fn|pub|261-287|def print_remote_latest_versions(current_version: str) ->...|
+|`check_for_updates`|fn|pub|288-324|def check_for_updates(current_version: str) -> None|
 

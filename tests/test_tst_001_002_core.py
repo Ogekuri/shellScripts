@@ -213,6 +213,7 @@ def test_main_loads_runtime_config_before_dispatch(monkeypatch):
 
     observed = {"loaded": 0}
     monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
+    monkeypatch.setattr(core, "print_remote_latest_versions", lambda _version: None)
     monkeypatch.setattr(
         core,
         "load_runtime_config",

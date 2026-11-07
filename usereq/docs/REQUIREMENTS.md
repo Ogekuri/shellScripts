@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.24"
-date: "2026-11-07T15:39:19Z"
+version: "0.6.25"
+date: "2026-11-07T16:05:23Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -44,7 +44,7 @@ Repository structure (evidence-oriented view, depth-limited):
 .
 ├── .github/
 │   └── workflows/
-│       └── release-uvx.yml
+│       └── release-pypi.yml
 ├── docs/
 ├── scripts/
 │   └── s.sh
@@ -81,7 +81,8 @@ Repository structure (evidence-oriented view, depth-limited):
 | Python 3.11+ | Runtime constraint | `pyproject.toml` `requires-python = ">=3.11"` |
 | setuptools, wheel, build | Packaging toolchain | `pyproject.toml` `[build-system].requires` |
 | pytest | Development dependency | `pyproject.toml` `[dependency-groups].dev = ["pytest"]` |
-| GitHub automation workflow script | CI/CD component | `.github/workflows/release-uvx.yml` |
+| GitHub automation workflow script (PyPI OIDC Trusted Publishing) | CI/CD component | `.github/workflows/release-pypi.yml` |
+| PyPI registry | Distribution channel and version-check source | `https://pypi.org/pypi/shellscripts/json`; `src/shell_scripts/version_check.py` |
 | External CLI tools (e.g., qpdf, pdftk, gs, doxygen, java, plakativ) | System dependencies invoked by subprocess/exec | direct imports and command invocations in `src/shell_scripts/commands/*.py` |
 
 ## 2. Project Requirements
@@ -90,8 +91,9 @@ Repository structure (evidence-oriented view, depth-limited):
 - **PRJ-001**: MUST parse CLI arguments and route execution to management flags (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`) or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
 - **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
-- **PRJ-004**: MUST perform startup version-update checks against GitHub releases with cooldown caching.
-- **PRJ-005**: MUST include a GitHub automation workflow script at `.github/workflows/release-uvx.yml`.
+- **PRJ-004**: MUST perform startup version-update checks against the PyPI registry with cooldown caching.
+- **PRJ-005**: MUST include a GitHub automation workflow script at `.github/workflows/release-pypi.yml`.
+- **PRJ-007**: MUST publish built distributions to PyPI via OIDC Trusted Publishing when a tagged version is committed on branch `master`.
 - **PRJ-006**: MUST expose video conversion subcommands that transcode one input video into H.264 or H.265 MP4 outputs using FFmpeg.
 
 ### 2.2 Project Constraints
@@ -100,7 +102,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **CTN-003**: MUST depend on external system executables for multiple subcommands and MUST fail fast when required executables are unavailable.
 - **CTN-004**: MUST restrict automatic self-upgrade and self-uninstall actions to Linux platforms and MUST print manual fallback commands on non-Linux platforms.
 - **CTN-005**: MUST treat Git repository root detection as a hard prerequisite for project-context commands.
-- **CTN-006**: MUST execute all GitHub Actions JavaScript action runtimes in `.github/workflows/release-uvx.yml` on Node24 or newer.
+- **CTN-006**: MUST execute all GitHub Actions JavaScript action runtimes in `.github/workflows/release-pypi.yml` on Node24 or newer.
 
 ## 3. Requirements
 
@@ -119,15 +121,24 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-012**: MUST provide a management operation that writes default runtime configuration JSON to `~/.config/shellScripts/config.json`, creating parent directories when absent.
 - **DES-013**: MUST resolve `ai-install` installer payload sources from detected runtime OS, including Linux npm no-`sudo` policy and Kiro package resolution via `https://prod.download.cli.kiro.dev/stable/latest/manifest.json`.
 - **DES-014**: MUST generate global help command listing from a fixed section-to-command mapping preserving section order and per-section command order.
-- **DES-015**: MUST pin every action referenced by `.github/workflows/release-uvx.yml` to a major version whose declared runtime is Node24 or newer.
+- **DES-015**: MUST pin every action referenced by `.github/workflows/release-pypi.yml` to a major version whose declared runtime is Node24 or newer.
+- **DES-016**: MUST gate PyPI publication in `release-pypi.yml` on tag membership of branch `master` while executing all other release steps for any tagged branch.
+- **DES-017**: MUST authenticate PyPI publication via OIDC Trusted Publishing and MUST NOT embed PyPI credentials or API tokens in `.github/workflows/release-pypi.yml`.
+- **DES-018**: MUST resolve startup update-check latest versions from PyPI JSON API `https://pypi.org/pypi/shellscripts/json` field `info.version`.
+- **DES-019**: MUST resolve develop upgrade tags and GitHub display versions from `https://api.github.com/repos/Ogekuri/shellScripts/releases/latest` field `tag_name`.
+- **DES-020**: MUST print a bright-red error line for each failed remote source lookup during `--version` and continue with the remaining source.
 
 No explicit performance optimizations identified.
 
 ### 3.2 Functions
 - **REQ-001**: MUST print global help and return code `0` when invoked without CLI arguments.
 - **REQ-002**: MUST print an error plus global help and return code `1` when the first argument is an unknown command.
-- **REQ-003**: MUST force the version-check HTTP request, print the package version, and return code `0` for `--version` and `--ver`.
-- **REQ-004**: MUST execute the Linux `--upgrade` command from runtime config key `management.upgrade`, using default `uv tool install shellscripts --force --from git+https://github.com/Ogekuri/shellScripts.git` when unset.
+- **REQ-003**: MUST force PyPI and GitHub remote lookups, print installed and latest versions, and return code `0` for `--version` and `--ver`.
+- **REQ-075**: MUST print `--version` output as exactly three lines: installed version, `PyPI latest: <version>`, and `GitHub latest: <version>`.
+- **REQ-004**: MUST execute the Linux `--upgrade` command from runtime config key `management.upgrade`, using default `uv tool install shellscripts --force` when unset.
+- **REQ-076**: MUST make `--upgrade --develop` and `--upgrade --dev` upgrade from the latest GitHub release tag regardless of its source branch.
+- **REQ-077**: MUST reject `--develop` and `--dev` flags passed without `--upgrade` with an error line and return code `1`.
+- **REQ-078**: MUST make develop upgrade fail with a bright-red error line and return code `1` when the GitHub latest-tag resolution fails.
 - **REQ-005**: MUST execute the Linux `--uninstall` command from runtime config key `management.uninstall`, using default `uv tool uninstall shellscripts` when unset.
 - **REQ-006**: MUST execute all configured AI installers, including pi.dev, by default in `ai-install` when no selector options are provided.
 - **REQ-007**: MUST reject unknown `ai-install` selector options with return code `1`.
@@ -196,7 +207,7 @@ No explicit performance optimizations identified.
 ## 4. Test Requirements
 
 ### 4.1 Coverage Summary
-Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, AI installers, command dispatch wrappers, PDF pipelines, and release-workflow Node24 runtime pinning.
+Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, AI installers, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
 High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
 
@@ -212,7 +223,9 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
 - **TST-011**: MUST verify REQ-057 and REQ-058 by monkeypatching executable checks and `subprocess.run`, passing only if FFmpeg argv vectors, `<input>.mp4` output naming, and propagated return codes are exact.
-- **TST-012**: MUST verify CTN-006 and DES-015 by parsing `.github/workflows/release-uvx.yml`, passing only if every referenced action major version matches the approved Node24-native mapping and no Node20 compatibility override environment variables are present.
+- **TST-012**: MUST verify CTN-006 and DES-015 by parsing `.github/workflows/release-pypi.yml`, passing only if every referenced action runtime matches the approved Node24-native mapping and no Node20 compatibility override environment variables are present.
+- **TST-013**: MUST verify PRJ-007, DES-016, and DES-017 by parsing `.github/workflows/release-pypi.yml`, passing only if the PyPI publish step is master-gated, OIDC-based without credential secrets, and all preexisting release steps are retained.
+- **TST-014**: MUST verify REQ-003, REQ-075 through REQ-077, DES-018, and DES-019 via monkeypatched HTTP and subprocess boundaries, passing only if PyPI update checks, three-line version output, default upgrade, and develop upgrade behaviors match specifications.
 
 ## 5. Evidence
 
@@ -220,9 +233,10 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 |---|---|---|---|
 | PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047, REQ-064, REQ-065, REQ-066 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `main`, `capture_terminal_state`, `reset_terminal_state`, `print_help` | Startup detects runtime OS before dispatch; empty args print grouped help and return `0`; unknown command path returns `1`; `--version`/`--ver` print `__version__`; wrapper exit restores saved TTY attributes and writes full mouse-off escape sequence including `?9l` through `?1016l`. |
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
-| PRJ-004, DES-002..DES-006, REQ-003, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `_is_forced_version_check`, `_write_idle_config`, `_should_check` | Forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every request outcome, applies 3600s on success and 86400s on request errors, and prints colored update/error lines. |
-| PRJ-005 | `.github/workflows/release-uvx.yml` | `jobs.check-branch`, `jobs.build-release` | Workflow script is present at required path and defines release automation jobs. |
-| CTN-006, DES-015 | `.github/workflows/release-uvx.yml`; `tests/test_tst_012_workflow_runtime.py` | `jobs.check-branch.steps`, `jobs.build-release.steps`, `NODE24_NATIVE_ACTION_MAJORS` | Every `uses` reference pins a Node24-native major (`checkout@v7`, `setup-python@v7`, `setup-uv@v10`, `attest-build-provenance@v4`, `release-changelog-builder-action@v6`, `action-gh-release@v3`); static test asserts full mapping coverage and absence of Node20 compatibility override variables. |
+| PRJ-004, DES-002..DES-006, DES-018, DES-019, DES-020, REQ-003, REQ-075, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `fetch_pypi_latest_version`, `fetch_github_latest_release`, `print_remote_latest_versions`, `_write_idle_config`, `_should_check` | Startup update check queries the PyPI JSON API; `--version` prints installed, PyPI latest, and GitHub latest lines; forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every outcome, applies 3600s success and 86400s error cooldowns, and prints colored update/error lines. |
+| PRJ-005, PRJ-007, DES-016, DES-017 | `.github/workflows/release-pypi.yml` | `jobs.check-branch`, `jobs.build-release`, `jobs.build-release.steps.Publish` | Workflow script is present at required path, retains check-branch/build/attest/changelog/GitHub-release steps, and publishes to PyPI via `pypa/gh-action-pypi-publish@release/v1` gated on `origin/master` tag membership with workflow-level `id-token: write` and no credential secrets. |
+| CTN-006, DES-015 | `.github/workflows/release-pypi.yml`; `tests/test_tst_012_workflow_runtime.py` | `jobs.check-branch.steps`, `jobs.build-release.steps`, `NODE24_NATIVE_ACTION_RUNTIMES` | Every `uses` reference pins a Node24-native runtime (`checkout@v7`, `setup-python@v7`, `setup-uv@v10`, `attest-build-provenance@v4`, `release-changelog-builder-action@v6`, `action-gh-release@v3`, `gh-action-pypi-publish@release/v1`); static test asserts full mapping coverage and absence of Node20 compatibility override variables. |
+| REQ-004, REQ-076, REQ-077, REQ-078, CTN-004 | `src/shell_scripts/core.py`; `src/shell_scripts/config.py`; `tests/test_tst_014_pypi_version_source.py` | `do_upgrade`, `_build_develop_upgrade_command`, `main`, `DEFAULT_RUNTIME_CONFIG` | Default upgrade resolves `management.upgrade` to `uv tool install shellscripts --force` (PyPI); `--upgrade --develop`/`--dev` resolves the latest GitHub release tag and upgrades from `git+...@<tag>`; bare `--develop`/`--dev` is rejected with code `1`; tag-resolution failure emits a bright-red error and code `1`. |
 | PRJ-006, REQ-057, REQ-058, REQ-064 | `src/shell_scripts/commands/video2h264.py`; `src/shell_scripts/commands/video2h265.py`; `src/shell_scripts/commands/__init__.py` | `run`, `_COMMAND_MODULES` | Command registry exposes `video2h264`/`video2h265`; runners launch fixed FFmpeg argv vectors via `subprocess.run` and output `<input>.mp4` in the input directory. |
 | CTN-001 | `pyproject.toml` | `[project].requires-python` | `requires-python = ">=3.11"`. |
 | CTN-002 | `pyproject.toml` | `[project.scripts]` | `shellscripts = "shell_scripts.core:main"`, `s = "shell_scripts.core:main"`. |
@@ -252,4 +266,4 @@ High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integra
 | REQ-034, REQ-035 | `src/shell_scripts/commands/pdf_crop.py` | `run`, `_parse_page_range`, `_compute_auto_bbox` | Supports bbox/margins/analyze-pages/pages options and validates range syntax `N`, `N-`, `-N`, `N-M`. |
 | REQ-036, REQ-037 | `src/shell_scripts/commands/tests_cmd.py` | `run` | Creates `.venv` if missing, conditionally installs `requirements.txt`, runs pytest with `PYTHONPATH` prefixed by `src`. |
 | REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-062, REQ-063 | `src/shell_scripts/commands/req_cmd.py`; `src/shell_scripts/config.py` | `run`, `_prepare_target_directory`, `_build_req_args`, `get_req_profile` | `req` command resolves targets by selector mode, removes predefined cleanup paths, emits `deleted`/`skip` cleanup evidence with file-or-dir labels for removals, and executes external `req` with hardcoded base args plus runtime-configured providers/static checks. |
-| TST-001..TST-012 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
+| TST-001..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |

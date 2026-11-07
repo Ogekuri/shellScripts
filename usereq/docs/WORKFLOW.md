@@ -20,14 +20,14 @@
     - `src/shell_scripts/__main__.py`
     - `src/shell_scripts/core.py`
 
-- ID: `PROC:release-uvx`
+- ID: `PROC:release-pypi`
   - type: `process`
   - parent_process: `null`
-  - role: `GitHub Actions release workflow job process for tag-based package release`
+  - role: `GitHub Actions release workflow job process for tag-based package release and conditional PyPI trusted publication`
   - entrypoint_symbols:
-    - `.github/workflows/release-uvx.yml::jobs.build-release`
+    - `.github/workflows/release-pypi.yml::jobs.build-release`
   - defining_files:
-    - `.github/workflows/release-uvx.yml`
+    - `.github/workflows/release-pypi.yml`
 
 ## Execution Units
 
@@ -63,10 +63,12 @@
     - `capture_terminal_state(...)`: Snapshot stdin termios attributes when stdin is a TTY and `termios` support is available [`src/shell_scripts/utils.py`]
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
     - `detect_runtime_os(...)`: Detect and cache normalized runtime OS token for startup-wide platform decisions [`src/shell_scripts/utils.py`]
-    - `check_for_updates(...)`: Startup version-check gate with forced CLI bypass plus 3600-second success and 86400-second request-error cooldown persistence [`src/shell_scripts/version_check.py`]
+    - `check_for_updates(...)`: Startup PyPI version-check gate with forced CLI bypass plus 3600-second success and 86400-second request-error cooldown persistence [`src/shell_scripts/version_check.py`]
       - `_is_forced_version_check(...)`: Detect `--version` or `--ver` requests that bypass cooldown gating [`src/shell_scripts/version_check.py`]
       - `_should_check(...)`: Evaluate forced bypass or cached cooldown expiration before network request [`src/shell_scripts/version_check.py`]
         - `_read_idle_config(...)`: Read cached cooldown JSON from user cache directory [`src/shell_scripts/version_check.py`]
+      - `fetch_pypi_latest_version(...)`: Resolve the latest published version from the PyPI JSON API [`src/shell_scripts/version_check.py`]
+        - `_fetch_json_payload(...)`: Fetch and decode one JSON payload over HTTP [`src/shell_scripts/version_check.py`]
       - `_compare_versions(...)`: Compare installed and remote semantic version tuples (`latest` > `current`) [`src/shell_scripts/version_check.py`]
         - `_parse_version(...)`: Convert semantic version strings into integer tuples [`src/shell_scripts/version_check.py`]
       - `_write_idle_config(...)`: Persist check timestamp, applied idle delay, and next allowed check timestamp [`src/shell_scripts/version_check.py`]
@@ -77,10 +79,19 @@
       - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
       - `get_default_runtime_config(...)`: Clone hardcoded runtime defaults [`src/shell_scripts/config.py`]
       - `_deep_merge_dict(...)`: Recursively merge nested override keys into defaults [`src/shell_scripts/config.py`]
+    - `print_remote_latest_versions(...)`: Print PyPI and GitHub latest-version report lines with per-source failure isolation [`src/shell_scripts/version_check.py`]
+      - `fetch_pypi_latest_version(...)`: Resolve the latest published version from the PyPI JSON API [`src/shell_scripts/version_check.py`]
+        - `_fetch_json_payload(...)`: Fetch and decode one JSON payload over HTTP [`src/shell_scripts/version_check.py`]
+      - `fetch_github_latest_release(...)`: Resolve the latest GitHub release tag regardless of its branch [`src/shell_scripts/version_check.py`]
+        - `_fetch_json_payload(...)`: Fetch and decode one JSON payload over HTTP [`src/shell_scripts/version_check.py`]
     - `print_help(...)`: Print grouped global help sections or command-specific help [`src/shell_scripts/core.py`]
       - `get_command(...)`: Resolve command module by static mapping key [`src/shell_scripts/commands/__init__.py`]
-    - `do_upgrade(...)`: Linux-only self-upgrade wrapper [`src/shell_scripts/core.py`]
-      - `get_management_command(...)`: Resolve upgrade command string from runtime config with default fallback [`src/shell_scripts/config.py`]
+    - `do_upgrade(...)`: Linux-only self-upgrade wrapper supporting PyPI default mode and GitHub-tagged develop mode [`src/shell_scripts/core.py`]
+      - `fetch_github_latest_release(...)`: Resolve latest GitHub release tag for develop upgrade mode [`src/shell_scripts/version_check.py`]
+        - `_fetch_json_payload(...)`: Fetch and decode one JSON payload over HTTP [`src/shell_scripts/version_check.py`]
+      - `_build_develop_upgrade_command(...)`: Substitute the latest GitHub tag into the `management.upgrade_develop` command template [`src/shell_scripts/core.py`]
+        - `get_management_command(...)`: Resolve command template from runtime config with default fallback [`src/shell_scripts/config.py`]
+      - `get_management_command(...)`: Resolve PyPI upgrade command string from runtime config with default fallback [`src/shell_scripts/config.py`]
       - `is_linux(...)`: Platform gate for Linux-specific automation [`src/shell_scripts/utils.py`]
       - `require_shell_command_executables(...)`: Validate executable tokens used by configured shell command before subprocess execution [`src/shell_scripts/utils.py`]
         - `extract_shell_executables(...)`: Parse executable candidates from shell command line [`src/shell_scripts/utils.py`]
@@ -297,28 +308,28 @@
     - `reset_terminal_state(...)`: Restore captured stdin TTY attributes, disable legacy+xterm mouse modes (`?9l` through `?1016l`), and execute `stty sane` fallback on TTY stdin [`src/shell_scripts/utils.py`]
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
 - External Boundaries:
-  - Network boundary: GitHub Releases API request for update check (`urllib.request.urlopen`) and binary downloads in AI installer command.
+  - Network boundary: PyPI JSON API request for startup update check and `--version` report (`urllib.request.urlopen`), GitHub Releases API request for develop upgrade tags and GitHub latest display (`urllib.request.urlopen`), and binary downloads in AI installer command.
   - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands).
   - Terminal boundary: ANSI control-sequence writes for legacy+xterm mouse-mode disable (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) and best-effort `termios`/`stty sane` restoration.
   - Process-replacement boundary: none; launcher-style commands now execute external tools via `subprocess.run`.
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
   - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
 
-### `PROC:release-uvx`
+### `PROC:release-pypi`
 
 - Entrypoint(s):
-  - `.github/workflows/release-uvx.yml::jobs.build-release` [`.github/workflows/release-uvx.yml`]
+  - `.github/workflows/release-pypi.yml::jobs.build-release` [`.github/workflows/release-pypi.yml`]
 - Lifecycle/trigger:
   - Trigger: GitHub push event on tags matching `v[0-9]+.[0-9]+.[0-9]+`.
-  - Runtime: GitHub runner executes check-branch and build-release jobs for branch validation, distribution build, artifact attestation, changelog generation, and release publication.
-  - Shutdown: job ends after release step completion or earlier on step failure.
+  - Runtime: GitHub runner executes check-branch and build-release jobs for branch validation, distribution build, artifact attestation, changelog generation, and release publication; PyPI publication via OIDC Trusted Publishing runs only when the tag is reachable from `master` (DES-016).
+  - Shutdown: job ends after release or publication step completion or earlier on step failure.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - No internal function declarations detected in workflow YAML.
 - External Boundaries:
-  - GitHub Actions boundaries: reusable actions executing on Node24 runtime (CTN-006: `actions/checkout`, `actions/setup-python`, `astral-sh/setup-uv`, `actions/attest-build-provenance`, `mikepenz/release-changelog-builder-action`, `softprops/action-gh-release`).
+  - GitHub Actions boundaries: reusable actions executing on Node24 runtime (CTN-006: `actions/checkout`, `actions/setup-python`, `astral-sh/setup-uv`, `actions/attest-build-provenance`, `mikepenz/release-changelog-builder-action`, `softprops/action-gh-release`, `pypa/gh-action-pypi-publish`).
   - Tooling boundaries: external shell commands (`git`, `uv`, `python -m build`).
-  - Network/API boundary: GitHub Releases publication with built artifacts.
+  - Network/API boundary: GitHub Releases publication with built artifacts and conditional PyPI upload via OIDC Trusted Publishing (`pypi.org`) for master tags.
 
 ## Communication Edges
 
@@ -336,11 +347,11 @@
 
 - Edge ID: `EDGE:002`
   - source_execution_unit: `PROC:main`
-  - destination_execution_unit: `PROC:release-uvx`
+  - destination_execution_unit: `PROC:release-pypi`
   - direction: `none`
   - mechanism: `none`
   - endpoint_channel: `none`
   - payload_data_shape_reference: `No explicit runtime communication path detected between local CLI process and release workflow process in repository-defined execution logic`
   - declaration_file_paths:
     - `src/shell_scripts/core.py`
-    - `.github/workflows/release-uvx.yml`
+    - `.github/workflows/release-pypi.yml`
