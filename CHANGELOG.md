@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.22.2](https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.22.2) - 2026-11-07
+## [0.23.0](https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0) - 2026-11-07
 ### 🐛  Bug Fixes
 - pin setup-uv to resolvable v10.3.3 tag [useReq] *(release-pypi)*
   - GitHub runner 2.338.2 failed at 'Prepare all required actions': astral-sh/setup-uv@v10 is an unresolvable ref (no v10 major tag exists upstream; verified via GitHub API - only full semver tags like v10.3.3 exist).
@@ -691,7 +691,7 @@
 - \[0.20.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.20.0
 - \[0.21.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.21.0
 - \[0.22.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.0
-- \[0.22.2\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.2
+- \[0.23.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -715,4 +715,4 @@
 [0.20.0]: https://github.com/Ogekuri/shellScripts/compare/v0.19.0..v0.20.0
 [0.21.0]: https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0
 [0.22.0]: https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0
-[0.22.2]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.22.2
+[0.23.0]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0
