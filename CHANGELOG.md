@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.1](https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.23.1) - 2026-11-07
+### 🐛  Bug Fixes
+- replace invalid PyPI trove classifier blocking uploads [useReq] *(packaging)*
+  - PyPI upload of shellscripts-0.23.0 failed with 400 Bad Request: 'Topic :: Software Development :: Configuration Management' is not a valid classifier (verified absent from the canonical trove list at pypi.org).
+  - Replace it with the canonical 'Topic :: Software Development' entry so trusted-publishing uploads satisfy PyPI core-metadata validation (PRJ-007).
+  - Add TST-013-scope reproducer test validating every pyproject.toml classifier against an authoritative canonical-list snapshot, asserting the rejected entry stays absent and the canonical replacement is declared (failed pre-fix, passes post-fix). Suite: 121 passing.
+
 ## [0.23.0](https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0) - 2026-11-07
 ### 🐛  Bug Fixes
 - pin setup-uv to resolvable v10.3.3 tag [useReq] *(release-pypi)*
@@ -692,6 +699,7 @@
 - \[0.21.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.21.0
 - \[0.22.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.0
 - \[0.23.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.0
+- \[0.23.1\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.1
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -716,3 +724,4 @@
 [0.21.0]: https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0
 [0.22.0]: https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0
 [0.23.0]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0
+[0.23.1]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.23.1
