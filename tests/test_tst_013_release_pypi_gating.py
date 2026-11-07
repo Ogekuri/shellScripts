@@ -3,16 +3,20 @@
 @details Parses the repository workflow artifact
   `.github/workflows/release-pypi.yml` as static text and verifies that the
   PyPI publication step is gated on `master` tag membership, authenticates via
-  OIDC Trusted Publishing without embedded credential secrets, and retains all
-  preexisting release steps for any tagged branch (PRJ-007, DES-016, DES-017).
-  Level classification: all helpers are Level 0 (pure text parsing over a
-  tracked static artifact); test functions are Level 1 consumers with no
+  OIDC Trusted Publishing without embedded credential secrets, retains all
+  preexisting release steps for any tagged branch (PRJ-007, DES-016, DES-017),
+  and validates that every `pyproject.toml` classifier is a canonical PyPI
+  trove entry so upload requests cannot be rejected with metadata 400 errors
+  (PRJ-007).
+  Level classification: all helpers are Level 0 (pure text parsing over
+  tracked static artifacts); test functions are Level 1 consumers with no
   cross-test dependencies and no network, filesystem side effects, clock,
   or randomness exposure.
 @satisfies TST-013, PRJ-007, DES-016, DES-017
 @return {None} Pytest module scope.
 """
 
+import tomllib
 from pathlib import Path
 
 # @var WORKFLOW_PATH {Path} Absolute path of the release workflow artifact under verification; resolved from this test file location to remain working-directory independent.
@@ -34,6 +38,23 @@ EMBEDDED_CREDENTIAL_TOKENS = (
     "TWINE_USERNAME",
     "TWINE_PASSWORD",
 )
+
+# @var PYPROJECT_PATH {Path} Absolute path of the packaging metadata artifact whose classifiers feed PyPI upload payloads (PRJ-007).
+PYPROJECT_PATH = Path(__file__).resolve().parents[1] / "pyproject.toml"
+
+# @var CANONICAL_TROVE_CLASSIFIERS {tuple[str, ...]} Authoritative snapshot of canonical PyPI trove classifier entries referenced by this project, verified against https://pypi.org/pypi?%3Aaction=list_classifiers; upload requests are rejected with HTTP 400 when any metadata classifier is absent from the canonical list.
+CANONICAL_TROVE_CLASSIFIERS = (
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+)
+
+# @var INVALID_TOPIC_CLASSIFIER {str} Non-canonical classifier rejected by PyPI with HTTP 400 (`is not a valid classifier`); kept as regression-guard evidence.
+INVALID_TOPIC_CLASSIFIER = "Topic :: Software Development :: Configuration Management"
 
 # @var RETAINED_ACTION_REFS {tuple[str, ...]} Preexisting release-step action references that MUST be retained by the PyPI migration (user-requested logic preservation).
 RETAINED_ACTION_REFS = (
@@ -204,3 +225,33 @@ def test_release_workflow_retains_preexisting_release_steps():
         assert action_ref in build_release_block, (
             f"preexisting release action missing: {action_ref}"
         )
+
+
+def test_pyproject_classifiers_are_canonical_pypi_trove_entries():
+    """@brief Verify every packaging classifier is a canonical PyPI trove entry.
+
+    @details Boundary/regression coverage for PyPI upload metadata: each
+      `classifiers` entry in `pyproject.toml` must be present in the
+      canonical trove snapshot, the previously rejected non-canonical Topic
+      entry must remain absent, and the canonical replacement must be used.
+    @return {None} Asserts canonical-classifier membership only.
+    @satisfies TST-013, PRJ-007
+    """
+    with open(PYPROJECT_PATH, "rb") as project_file:
+        project_metadata = tomllib.load(project_file)
+
+    declared_classifiers = project_metadata["project"]["classifiers"]
+    canonical_entries = set(CANONICAL_TROVE_CLASSIFIERS)
+
+    assert INVALID_TOPIC_CLASSIFIER not in canonical_entries, (
+        "regression guard failed: rejected classifier present in canonical list"
+    )
+    assert INVALID_TOPIC_CLASSIFIER not in declared_classifiers, (
+        f"non-canonical classifier rejected by PyPI upload: "
+        f"{INVALID_TOPIC_CLASSIFIER}"
+    )
+    for classifier in declared_classifiers:
+        assert classifier in canonical_entries, (
+            f"classifier absent from canonical PyPI trove list: {classifier}"
+        )
+    assert "Topic :: Software Development" in declared_classifiers
