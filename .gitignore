@@ -24,7 +24,7 @@
 !setup.py
 !pyproject.toml
 !uv.lock
-!.g.conf
+!.galias.conf
 !src/
 !src/**/*
 !docs/
