@@ -1,11 +1,52 @@
 # Changelog
 
-## [0.23.1](https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.23.1) - 2026-11-07
+## [0.24.0](https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0) - 2026-11-08
+### ⛰️  Features
+- add pre-release-check.sh release verification pipeline [useReq] *(scripts)*
+  - Add executable scripts/pre-release-check.sh running mandatory
+  - pre-release checks: pytest suite with PYTHONPATH=src (.venv fallback),
+  - dist cleanup, sdist+wheel build via uv build with python3 -m build
+  - fallback, and sdist/wheel artifact verification.
+  - Fail-fast semantics with PASS/FAIL evidence lines; exit 1 on first
+  - failed check, exit 0 only when all checks pass (REQ-079, REQ-080).
+  - Add requirements DES-021..DES-025, REQ-079, REQ-080, TST-015 and
+  - static parsing tests in tests/test_tst_015_pre_release_check.py.
+  - Register PROC:pre-release-check execution unit in WORKFLOW.md.
+
 ### 🐛  Bug Fixes
+- Fix version number in scripts file.
+- add cross-device temp-output promotion in PDF TOC splits [useReq] *(pdf)*
+  - Add _promote_temp_output EXDEV fallback in pdf_split_by_toc and
+  - pdf_split_by_format so chunk promotion survives temp directories on
+  - a different filesystem; previously crashed with OSError EXDEV in
+  - pdf-split-by-toc and silently dropped chunk TOC in pdf-split-by-format.
+  - Add cross-device reproducer tests and cwd isolation for split flows
+  - (TST-007, REQ-031, REQ-032).
+  - Update WORKFLOW.md call traces and regenerate REFERENCES.md.
 - replace invalid PyPI trove classifier blocking uploads [useReq] *(packaging)*
   - PyPI upload of shellscripts-0.23.0 failed with 400 Bad Request: 'Topic :: Software Development :: Configuration Management' is not a valid classifier (verified absent from the canonical trove list at pypi.org).
   - Replace it with the canonical 'Topic :: Software Development' entry so trusted-publishing uploads satisfy PyPI core-metadata validation (PRJ-007).
   - Add TST-013-scope reproducer test validating every pyproject.toml classifier against an authoritative canonical-list snapshot, asserting the rejected entry stays absent and the canonical replacement is declared (failed pre-fix, passes post-fix). Suite: 121 passing.
+
+### 🚜  Changes
+- gate release pipeline on pre-release check job [useReq] *(release)*
+  - Add dedicated pre-release-check job to release-pypi.yml running
+  - scripts/pre-release-check.sh (unit tests, build, artifact gates)
+  - after uv sync --frozen, before any artifact creation (DES-028).
+  - Declare needs: [check-branch, pre-release-check] on build-release so
+  - failing tests skip build, attestation, changelog, GitHub release,
+  - and PyPI publication (DES-029, REQ-083).
+  - Add TST-016 with tests/test_tst_016_release_precheck_gating.py.
+  - Update REQUIREMENTS.md (v0.6.28) and WORKFLOW.md runtime model.
+- leave repo clean of generated artifacts after pre-release-check [useReq] *(scripts)*
+  - Add cleanup_artifacts EXIT trap removing dist, build, .pytest_cache,
+  - src/shellscripts.egg-info, and __pycache__ dirs under src/tests on
+  - both success and failure termination paths (DES-026, DES-027).
+  - Print parser-stable clean evidence line listing removed groups.
+  - Guarantee no Git-tracked file is removed and repository is artifact
+  - free on success (REQ-081, REQ-082).
+  - Extend TST-015 and tests/test_tst_015_pre_release_check.py coverage.
+  - Update REQUIREMENTS.md (v0.6.27) and WORKFLOW.md runtime model.
 
 ## [0.23.0](https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0) - 2026-11-07
 ### 🐛  Bug Fixes
@@ -699,7 +740,7 @@
 - \[0.21.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.21.0
 - \[0.22.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.0
 - \[0.23.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.0
-- \[0.23.1\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.1
+- \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -724,4 +765,4 @@
 [0.21.0]: https://github.com/Ogekuri/shellScripts/compare/v0.20.0..v0.21.0
 [0.22.0]: https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0
 [0.23.0]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0
-[0.23.1]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.23.1
+[0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
