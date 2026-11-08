@@ -36,9 +36,31 @@ jobs:
             echo "is_master=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # 1b. Runs the mandatory pre-release verification pipeline (unit tests, build,
+  # artifact gates) before any release artifact is created (DES-028); the
+  # build-release job declares needs on this job so a failing check blocks every
+  # artifact-creation and publication step (DES-029, REQ-083).
+  pre-release-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Install project and dev dependencies
+        run: uv sync --frozen
+
+      - name: Run pre-release checks (tests, build, artifact gates)
+        run: bash scripts/pre-release-check.sh
+
   # 2. Effetua la build
   build-release:
-    needs: check-branch
+    needs: [check-branch, pre-release-check]
     runs-on: ubuntu-latest
 
     steps:

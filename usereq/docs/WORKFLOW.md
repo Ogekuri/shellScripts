@@ -32,7 +32,7 @@
 - ID: `PROC:release-pypi`
   - type: `process`
   - parent_process: `null`
-  - role: `GitHub Actions release workflow job process for tag-based package release and conditional PyPI trusted publication`
+  - role: `GitHub Actions release workflow that gates artifact creation and publication on a dedicated pre-release verification job for tag-based package release and conditional PyPI trusted publication`
   - entrypoint_symbols:
     - `.github/workflows/release-pypi.yml::jobs.build-release`
   - defining_files:
@@ -352,7 +352,7 @@
   - `.github/workflows/release-pypi.yml::jobs.build-release` [`.github/workflows/release-pypi.yml`]
 - Lifecycle/trigger:
   - Trigger: GitHub push event on tags matching `v[0-9]+.[0-9]+.[0-9]+`.
-  - Runtime: GitHub runner executes check-branch and build-release jobs for branch validation, distribution build, artifact attestation, changelog generation, and release publication; PyPI publication via OIDC Trusted Publishing runs only when the tag is reachable from `master` (DES-016).
+  - Runtime: GitHub runner executes check-branch and pre-release-check jobs; the `pre-release-check` job provisions dependencies via `uv sync --frozen` and executes `scripts/pre-release-check.sh` (unit tests, build, artifact gates); the `build-release` job declares `needs: [check-branch, pre-release-check]`, so any verification failure skips distribution build, artifact attestation, changelog generation, GitHub release, and PyPI publication steps (DES-028, DES-029, REQ-083); PyPI publication via OIDC Trusted Publishing runs only when the tag is reachable from `master` (DES-016).
   - Shutdown: job ends after release or publication step completion or earlier on step failure.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
@@ -386,3 +386,14 @@
   - declaration_file_paths:
     - `src/shell_scripts/core.py`
     - `.github/workflows/release-pypi.yml`
+
+- Edge ID: `EDGE:003`
+  - source_execution_unit: `PROC:release-pypi`
+  - destination_execution_unit: `PROC:pre-release-check`
+  - direction: `PROC:release-pypi -> PROC:pre-release-check`
+  - mechanism: `OS child process spawn inside workflow job`
+  - endpoint_channel: `jobs.pre-release-check runner step executing bash scripts/pre-release-check.sh`
+  - payload_data_shape_reference: `repository checkout at the pushed tag; script exit code gates the build-release job via needs dependency`
+  - declaration_file_paths:
+    - `.github/workflows/release-pypi.yml`
+    - `scripts/pre-release-check.sh`
