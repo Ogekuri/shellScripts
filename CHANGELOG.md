@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.24.1](https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.24.1) - 2026-11-08
+### 🚜  Changes
+- render failed lookups as latest unknown with reason [useReq] *(version-check)*
+  - REQ-084: failed --version source lookups now print
+  - "<source> latest: unknown (<reason>)" in bright red instead of
+  - the old "<source> latest check failed: <reason>." line that
+  - dropped the version line entirely
+  - reuse _format_request_error so GitHub rate-limit (403/429),
+  - HTTP 404, and non-HTTP failures show the actual error reason
+  - REQUIREMENTS.md v0.6.29: REQ-075 scoped to successful lookups,
+  - REQ-084 added, TST-014 and evidence table extended
+  - tests: TST-014 assertions updated to normative failure output
+  - and new GitHub HTTP 404 failure case added
+
 ## [0.24.0](https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0) - 2026-11-08
 ### ⛰️  Features
 - add pre-release-check.sh release verification pipeline [useReq] *(scripts)*
@@ -741,6 +755,7 @@
 - \[0.22.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.0
 - \[0.23.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.0
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
+- \[0.24.1\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.1
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -766,3 +781,4 @@
 [0.22.0]: https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0
 [0.23.0]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
+[0.24.1]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.24.1
