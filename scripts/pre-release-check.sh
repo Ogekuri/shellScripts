@@ -1,0 +1,105 @@
+#!/bin/bash
+# VERSION: 1.0.0
+# AUTHORS: Ogekuri
+# Pre-release verification pipeline for shellScripts.
+
+# @file scripts/pre-release-check.sh
+# @brief Run all mandatory checks required before an official release.
+# @details Resolves the Git repository root from the script location and
+#   changes the working directory to that root, executes the pytest
+#   unit-test suite with `<project-root>/src` prepended to `PYTHONPATH`
+#   (via `.venv/bin/python3` when present, `python3` otherwise), removes
+#   any preexisting `dist` directory, builds sdist and wheel via `uv build`
+#   when `uv` is executable and `python3 -m build` otherwise, verifies that
+#   `dist` contains at least one sdist archive and one wheel artifact,
+#   prints one `PASS` or `FAIL` evidence line per check, aborts remaining
+#   checks at the first failure with exit code `1`, and exits `0` only when
+#   every mandatory check passes.
+# @satisfies DES-021, DES-022, DES-023, DES-024, DES-025, REQ-079, REQ-080
+
+set -u
+
+FAILED_CHECK=""
+
+# @brief Execute one mandatory check and record PASS/FAIL evidence.
+# @details Prints a `==> Running check` header, executes the provided
+#   command vector, prints `PASS: <name>` on success or `FAIL: <name>` on
+#   failure, records the failed check name in the global FAILED_CHECK
+#   variable, and returns the executed command exit status to the caller.
+# @param $1 Check name used in evidence and summary lines.
+# @param $2... Command vector executed for this check.
+# @return Propagates the executed command exit status.
+# @satisfies REQ-079, REQ-080
+run_check() {
+    local check_name="$1"
+    shift
+    printf '==> Running check: %s\n' "${check_name}"
+    if "$@"; then
+        printf 'PASS: %s\n' "${check_name}"
+        return 0
+    fi
+    FAILED_CHECK="${check_name}"
+    printf 'FAIL: %s\n' "${check_name}"
+    return 1
+}
+
+# @brief Abort the pipeline after the first failed check.
+# @details Prints one parser-stable failure summary line naming the failed
+#   check recorded in FAILED_CHECK and terminates the script with exit
+#   code 1, guaranteeing that no subsequent check is executed.
+# @return Does not return; exits the process with status 1.
+# @satisfies REQ-079
+fail_fast() {
+    printf 'Pre-release check FAILED at check: %s\n' "${FAILED_CHECK}"
+    exit 1
+}
+
+# @brief Verify that dist contains one sdist archive and one wheel artifact.
+# @details Uses `compgen` glob probes so both artifact classes are validated
+#   without external tool dependencies, and emits an explicit diagnostic
+#   line for the first missing artifact class.
+# @return {int} 0 when at least one `dist/*.tar.gz` and one `dist/*.whl`
+#   exist; 1 otherwise.
+# @satisfies DES-025
+check_artifacts() {
+    if ! compgen -G "dist/*.tar.gz" > /dev/null; then
+        printf 'Missing sdist artifact (.tar.gz) in dist/.\n'
+        return 1
+    fi
+    if ! compgen -G "dist/*.whl" > /dev/null; then
+        printf 'Missing wheel artifact (.whl) in dist/.\n'
+        return 1
+    fi
+    return 0
+}
+
+SCRIPT_PATH=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P)
+BASE_DIR=$(CDPATH= cd -- "${SCRIPT_PATH}/.." 2>/dev/null && pwd -P)
+
+PROJECT_ROOT=$(git -C "${BASE_DIR}" rev-parse --show-toplevel 2>/dev/null)
+if [ -z "${PROJECT_ROOT}" ]; then
+    echo "ERROR: Unable to determine project root from pre-release script path."
+    exit 1
+fi
+
+cd -- "${PROJECT_ROOT}" || exit 1
+
+if [ -x ".venv/bin/python3" ]; then
+    PYTHON_BIN=".venv/bin/python3"
+else
+    PYTHON_BIN="python3"
+fi
+
+run_check "unit-tests" env PYTHONPATH="${PWD}/src" "${PYTHON_BIN}" -m pytest tests/ || fail_fast
+
+rm -rf -- dist
+if command -v uv > /dev/null 2>&1; then
+    run_check "build" uv build || fail_fast
+else
+    run_check "build" python3 -m build || fail_fast
+fi
+
+run_check "artifacts" check_artifacts || fail_fast
+
+printf 'Pre-release check PASSED: all mandatory checks succeeded.\n'
+exit 0
