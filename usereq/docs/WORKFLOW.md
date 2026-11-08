@@ -64,16 +64,17 @@
   - Trigger: developer or automation invokes the script before an official release.
   - Startup: resolves canonical script and base directories, resolves the Git repository root via `git rev-parse --show-toplevel`, selects `.venv/bin/python3` when present or `python3` otherwise, and changes the working directory to the repository root.
   - Runtime mode: sequential fail-fast check pipeline; each check runs as a child process via `run_check` and any failure aborts all remaining checks.
-  - Shutdown: prints `Pre-release check FAILED at check: <name>` and exits `1` on the first failed check, or `Pre-release check PASSED` and exits `0` when every mandatory check passes.
+  - Shutdown: prints `Pre-release check FAILED at check: <name>` and exits `1` on the first failed check, or `Pre-release check PASSED` and exits `0` when every mandatory check passes; an EXIT trap removes every generated artifact before termination on both paths.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - `run_check(...)`: Execute one mandatory check, print `PASS`/`FAIL` evidence line, and record the failed check name [`scripts/pre-release-check.sh`]
   - `fail_fast(...)`: Print the failure summary naming the failed check and terminate with exit code `1` [`scripts/pre-release-check.sh`]
   - `check_artifacts(...)`: Verify at least one sdist and one wheel artifact exist under `dist/` via `compgen` glob probes [`scripts/pre-release-check.sh`]
+  - `cleanup_artifacts(...)`: Remove `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories and print one `clean` evidence line [`scripts/pre-release-check.sh`]
 - External Boundaries:
   - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `env`, `python3`/`.venv/bin/python3` running pytest, `uv build` or `python3 -m build`, `rm`, `compgen`).
-  - File-system boundary: removes the preexisting `dist` directory and reads built `dist/*.tar.gz` and `dist/*.whl` artifacts.
-  - Terminal boundary: parser-stable `PASS:`/`FAIL:` evidence lines and final `Pre-release check PASSED`/`FAILED` summary lines on stdout.
+  - File-system boundary: removes the preexisting `dist` directory, reads built `dist/*.tar.gz` and `dist/*.whl` artifacts, and deletes generated artifacts (`dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, `__pycache__` under `src`/`tests`) before termination.
+  - Terminal boundary: parser-stable `PASS:`/`FAIL:`/`clean` evidence lines and final `Pre-release check PASSED`/`FAILED` summary lines on stdout.
 
 ### `PROC:main`
 

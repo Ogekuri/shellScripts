@@ -6,8 +6,8 @@
   artifact gates, fail-fast exit semantics, and `PASS`/`FAIL` evidence-line
   format. Validates Bash syntax via `bash -n` without executing the release
   pipeline.
-@satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, REQ-079,
-  REQ-080
+@satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, DES-026,
+  DES-027, REQ-079, REQ-080, REQ-081, REQ-082
 @return {None} Pytest module scope.
 """
 
@@ -127,3 +127,23 @@ def test_pre_release_script_enforces_fail_fast_and_evidence_lines():
     assert "exit 0" in content
     assert "Pre-release check FAILED at check: " in content
     assert "Pre-release check PASSED" in content
+
+
+def test_pre_release_script_cleans_generated_artifacts():
+    """
+    @brief Validate generated-artifact cleanup registration.
+    @details Asserts the script defines `cleanup_artifacts`, registers it as
+      an EXIT trap so success and failure paths both clean up, removes
+      `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and
+      `__pycache__` directories under `src` and `tests`, and prints a
+      `clean` evidence line listing the removed artifact groups.
+    @return {None} Assertions only.
+    @satisfies TST-015, DES-026, DES-027, REQ-081, REQ-082
+    """
+
+    content = _read_script()
+    assert "cleanup_artifacts" in content
+    assert "trap cleanup_artifacts EXIT" in content
+    assert "rm -rf -- dist build .pytest_cache src/shellscripts.egg-info" in content
+    assert "find src tests -type d -name __pycache__" in content
+    assert "clean: dist build .pytest_cache src/shellscripts.egg-info __pycache__" in content
