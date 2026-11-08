@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
+import errno
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 
@@ -102,7 +104,48 @@ def _extract_toc_for_range(data_file, start, end):
     return "\n".join(result)
 
 
+def _promote_temp_output(temp_output, output_file):
+    """
+    @brief Promote one pdftk-produced temporary artifact onto the final output path.
+    @details Attempts same-device atomic replacement via `os.replace`. On
+      `OSError` with `errno.EXDEV` (temporary directory and output directory
+      located on different filesystems), falls back to `shutil.move`, which
+      copies the artifact content and removes the temporary source. All other
+      `OSError` values propagate unchanged to preserve pre-existing failure
+      semantics. Time complexity O(1) for same-device renames, O(n) over file
+      size for the cross-device copy fallback.
+    @param temp_output {str} Temporary artifact path produced by the external tool chain.
+    @param output_file {str} Final chunk path that must receive the artifact content.
+    @return {None} Applies destination filesystem mutation.
+    @throws {OSError} Propagated for non-EXDEV replacement failures.
+    @satisfies REQ-031, REQ-032
+    """
+    try:
+        os.replace(temp_output, output_file)
+    except OSError as error:
+        if error.errno != errno.EXDEV:
+            raise
+        shutil.move(temp_output, output_file)
+
+
 def _apply_toc(output_file, toc_content):
+    """
+    @brief Reapply in-range TOC data to one generated chunk file.
+    @details Writes `toc_content` into a temporary `.info` payload, prepares
+      temporary PDF artifacts, strips object streams from `output_file` via
+      `qpdf`, rebuilds the chunk with TOC metadata via `pdftk update_info`,
+      and promotes the artifact onto `output_file` through
+      `_promote_temp_output` so a temporary directory on a different
+      filesystem cannot silently drop the chunk TOC. Tool-chain failures are
+      contained without aborting the split loop. Time complexity O(m) over
+      TOC content size plus external process latency.
+    @param output_file {str} Generated chunk path receiving the TOC metadata.
+    @param toc_content {str} Range-filtered pdftk dump-data bookmark payload.
+    @return {None} Mutates `output_file` content on success.
+    @throws {OSError} Propagated when temporary payload creation, unlink, or
+      non-EXDEV promotion fails.
+    @satisfies REQ-032
+    """
     if not toc_content.strip():
         return
     with tempfile.NamedTemporaryFile(mode="w", suffix=".info", delete=False) as f:
@@ -124,7 +167,7 @@ def _apply_toc(output_file, toc_content):
                 capture_output=True,
             )
             if r2.returncode == 0:
-                os.replace(with_toc, output_file)
+                _promote_temp_output(with_toc, output_file)
             else:
                 os.unlink(with_toc)
                 print(f"   [!] Warning: unable to update TOC for '{output_file}'.")

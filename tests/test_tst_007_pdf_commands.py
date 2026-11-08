@@ -7,6 +7,7 @@
 @return {None} Pytest module scope.
 """
 
+import errno
 import pathlib
 import subprocess
 
@@ -206,11 +207,85 @@ def test_pdf_split_by_toc_runs_required_tools(monkeypatch, tmp_path):
     monkeypatch.setattr(pdf_split_by_toc, "require_commands", lambda *_cmds: None)
     monkeypatch.setattr(pdf_split_by_toc.subprocess, "run", _fake_run)
 
+    monkeypatch.chdir(tmp_path)
     result = pdf_split_by_toc.run([str(input_pdf)])
 
     assert result == 0
     assert any(cmd[0] == "qpdf" for cmd in calls)
     assert any(cmd[0] == "pdftk" for cmd in calls)
+
+
+def test_pdf_split_by_toc_promotes_output_across_devices(monkeypatch, tmp_path):
+    """
+    @brief Validate cross-device temp-output promotion in pdf-split-by-toc.
+    @details Simulates `os.replace` failing with `errno.EXDEV` (system temp
+      directory located on a different filesystem than the working directory)
+      and asserts the generated chunk still receives the pdftk-produced
+      artifact through the copy-based fallback instead of crashing.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {pathlib.Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-007, REQ-031
+    """
+
+    input_pdf = tmp_path / "book.pdf"
+    input_pdf.write_text("dummy")
+    toc_artifact = (
+        "NumberOfPages: 3\n"
+        "BookmarkBegin\n"
+        "BookmarkTitle: Intro\n"
+        "BookmarkLevel: 1\n"
+        "BookmarkPageNumber: 1\n"
+        "BookmarkBegin\n"
+        "BookmarkTitle: End\n"
+        "BookmarkLevel: 1\n"
+        "BookmarkPageNumber: 3\n"
+    )
+
+    def _fake_run(command, **kwargs):
+        """
+        @brief Mock subprocess.run for pdf-split-by-toc.
+        @details Captures invocation list and writes the deterministic TOC
+          artifact to every pdftk output target so the promotion result stays
+          observable.
+        @param command {list[str]} Command token vector.
+        @param kwargs {dict[str, object]} Execution options.
+        @return {subprocess.CompletedProcess[str]} Successful completion object.
+        """
+
+        del kwargs
+        if command[0] == "pdftk" and "output" in command:
+            output_path = command[command.index("output") + 1]
+            with open(output_path, "w", encoding="utf-8") as handle:
+                handle.write(toc_artifact)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    def _raise_exdev(source, destination):
+        """
+        @brief Simulate cross-device rename rejection.
+        @details Replaces `os.replace` with the exact `OSError` raised by the
+          operating system when source and destination live on different
+          filesystems, keeping the reproducer independent from the host
+          mount layout.
+        @param source {str} Source path token.
+        @param destination {str} Destination path token.
+        @return {None} Never returns normally.
+        @throws {OSError} Always raises with `errno.EXDEV`.
+        """
+
+        del source, destination
+        raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+    monkeypatch.setattr(pdf_split_by_toc, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(pdf_split_by_toc.subprocess, "run", _fake_run)
+    monkeypatch.setattr(pdf_split_by_toc.os, "replace", _raise_exdev)
+
+    monkeypatch.chdir(tmp_path)
+    result = pdf_split_by_toc.run([str(input_pdf)])
+
+    chunk = input_pdf.parent / "book_01_Intro.pdf"
+    assert result == 0
+    assert chunk.read_text(encoding="utf-8") == toc_artifact
 
 
 def test_pdf_split_by_format_runs_required_tools(monkeypatch, tmp_path):
@@ -251,10 +326,91 @@ def test_pdf_split_by_format_runs_required_tools(monkeypatch, tmp_path):
     monkeypatch.setattr(pdf_split_by_format, "_has_toc", lambda _pdf: False)
     monkeypatch.setattr(pdf_split_by_format.subprocess, "run", _fake_run)
 
+    monkeypatch.chdir(tmp_path)
     result = pdf_split_by_format.run([str(input_pdf)])
 
     assert result == 0
     assert any(cmd[0] == "qpdf" for cmd in calls)
+
+
+def test_pdf_split_by_format_promotes_output_across_devices(monkeypatch, tmp_path):
+    """
+    @brief Validate cross-device temp-output promotion in pdf-split-by-format.
+    @details Simulates `os.replace` failing with `errno.EXDEV` while TOC data
+      is available and asserts the generated chunk still receives the
+      pdftk-produced artifact through the copy-based fallback instead of
+      silently losing its table of contents.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param tmp_path {pathlib.Path} Isolated filesystem fixture.
+    @return {None} Assertions only.
+    @satisfies TST-007, REQ-032
+    """
+
+    input_pdf = tmp_path / "formats.pdf"
+    input_pdf.write_text("dummy")
+    toc_artifact = (
+        "NumberOfPages: 3\n"
+        "BookmarkBegin\n"
+        "BookmarkTitle: Intro\n"
+        "BookmarkLevel: 1\n"
+        "BookmarkPageNumber: 1\n"
+        "BookmarkBegin\n"
+        "BookmarkTitle: End\n"
+        "BookmarkLevel: 1\n"
+        "BookmarkPageNumber: 3\n"
+    )
+
+    def _fake_run(command, **kwargs):
+        """
+        @brief Mock subprocess.run for pdf-split-by-format.
+        @details Captures invocation list and writes the deterministic TOC
+          artifact to every pdftk output target (dump-data file and
+          update-info output) so the promotion result stays observable.
+        @param command {list[str]} Command token vector.
+        @param kwargs {dict[str, object]} Execution options.
+        @return {subprocess.CompletedProcess[str]} Successful completion object.
+        """
+
+        del kwargs
+        if command[0] == "pdftk" and "output" in command:
+            output_path = command[command.index("output") + 1]
+            with open(output_path, "w", encoding="utf-8") as handle:
+                handle.write(toc_artifact)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    def _raise_exdev(source, destination):
+        """
+        @brief Simulate cross-device rename rejection.
+        @details Replaces `os.replace` with the exact `OSError` raised by the
+          operating system when source and destination live on different
+          filesystems, keeping the reproducer independent from the host
+          mount layout.
+        @param source {str} Source path token.
+        @param destination {str} Destination path token.
+        @return {None} Never returns normally.
+        @throws {OSError} Always raises with `errno.EXDEV`.
+        """
+
+        del source, destination
+        raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+    monkeypatch.setattr(pdf_split_by_format, "require_commands", lambda *_cmds: None)
+    monkeypatch.setattr(pdf_split_by_format, "_get_total_pages", lambda _pdf: 3)
+    monkeypatch.setattr(
+        pdf_split_by_format,
+        "_get_page_formats",
+        lambda _pdf, _pages: ["A4", "A4", "A3"],
+    )
+    monkeypatch.setattr(pdf_split_by_format, "_has_toc", lambda _pdf: True)
+    monkeypatch.setattr(pdf_split_by_format.subprocess, "run", _fake_run)
+    monkeypatch.setattr(pdf_split_by_format.os, "replace", _raise_exdev)
+
+    monkeypatch.chdir(tmp_path)
+    result = pdf_split_by_format.run([str(input_pdf)])
+
+    chunk = input_pdf.parent / "formats_01.pdf"
+    assert result == 0
+    assert chunk.read_text(encoding="utf-8") == toc_artifact
 
 
 def test_pdf_toc_clean_generates_toc_clean_filename(monkeypatch, tmp_path):

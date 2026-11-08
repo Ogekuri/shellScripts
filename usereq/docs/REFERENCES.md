@@ -974,13 +974,15 @@ from shell_scripts.utils import require_commands, print_error
 
 ---
 
-# pdf_split_by_format.py | Python | 243L | 9 symbols | 5 imports | 1 comments
+# pdf_split_by_format.py | Python | 286L | 10 symbols | 7 imports | 3 comments
 > Path: `src/shell_scripts/commands/pdf_split_by_format.py`
 
 ## Imports
 ```
+import errno
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from shell_scripts.utils import require_commands, print_error
@@ -988,45 +990,64 @@ from shell_scripts.utils import require_commands, print_error
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L9)
-- var `DESCRIPTION = "Split PDF into parts by page format changes."` (L10)
-### fn `def print_help(version)` (L13-22)
+- var `PROGRAM = "shellscripts"` (L11)
+- var `DESCRIPTION = "Split PDF into parts by page format changes."` (L12)
+### fn `def print_help(version)` (L15-24)
 
-### fn `def _get_page_formats(pdf, total_pages)` `priv` (L23-37)
+### fn `def _get_page_formats(pdf, total_pages)` `priv` (L25-39)
 
-### fn `def _get_total_pages(pdf)` `priv` (L38-50)
+### fn `def _get_total_pages(pdf)` `priv` (L40-52)
 
-### fn `def _has_toc(pdf)` `priv` (L51-69)
+### fn `def _has_toc(pdf)` `priv` (L53-71)
 
-### fn `def _extract_toc_for_range(data_file, start, end)` `priv` (L70-104)
+### fn `def _extract_toc_for_range(data_file, start, end)` `priv` (L72-106)
 
-### fn `def _apply_toc(output_file, toc_content)` `priv` (L105-137)
+### fn `def _promote_temp_output(temp_output, output_file)` `priv` (L107-130)
+- @brief Promote one pdftk-produced temporary artifact onto the final output path.
+- @details Attempts same-device atomic replacement via `os.replace`. On `OSError` with `errno.EXDEV` (temporary directory and output directory located on different filesystems), falls back to `shutil.move`, which copies the artifact content and removes the temporary source. All other `OSError` values propagate unchanged to preserve pre-existing failure semantics. Time complexity O(1) for same-device renames, O(n) over file size for the cross-device copy fallback.
+- @param temp_output {str} Temporary artifact path produced by the external tool chain.
+- @param output_file {str} Final chunk path that must receive the artifact content.
+- @return {None} Applies destination filesystem mutation.
+- @throws {OSError} Propagated for non-EXDEV replacement failures.
+- @satisfies REQ-031, REQ-032
 
-### fn `def run(args)` (L138-244)
+### fn `def _apply_toc(output_file, toc_content)` `priv` (L131-180)
+- @brief Reapply in-range TOC data to one generated chunk file.
+- @details Writes `toc_content` into a temporary `.info` payload, prepares temporary PDF artifacts, strips object streams from `output_file` via `qpdf`, rebuilds the chunk with TOC metadata via `pdftk update_info`, and promotes the artifact onto `output_file` through `_promote_temp_output` so a temporary directory on a different filesystem cannot silently drop the chunk TOC. Tool-chain failures are contained without aborting the split loop. Time complexity O(m) over TOC content size plus external process latency.
+- @param output_file {str} Generated chunk path receiving the TOC metadata.
+- @param toc_content {str} Range-filtered pdftk dump-data bookmark payload.
+- @return {None} Mutates `output_file` content on success.
+- @throws {OSError} Propagated when temporary payload creation, unlink, or non-EXDEV promotion fails.
+- @satisfies REQ-032
+
+### fn `def run(args)` (L181-287)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|9||
-|`DESCRIPTION`|var|pub|10||
-|`print_help`|fn|pub|13-22|def print_help(version)|
-|`_get_page_formats`|fn|priv|23-37|def _get_page_formats(pdf, total_pages)|
-|`_get_total_pages`|fn|priv|38-50|def _get_total_pages(pdf)|
-|`_has_toc`|fn|priv|51-69|def _has_toc(pdf)|
-|`_extract_toc_for_range`|fn|priv|70-104|def _extract_toc_for_range(data_file, start, end)|
-|`_apply_toc`|fn|priv|105-137|def _apply_toc(output_file, toc_content)|
-|`run`|fn|pub|138-244|def run(args)|
+|`PROGRAM`|var|pub|11||
+|`DESCRIPTION`|var|pub|12||
+|`print_help`|fn|pub|15-24|def print_help(version)|
+|`_get_page_formats`|fn|priv|25-39|def _get_page_formats(pdf, total_pages)|
+|`_get_total_pages`|fn|priv|40-52|def _get_total_pages(pdf)|
+|`_has_toc`|fn|priv|53-71|def _has_toc(pdf)|
+|`_extract_toc_for_range`|fn|priv|72-106|def _extract_toc_for_range(data_file, start, end)|
+|`_promote_temp_output`|fn|priv|107-130|def _promote_temp_output(temp_output, output_file)|
+|`_apply_toc`|fn|priv|131-180|def _apply_toc(output_file, toc_content)|
+|`run`|fn|pub|181-287|def run(args)|
 
 
 ---
 
-# pdf_split_by_toc.py | Python | 197L | 8 symbols | 5 imports | 1 comments
+# pdf_split_by_toc.py | Python | 240L | 9 symbols | 7 imports | 3 comments
 > Path: `src/shell_scripts/commands/pdf_split_by_toc.py`
 
 ## Imports
 ```
+import errno
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from shell_scripts.utils import require_commands, print_error
@@ -1034,31 +1055,48 @@ from shell_scripts.utils import require_commands, print_error
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L9)
-- var `DESCRIPTION = "Split PDF into chapters by TOC level-1 entries."` (L10)
-### fn `def print_help(version)` (L13-20)
+- var `PROGRAM = "shellscripts"` (L11)
+- var `DESCRIPTION = "Split PDF into chapters by TOC level-1 entries."` (L12)
+### fn `def print_help(version)` (L15-22)
 
-### fn `def _parse_level1_toc(dump_content)` `priv` (L21-39)
+### fn `def _parse_level1_toc(dump_content)` `priv` (L23-41)
 
-### fn `def _extract_toc_for_range(dump_content, start, end)` `priv` (L40-72)
+### fn `def _extract_toc_for_range(dump_content, start, end)` `priv` (L42-74)
 
-### fn `def _sanitize_title(title)` `priv` (L73-78)
+### fn `def _sanitize_title(title)` `priv` (L75-80)
 
-### fn `def _apply_toc_to_file(output_file, toc_content)` `priv` (L79-108)
+### fn `def _promote_temp_output(temp_output, output_file)` `priv` (L81-104)
+- @brief Promote one pdftk-produced temporary artifact onto the final output path.
+- @details Attempts same-device atomic replacement via `os.replace`. On `OSError` with `errno.EXDEV` (temporary directory and output directory located on different filesystems), falls back to `shutil.move`, which copies the artifact content and removes the temporary source. All other `OSError` values propagate unchanged to preserve pre-existing failure semantics. Time complexity O(1) for same-device renames, O(n) over file size for the cross-device copy fallback.
+- @param temp_output {str} Temporary artifact path produced by the external tool chain.
+- @param output_file {str} Final chunk path that must receive the artifact content.
+- @return {None} Applies destination filesystem mutation.
+- @throws {OSError} Propagated for non-EXDEV replacement failures.
+- @satisfies REQ-031, REQ-032
 
-### fn `def run(args)` (L109-198)
+### fn `def _apply_toc_to_file(output_file, toc_content)` `priv` (L105-151)
+- @brief Reapply rebased TOC data to one generated chunk file.
+- @details Writes `toc_content` into a temporary `.info` payload, strips object streams from `output_file` via `qpdf`, rebuilds the chunk with TOC metadata via `pdftk update_info`, and promotes the artifact onto `output_file` through `_promote_temp_output` so a temporary directory on a different filesystem cannot crash chunk generation. Emits a warning and keeps the original chunk when the tool chain fails. Time complexity O(m) over TOC content size plus external process latency.
+- @param output_file {str} Generated chunk path receiving the TOC metadata.
+- @param toc_content {str} Rebased pdftk dump-data bookmark payload.
+- @return {None} Mutates `output_file` content on success.
+- @throws {OSError} Propagated when temporary payload creation, unlink, or non-EXDEV promotion fails.
+- @satisfies REQ-031
+
+### fn `def run(args)` (L152-241)
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|9||
-|`DESCRIPTION`|var|pub|10||
-|`print_help`|fn|pub|13-20|def print_help(version)|
-|`_parse_level1_toc`|fn|priv|21-39|def _parse_level1_toc(dump_content)|
-|`_extract_toc_for_range`|fn|priv|40-72|def _extract_toc_for_range(dump_content, start, end)|
-|`_sanitize_title`|fn|priv|73-78|def _sanitize_title(title)|
-|`_apply_toc_to_file`|fn|priv|79-108|def _apply_toc_to_file(output_file, toc_content)|
-|`run`|fn|pub|109-198|def run(args)|
+|`PROGRAM`|var|pub|11||
+|`DESCRIPTION`|var|pub|12||
+|`print_help`|fn|pub|15-22|def print_help(version)|
+|`_parse_level1_toc`|fn|priv|23-41|def _parse_level1_toc(dump_content)|
+|`_extract_toc_for_range`|fn|priv|42-74|def _extract_toc_for_range(dump_content, start, end)|
+|`_sanitize_title`|fn|priv|75-80|def _sanitize_title(title)|
+|`_promote_temp_output`|fn|priv|81-104|def _promote_temp_output(temp_output, output_file)|
+|`_apply_toc_to_file`|fn|priv|105-151|def _apply_toc_to_file(output_file, toc_content)|
+|`run`|fn|pub|152-241|def run(args)|
 
 
 ---
