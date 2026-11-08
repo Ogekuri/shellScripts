@@ -2070,7 +2070,7 @@ common xterm mouse tracking modes (`?1000l`..`?1016l`).
 
 ---
 
-# version_check.py | Python | 323L | 26 symbols | 8 imports | 15 comments
+# version_check.py | Python | 324L | 26 symbols | 8 imports | 15 comments
 > Path: `src/shell_scripts/version_check.py`
 
 ## Imports
@@ -2196,14 +2196,14 @@ object. Time complexity O(n) over payload size.
 - @throws {KeyError} When `tag_name` field is absent.
 - @satisfies DES-019, REQ-076
 
-### fn `def print_remote_latest_versions(current_version: str) -> None` (L261-287)
+### fn `def print_remote_latest_versions(current_version: str) -> None` (L261-288)
 - @brief Print PyPI and GitHub latest-version report lines.
-- @details Emits one `<source> latest: <version>` line per remote source in fixed order (PyPI, GitHub). A failed source lookup prints one bright-red error line instead of its version line, and the remaining source is still processed. Complexity O(1) excluding network latency.
+- @details Emits one `<source> latest: <version>` line per remote source in fixed order (PyPI, GitHub). A failed source lookup prints one bright-red `<source> latest: unknown (<reason>)` line where `<reason>` is the `_format_request_error` descriptor of the actual failure, and the remaining source is still processed. Complexity O(1) excluding network latency.
 - @param current_version {str} Installed package version used in User-Agent.
 - @return {None} Writes two report or error lines to stdout.
-- @satisfies REQ-003, REQ-075, DES-020
+- @satisfies REQ-003, REQ-075, REQ-084, DES-020
 
-### fn `def check_for_updates(current_version: str) -> None` (L288-324)
+### fn `def check_for_updates(current_version: str) -> None` (L289-325)
 - @brief Execute the startup PyPI registry version check.
 - @details Applies cooldown gating unless the current CLI invocation requests `--version` or `--ver`, performs the PyPI latest-version HTTP request, prints a bright-green update line for newer releases, persists a 3600-second success cooldown or an 86400-second request-error cooldown for every request outcome, prints bright-red request errors, and suppresses propagation of non-HTTP request exceptions. Complexity O(1) excluding network latency and JSON parsing.
 - @param current_version {str} Installed package version string.
@@ -2238,6 +2238,6 @@ object. Time complexity O(n) over payload size.
 |`_fetch_json_payload`|fn|priv|194-195|def _fetch_json_payload(|
 |`fetch_pypi_latest_version`|fn|pub|219-239|def fetch_pypi_latest_version(current_version: str) -> str|
 |`fetch_github_latest_release`|fn|pub|240-260|def fetch_github_latest_release(current_version: str) -> str|
-|`print_remote_latest_versions`|fn|pub|261-287|def print_remote_latest_versions(current_version: str) ->...|
-|`check_for_updates`|fn|pub|288-324|def check_for_updates(current_version: str) -> None|
+|`print_remote_latest_versions`|fn|pub|261-288|def print_remote_latest_versions(current_version: str) ->...|
+|`check_for_updates`|fn|pub|289-325|def check_for_updates(current_version: str) -> None|
 

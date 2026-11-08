@@ -263,11 +263,12 @@ def print_remote_latest_versions(current_version: str) -> None:
 
     @details Emits one `<source> latest: <version>` line per remote source in
     fixed order (PyPI, GitHub). A failed source lookup prints one bright-red
-    error line instead of its version line, and the remaining source is still
-    processed. Complexity O(1) excluding network latency.
+    `<source> latest: unknown (<reason>)` line where `<reason>` is the
+    `_format_request_error` descriptor of the actual failure, and the remaining
+    source is still processed. Complexity O(1) excluding network latency.
     @param current_version {str} Installed package version used in User-Agent.
     @return {None} Writes two report or error lines to stdout.
-    @satisfies REQ-003, REQ-075, DES-020
+    @satisfies REQ-003, REQ-075, REQ-084, DES-020
     """
 
     for source_label, fetch_version in (
@@ -278,8 +279,8 @@ def print_remote_latest_versions(current_version: str) -> None:
             latest_version = fetch_version(current_version).lstrip("v")
         except Exception as error:
             print(
-                f"{BRIGHT_RED}{source_label} latest check failed: "
-                f"{_format_request_error(error)}.{RESET}"
+                f"{BRIGHT_RED}{source_label} latest: unknown "
+                f"({_format_request_error(error)}){RESET}"
             )
             continue
         print(f"{source_label} latest: {latest_version}")

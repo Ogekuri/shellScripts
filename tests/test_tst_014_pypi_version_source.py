@@ -15,6 +15,7 @@
 import json
 import types
 import urllib.error
+from email.message import Message
 
 import shell_scripts.core as core
 from shell_scripts.config import get_default_runtime_config
@@ -204,12 +205,12 @@ def test_print_remote_latest_versions_reports_failed_source_and_continues(
     """
     @brief Validate per-source error reporting during version report.
     @details Forces the PyPI lookup to raise a non-HTTP exception and asserts
-      one bright-red failure line for PyPI while the GitHub line is still
-      emitted.
+      the bright-red `PyPI latest: unknown (<reason>)` failure line while the
+      GitHub line is still emitted.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
-    @satisfies TST-014, DES-020
+    @satisfies TST-014, REQ-084, DES-020
     """
 
     def _raise_url_error(_version):
@@ -229,9 +230,52 @@ def test_print_remote_latest_versions_reports_failed_source_and_continues(
     version_check.print_remote_latest_versions("0.1.0")
     captured = capsys.readouterr()
 
-    assert "PyPI latest check failed" in captured.out
-    assert "PyPI latest:" not in captured.out
+    expected_output = "PyPI latest: unknown (URLError: <urlopen error pypi unreachable>)"
+    assert expected_output in captured.out
+    assert "PyPI latest check failed" not in captured.out
     assert "GitHub latest: 0.1.0" in captured.out
+
+
+def test_print_remote_latest_versions_reports_github_http_404(
+    monkeypatch,
+    capsys,
+):
+    """
+    @brief Validate GitHub HTTP failure rendering during version report.
+    @details Forces the GitHub lookup to raise an HTTP 404 error and asserts
+      the bright-red `GitHub latest: unknown (HTTP 404)` failure line while
+      the PyPI line is still emitted.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
+    @return {None} Assertions only.
+    @satisfies TST-014, REQ-084, DES-020
+    """
+
+    def _raise_http_404(_version):
+        """
+        @brief Simulate GitHub API HTTP 404 failure.
+        @param _version {str} Unused installed version.
+        @return {None} Always raises.
+        @throws {urllib.error.HTTPError} Deterministic HTTP failure.
+        """
+        raise urllib.error.HTTPError(
+            version_check.GITHUB_API_URL, 404, "Not Found", Message(), None
+        )
+
+    monkeypatch.setattr(
+        version_check, "fetch_pypi_latest_version", lambda _version: "0.1.0"
+    )
+    monkeypatch.setattr(
+        version_check, "fetch_github_latest_release", _raise_http_404
+    )
+
+    version_check.print_remote_latest_versions("0.1.0")
+    captured = capsys.readouterr()
+
+    expected_output = "GitHub latest: unknown (HTTP 404)"
+    assert expected_output in captured.out
+    assert "GitHub latest check failed" not in captured.out
+    assert "PyPI latest: 0.1.0" in captured.out
 
 
 def test_main_version_prints_installed_pypi_and_github_lines(
