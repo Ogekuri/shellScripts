@@ -1,7 +1,24 @@
 # Changelog
 
-## [0.24.1](https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.24.1) - 2026-11-08
+## [0.25.0](https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0) - 2026-11-09
+### ⛰️  Features
+- add Antigravity CLI launcher with YOLO mode and alphabetical AI CLI help [useReq] *(agy)*
+  - Add agy command executing agy --dangerously-skip-permissions via blocking
+  - subprocess.run with inherited stdio, harmonized with other AI launchers (REQ-085)
+  - Render AI CLI launch tokens in alphabetical order in agy inline help (REQ-086)
+  - Register agy in static command map and global AI help section (DES-001, DES-014)
+  - Add TST-017 pytest suite covering argv vector, stdio inheritance, registry
+  - exposure, and alphabetical help listing
+  - Update SRS to 0.6.30 with REQ-085/REQ-086/TST-017 and refresh WORKFLOW/REFERENCES
+
 ### 🚜  Changes
+- BREAKING CHANGE: remove ai-install command, installer module, requirements, and tests [useReq] *(ai-install)*
+  - Delete src/shell_scripts/commands/ai_install.py and tests/test_tst_003_ai_install.py
+  - Deregister ai-install from static command map and global AI help section (DES-001, DES-014)
+  - Remove installer requirements REQ-006..REQ-010, REQ-067, REQ-072..REQ-074, DES-013, TST-003
+  - Restrict PRJ-003 to AI CLI launch; bump SRS to 0.6.31; refresh WORKFLOW/REFERENCES
+  - Update is_windows doc @satisfies after removing DES-013/REQ-008 (utils.py)
+  - Breaking: shellscripts ai-install now resolves as unknown command (REQ-002 path)
 - render failed lookups as latest unknown with reason [useReq] *(version-check)*
   - REQ-084: failed --version source lookups now print
   - "<source> latest: unknown (<reason>)" in bright red instead of
@@ -755,7 +772,7 @@
 - \[0.22.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.22.0
 - \[0.23.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.0
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
-- \[0.24.1\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.1
+- \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -781,4 +798,4 @@
 [0.22.0]: https://github.com/Ogekuri/shellScripts/compare/v0.21.0..v0.22.0
 [0.23.0]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
-[0.24.1]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.24.1
+[0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
