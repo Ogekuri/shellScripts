@@ -85,6 +85,12 @@ Upgrade to the latest published PyPI release:
 s --upgrade
 ```
 
+Force a complete re-download and reinstallation by appending the forced-reinstall options (`--force --reinstall --refresh`) to the configured upgrade command:
+
+```bash
+s --upgrade --force
+```
+
 
 ### Run Without Installing (uvx)
 
@@ -124,6 +130,12 @@ s --upgrade --dev
 s --upgrade --develop
 ```
 
+Add `--force` to force a complete re-download and reinstallation of the tagged release:
+
+```bash
+s --upgrade --develop --force
+```
+
 
 ## Management Commands
 
@@ -140,6 +152,7 @@ Built-in management flags:
 - `--help` : show full help or command help (`shellscripts --help <command>`).
 - `--version` / `--ver` : print the installed version plus the latest versions available on PyPI and GitHub.
 - `--upgrade` : run the configured upgrade command automatically on Linux (installs the latest PyPI release by default), otherwise print the manual command.
+- `--upgrade --force` : force download and complete reinstallation by appending `--force --reinstall --refresh` to the `--upgrade` or `--upgrade --dev`/`--upgrade --develop` command.
 - `--upgrade --dev` / `--upgrade --develop` : upgrade from the latest tagged GitHub release instead of PyPI, regardless of its source branch.
 - `--uninstall` : run configured uninstall command automatically on Linux, otherwise print the manual command.
 - `--write-config` : write the default runtime configuration file.

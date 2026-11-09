@@ -3,9 +3,10 @@
 
 @details Provides global help rendering, management command execution
 (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`,
-`--develop`/`--dev` upgrade selector), runtime
-configuration bootstrap, and subcommand delegation to lazily imported modules.
-@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078
+`--develop`/`--dev` upgrade selector, `--force` forced-reinstall selector),
+runtime configuration bootstrap, and subcommand delegation to lazily imported
+modules.
+@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090
 """
 
 import sys
@@ -36,6 +37,14 @@ PROGRAM = "shellscripts"
 #  global help sections.
 #  @satisfies REQ-066
 HELP_COMMAND_COLUMN_WIDTH = 16
+
+## @var FORCED_REINSTALL_OPTIONS
+#  @brief Option suffix appended to upgrade commands when `--force` is active.
+#  @details Standard forced-reinstall options for `uv tool install`: replace
+#  the installed tool entry, reinstall the package, and refresh cached remote
+#  metadata so the upgrade performs a full re-download and reinstallation.
+#  @satisfies REQ-088, REQ-089
+FORCED_REINSTALL_OPTIONS = "--force --reinstall --refresh"
 
 ## @var HELP_SECTION_COMMANDS
 #  @brief Ordered command groups for global help rendering.
@@ -143,6 +152,10 @@ def print_help(command_name=None):
     )
     print("                 instead of PyPI (alias: --develop).")
     print(
+        "  --force      - With --upgrade: force download and complete reinstallation"
+    )
+    print("                 (appends --force --reinstall --refresh).")
+    print(
         f"  --uninstall  - Uninstall {PROGRAM} on Linux; print manual command elsewhere."
     )
     print("  --write-config - Write default runtime config to user config directory.")
@@ -181,18 +194,21 @@ def _build_develop_upgrade_command(latest_tag: str) -> str:
     return template.replace("{tag}", latest_tag)
 
 
-def do_upgrade(develop: bool = False) -> int:
+def do_upgrade(develop: bool = False, force: bool = False) -> int:
     """@brief Execute Linux-only upgrade command resolved from runtime config.
 
     @details Reads management command string from runtime config key
     `management.upgrade` (PyPI default) or, when `develop` is set, resolves
     the latest GitHub release tag and composes the tag-pinned upgrade command;
-    executes it on Linux via shell invocation and prints the manual fallback
-    command on non-Linux systems.
-    @param develop {bool} Force upgrade from the latest GitHub release tag.
+    appends ` --force --reinstall --refresh` to the resolved command when
+    `force` is set; executes the composed command on Linux via shell
+    invocation and prints the manual fallback command on non-Linux systems.
+    Complexity O(n) over the composed command string length.
+    @param develop {bool} Select upgrade from the latest GitHub release tag.
+    @param force {bool} Append forced-reinstall options to the upgrade command.
     @return {int} `1` when develop tag resolution fails; subprocess return code
       on Linux; `0` on non-Linux fallback.
-    @satisfies REQ-004, REQ-076, REQ-078, REQ-045, REQ-056
+    @satisfies REQ-004, REQ-076, REQ-078, REQ-087, REQ-088, REQ-089, REQ-045, REQ-056
     """
 
     if develop:
@@ -204,6 +220,8 @@ def do_upgrade(develop: bool = False) -> int:
         install_cmd = _build_develop_upgrade_command(latest_tag)
     else:
         install_cmd = get_management_command("upgrade")
+    if force:
+        install_cmd = f"{install_cmd} {FORCED_REINSTALL_OPTIONS}"
     if is_linux():
         require_shell_command_executables(install_cmd)
         print(f"Upgrading {PROGRAM}...")
@@ -261,12 +279,14 @@ def main():
     @details Performs runtime OS detection, update check, runtime configuration
     load, and argument dispatch through management flags (`--version` prints
     installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI
-    or, with `--develop`/`--dev`, from the latest GitHub release tag) and
-    subcommands, then restores terminal raw/cbreak and disables legacy+xterm
+    or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force`
+    appends forced-reinstall options to the selected upgrade command; bare
+    `--develop`/`--dev`/`--force` selectors are rejected) and subcommands,
+    then restores terminal raw/cbreak and disables legacy+xterm
     mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`,
     `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090
     """
     saved_tty = capture_terminal_state()
     try:
@@ -289,10 +309,15 @@ def main():
 
         if first_arg == "--upgrade":
             develop = any(arg in ("--develop", "--dev") for arg in args[1:])
-            return do_upgrade(develop=develop)
+            force = "--force" in args[1:]
+            return do_upgrade(develop=develop, force=force)
 
         if first_arg in ("--develop", "--dev"):
             print_error("--develop/--dev must be used together with --upgrade.")
+            return 1
+
+        if first_arg == "--force":
+            print_error("--force must be used together with --upgrade.")
             return 1
 
         if first_arg == "--uninstall":

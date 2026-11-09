@@ -1,14 +1,16 @@
 """
-@brief Validate PyPI-primary version sourcing, version reporting, and develop upgrade flows.
+@brief Validate PyPI-primary version sourcing, version reporting, and upgrade flows.
 @details Verifies startup update checks against the PyPI JSON API, GitHub
   latest-release resolution, the three-line `--version` report, the PyPI
-  default upgrade command, the `--upgrade --dev`/`--develop` GitHub-tagged
-  upgrade command, develop-upgrade failure handling, and rejection of the
-  develop selector without `--upgrade`. All HTTP and subprocess boundaries are
-  monkeypatched; no real network, filesystem, clock, or randomness access.
+  default upgrade command, the forced-reinstall `--force` suffix on PyPI and
+  GitHub-tagged upgrade commands, the `--upgrade --dev`/`--develop`
+  GitHub-tagged upgrade command, develop-upgrade failure handling, and
+  rejection of the develop and force selectors without `--upgrade`. All HTTP
+  and subprocess boundaries are monkeypatched; no real network, filesystem,
+  clock, or randomness access.
   Level classification: Level 0 tests exercise single module functions;
   Level 1 tests exercise `core.main` dispatch with patched boundaries.
-@satisfies TST-014, REQ-003, REQ-075, REQ-076, REQ-077, REQ-078, DES-018, DES-019, DES-020
+@satisfies TST-014, REQ-003, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, DES-018, DES-019, DES-020
 @return {None} Pytest module scope.
 """
 
@@ -349,7 +351,7 @@ def test_do_upgrade_default_resolves_pypi_command(monkeypatch):
 
     result = core.do_upgrade()
 
-    expected_output = "uv tool install shellscripts --force"
+    expected_output = "uv tool install shellscripts"
     assert result == 0
     assert observed["shell"] is True
     assert observed["command"] == expected_output
@@ -363,7 +365,7 @@ def test_do_upgrade_develop_upgrades_from_latest_github_tag(monkeypatch):
       propagation.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-014, REQ-076, DES-019
+    @satisfies TST-014, REQ-076, REQ-087, DES-019
     """
     observed = {}
 
@@ -395,8 +397,99 @@ def test_do_upgrade_develop_upgrades_from_latest_github_tag(monkeypatch):
     result = core.do_upgrade(develop=True)
 
     expected_output = (
-        "uv tool install shellscripts --force "
+        "uv tool install shellscripts "
         "--from git+https://github.com/Ogekuri/shellScripts.git@v1.2.3"
+    )
+    assert result == 5
+    assert observed["shell"] is True
+    assert observed["command"] == expected_output
+
+
+def test_do_upgrade_force_appends_reinstall_options(monkeypatch):
+    """
+    @brief Validate the forced PyPI upgrade command contract.
+    @details Forces the Linux path, keeps the real runtime-config resolution,
+      and intercepts subprocess invocation to assert that `force=True` appends
+      the forced-reinstall option suffix to the default PyPI command.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-014, REQ-088
+    """
+    observed = {}
+
+    def _fake_run(command, shell=False):
+        """
+        @brief Mock subprocess.run for the upgrade path.
+        @param command {str} Shell command string.
+        @param shell {bool} Shell execution selector.
+        @return {types.SimpleNamespace} Object with returncode field.
+        """
+        observed["command"] = command
+        observed["shell"] = shell
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(core, "is_linux", lambda: True)
+    monkeypatch.setattr(
+        core, "require_shell_command_executables", lambda command: None
+    )
+    monkeypatch.setattr(
+        core,
+        "get_management_command",
+        lambda name: get_default_runtime_config()["management"][name],
+    )
+    monkeypatch.setattr(core.subprocess, "run", _fake_run)
+
+    result = core.do_upgrade(force=True)
+
+    expected_output = "uv tool install shellscripts --force --reinstall --refresh"
+    assert result == 0
+    assert observed["shell"] is True
+    assert observed["command"] == expected_output
+
+
+def test_do_upgrade_develop_force_appends_reinstall_options(monkeypatch):
+    """
+    @brief Validate the forced develop upgrade command contract.
+    @details Patches the latest-tag resolution and intercepts subprocess
+      invocation to assert that `develop=True, force=True` composes the
+      tag-pinned GitHub install command with the forced-reinstall suffix.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-014, REQ-089
+    """
+    observed = {}
+
+    def _fake_run(command, shell=False):
+        """
+        @brief Mock subprocess.run for the upgrade path.
+        @param command {str} Shell command string.
+        @param shell {bool} Shell execution selector.
+        @return {types.SimpleNamespace} Object with returncode field.
+        """
+        observed["command"] = command
+        observed["shell"] = shell
+        return types.SimpleNamespace(returncode=5)
+
+    monkeypatch.setattr(core, "is_linux", lambda: True)
+    monkeypatch.setattr(
+        core, "require_shell_command_executables", lambda command: None
+    )
+    monkeypatch.setattr(
+        core,
+        "get_management_command",
+        lambda name: get_default_runtime_config()["management"][name],
+    )
+    monkeypatch.setattr(
+        core, "fetch_github_latest_release", lambda _version: "v1.2.3"
+    )
+    monkeypatch.setattr(core.subprocess, "run", _fake_run)
+
+    result = core.do_upgrade(develop=True, force=True)
+
+    expected_output = (
+        "uv tool install shellscripts "
+        "--from git+https://github.com/Ogekuri/shellScripts.git@v1.2.3 "
+        "--force --reinstall --refresh"
     )
     assert result == 5
     assert observed["shell"] is True
@@ -481,10 +574,11 @@ def test_main_upgrade_accepts_develop_aliases(monkeypatch):
     """
     observed_calls = []
 
-    def _record_upgrade(develop=False):
+    def _record_upgrade(develop=False, force=False):
         """
-        @brief Record develop selector values.
+        @brief Record upgrade selector values.
         @param develop {bool} Develop selector flag.
+        @param force {bool} Forced-reinstall selector flag.
         @return {int} Deterministic success code.
         """
         observed_calls.append(develop)
@@ -503,3 +597,69 @@ def test_main_upgrade_accepts_develop_aliases(monkeypatch):
 
     expected_output = [True, True]
     assert observed_calls == expected_output
+
+
+def test_main_upgrade_forwards_force_selector(monkeypatch):
+    """
+    @brief Validate forwarding of the force selector on the upgrade flag.
+    @details Replaces `do_upgrade` with a recorder and asserts the develop and
+      force selector pairs for plain, forced, forced-develop, and forced-alias
+      invocations.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @return {None} Assertions only.
+    @satisfies TST-014, REQ-088, REQ-089
+    """
+    observed_calls = []
+
+    def _record_upgrade(develop=False, force=False):
+        """
+        @brief Record upgrade selector values.
+        @param develop {bool} Develop selector flag.
+        @param force {bool} Forced-reinstall selector flag.
+        @return {int} Deterministic success code.
+        """
+        observed_calls.append((develop, force))
+        return 0
+
+    monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
+    monkeypatch.setattr(core, "print_remote_latest_versions", lambda _version: None)
+    monkeypatch.setattr(core, "do_upgrade", _record_upgrade)
+
+    for argv_tail in (
+        ("--upgrade",),
+        ("--upgrade", "--force"),
+        ("--upgrade", "--develop", "--force"),
+        ("--upgrade", "--force", "--dev"),
+    ):
+        monkeypatch.setattr(core.sys, "argv", ["shellscripts", *argv_tail])
+        result = core.main()
+        assert result == 0
+
+    expected_output = [
+        (False, False),
+        (False, True),
+        (True, True),
+        (True, True),
+    ]
+    assert observed_calls == expected_output
+
+
+def test_main_rejects_force_flag_without_upgrade(monkeypatch, capsys):
+    """
+    @brief Validate rejection of the bare force selector flag.
+    @details Injects `--force` as first argument and asserts return code `1`
+      plus an explanatory error line without upgrade execution.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
+    @return {None} Assertions only.
+    @satisfies TST-014, REQ-090
+    """
+    monkeypatch.setattr(core, "check_for_updates", lambda _version: None)
+    monkeypatch.setattr(core, "print_remote_latest_versions", lambda _version: None)
+
+    monkeypatch.setattr(core.sys, "argv", ["shellscripts", "--force"])
+    result = core.main()
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "--force must be used together with --upgrade" in captured.err

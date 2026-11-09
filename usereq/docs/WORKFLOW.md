@@ -88,7 +88,7 @@
   - Shutdown: restores saved TTY state and disables legacy+xterm mouse tracking (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before returning explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
-  - `main(...)`: Entry dispatcher for all CLI invocations [`src/shell_scripts/core.py`]
+  - `main(...)`: Entry dispatcher for all CLI invocations, resolving the `--upgrade` develop (`--develop`/`--dev`) and forced-reinstall (`--force`) selectors and rejecting bare selector flags [`src/shell_scripts/core.py`]
     - `capture_terminal_state(...)`: Snapshot stdin termios attributes when stdin is a TTY and `termios` support is available [`src/shell_scripts/utils.py`]
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
     - `detect_runtime_os(...)`: Detect and cache normalized runtime OS token for startup-wide platform decisions [`src/shell_scripts/utils.py`]
@@ -116,7 +116,7 @@
       - `_format_request_error(...)`: Normalize the failed-source request error into the `unknown (<reason>)` detail text [`src/shell_scripts/version_check.py`]
     - `print_help(...)`: Print grouped global help sections or command-specific help [`src/shell_scripts/core.py`]
       - `get_command(...)`: Resolve command module by static mapping key [`src/shell_scripts/commands/__init__.py`]
-    - `do_upgrade(...)`: Linux-only self-upgrade wrapper supporting PyPI default mode and GitHub-tagged develop mode [`src/shell_scripts/core.py`]
+    - `do_upgrade(...)`: Linux-only self-upgrade wrapper supporting PyPI default mode, GitHub-tagged develop mode, and appending `FORCED_REINSTALL_OPTIONS` (`--force --reinstall --refresh`) to the resolved command when the `--force` selector is active [`src/shell_scripts/core.py`]
       - `fetch_github_latest_release(...)`: Resolve latest GitHub release tag for develop upgrade mode [`src/shell_scripts/version_check.py`]
         - `_fetch_json_payload(...)`: Fetch and decode one JSON payload over HTTP [`src/shell_scripts/version_check.py`]
       - `_build_develop_upgrade_command(...)`: Substitute the latest GitHub tag into the `management.upgrade_develop` command template [`src/shell_scripts/core.py`]
