@@ -44,8 +44,7 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 
 ## Feature Highlights
 - Single CLI entrypoint with command dispatch and grouped built-in help (`shellscripts` and alias `s`).
-- AI tooling bootstrap command (`ai-install`) with per-tool selectors for Codex, Copilot, Gemini, OpenCode, Claude, and Kiro.
-- Project-context launchers for AI CLIs (`claude`, `codex`, `copilot`, `gemini`, `kiro`, `opencode`, `pi`) and IDEs (`vscode`, `vsinsider`).
+- Project-context launchers for AI CLIs (`agy`, `claude`, `codex`, `copilot`, `gemini`, `kiro`, `opencode`, `pi`) and IDEs (`vscode`, `vsinsider`).
 - PDF workflow commands for crop, merge, split, TOC cleanup, and tiling.
 - DICOM helpers (`dicom2jpg`, `dicomviewer`) and video transcoders (`video2h264`, `video2h265`).
 - Project maintenance and automation commands (`req`, `clean`, `venv`, `tests`, `doxygen`, `ubuntu-dark-theme`).
@@ -56,9 +55,8 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 
 - Python `>=3.11`.
 - Astral `uv` is required for install and runtime flows (`uv tool install`, `uvx`, `uv run`).
-- Git is required for commands that enforce repository-root execution (`claude`, `codex`, `copilot`, `gemini`, `kiro`, `opencode`, `pi`, `clean`, `venv`, `tests`, `doxygen`, `vscode`, `vsinsider`).
+- Git is required for commands that enforce repository-root execution (`agy`, `claude`, `codex`, `copilot`, `gemini`, `kiro`, `opencode`, `pi`, `clean`, `venv`, `tests`, `doxygen`, `vscode`, `vsinsider`).
 - Command-specific external tools are required only for related commands:
-  - `npm` (and `sudo` on non-Windows) for npm-based `ai-install` targets.
   - `req` for the `req` command.
   - `doxygen` (plus optional `make` and `pdflatex`) for `doxygen`.
   - `gs`, `pdfinfo`, `qpdf`, `pdftk`, `plakativ` for PDF commands.
@@ -179,14 +177,14 @@ Top-level configuration keys:
 
 | Command | Purpose |
 |---|---|
-| `ai-install` | Install AI CLIs (all or selected tools). |
+| `agy` | Launch Antigravity CLI in project context (YOLO mode, pass-through args). |
 | `claude` | Launch Claude CLI in project context. |
 | `codex` | Launch Codex CLI in project context with auth sync and `CODEX_HOME`. |
 | `copilot` | Launch Copilot CLI in project context. |
 | `gemini` | Launch Gemini CLI in project context. |
 | `kiro` | Launch Kiro CLI in project context. |
 | `opencode` | Launch OpenCode CLI in project context. |
-| `pi` | Launch pi.dev CLI in project context (adds default `--tools` when missing). |
+| `pi` | Launch pi.dev CLI in project context (forwards all arguments unchanged). |
 | `clean` | Find and delete cache directories under the project root (or a passed directory). |
 | `req` | Run useReq bootstrap on current directory, first-level dirs, or recursively. |
 | `venv` | Recreate `.venv` and install `requirements.txt` if present. |
@@ -212,25 +210,13 @@ Top-level configuration keys:
 
 ### Selected Usage Examples
 
-Install all AI CLIs (default behavior):
+Launch Antigravity CLI in YOLO mode (command help lists the available AI CLIs in alphabetical order):
 
 ```bash
-s ai-install
+s agy
 ```
 
-Install only selected AI tools:
-
-```bash
-s ai-install --codex --gemini --claude
-```
-
-Run pi.dev with default tools injected automatically:
-
-```bash
-s pi
-```
-
-Override pi tools explicitly:
+Run pi.dev CLI forwarding all arguments unchanged (no implicit option injection):
 
 ```bash
 s pi --tools read,bash,grep,find
