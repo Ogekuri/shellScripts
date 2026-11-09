@@ -68,7 +68,6 @@ HELP_SECTION_COMMANDS = (
         "AI Commands",
         (
             "agy",
-            "ai-install",
             "claude",
             "codex",
             "copilot",

@@ -16,7 +16,6 @@ from types import ModuleType
 #  @satisfies PRJ-003, DES-001
 _COMMAND_MODULES = {
     "agy": "shell_scripts.commands.agy",
-    "ai-install": "shell_scripts.commands.ai_install",
     "clean": "shell_scripts.commands.clean",
     "claude": "shell_scripts.commands.claude",
     "codex": "shell_scripts.commands.codex",

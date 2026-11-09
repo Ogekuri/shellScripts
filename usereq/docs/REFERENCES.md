@@ -9,7 +9,6 @@
         │   ├── __init__.py
         │   ├── _dc_common.py
         │   ├── agy.py
-        │   ├── ai_install.py
         │   ├── bin_links.py
         │   ├── claude.py
         │   ├── clean.py
@@ -69,7 +68,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 82L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 81L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -80,7 +79,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L52-67)
+### fn `def get_command(name: str) -> ModuleType | None` (L51-66)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -92,7 +91,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @satisfies PRJ-003, DES-001
 - @satisfies PRJ-001, DES-001, DES-008, REQ-057, REQ-058
 
-### fn `def get_all_commands() -> dict[str, str]` (L68-83)
+### fn `def get_all_commands() -> dict[str, str]` (L67-82)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
@@ -102,8 +101,8 @@ Removing an entry removes command discoverability and dispatch reachability.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|52-67|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|68-83|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|51-66|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|67-82|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -214,139 +213,6 @@ and excludes installer command tokens.
 |`AI_CLI_COMMANDS`|var|pub|29||
 |`print_help`|fn|pub|41-63|def print_help(version)|
 |`run`|fn|pub|64-82|def run(args)|
-
-
----
-
-# ai_install.py | Python | 453L | 19 symbols | 13 imports | 25 comments
-> Path: `src/shell_scripts/commands/ai_install.py`
-
-## Imports
-```
-import json
-import os
-import platform
-import subprocess
-import shutil
-import zipfile
-import tempfile
-from pathlib import Path
-from shell_scripts.utils import (
-import urllib.error
-import urllib.request
-import urllib.error
-import urllib.request
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L33)
-- @brief Base CLI program name used in help output.
-- @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Install AI CLI tools (Codex, Copilot, Gemini, OpenCode, pi.dev, Claude, Kiro)."` (L38)
-- @brief One-line command description for dispatcher help surfaces.
-- @details Exposed by command registry introspection (`get_all_commands`).
-- var `TOOLS = {` (L44)
-- var `PI_PACKAGES = ("git:github.com/ferologics/pi-notify",)` (L71)
-- var `CLAUDE_BUCKET = (` (L73)
-- var `CLAUDE_ARTIFACT_CANDIDATES = {` (L77)
-- var `KIRO_CHANNEL_BASE_URL = "https://prod.download.cli.kiro.dev/stable"` (L82)
-- var `KIRO_MANIFEST_URL = f"{KIRO_CHANNEL_BASE_URL}/latest/manifest.json"` (L83)
-- var `KIRO_LINUX_VARIANT = "headless"` (L84)
-### fn `def print_help(version: str) -> None` (L87-110)
-- @brief Render command help for `ai-install`.
-- @details Prints supported selectors and execution contract for installer dispatch. The selector surface excludes any `--extra` compatibility flag.
-- @param version {str} CLI version string appended in usage output.
-- @return {None} Writes help text to stdout.
-- @satisfies DES-008
-
-### fn `def _install_npm_tool(tool_key)` `priv` (L111-157)
-- @brief Execute npm-based installer command for selected tool.
-- @details Resolves base npm command from static tool mapping, omits `sudo` on Linux and Windows, prepends `sudo` on other runtimes, and uses resolved `npm.cmd` path on Windows when available to avoid process-launch failures. For Windows Copilot installs, retries once after a non-zero first attempt to mitigate transient file-lock failures during binary replacement.
-- @param tool_key {str} Tool identifier key from `TOOLS`.
-- @return {bool} `True` when installation succeeds; `False` otherwise.
-- @satisfies DES-013, REQ-008, REQ-047, REQ-056, REQ-072
-
-### fn `def _normalize_kiro_linux_arch(machine_token)` `priv` (L158-179)
-- @brief Normalize machine architecture token for Kiro Linux packages.
-- @details Maps runtime machine names into manifest architecture keys accepted by Kiro headless Linux ZIP entries. Raises explicit error for unknown architecture to avoid ambiguous package selection.
-- @param machine_token {str} Raw `platform.machine()` token.
-- @return {str} Normalized architecture token (`x86_64` or `aarch64`).
-- @throws {RuntimeError} When architecture is not supported by Kiro installer.
-- @satisfies REQ-010, REQ-067
-
-### fn `def _detect_kiro_linux_libc()` `priv` (L180-195)
-- @brief Detect Linux libc class token for Kiro package selection.
-- @details Uses `platform.libc_ver()` to classify runtime libc as `musl` or `gnu`. Unknown or empty values default to `gnu` to keep deterministic package selection for glibc environments.
-- @return {str} libc class token (`musl` or `gnu`).
-- @satisfies REQ-010
-
-### fn `def _resolve_kiro_linux_download_path(manifest, arch_token, libc_token)` `priv` (L196-241)
-- @brief Resolve Kiro Linux ZIP download path from manifest metadata.
-- @details Filters manifest packages by Linux OS, headless ZIP variant, runtime architecture, and runtime libc class reflected in target triple. Returns first matching `download` path and fails explicitly when no match exists.
-- @param manifest {dict[str, object]} Parsed Kiro manifest JSON payload.
-- @param arch_token {str} Normalized architecture token (`x86_64|aarch64`).
-- @param libc_token {str} Normalized libc token (`gnu|musl`).
-- @return {str} Relative download path from manifest `packages[].download`.
-- @throws {RuntimeError} When no manifest package matches runtime filters.
-- @satisfies DES-013, REQ-010
-
-### fn `def _install_claude()` `priv` (L242-295)
-- @brief Install Claude CLI by direct binary download.
-- @details Downloads latest version metadata from configured bucket, resolves OS-specific Claude artifact candidates from runtime OS token, downloads the first available artifact, writes executable into `~/.claude/bin/claude`, and sets execute permissions on non-Windows runtimes.
-- @return {None} Executes side effects and prints result messages.
-- @throws {RuntimeError} When runtime OS has no configured package candidates.
-- @throws {urllib.error.URLError} When metadata or artifact download fails.
-- @throws {OSError} When destination write or permission update fails.
-- @satisfies DES-013, REQ-009
-
-### fn `def _install_pi() -> None` `priv` (L296-323)
-- @brief Install pi.dev CLI and required post-install pi packages.
-- @details Executes npm-based pi.dev CLI installation first. When npm installation succeeds, the function resolves the `pi` executable and installs each package from `PI_PACKAGES` using `pi install <package>` in tuple order. Package installation is skipped only when CLI installation fails.
-- @return {None} Executes side effects and prints result messages.
-- @satisfies DES-013, REQ-072, REQ-073, REQ-074
-
-### fn `def _install_kiro()` `priv` (L324-404)
-- @brief Install Kiro CLI binaries by ZIP extraction flow.
-- @details Rejects unsupported runtime OS values (`windows`, `darwin`) with explicit errors. On Linux, resolves runtime architecture/libc package from official stable manifest, downloads selected ZIP archive, extracts `kiro-cli*` binaries, and installs them into `~/.local/bin`.
-- @return {None} Executes side effects and prints result messages.
-- @throws {RuntimeError} When runtime OS is unsupported or manifest has no matching package.
-- @throws {urllib.error.URLError} When archive download fails.
-- @throws {json.JSONDecodeError} When manifest payload is malformed.
-- @throws {zipfile.BadZipFile} When downloaded archive is invalid.
-- @throws {OSError} When extraction/copy/permission updates fail.
-- @satisfies DES-013, REQ-010, REQ-067
-
-- var `ALL_INSTALLERS = {` (L405)
-### fn `def run(args: list[str]) -> int` (L416-454)
-- @brief Parse selectors and execute selected AI installer routines.
-- @details Accepts explicit selectors or defaults to the full installer set when omitted. Unknown selectors are rejected with return code `1`; no compatibility parsing exists for removed `--extra` behavior.
-- @param args {list[str]} CLI selector tokens for installer filtering.
-- @return {int} `0` on successful dispatch; `1` on unknown selector.
-- @satisfies REQ-006, REQ-007, REQ-073, REQ-074
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|33||
-|`DESCRIPTION`|var|pub|38||
-|`TOOLS`|var|pub|44||
-|`PI_PACKAGES`|var|pub|71||
-|`CLAUDE_BUCKET`|var|pub|73||
-|`CLAUDE_ARTIFACT_CANDIDATES`|var|pub|77||
-|`KIRO_CHANNEL_BASE_URL`|var|pub|82||
-|`KIRO_MANIFEST_URL`|var|pub|83||
-|`KIRO_LINUX_VARIANT`|var|pub|84||
-|`print_help`|fn|pub|87-110|def print_help(version: str) -> None|
-|`_install_npm_tool`|fn|priv|111-157|def _install_npm_tool(tool_key)|
-|`_normalize_kiro_linux_arch`|fn|priv|158-179|def _normalize_kiro_linux_arch(machine_token)|
-|`_detect_kiro_linux_libc`|fn|priv|180-195|def _detect_kiro_linux_libc()|
-|`_resolve_kiro_linux_download_path`|fn|priv|196-241|def _resolve_kiro_linux_download_path(manifest, arch_toke...|
-|`_install_claude`|fn|priv|242-295|def _install_claude()|
-|`_install_pi`|fn|priv|296-323|def _install_pi() -> None|
-|`_install_kiro`|fn|priv|324-404|def _install_kiro()|
-|`ALL_INSTALLERS`|var|pub|405||
-|`run`|fn|pub|416-454|def run(args: list[str]) -> int|
 
 
 ---
@@ -1831,7 +1697,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 325L | 9 symbols | 7 imports | 19 comments
+# core.py | Python | 324L | 9 symbols | 7 imports | 19 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1859,7 +1725,7 @@ global help sections.
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L114-168)
+### fn `def print_help(command_name=None)` (L113-167)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -1867,34 +1733,34 @@ maps directly to REQ-066 output expectations.
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L169-184)
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L168-183)
 - @brief Compose the develop upgrade command for one GitHub release tag.
 - @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
 - @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
 - @return {str} Fully substituted shell upgrade command.
 - @satisfies REQ-076, DES-019
 
-### fn `def do_upgrade(develop: bool = False) -> int` (L185-219)
+### fn `def do_upgrade(develop: bool = False) -> int` (L184-218)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; executes it on Linux via shell invocation and prints the manual fallback command on non-Linux systems.
 - @param develop {bool} Force upgrade from the latest GitHub release tag.
 - @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-076, REQ-078, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L220-242)
+### fn `def do_uninstall()` (L219-241)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L243-258)
+### fn `def do_write_config()` (L242-257)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L259-326)
+### fn `def main()` (L258-325)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
@@ -1906,12 +1772,12 @@ maps directly to REQ-066 output expectations.
 |`PROGRAM`|var|pub|32||
 |`HELP_COMMAND_COLUMN_WIDTH`|var|pub|38||
 |`HELP_SECTION_COMMANDS`|var|pub|46||
-|`print_help`|fn|pub|114-168|def print_help(command_name=None)|
-|`_build_develop_upgrade_command`|fn|priv|169-184|def _build_develop_upgrade_command(latest_tag: str) -> str|
-|`do_upgrade`|fn|pub|185-219|def do_upgrade(develop: bool = False) -> int|
-|`do_uninstall`|fn|pub|220-242|def do_uninstall()|
-|`do_write_config`|fn|pub|243-258|def do_write_config()|
-|`main`|fn|pub|259-326|def main()|
+|`print_help`|fn|pub|113-167|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|168-183|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|184-218|def do_upgrade(develop: bool = False) -> int|
+|`do_uninstall`|fn|pub|219-241|def do_uninstall()|
+|`do_write_config`|fn|pub|242-257|def do_write_config()|
+|`main`|fn|pub|258-325|def main()|
 
 
 ---
@@ -1984,7 +1850,7 @@ common xterm mouse tracking modes (`?1000l`..`?1016l`).
 - @brief Check whether runtime operating system is Windows.
 - @details Evaluates cached runtime token from `get_runtime_os`.
 - @return {bool} `True` when runtime OS is Windows; otherwise `False`.
-- @satisfies DES-013, REQ-008, REQ-047
+- @satisfies REQ-047
 
 ### fn `def is_linux()` (L164-174)
 - @brief Check whether runtime operating system is Linux.

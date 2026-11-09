@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.30"
-date: "2026-11-09T10:05:54Z"
+version: "0.6.31"
+date: "2026-11-09T10:34:10Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -36,7 +36,7 @@ Requirement ID prefixes used in this document are `PRJ`, `CTN`, `DES`, `REQ`, an
 On every modification, YAML front matter `date` and `version` MUST be updated and in-body revision history MUST NOT be added.
 
 ### 1.2 Project Scope
-shellScripts is a Python CLI package that dispatches utility subcommands for AI tool bootstrapping, PDF operations, DICOM operations, generic file diff/edit/view dispatching, project environment management, and editor/theme helpers.
+shellScripts is a Python CLI package that dispatches utility subcommands for AI CLI launching, PDF operations, DICOM operations, generic file diff/edit/view dispatching, project environment management, and editor/theme helpers.
 
 Repository structure (evidence-oriented view, depth-limited):
 
@@ -58,7 +58,6 @@ Repository structure (evidence-oriented view, depth-limited):
 │   │   ├── version_check.py
 │   │   └── commands/
 │   │       ├── __init__.py
-│   │       ├── ai_install.py
 │   │       ├── clean.py
 │   │       ├── {agy,claude,codex,copilot,gemini,kiro,opencode,pi}.py
 │   │       ├── {diff,edit,view}_cmd.py
@@ -91,7 +90,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ### 2.1 Project Functions
 - **PRJ-001**: MUST parse CLI arguments and route execution to management flags (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`) or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
-- **PRJ-003**: MUST expose subcommands for AI CLI installation/launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
+- **PRJ-003**: MUST expose subcommands for AI CLI launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against the PyPI registry with cooldown caching.
 - **PRJ-005**: MUST include a GitHub automation workflow script at `.github/workflows/release-pypi.yml`.
 - **PRJ-007**: MUST publish built distributions to PyPI via OIDC Trusted Publishing when a tagged version is committed on branch `master`.
@@ -120,7 +119,6 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-010**: MUST request deletion confirmation in `clean` unless `--yes` is provided.
 - **DES-011**: MUST implement centralized runtime configuration loading from `~/.config/shellScripts/config.json` with recursive merge semantics where missing keys preserve hardcoded defaults, including `req` providers and static checks.
 - **DES-012**: MUST provide a management operation that writes default runtime configuration JSON to `~/.config/shellScripts/config.json`, creating parent directories when absent.
-- **DES-013**: MUST resolve `ai-install` installer payload sources from detected runtime OS, including Linux npm no-`sudo` policy and Kiro package resolution via `https://prod.download.cli.kiro.dev/stable/latest/manifest.json`.
 - **DES-014**: MUST generate global help command listing from a fixed section-to-command mapping preserving section order and per-section command order.
 - **DES-015**: MUST pin every action referenced by `.github/workflows/release-pypi.yml` to a major version whose declared runtime is Node24 or newer.
 - **DES-016**: MUST gate PyPI publication in `release-pypi.yml` on tag membership of branch `master` while executing all other release steps for any tagged branch.
@@ -150,15 +148,6 @@ No explicit performance optimizations identified.
 - **REQ-077**: MUST reject `--develop` and `--dev` flags passed without `--upgrade` with an error line and return code `1`.
 - **REQ-078**: MUST make develop upgrade fail with a bright-red error line and return code `1` when the GitHub latest-tag resolution fails.
 - **REQ-005**: MUST execute the Linux `--uninstall` command from runtime config key `management.uninstall`, using default `uv tool uninstall shellscripts` when unset.
-- **REQ-006**: MUST execute all configured AI installers, including pi.dev, by default in `ai-install` when no selector options are provided.
-- **REQ-007**: MUST reject unknown `ai-install` selector options with return code `1`.
-- **REQ-008**: MUST install Codex, Copilot, Gemini, and OpenCode CLIs via `npm install -g` without `sudo` on Linux and Windows, and with `sudo` on macOS.
-- **REQ-009**: MUST install Claude CLI by downloading `latest` metadata, selecting runtime-OS binary package (`linux`, `windows`, `macos`), and installing the executable at `~/.claude/bin/claude`.
-- **REQ-010**: MUST install Kiro CLI only on Linux by resolving a headless ZIP package from `https://prod.download.cli.kiro.dev/stable/latest/manifest.json` using runtime architecture (`x86_64|aarch64`) and libc class (`gnu|musl`).
-- **REQ-072**: MUST install pi.dev CLI in `ai-install` via `npm install -g @mariozechner/pi-coding-agent` with the same runtime-OS sudo policy used for other npm-based AI installers.
-- **REQ-073**: MUST execute `pi install git:github.com/ferologics/pi-notify` after successful pi.dev CLI installation in `ai-install`.
-- **REQ-074**: MUST emit the same start/result installer output pattern for `pi install git:github.com/ferologics/pi-notify` as other `ai-install` tools.
-- **REQ-067**: MUST reject Kiro installation on Windows and macOS with explicit unsupported-platform error output and without attempting package download or extraction.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
 - **REQ-014**: MUST set `CODEX_HOME` to `<project-root>/.codex` and execute `codex --yolo` in `codex` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-015**: MUST execute `copilot --yolo --allow-all-tools --no-auto-update` in `copilot` via `subprocess.run` with inherited stdio and blocking wait.
@@ -225,7 +214,7 @@ No explicit performance optimizations identified.
 ## 4. Test Requirements
 
 ### 4.1 Coverage Summary
-Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, AI installers, Antigravity CLI launch, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
+Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, Antigravity CLI launch, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
 High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
 The release workflow gates all release artifact creation and publication on a dedicated pre-release verification job covered by static parsing tests.
@@ -234,7 +223,6 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 ### 4.2 Verification Requirements
 - **TST-001**: MUST verify REQ-001, REQ-002, REQ-047, and REQ-066 by invoking `shell_scripts.core.main`, passing only if return codes, grouped help/error outputs, and startup OS-detection invocation match specified behavior.
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting command values resolved from runtime config with default command fallback and propagated return codes.
-- **TST-003**: MUST verify REQ-006 through REQ-010, REQ-067, and REQ-072 through REQ-074 by monkeypatching installer call sites and passing only if selector parsing, npm sudo policy, pi notify install order, and Kiro platform gates are correct.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
 - **TST-005**: MUST verify REQ-014 through REQ-021, REQ-043 through REQ-044, and REQ-068 through REQ-069 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, codex auth synchronization, absence of implicit `--tools` injection, and propagated return codes match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
@@ -269,7 +257,6 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | DES-007, REQ-023, REQ-024, REQ-064 | `src/shell_scripts/commands/diff_cmd.py`; `src/shell_scripts/commands/edit_cmd.py`; `src/shell_scripts/commands/view_cmd.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `diff`/`edit`/`view` wrappers call shared dispatch; missing file argument returns `2`; selected external command is launched via `subprocess.run` with inherited stdio and blocking wait. |
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
-| REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-067, REQ-072, REQ-073, REQ-074 | `src/shell_scripts/commands/ai_install.py` | `run`, `_install_npm_tool`, `_install_claude`, `_install_kiro`, `_install_pi` | Default installer selection is all tools including pi.dev; unknown options fail; npm install command omits `sudo` on Linux and Windows and uses `sudo` on macOS; pi installer always installs CLI and then installs `pi install git:github.com/ferologics/pi-notify`; Kiro installer resolves Linux headless ZIP package from official stable manifest and rejects Windows/macOS with explicit unsupported-platform errors. |
 | REQ-014, REQ-043, REQ-044, REQ-064 | `src/shell_scripts/commands/codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; copies `~/.codex/auth.json` into `<project>/.codex/auth.json` before launch and copies back after process termination, replacing existing file or symlink targets; emits one informational output line for each copy operation; executes `codex --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-015, REQ-064 | `src/shell_scripts/commands/copilot.py` | `run` | Executes `copilot --yolo --allow-all-tools --no-auto-update` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-016, REQ-064 | `src/shell_scripts/commands/gemini.py` | `run` | Executes `gemini --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
@@ -290,6 +277,6 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | REQ-034, REQ-035 | `src/shell_scripts/commands/pdf_crop.py` | `run`, `_parse_page_range`, `_compute_auto_bbox` | Supports bbox/margins/analyze-pages/pages options and validates range syntax `N`, `N-`, `-N`, `N-M`. |
 | REQ-036, REQ-037 | `src/shell_scripts/commands/tests_cmd.py` | `run` | Creates `.venv` if missing, conditionally installs `requirements.txt`, runs pytest with `PYTHONPATH` prefixed by `src`. |
 | REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-062, REQ-063 | `src/shell_scripts/commands/req_cmd.py`; `src/shell_scripts/config.py` | `run`, `_prepare_target_directory`, `_build_req_args`, `get_req_profile` | `req` command resolves targets by selector mode, removes predefined cleanup paths, emits `deleted`/`skip` cleanup evidence with file-or-dir labels for removals, and executes external `req` with hardcoded base args plus runtime-configured providers/static checks. |
-| TST-001..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
+| TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
 | DES-021..DES-027, REQ-079..REQ-082, TST-015 | `scripts/pre-release-check.sh`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `check_artifacts`, `cleanup_artifacts`, `fail_fast` | Script resolves the repository root, runs pytest with `PYTHONPATH=src` via `.venv/bin/python3` or `python3`, removes `dist`, builds via `uv build` or `python3 -m build`, verifies sdist and wheel artifacts, removes `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories via an EXIT trap on success and failure paths, prints `PASS`/`FAIL`/`clean` evidence lines, exits `1` on first failure and `0` on full success; tests assert script structure and Bash syntax. |
 | DES-028, DES-029, REQ-083, TST-016 | `.github/workflows/release-pypi.yml`; `tests/test_tst_016_release_precheck_gating.py` | `jobs.pre-release-check`, `jobs.build-release.needs` | Workflow runs `scripts/pre-release-check.sh` in a dedicated `pre-release-check` job (checkout, `setup-uv@v10.3.3`, `uv sync`, script execution) and declares `needs: [check-branch, pre-release-check]` on `build-release`, so any check failure skips artifact creation, attestation, changelog, GitHub release, and PyPI publication steps; tests assert job presence, script invocation, and needs declaration. |

@@ -155,7 +155,7 @@ def is_windows():
 
     @details Evaluates cached runtime token from `get_runtime_os`.
     @return {bool} `True` when runtime OS is Windows; otherwise `False`.
-    @satisfies DES-013, REQ-008, REQ-047
+    @satisfies REQ-047
     """
 
     return get_runtime_os() == "windows"
