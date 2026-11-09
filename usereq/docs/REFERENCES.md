@@ -8,6 +8,7 @@
         ├── commands
         │   ├── __init__.py
         │   ├── _dc_common.py
+        │   ├── agy.py
         │   ├── ai_install.py
         │   ├── bin_links.py
         │   ├── claude.py
@@ -68,7 +69,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 81L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 82L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -79,7 +80,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L51-66)
+### fn `def get_command(name: str) -> ModuleType | None` (L52-67)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -91,7 +92,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @satisfies PRJ-003, DES-001
 - @satisfies PRJ-001, DES-001, DES-008, REQ-057, REQ-058
 
-### fn `def get_all_commands() -> dict[str, str]` (L67-82)
+### fn `def get_all_commands() -> dict[str, str]` (L68-83)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
@@ -101,8 +102,8 @@ Removing an entry removes command discoverability and dispatch reachability.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|51-66|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|67-82|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|52-67|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|68-83|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -164,6 +165,55 @@ from shell_scripts.utils import is_executable_command, print_error
 |`categorize`|fn|pub|61-98|def categorize(filepath)|
 |`pick_cmd`|fn|pub|99-114|def pick_cmd(primary, fallback)|
 |`dispatch`|fn|pub|115-139|def dispatch(category_cmds, fallback_cmd, filepath, extra...|
+
+
+---
+
+# agy.py | Python | 81L | 5 symbols | 2 imports | 16 comments
+> Path: `src/shell_scripts/commands/agy.py`
+
+## Imports
+```
+import subprocess
+from shell_scripts.utils import require_project_root, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L18)
+- @brief Base CLI program name used in help output.
+- @details Constant identifier for usage-line rendering in command help.
+- var `DESCRIPTION = "Launch Antigravity CLI in the project context."` (L22)
+- @brief One-line command description for dispatcher help surfaces.
+- @details Exposed by command registry introspection (`get_all_commands`).
+- var `AI_CLI_COMMANDS = tuple(sorted((` (L29)
+- @brief Alphabetically sorted AI CLI launch command tokens rendered in inline help.
+- @details Derived through `sorted()` at import time so token-set edits preserve
+the REQ-086 alphabetical rendering contract; contains launcher commands only
+and excludes installer command tokens.
+- @satisfies REQ-086
+### fn `def print_help(version)` (L41-63)
+- @brief Print command-specific help for `agy`.
+- @details Emits usage and pass-through argument behavior, then renders the AI CLI launch command tokens from `AI_CLI_COMMANDS`, one per line, in ascending alphabetical order; does not mutate process state. Time complexity O(n) over registered AI CLI token count.
+- @param version {str} CLI version string propagated by dispatcher.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-086
+
+### fn `def run(args)` (L64-82)
+- @brief Launch Antigravity CLI in YOLO mode after executable validation.
+- @details Resolves project root, builds the fixed command vector `[agy, --dangerously-skip-permissions] + args`, resolves the executable path via `require_commands`, then executes it through blocking `subprocess.run` with inherited stdio. Time complexity O(n) over forwarded argument count.
+- @param args {list[str]} Additional CLI args forwarded to Antigravity.
+- @return {int} Child process return code.
+- @satisfies REQ-085, REQ-055, REQ-056, REQ-064
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|18||
+|`DESCRIPTION`|var|pub|22||
+|`AI_CLI_COMMANDS`|var|pub|29||
+|`print_help`|fn|pub|41-63|def print_help(version)|
+|`run`|fn|pub|64-82|def run(args)|
 
 
 ---
@@ -1781,7 +1831,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 324L | 9 symbols | 7 imports | 19 comments
+# core.py | Python | 325L | 9 symbols | 7 imports | 19 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1809,7 +1859,7 @@ global help sections.
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L113-167)
+### fn `def print_help(command_name=None)` (L114-168)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -1817,34 +1867,34 @@ maps directly to REQ-066 output expectations.
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L168-183)
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L169-184)
 - @brief Compose the develop upgrade command for one GitHub release tag.
 - @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
 - @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
 - @return {str} Fully substituted shell upgrade command.
 - @satisfies REQ-076, DES-019
 
-### fn `def do_upgrade(develop: bool = False) -> int` (L184-218)
+### fn `def do_upgrade(develop: bool = False) -> int` (L185-219)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; executes it on Linux via shell invocation and prints the manual fallback command on non-Linux systems.
 - @param develop {bool} Force upgrade from the latest GitHub release tag.
 - @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-076, REQ-078, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L219-241)
+### fn `def do_uninstall()` (L220-242)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L242-257)
+### fn `def do_write_config()` (L243-258)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L258-325)
+### fn `def main()` (L259-326)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
@@ -1856,12 +1906,12 @@ maps directly to REQ-066 output expectations.
 |`PROGRAM`|var|pub|32||
 |`HELP_COMMAND_COLUMN_WIDTH`|var|pub|38||
 |`HELP_SECTION_COMMANDS`|var|pub|46||
-|`print_help`|fn|pub|113-167|def print_help(command_name=None)|
-|`_build_develop_upgrade_command`|fn|priv|168-183|def _build_develop_upgrade_command(latest_tag: str) -> str|
-|`do_upgrade`|fn|pub|184-218|def do_upgrade(develop: bool = False) -> int|
-|`do_uninstall`|fn|pub|219-241|def do_uninstall()|
-|`do_write_config`|fn|pub|242-257|def do_write_config()|
-|`main`|fn|pub|258-325|def main()|
+|`print_help`|fn|pub|114-168|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|169-184|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|185-219|def do_upgrade(develop: bool = False) -> int|
+|`do_uninstall`|fn|pub|220-242|def do_uninstall()|
+|`do_write_config`|fn|pub|243-258|def do_write_config()|
+|`main`|fn|pub|259-326|def main()|
 
 
 ---

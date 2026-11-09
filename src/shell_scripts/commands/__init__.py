@@ -15,6 +15,7 @@ from types import ModuleType
 #  Removing an entry removes command discoverability and dispatch reachability.
 #  @satisfies PRJ-003, DES-001
 _COMMAND_MODULES = {
+    "agy": "shell_scripts.commands.agy",
     "ai-install": "shell_scripts.commands.ai_install",
     "clean": "shell_scripts.commands.clean",
     "claude": "shell_scripts.commands.claude",

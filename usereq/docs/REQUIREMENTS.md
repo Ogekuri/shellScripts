@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.29"
-date: "2026-11-08T16:19:16Z"
+version: "0.6.30"
+date: "2026-11-09T10:05:54Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -60,7 +60,7 @@ Repository structure (evidence-oriented view, depth-limited):
 │   │       ├── __init__.py
 │   │       ├── ai_install.py
 │   │       ├── clean.py
-│   │       ├── {claude,codex,copilot,gemini,kiro,opencode,pi}.py
+│   │       ├── {agy,claude,codex,copilot,gemini,kiro,opencode,pi}.py
 │   │       ├── {diff,edit,view}_cmd.py
 │   │       ├── dicom*.py
 │   │       ├── doxygen_cmd.py
@@ -219,11 +219,13 @@ No explicit performance optimizations identified.
 - **REQ-082**: MUST NOT remove any Git-tracked file during pre-release artifact cleanup.
 - **REQ-083**: MUST skip every release artifact creation, attestation, changelog, GitHub release, and PyPI publication step when the pre-release job fails.
 - **REQ-084**: MUST print each failed remote-source lookup during `--version` as `<source> latest: unknown (<reason>)` where `<reason>` describes the actual request failure.
+- **REQ-085**: MUST execute `agy --dangerously-skip-permissions` in `agy` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-086**: MUST print the AI CLI launch command tokens in alphabetical order in the `agy` inline help output.
 
 ## 4. Test Requirements
 
 ### 4.1 Coverage Summary
-Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, AI installers, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
+Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, AI installers, Antigravity CLI launch, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
 High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
 The release workflow gates all release artifact creation and publication on a dedicated pre-release verification job covered by static parsing tests.
@@ -246,6 +248,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 - **TST-014**: MUST verify REQ-003, REQ-075 through REQ-077, REQ-084, DES-018, and DES-019 via monkeypatched HTTP and subprocess boundaries, passing only if PyPI update checks, three-line version output, default upgrade, and develop upgrade behaviors match specifications.
 - **TST-015**: MUST verify DES-021 through DES-027 and REQ-079 through REQ-082 by parsing `scripts/pre-release-check.sh`, passing only if mandatory commands, artifact gates, cleanup registration, failure semantics, and evidence lines are present.
 - **TST-016**: MUST verify DES-028, DES-029, and REQ-083 by parsing `.github/workflows/release-pypi.yml`, passing only if the dedicated pre-release job runs `scripts/pre-release-check.sh` and `build-release` declares `needs` on it.
+- **TST-017**: MUST verify REQ-085 and REQ-086 by monkeypatching `subprocess.run` and capturing `agy` help output, passing only if the `agy` argv vector, stdio inheritance, registry exposure, and alphabetical AI CLI help listing match specifications.
 
 ## 5. Evidence
 
@@ -272,6 +275,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | REQ-016, REQ-064 | `src/shell_scripts/commands/gemini.py` | `run` | Executes `gemini --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-017, REQ-064 | `src/shell_scripts/commands/claude.py` | `run` | Executes `~/.claude/bin/claude --dangerously-skip-permissions` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-018, REQ-064 | `src/shell_scripts/commands/opencode.py` | `run` | Executes `opencode` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-085, REQ-086, TST-017 | `src/shell_scripts/commands/agy.py`; `src/shell_scripts/commands/__init__.py`; `src/shell_scripts/core.py`; `tests/test_tst_017_agy_command.py` | `run`, `print_help`, `AI_CLI_COMMANDS`, `_COMMAND_MODULES`, `HELP_SECTION_COMMANDS` | `agy` command resolves project root, validates the `agy` executable, and executes `agy --dangerously-skip-permissions` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait; inline help prints the AI CLI launch tokens in alphabetical order; static registry and AI help section expose `agy`. |
 | REQ-019, REQ-064 | `src/shell_scripts/commands/kiro.py` | `run` | Executes `kiro-cli` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-020, REQ-021, REQ-064 | `src/shell_scripts/commands/vscode_cmd.py`; `src/shell_scripts/commands/vsinsider_cmd.py` | `run` | Commands set `CODEX_HOME`, append project path, and execute Code binaries via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-022 | `src/shell_scripts/commands/ubuntu_dark_theme.py` | `run` | Applies `gsettings ... gtk-theme Adwaita-dark` and conditionally launches `gtk-chtheme`, `qt5ct`, `qt6ct`. |
