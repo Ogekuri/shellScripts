@@ -774,13 +774,18 @@ def print_config_cli_help(command: str) -> None:
 def do_print_raw() -> int:
     """@brief Print the on-disk configuration file verbatim.
 
-    @details Emits the raw bytes of the canonical config file without
-    parsing, or a bright-red error naming the path when the file is missing
-    or unreadable. Time complexity O(n) over file size.
-    @return {int} `0` on success; `1` when the file is missing or unreadable.
-    @satisfies REQ-094
+    @details Enforces schema registry parity with `DEFAULT_RUNTIME_CONFIG`
+    before emitting output (DES-034, DES-032 surface membership), then emits
+    the raw bytes of the canonical config file without parsing, or a
+    bright-red error naming the path when the file is missing or unreadable.
+    Time complexity O(n) over file size.
+    @return {int} `0` on success; `1` on schema divergence or when the file
+      is missing or unreadable.
+    @satisfies DES-032, DES-034, REQ-094
     """
 
+    if _fail_on_schema_mismatch():
+        return 1
     target = get_config_path()
     if not target.exists():
         print_error(f"File di configurazione non trovato: {target}.")

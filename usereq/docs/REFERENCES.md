@@ -1599,7 +1599,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# config_cli.py | Python | 986L | 34 symbols | 7 imports | 58 comments
+# config_cli.py | Python | 991L | 34 symbols | 7 imports | 58 comments
 > Path: `src/shell_scripts/config_cli.py`
 
 ## Imports
@@ -1808,32 +1808,32 @@ length.
 - @satisfies REQ-101
 - @satisfies REQ-109
 
-### fn `def do_print_raw() -> int` (L774-796)
+### fn `def do_print_raw() -> int` (L774-801)
 - @brief Print the on-disk configuration file verbatim.
-- @details Emits the raw bytes of the canonical config file without parsing, or a bright-red error naming the path when the file is missing or unreadable. Time complexity O(n) over file size.
-- @return {int} `0` on success; `1` when the file is missing or unreadable.
-- @satisfies REQ-094
+- @details Enforces schema registry parity with `DEFAULT_RUNTIME_CONFIG` before emitting output (DES-034, DES-032 surface membership), then emits the raw bytes of the canonical config file without parsing, or a bright-red error naming the path when the file is missing or unreadable. Time complexity O(n) over file size.
+- @return {int} `0` on success; `1` on schema divergence or when the file is missing or unreadable.
+- @satisfies DES-032, DES-034, REQ-094
 
-### fn `def do_print() -> int` (L797-818)
+### fn `def do_print() -> int` (L802-823)
 - @brief Render the effective configuration as an options tree.
 - @details Deep-merges on-disk overrides onto hardcoded defaults, then renders the schema-ordered tree with branch connectors, `= <JSON>` scalar leaves, masked secrets, and `Sel`/`Valore` selection tables. The root annotation reports `ATTIVA` when the config file exists and `PREDEFINITA` otherwise. Time complexity O(n) over configuration size.
 - @return {int} `0` on success; `1` on schema divergence.
 - @satisfies REQ-095, REQ-096, REQ-097, REQ-098, DES-034
 
-### fn `def do_params() -> int` (L819-837)
+### fn `def do_params() -> int` (L824-842)
 - @brief Render the configurable parameter hierarchy with descriptions.
 - @details Emits the schema-ordered tree with per-group descriptions, per-option kind labels and short descriptions, and `Valore`/`Significato` allowed-value tables for selection options. Time complexity O(n) over schema node count.
 - @return {int} `0` on success; `1` on schema divergence.
 - @satisfies REQ-107, REQ-108, DES-034
 
-### fn `def do_get(path: str | None) -> int` (L838-873)
+### fn `def do_get(path: str | None) -> int` (L843-878)
 - @brief Read one configuration value by hierarchical path.
 - @details Resolves the `:`-separated path against the schema registry and the effective configuration, masks secret leaves, prints scalars and lists as single-line JSON and object subtrees as indented JSON. Time complexity O(n) over subtree size.
 - @param path {str|None} Hierarchical path token, for example `management:upgrade`.
 - @return {int} `0` on success; `1` for missing arguments, unknown paths, or absent values.
 - @satisfies REQ-098, REQ-099, REQ-100, REQ-109, DES-034
 
-### fn `def do_set(path: str | None, value: str | None) -> int` (L874-934)
+### fn `def do_set(path: str | None, value: str | None) -> int` (L879-939)
 - @brief Set one configuration value by hierarchical path.
 - @details Resolves `$NAME` tokens from the environment, coerces the value by schema kind, validates schema-allowed choices, then loads the on-disk overrides, writes only the target key, and persists sorted-key indented JSON without touching unrelated keys. Time complexity O(n) over configuration size.
 - @param path {str|None} Hierarchical path token ending at a schema leaf.
@@ -1841,7 +1841,7 @@ length.
 - @return {int} `0` on success; `1` for missing arguments, unknown paths, invalid values, disallowed choices, undefined environment variables, or unreadable config files.
 - @satisfies REQ-101, REQ-102, REQ-103, REQ-104, REQ-109, DES-034
 
-### fn `def do_unset(path: str | None) -> int` (L935-972)
+### fn `def do_unset(path: str | None) -> int` (L940-977)
 - @brief Remove one configuration override by hierarchical path.
 - @details Loads the on-disk overrides, removes the target key (leaf or object subtree), persists the result so hardcoded defaults reactivate, and prints the subtree-removal warning for object payloads. Time complexity O(n) over configuration size.
 - @param path {str|None} Hierarchical path token to remove.
@@ -1879,12 +1879,12 @@ length.
 |`_write_overrides`|fn|priv|667-686|def _write_overrides(payload: dict[str, Any]) -> None|
 |`_coerce_value`|fn|priv|687-688|def _coerce_value(|
 |`print_config_cli_help`|fn|pub|735-773|def print_config_cli_help(command: str) -> None|
-|`do_print_raw`|fn|pub|774-796|def do_print_raw() -> int|
-|`do_print`|fn|pub|797-818|def do_print() -> int|
-|`do_params`|fn|pub|819-837|def do_params() -> int|
-|`do_get`|fn|pub|838-873|def do_get(path: str | None) -> int|
-|`do_set`|fn|pub|874-934|def do_set(path: str | None, value: str | None) -> int|
-|`do_unset`|fn|pub|935-972|def do_unset(path: str | None) -> int|
+|`do_print_raw`|fn|pub|774-801|def do_print_raw() -> int|
+|`do_print`|fn|pub|802-823|def do_print() -> int|
+|`do_params`|fn|pub|824-842|def do_params() -> int|
+|`do_get`|fn|pub|843-878|def do_get(path: str | None) -> int|
+|`do_set`|fn|pub|879-939|def do_set(path: str | None, value: str | None) -> int|
+|`do_unset`|fn|pub|940-977|def do_unset(path: str | None) -> int|
 
 
 ---
