@@ -57,7 +57,6 @@ def test_codex_executes_expected_command_without_auth_synchronization(
         observed["kwargs"] = kwargs
         return types.SimpleNamespace(returncode=7)
 
-    monkeypatch.setattr(yolo_common, "require_project_root", lambda: project_root)
     monkeypatch.setattr(yolo_common, "require_commands", lambda *cmds: cmds[0])
     monkeypatch.setattr(yolo_common.subprocess, "run", _fake_run)
 
@@ -110,7 +109,6 @@ def test_yolo_launchers_use_resolved_executable_path(
         observed["kwargs"] = kwargs
         return types.SimpleNamespace(returncode=27)
 
-    monkeypatch.setattr(yolo_common, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(yolo_common, "require_commands", lambda *_cmds: resolved_exec)
     monkeypatch.setattr(yolo_common.subprocess, "run", _fake_run)
 

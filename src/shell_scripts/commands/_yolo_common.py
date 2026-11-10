@@ -13,7 +13,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 
-from shell_scripts.utils import require_project_root, require_commands
+from shell_scripts.utils import require_commands
 
 ## @var PROGRAM
 #  @brief Base CLI program name used in help output.
@@ -162,13 +162,14 @@ def print_yolo_help(command: str, version: str, description: str) -> None:
 
 
 def run_yolo_cli(command: str, args: list[str]) -> int:
-    """@brief Launch one registered YOLO CLI after prerequisite validation.
+    """@brief Launch one registered YOLO CLI after executable validation.
 
-    @details Resolves project root, resolves the registry record, validates
-    executable availability for the record executable, builds the command
-    vector `[resolved_executable, option] + args`, then executes it through
-    blocking `subprocess.run` with inherited stdio. Time complexity O(n) over
-    forwarded argument count.
+    @details Resolves the registry record, validates executable availability
+    for the record executable, builds the command vector
+    `[resolved_executable, option] + args`, then executes it through blocking
+    `subprocess.run` with inherited stdio. Performs no Git repository root
+    validation and emits no project-root error output. Time complexity O(n)
+    over forwarded argument count.
     @param command {str} Registered dispatcher command token.
     @param args {list[str]} Additional CLI args forwarded to the external CLI.
     @return {int} Child process return code.
@@ -177,7 +178,6 @@ def run_yolo_cli(command: str, args: list[str]) -> int:
         REQ-055, REQ-056, REQ-064
     """
     spec = get_yolo_spec(command)
-    require_project_root()
     cmd = [spec.executable, spec.option] + args
     cmd[0] = require_commands(cmd[0])
     result = subprocess.run(cmd)

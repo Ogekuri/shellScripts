@@ -5,19 +5,17 @@
   UUTs: `shell_scripts.commands._yolo_common.YOLO_CLI_REGISTRY` (Level 0
   constant), `shell_scripts.commands._yolo_common.print_yolo_help` (Level 0:
   pure stdout rendering), `shell_scripts.commands._yolo_common.run_yolo_cli`
-  (Level 1: project-root guard, executable resolution, subprocess boundary),
+  (Level 1: executable resolution, subprocess boundary),
   thin delegation in
   `shell_scripts.commands.{agy,claude,codex,copilot,opencode}.run` (Level 1),
   registry/global-help exposure (Level 0 lookups).
-  External dependencies isolated: `subprocess.run`, `require_project_root`,
-  `require_commands`. The missing-executable error path terminates through the
-  shared `require_commands` helper already covered by the TST-005 policy, so
-  no launcher-local error case exists in this module.
+  External dependencies isolated: `subprocess.run`,
+  `require_commands`. The YOLO launchers perform no Git repository root
+  validation, so no project-root boundary exists in this module.
 @satisfies TST-017, REQ-085, REQ-086, REQ-092, REQ-093, DES-030, DES-031
 @return {None} Pytest module scope.
 """
 
-from pathlib import Path
 import types
 
 import pytest
@@ -139,7 +137,6 @@ def test_yolo_modules_delegate_expected_yolo_argv(
         observed["kwargs"] = kwargs
         return types.SimpleNamespace(returncode=11)
 
-    monkeypatch.setattr(yolo_common, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(yolo_common, "require_commands", lambda *_cmds: resolved_exec)
     monkeypatch.setattr(yolo_common.subprocess, "run", _fake_run)
 
@@ -170,7 +167,6 @@ def test_yolo_runner_with_empty_args_executes_fixed_yolo_vector_only(
         observed["command"] = command
         return types.SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr(yolo_common, "require_project_root", lambda: Path("/tmp/p"))
     monkeypatch.setattr(yolo_common, "require_commands", lambda *_cmds: resolved_exec)
     monkeypatch.setattr(yolo_common.subprocess, "run", _fake_run)
 

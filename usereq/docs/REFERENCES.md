@@ -175,7 +175,7 @@ from shell_scripts.utils import is_executable_command, print_error
 from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
-from shell_scripts.utils import require_project_root, require_commands
+from shell_scripts.utils import require_commands
 ```
 
 ## Definitions
@@ -208,8 +208,8 @@ from shell_scripts.utils import require_project_root, require_commands
 - @satisfies DES-008, REQ-086, REQ-092, REQ-093
 
 ### fn `def run_yolo_cli(command: str, args: list[str]) -> int` (L164-185)
-- @brief Launch one registered YOLO CLI after prerequisite validation.
-- @details Resolves project root, resolves the registry record, validates executable availability for the record executable, builds the command vector `[resolved_executable, option] + args`, then executes it through blocking `subprocess.run` with inherited stdio. Time complexity O(n) over forwarded argument count.
+- @brief Launch one registered YOLO CLI after executable validation.
+- @details Resolves the registry record, validates executable availability for the record executable, builds the command vector `[resolved_executable, option] + args`, then executes it through blocking `subprocess.run` with inherited stdio. Performs no Git repository root validation and emits no project-root error output. Time complexity O(n) over forwarded argument count.
 - @param command {str} Registered dispatcher command token.
 - @param args {list[str]} Additional CLI args forwarded to the external CLI.
 - @return {int} Child process return code.

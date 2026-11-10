@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.9.0"
-date: "2026-11-10T17:20:00Z"
+version: "0.10.0"
+date: "2026-11-10T19:30:00Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -103,7 +103,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **CTN-002**: MUST expose console scripts `shellscripts` and `s` mapped to `shell_scripts.core:main`.
 - **CTN-003**: MUST depend on external system executables for multiple subcommands and MUST fail fast when required executables are unavailable.
 - **CTN-004**: MUST restrict automatic self-upgrade and self-uninstall actions to Linux platforms and MUST print manual fallback commands on non-Linux platforms.
-- **CTN-005**: MUST treat Git repository root detection as a hard prerequisite for project-context commands.
+- **CTN-005**: MUST treat Git repository root detection as a hard prerequisite for project-context commands, excluding YOLO AI CLI launch commands (`agy`, `claude`, `codex`, `copilot`, `opencode`).
 - **CTN-006**: MUST execute all GitHub Actions JavaScript action runtimes in `.github/workflows/release-pypi.yml` on Node24 or newer.
 - **CTN-007**: MUST write every user-visible CLI message, help text, evidence token, and schema label in English.
 
@@ -284,7 +284,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | CTN-002 | `pyproject.toml` | `[project.scripts]` | `shellscripts = "shell_scripts.core:main"`, `s = "shell_scripts.core:main"`. |
 | CTN-003 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/*.py` | `require_commands`, command `run` functions | Multiple commands call `require_commands(...)` and terminate on missing tools. |
 | CTN-004, REQ-004, REQ-005 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `do_upgrade`, `do_uninstall`, `is_linux` | Linux executes `uv tool ...`; non-Linux prints manual command text and returns `0`. |
-| CTN-005 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/{claude,codex,copilot,opencode}.py` | `require_project_root`, `run` | Project-context commands call `require_project_root()` and exit on missing Git root. |
+| CTN-005 | `src/shell_scripts/utils.py`; `src/shell_scripts/commands/{clean,doxygen_cmd,tests_cmd,venv_cmd,vscode_cmd,vsinsider_cmd}.py` | `require_project_root`, `run` | Project-context commands call `require_project_root()` and exit on missing Git root; YOLO AI CLI launch commands perform no Git root validation and execute only the registry-defined command vector. |
 | DES-007, REQ-023, REQ-024, REQ-064 | `src/shell_scripts/commands/diff_cmd.py`; `src/shell_scripts/commands/edit_cmd.py`; `src/shell_scripts/commands/view_cmd.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `diff`/`edit`/`view` wrappers call shared dispatch; missing file argument returns `2`; selected external command is launched via `subprocess.run` with inherited stdio and blocking wait. |
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
