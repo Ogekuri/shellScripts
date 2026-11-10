@@ -259,7 +259,7 @@ def _print_install_skipped(target_dir: Path) -> None:
     """@brief Emit skip evidence when target directory is not Git root.
 
     @details Prints one parser-stable line containing `skip` and token
-    `skippata` to document installation omission for non-root directories in
+    `skipped` to document installation omission for non-root directories in
     current-directory and `--dirs` modes. Time complexity is O(1).
     @param target_dir {Path} Directory skipped from cleanup and installation.
     @return {None} Writes one stdout line.
@@ -268,7 +268,7 @@ def _print_install_skipped(target_dir: Path) -> None:
 
     print(
         "install | skip | "
-        f"{target_dir} | installation skippata: target is not a git root"
+        f"{target_dir} | installation skipped: target is not a git root"
     )
 
 

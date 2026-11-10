@@ -167,9 +167,9 @@ def test_check_for_updates_queries_pypi_and_applies_success_cooldown(
     version_check.check_for_updates("0.1.0")
     captured = capsys.readouterr()
 
-    expected_output = "Versione Disponibile: 9.9.9"
+    expected_output = "Update Available: 9.9.9"
     assert expected_output in captured.out
-    assert "Versione Installata: 0.1.0" in captured.out
+    assert "Installed Version: 0.1.0" in captured.out
     assert observed_cooldowns == [version_check.IDLE_DELAY]
 
 

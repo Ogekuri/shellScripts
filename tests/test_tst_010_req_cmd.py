@@ -366,7 +366,7 @@ def test_req_current_directory_skips_when_not_git_root(
     """
     @brief Validate skip flow for non-root current directory.
     @details Runs default mode with Git-root predicate returning `False` and
-      asserts command prints one skip evidence line containing `skippata` while
+      asserts command prints one skip evidence line containing `skipped` while
       avoiding cleanup and external req execution.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
@@ -414,7 +414,7 @@ def test_req_current_directory_skips_when_not_git_root(
     assert observed["prepare_calls"] == 0
     assert observed["run_calls"] == 0
     assert "install | skip |" in output
-    assert "skippata" in output
+    assert "skipped" in output
     assert str(tmp_path) in output
 
 
@@ -423,7 +423,7 @@ def test_req_dirs_skips_non_root_directories_only(monkeypatch, tmp_path, capsys)
     @brief Validate `--dirs` selective skip and continue behavior.
     @details Creates two first-level directories, marks only one as Git root,
       and asserts external req executes only for eligible directory while
-      skipped directory emits one skip evidence line containing `skippata`.
+      skipped directory emits one skip evidence line containing `skipped`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param tmp_path {Path} Isolated filesystem fixture.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
@@ -466,4 +466,4 @@ def test_req_dirs_skips_non_root_directories_only(monkeypatch, tmp_path, capsys)
     assert result == 0
     assert observed_bases == [str(git_root_dir)]
     assert f"install | skip | {skipped_dir}" in output
-    assert "skippata" in output
+    assert "skipped" in output

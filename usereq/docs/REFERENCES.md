@@ -1154,7 +1154,7 @@ from shell_scripts.utils import print_error, require_commands
 
 ### fn `def _print_install_skipped(target_dir: Path) -> None` `priv` (L258-274)
 - @brief Emit skip evidence when target directory is not Git root.
-- @details Prints one parser-stable line containing `skip` and token `skippata` to document installation omission for non-root directories in current-directory and `--dirs` modes. Time complexity is O(1).
+- @details Prints one parser-stable line containing `skip` and token `skipped` to document installation omission for non-root directories in current-directory and `--dirs` modes. Time complexity is O(1).
 - @param target_dir {Path} Directory skipped from cleanup and installation.
 - @return {None} Writes one stdout line.
 - @satisfies REQ-070, REQ-071
@@ -1617,7 +1617,7 @@ from shell_scripts.utils import print_error, print_info, print_success
 
 - var `PROGRAM = "shellscripts"` (L33)
 - @brief CLI program token used in inline usage help output.
-- var `ROOT_LABEL = "Configurazione_shellScripts"` (L37)
+- var `ROOT_LABEL = "shellScripts_Configuration"` (L37)
 - @brief Root node label rendered by `--print` and `--params` trees.
 - var `NAME_COLUMN_WIDTH = 24` (L43)
 - var `PATH_SEPARATOR = ":"` (L47)
@@ -1627,7 +1627,7 @@ from shell_scripts.utils import print_error, print_info, print_success
 - var `KIND_LABELS = {` (L57)
 ### class `class ChoiceSpec` `@dataclass(frozen=True)` (L72-84)
 - @brief One allowed value of a selection-type option.
-- @details Immutable registry record pairing an accepted value token with its meaning, rendered in `Sel`/`Valore` and `Valore`/`Significato` tables by `--print` and `--params`.
+- @details Immutable registry record pairing an accepted value token with its meaning, rendered in `Sel`/`Value` and `Value`/`Meaning` tables by `--print` and `--params`.
 - @satisfies REQ-097, REQ-108
 
 ### class `class OptionSpec` `@dataclass(frozen=True)` (L86-103)
@@ -1756,23 +1756,23 @@ O(n*m) over table cells.
 - @brief Render one `--print` tree level.
 - @brief Map one default configuration value to its shape label.
 - @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
-connectors, left-justified names, `= <JSON>` scalar leaves, `Sel`/`Valore`
+connectors, left-justified names, `= <JSON>` scalar leaves, `Sel`/`Value`
 selection tables for choice leaves with the active choice marked `[*]`,
-`Chiave`/`Valore` box tables for object-shaped leaves (one sorted row per
-entry, JSON-encoded cell values), and `#`/`Valore` box tables for
+`Key`/`Value` box tables for object-shaped leaves (one sorted row per
+entry, JSON-encoded cell values), and `#`/`Value` box tables for
 list-shaped leaves (one row per element, JSON-encoded cell values).
 Table lines carry the `│` tree continuation of `node_prefix` for
 non-final siblings. Masked secrets bypass table rendering and fall
 back to the scalar line.
 Time complexity O(n) over subtree node count.
-- @details Normalizes Python runtime types into stable shape tokens consumed by the `--params` `oggetto` default-structure table (REQ-112). The boolean check precedes the integer check because `bool` subclasses `int`. Time complexity O(1).
+- @details Normalizes Python runtime types into stable shape tokens consumed by the `--params` `object` default-structure table (REQ-112). The boolean check precedes the integer check because `bool` subclasses `int`. Time complexity O(1).
 - @param prefix {str} Ancestor connector prefix for this level.
 - @param children {tuple} Sibling schema nodes being rendered.
 - @param values {Any} Effective configuration subtree for this level.
 - @param lines {list[str]} Output accumulator mutated in place.
 - @param value {Any} Default configuration value to classify.
 - @return {None} Appends rendered lines to `lines`.
-- @return {str} Shape token: `stringa`, `intero`, `booleano`, `elenco di stringhe`, `oggetto`, or `valore` for unclassified payloads.
+- @return {str} Shape token: `string`, `integer`, `boolean`, `list of strings`, `object`, or `value` for unclassified payloads.
 - @satisfies DES-032, REQ-095, REQ-096, REQ-097, REQ-098
 - @satisfies REQ-112
 
@@ -1784,11 +1784,11 @@ Time complexity O(n) over subtree node count.
 - @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
 connectors, left-justified names with `-` annotations, and kind labels
 for leaves. Scalar leaves append the schema-declared input example;
-selection leaves append a `Valore`/`Significato` allowed-value table
-followed by an example continuation line; `oggetto` leaves append a
-JSON-object input note, a `Chiave`/`Formato` default-structure table
+selection leaves append a `Value`/`Meaning` allowed-value table
+followed by an example continuation line; `object` leaves append a
+JSON-object input note, a `Key`/`Format` default-structure table
 resolved from `DEFAULT_RUNTIME_CONFIG`, and an example continuation
-line; `elenco` leaves append a JSON-array input note, an element-format
+line; `list` leaves append a JSON-array input note, an element-format
 table, and an example continuation line. Table and example lines carry
 the `│` tree continuation of `node_prefix` for non-final siblings.
 Time complexity O(n) over subtree node count.
@@ -1797,7 +1797,7 @@ Time complexity O(n) over subtree node count.
 - @param children {tuple} Sibling schema nodes being rendered.
 - @param lines {list[str]} Output accumulator mutated in place.
 - @param prefix_parts {tuple[str,...]} Schema path segments of this level,
-used to resolve `oggetto` defaults for the structure table.
+used to resolve `object` defaults for the structure table.
 - @return {None} Appends rendered lines to `lines`.
 - @return {tuple[dict|None, str|None]} `(payload, None)` on success or `(None, error_message)` on failure.
 - @satisfies DES-036, REQ-107, REQ-108, REQ-110, REQ-111, REQ-112, REQ-113
@@ -1816,10 +1816,10 @@ used to resolve `oggetto` defaults for the structure table.
 ### fn `def print_config_cli_help(command: str) -> None` (L859-897)
 - @brief Coerce one raw CLI token by schema kind.
 - @brief Print command-specific inline usage help.
-- @details Maps `booleano` tokens to `true`/`false` (case-insensitive),
-`intero` tokens to `int`, `elenco` tokens to JSON arrays of non-empty
-strings, `oggetto` tokens to JSON objects, and leaves `stringa` and
-`selezione` tokens as non-empty strings. Time complexity O(n) over token
+- @details Maps `boolean` tokens to `true`/`false` (case-insensitive),
+`integer` tokens to `int`, `list` tokens to JSON arrays of non-empty
+strings, `object` tokens to JSON objects, and leaves `string` and
+`selection` tokens as non-empty strings. Time complexity O(n) over token
 length.
 - @details Documents the `:` hierarchical path syntax, accepted value formats, environment acquisition, and per-command examples for one of `--get`, `--set`, or `--unset`. Time complexity O(1).
 - @param raw {str} Raw value token from the CLI.
@@ -1838,13 +1838,13 @@ length.
 
 ### fn `def do_print() -> int` (L926-947)
 - @brief Render the effective configuration as an options tree.
-- @details Deep-merges on-disk overrides onto hardcoded defaults, then renders the schema-ordered tree with branch connectors, `= <JSON>` scalar leaves, masked secrets, and `Sel`/`Valore` selection tables. The root annotation reports `ATTIVA` when the config file exists and `PREDEFINITA` otherwise. Time complexity O(n) over configuration size.
+- @details Deep-merges on-disk overrides onto hardcoded defaults, then renders the schema-ordered tree with branch connectors, `= <JSON>` scalar leaves, masked secrets, and `Sel`/`Value` selection tables. The root annotation reports `ACTIVE` when the config file exists and `DEFAULT` otherwise. Time complexity O(n) over configuration size.
 - @return {int} `0` on success; `1` on schema divergence.
 - @satisfies REQ-095, REQ-096, REQ-097, REQ-098, DES-034
 
 ### fn `def do_params() -> int` (L948-970)
 - @brief Render the configurable parameter hierarchy with descriptions.
-- @details Emits the schema-ordered tree with per-group descriptions, per-option kind labels and short descriptions, schema-declared input examples on scalar lines and continuation lines, `Valore`/`Significato` allowed-value tables for selection options, `Chiave`/`Formato` default-structure tables for `oggetto` options, and element-format tables for `elenco` options. Time complexity O(n) over schema node count.
+- @details Emits the schema-ordered tree with per-group descriptions, per-option kind labels and short descriptions, schema-declared input examples on scalar lines and continuation lines, `Value`/`Meaning` allowed-value tables for selection options, `Key`/`Format` default-structure tables for `object` options, and element-format tables for `list` options. Time complexity O(n) over schema node count.
 - @return {int} `0` on success; `1` on schema divergence.
 - @satisfies DES-034, DES-036, REQ-107, REQ-108, REQ-110, REQ-111, REQ-112, REQ-113
 

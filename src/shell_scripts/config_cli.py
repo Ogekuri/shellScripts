@@ -34,7 +34,7 @@ PROGRAM = "shellscripts"
 
 ## @var ROOT_LABEL
 #  @brief Root node label rendered by `--print` and `--params` trees.
-ROOT_LABEL = "Configurazione_shellScripts"
+ROOT_LABEL = "shellScripts_Configuration"
 
 ## @var NAME_COLUMN_WIDTH
 #  @brief Fixed option-name column width for tree rendering.
@@ -55,12 +55,12 @@ MASKED_SECRET = "********"
 #  @details Keys are OptionSpec kind tokens; values are labels rendered as
 #  `[<label>]` prefixes in `--params` option descriptions.
 KIND_LABELS = {
-    "stringa": "Stringa",
-    "intero": "Intero",
-    "booleano": "Booleano",
-    "selezione": "Selezione",
-    "elenco": "Elenco",
-    "oggetto": "Oggetto",
+    "string": "String",
+    "integer": "Integer",
+    "boolean": "Boolean",
+    "selection": "Selection",
+    "list": "List",
+    "object": "Object",
 }
 
 ## @var _MISSING
@@ -73,7 +73,7 @@ class ChoiceSpec:
     """@brief One allowed value of a selection-type option.
 
     @details Immutable registry record pairing an accepted value token with
-    its meaning, rendered in `Sel`/`Valore` and `Valore`/`Significato`
+    its meaning, rendered in `Sel`/`Value` and `Value`/`Meaning`
     tables by `--print` and `--params`.
     @satisfies REQ-097, REQ-108
     """
@@ -126,22 +126,22 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
     (
         "management",
         GroupSpec(
-            "Comandi di gestione del pacchetto shellscripts.",
+            "Management commands for the shellscripts package.",
             (
                 (
                     "upgrade",
                     OptionSpec(
-                        "stringa",
-                        "Comando Linux per l'aggiornamento da PyPI.",
+                        "string",
+                        "Linux command for upgrading from PyPI.",
                         example='"uv tool install shellscripts"',
                     ),
                 ),
                 (
                     "upgrade_develop",
                     OptionSpec(
-                        "stringa",
-                        "Template del comando di upgrade dal tag GitHub "
-                        "({tag} sostituito a runtime).",
+                        "string",
+                        "Upgrade-command template from the GitHub tag "
+                        "({tag} substituted at runtime).",
                         example=(
                             '"uv tool install shellscripts --from '
                             'git+https://github.com/Ogekuri/shellScripts.git@{tag}"'
@@ -151,8 +151,8 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                 (
                     "uninstall",
                     OptionSpec(
-                        "stringa",
-                        "Comando Linux per la disinstallazione.",
+                        "string",
+                        "Linux command for uninstalling.",
                         example='"uv tool uninstall shellscripts"',
                     ),
                 ),
@@ -162,18 +162,18 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
     (
         "dispatch",
         GroupSpec(
-            "Profili dei comandi per diff, edit e view.",
+            "Command profiles for diff, edit, and view.",
             (
                 (
                     "diff",
                     GroupSpec(
-                        "Comandi per il confronto di file per categoria.",
+                        "File-diff commands by category.",
                         (
                             (
                                 "categories",
                                 OptionSpec(
-                                    "oggetto",
-                                    "Mappatura categoria-comando per il diff.",
+                                    "object",
+                                    "Category-to-command mapping for diff.",
                                     example='{"code": ["bcompare"], '
                                             '"pdf": ["okular"]}',
                                 ),
@@ -181,8 +181,8 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                             (
                                 "fallback",
                                 OptionSpec(
-                                    "elenco",
-                                    "Vettore comando di fallback per il diff.",
+                                    "list",
+                                    "Fallback command vector for diff.",
                                     example='["bcompare"]',
                                 ),
                             ),
@@ -192,13 +192,13 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                 (
                     "edit",
                     GroupSpec(
-                        "Comandi per la modifica di file per categoria.",
+                        "File-edit commands by category.",
                         (
                             (
                                 "categories",
                                 OptionSpec(
-                                    "oggetto",
-                                    "Mappatura categoria-comando per l'editor.",
+                                    "object",
+                                    "Category-to-command mapping for the editor.",
                                     example='{"image": ["gimp"], '
                                             '"pdf": ["okular"]}',
                                 ),
@@ -206,8 +206,8 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                             (
                                 "fallback",
                                 OptionSpec(
-                                    "elenco",
-                                    "Vettore comando di fallback per l'editor.",
+                                    "list",
+                                    "Fallback command vector for the editor.",
                                     example='["gedit", "-w"]',
                                 ),
                             ),
@@ -217,13 +217,13 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                 (
                     "view",
                     GroupSpec(
-                        "Comandi per la visualizzazione di file per categoria.",
+                        "File-view commands by category.",
                         (
                             (
                                 "categories",
                                 OptionSpec(
-                                    "oggetto",
-                                    "Mappatura categoria-comando per il viewer.",
+                                    "object",
+                                    "Category-to-command mapping for the viewer.",
                                     example='{"image": ["sushi"], '
                                             '"pdf": ["sushi"]}',
                                 ),
@@ -231,8 +231,8 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                             (
                                 "fallback",
                                 OptionSpec(
-                                    "elenco",
-                                    "Vettore comando di fallback per il viewer.",
+                                    "list",
+                                    "Fallback command vector for the viewer.",
                                     example='["sushi"]',
                                 ),
                             ),
@@ -245,21 +245,21 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
     (
         "req",
         GroupSpec(
-            "Parametri del comando req.",
+            "Parameters of the req command.",
             (
                 (
                     "providers",
                     OptionSpec(
-                        "elenco",
-                        "Provider ripetuti passati a req con --provider.",
+                        "list",
+                        "Repeated providers passed to req with --provider.",
                         example='["codex:skills", "pi:prompts"]',
                     ),
                 ),
                 (
                     "static_checks",
                     OptionSpec(
-                        "elenco",
-                        "Controlli statici ripetuti passati a req con "
+                        "list",
+                        "Repeated static checks passed to req with "
                         "--enable-static-check.",
                         example='["Python=Ruff"]',
                     ),
@@ -472,7 +472,7 @@ def _fail_on_schema_mismatch() -> bool:
     if not _SCHEMA_MISMATCHES:
         return False
     print_error(
-        "Schema di configurazione non allineato ai default: "
+        "Configuration schema not aligned with defaults: "
         + "; ".join(_SCHEMA_MISMATCHES)
     )
     return True
@@ -564,10 +564,10 @@ def _render_print_children(
     """@brief Render one `--print` tree level.
 
     @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
-    connectors, left-justified names, `= <JSON>` scalar leaves, `Sel`/`Valore`
+    connectors, left-justified names, `= <JSON>` scalar leaves, `Sel`/`Value`
     selection tables for choice leaves with the active choice marked `[*]`,
-    `Chiave`/`Valore` box tables for object-shaped leaves (one sorted row per
-    entry, JSON-encoded cell values), and `#`/`Valore` box tables for
+    `Key`/`Value` box tables for object-shaped leaves (one sorted row per
+    entry, JSON-encoded cell values), and `#`/`Value` box tables for
     list-shaped leaves (one row per element, JSON-encoded cell values).
     Table lines carry the `│` tree continuation of `node_prefix` for
     non-final siblings. Masked secrets bypass table rendering and fall
@@ -610,7 +610,7 @@ def _render_print_children(
                 for choice in node.choices
             ]
             indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
-            lines.extend(_render_box_table(["Sel", "Valore"], rows, indent))
+            lines.extend(_render_box_table(["Sel", "Value"], rows, indent))
             continue
         rendered = (
             MASKED_SECRET if node.secret and value is not None else value
@@ -623,7 +623,7 @@ def _render_print_children(
             ]
             indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
             lines.extend(
-                _render_box_table(["Chiave", "Valore"], rows, indent)
+                _render_box_table(["Key", "Value"], rows, indent)
             )
             continue
         if isinstance(rendered, list):
@@ -633,7 +633,7 @@ def _render_print_children(
                 for position, item in enumerate(rendered, start=1)
             ]
             indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
-            lines.extend(_render_box_table(["#", "Valore"], rows, indent))
+            lines.extend(_render_box_table(["#", "Value"], rows, indent))
             continue
         lines.append(f"{prefix}{branch}{name}= {_render_json(rendered)}")
 
@@ -642,26 +642,26 @@ def _describe_value_shape(value: Any) -> str:
     """@brief Map one default configuration value to its shape label.
 
     @details Normalizes Python runtime types into stable shape tokens
-    consumed by the `--params` `oggetto` default-structure table (REQ-112).
+    consumed by the `--params` `object` default-structure table (REQ-112).
     The boolean check precedes the integer check because `bool` subclasses
     `int`. Time complexity O(1).
     @param value {Any} Default configuration value to classify.
-    @return {str} Shape token: `stringa`, `intero`, `booleano`, `elenco di
-      stringhe`, `oggetto`, or `valore` for unclassified payloads.
+    @return {str} Shape token: `string`, `integer`, `boolean`, `list of
+      strings`, `object`, or `value` for unclassified payloads.
     @satisfies REQ-112
     """
 
     if isinstance(value, bool):
-        return "booleano"
+        return "boolean"
     if isinstance(value, str):
-        return "stringa"
+        return "string"
     if isinstance(value, (int, float)):
-        return "intero"
+        return "integer"
     if isinstance(value, list):
-        return "elenco di stringhe"
+        return "list of strings"
     if isinstance(value, dict):
-        return "oggetto"
-    return "valore"
+        return "object"
+    return "value"
 
 
 def _render_params_children(
@@ -675,11 +675,11 @@ def _render_params_children(
     @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
     connectors, left-justified names with `-` annotations, and kind labels
     for leaves. Scalar leaves append the schema-declared input example;
-    selection leaves append a `Valore`/`Significato` allowed-value table
-    followed by an example continuation line; `oggetto` leaves append a
-    JSON-object input note, a `Chiave`/`Formato` default-structure table
+    selection leaves append a `Value`/`Meaning` allowed-value table
+    followed by an example continuation line; `object` leaves append a
+    JSON-object input note, a `Key`/`Format` default-structure table
     resolved from `DEFAULT_RUNTIME_CONFIG`, and an example continuation
-    line; `elenco` leaves append a JSON-array input note, an element-format
+    line; `list` leaves append a JSON-array input note, an element-format
     table, and an example continuation line. Table and example lines carry
     the `│` tree continuation of `node_prefix` for non-final siblings.
     Time complexity O(n) over subtree node count.
@@ -687,7 +687,7 @@ def _render_params_children(
     @param children {tuple} Sibling schema nodes being rendered.
     @param lines {list[str]} Output accumulator mutated in place.
     @param prefix_parts {tuple[str,...]} Schema path segments of this level,
-      used to resolve `oggetto` defaults for the structure table.
+      used to resolve `object` defaults for the structure table.
     @return {None} Appends rendered lines to `lines`.
     @satisfies DES-036, REQ-107, REQ-108, REQ-110, REQ-111, REQ-112, REQ-113
     """
@@ -711,21 +711,21 @@ def _render_params_children(
         if node.choices:
             lines.append(
                 f"{prefix}{branch}{name}- [{kind_label}] {node.description} "
-                "Valori ammessi:"
+                "Allowed values:"
             )
             rows = [[choice.value, choice.meaning] for choice in node.choices]
             lines.extend(
-                _render_box_table(["Valore", "Significato"], rows, indent)
+                _render_box_table(["Value", "Meaning"], rows, indent)
             )
             example = node.example
             if not example:
                 example = f'"{node.choices[0].value}"'
-            lines.append(f"{indent}(Esempio di input: {example})")
+            lines.append(f"{indent}(Input example: {example})")
             continue
-        if node.kind == "oggetto":
+        if node.kind == "object":
             lines.append(
                 f"{prefix}{branch}{name}- [{kind_label}] {node.description} "
-                "Formato di input: oggetto JSON. Struttura predefinita:"
+                "Input format: JSON object. Default structure:"
             )
             default_value = _resolve_value(
                 DEFAULT_RUNTIME_CONFIG, list(node_parts)
@@ -738,25 +738,25 @@ def _render_params_children(
                 ]
             if rows:
                 lines.extend(
-                    _render_box_table(["Chiave", "Formato"], rows, indent)
+                    _render_box_table(["Key", "Format"], rows, indent)
                 )
-            lines.append(f"{indent}(Esempio di input: {node.example})")
+            lines.append(f"{indent}(Input example: {node.example})")
             continue
-        if node.kind == "elenco":
+        if node.kind == "list":
             lines.append(
                 f"{prefix}{branch}{name}- [{kind_label}] {node.description} "
-                "Formato di input: elenco JSON. Struttura ammessa:"
+                "Input format: JSON list. Allowed structure:"
             )
             lines.extend(
                 _render_box_table(
-                    ["Campo", "Formato"],
-                    [["elementi", "stringhe non vuote"]],
+                    ["Field", "Format"],
+                    [["elements", "non-empty strings"]],
                     indent,
                 )
             )
-            lines.append(f"{indent}(Esempio di input: {node.example})")
+            lines.append(f"{indent}(Input example: {node.example})")
             continue
-        suffix = f" (Esempio di input: {node.example})" if node.example else ""
+        suffix = f" (Input example: {node.example})" if node.example else ""
         lines.append(
             f"{prefix}{branch}{name}- [{kind_label}] {node.description}{suffix}"
         )
@@ -780,11 +780,11 @@ def _load_overrides() -> "tuple[dict[str, Any] | None, str | None]":
     try:
         payload = json.loads(target.read_text(encoding="utf-8"))
     except OSError as err:
-        return None, f"Impossibile leggere '{target}': {err}."
+        return None, f"Cannot read '{target}': {err}."
     except json.JSONDecodeError as err:
-        return None, f"JSON non valido in '{target}': {err}."
+        return None, f"Invalid JSON in '{target}': {err}."
     if not isinstance(payload, dict):
-        return None, f"Il file '{target}' deve contenere un oggetto JSON."
+        return None, f"File '{target}' must contain a JSON object."
     return payload, None
 
 
@@ -813,10 +813,10 @@ def _coerce_value(
 ) -> "tuple[bool, Any, str | None]":
     """@brief Coerce one raw CLI token by schema kind.
 
-    @details Maps `booleano` tokens to `true`/`false` (case-insensitive),
-    `intero` tokens to `int`, `elenco` tokens to JSON arrays of non-empty
-    strings, `oggetto` tokens to JSON objects, and leaves `stringa` and
-    `selezione` tokens as non-empty strings. Time complexity O(n) over token
+    @details Maps `boolean` tokens to `true`/`false` (case-insensitive),
+    `integer` tokens to `int`, `list` tokens to JSON arrays of non-empty
+    strings, `object` tokens to JSON objects, and leaves `string` and
+    `selection` tokens as non-empty strings. Time complexity O(n) over token
     length.
     @param raw {str} Raw value token from the CLI.
     @param spec {OptionSpec} Target option schema record.
@@ -824,35 +824,35 @@ def _coerce_value(
     @satisfies REQ-101
     """
 
-    if spec.kind == "booleano":
+    if spec.kind == "boolean":
         lowered = raw.lower()
         if lowered == "true":
             return True, None, None
         if lowered == "false":
             return False, None, None
-        return False, None, "attesi true oppure false"
-    if spec.kind == "intero":
+        return False, None, "expected true or false"
+    if spec.kind == "integer":
         try:
             return True, int(raw), None
         except ValueError:
-            return False, None, "atteso un valore intero"
-    if spec.kind in ("elenco", "oggetto"):
+            return False, None, "expected an integer value"
+    if spec.kind in ("list", "object"):
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError:
-            return False, None, "atteso un valore JSON valido"
-        if spec.kind == "elenco":
+            return False, None, "expected a valid JSON value"
+        if spec.kind == "list":
             valid = isinstance(parsed, list) and all(
                 isinstance(item, str) and item for item in parsed
             )
             if not valid:
-                return False, None, "atteso un elenco JSON di stringhe"
+                return False, None, "expected a JSON list of strings"
             return True, parsed, None
         if not isinstance(parsed, dict):
-            return False, None, "atteso un oggetto JSON"
+            return False, None, "expected a JSON object"
         return True, parsed, None
     if not raw.strip():
-        return False, None, "attesa una stringa non vuota"
+        return False, None, "expected a non-empty string"
     return True, raw, None
 
 
@@ -868,28 +868,28 @@ def print_config_cli_help(command: str) -> None:
     """
 
     if command == "--set":
-        print(f"Usage: {PROGRAM} --set <percorso> <valore>")
-        print("Imposta un'opzione scrivendo solo la chiave nel file di configurazione.")
-        print("Il percorso usa ':' come separatore gerarchico delle opzioni.")
-        print("Valori booleani: true/false; elenchi e oggetti: JSON.")
-        print("Un valore '$NOME' viene acquisito dalla variabile d'ambiente NOME.")
-        print("Esempi:")
+        print(f"Usage: {PROGRAM} --set <path> <value>")
+        print("Sets one option by writing only its key into the configuration file.")
+        print("The path uses ':' as the hierarchical option separator.")
+        print("Boolean values: true/false; lists and objects: JSON.")
+        print("A '$NAME' value is acquired from environment variable NAME.")
+        print("Examples:")
         print(f'  {PROGRAM} --set management:upgrade "uv tool install shellscripts"')
         print(f"  {PROGRAM} --set dispatch:diff:fallback '[\"bcompare\"]'")
         print(f"  {PROGRAM} --set req:providers $REQ_PROVIDERS")
         return
     if command == "--unset":
-        print(f"Usage: {PROGRAM} --unset <percorso>")
-        print("Rimuove una chiave dal file di configurazione riattivando il default.")
-        print("Il percorso usa ':' come separatore gerarchico delle opzioni.")
-        print("Esempi:")
+        print(f"Usage: {PROGRAM} --unset <path>")
+        print("Removes one key from the configuration file, reactivating the default.")
+        print("The path uses ':' as the hierarchical option separator.")
+        print("Examples:")
         print(f"  {PROGRAM} --unset management:upgrade")
         print(f"  {PROGRAM} --unset dispatch:diff")
         return
-    print(f"Usage: {PROGRAM} --get <percorso>")
-    print("Legge un valore dalla configurazione effettiva (default piu' file).")
-    print("Il percorso usa ':' come separatore gerarchico delle opzioni.")
-    print("Esempi:")
+    print(f"Usage: {PROGRAM} --get <path>")
+    print("Reads one value from the effective configuration (defaults plus file).")
+    print("The path uses ':' as the hierarchical option separator.")
+    print("Examples:")
     print(f"  {PROGRAM} --get management:upgrade")
     print(f"  {PROGRAM} --get dispatch:diff:categories")
     print(f"  {PROGRAM} --get req:providers")
@@ -912,12 +912,12 @@ def do_print_raw() -> int:
         return 1
     target = get_config_path()
     if not target.exists():
-        print_error(f"File di configurazione non trovato: {target}.")
+        print_error(f"Configuration file not found: {target}.")
         return 1
     try:
         content = target.read_text(encoding="utf-8")
     except OSError as err:
-        print_error(f"Impossibile leggere '{target}': {err}.")
+        print_error(f"Cannot read '{target}': {err}.")
         return 1
     print(content, end="")
     return 0
@@ -928,9 +928,9 @@ def do_print() -> int:
 
     @details Deep-merges on-disk overrides onto hardcoded defaults, then
     renders the schema-ordered tree with branch connectors, `= <JSON>` scalar
-    leaves, masked secrets, and `Sel`/`Valore` selection tables. The root
-    annotation reports `ATTIVA` when the config file exists and
-    `PREDEFINITA` otherwise. Time complexity O(n) over configuration size.
+    leaves, masked secrets, and `Sel`/`Value` selection tables. The root
+    annotation reports `ACTIVE` when the config file exists and
+    `DEFAULT` otherwise. Time complexity O(n) over configuration size.
     @return {int} `0` on success; `1` on schema divergence.
     @satisfies REQ-095, REQ-096, REQ-097, REQ-098, DES-034
     """
@@ -938,8 +938,8 @@ def do_print() -> int:
     if _fail_on_schema_mismatch():
         return 1
     effective = load_runtime_config()
-    state = "ATTIVA" if get_config_path().exists() else "PREDEFINITA"
-    lines = [f"{ROOT_LABEL} - [Stato: {state}]"]
+    state = "ACTIVE" if get_config_path().exists() else "DEFAULT"
+    lines = [f"{ROOT_LABEL} - [State: {state}]"]
     _render_print_children("", CONFIG_SCHEMA, effective, lines)
     print("\n".join(lines))
     return 0
@@ -950,10 +950,10 @@ def do_params() -> int:
 
     @details Emits the schema-ordered tree with per-group descriptions,
     per-option kind labels and short descriptions, schema-declared input
-    examples on scalar lines and continuation lines, `Valore`/`Significato`
-    allowed-value tables for selection options, `Chiave`/`Formato`
-    default-structure tables for `oggetto` options, and element-format
-    tables for `elenco` options. Time complexity O(n) over schema node
+    examples on scalar lines and continuation lines, `Value`/`Meaning`
+    allowed-value tables for selection options, `Key`/`Format`
+    default-structure tables for `object` options, and element-format
+    tables for `list` options. Time complexity O(n) over schema node
     count.
     @return {int} `0` on success; `1` on schema divergence.
     @satisfies DES-034, DES-036, REQ-107, REQ-108, REQ-110, REQ-111,
@@ -962,7 +962,7 @@ def do_params() -> int:
 
     if _fail_on_schema_mismatch():
         return 1
-    lines = [f"{ROOT_LABEL} - Radice delle impostazioni di {PROGRAM}."]
+    lines = [f"{ROOT_LABEL} - Root of the {PROGRAM} settings."]
     _render_params_children("", CONFIG_SCHEMA, lines)
     print("\n".join(lines))
     return 0
@@ -990,11 +990,11 @@ def do_get(path: str | None) -> int:
         return 1
     node = _find_schema_node(parts)
     if node is None:
-        print_error(f"Percorso di configurazione sconosciuto: {path}.")
+        print_error(f"Unknown configuration path: {path}.")
         return 1
     value = _resolve_value(load_runtime_config(), parts)
     if value is _MISSING:
-        print_error(f"Parametro non trovato nella configurazione: {path}.")
+        print_error(f"Parameter not found in configuration: {path}.")
         return 1
     value = _mask_secrets(node, value)
     if isinstance(value, dict):
@@ -1028,26 +1028,26 @@ def do_set(path: str | None, value: str | None) -> int:
         return 1
     node = _find_schema_node(parts)
     if not isinstance(node, OptionSpec):
-        print_error(f"Percorso di configurazione sconosciuto: {path}.")
+        print_error(f"Unknown configuration path: {path}.")
         return 1
     raw = value
     from_environment = False
     if raw.startswith("$") and len(raw) > 1:
         env_name = raw[1:]
         if env_name not in os.environ:
-            print_error(f"Variabile d'ambiente non definita: {env_name}.")
+            print_error(f"Environment variable not defined: {env_name}.")
             return 1
         raw = os.environ[env_name]
         from_environment = True
     ok, coerced, error = _coerce_value(raw, node)
     if not ok:
-        print_error(f"Valore non valido per {path} [{node.kind}]: {error}.")
+        print_error(f"Invalid value for {path} [{node.kind}]: {error}.")
         return 1
     if node.choices:
         allowed = [choice.value for choice in node.choices]
         if coerced not in allowed:
             print_error(
-                f"Valore non ammesso per {path}. Valori ammessi: "
+                f"Disallowed value for {path}. Allowed values: "
                 + ", ".join(allowed)
                 + "."
             )
@@ -1059,9 +1059,9 @@ def do_set(path: str | None, value: str | None) -> int:
     _set_nested(overrides, parts, coerced)
     _write_overrides(overrides)
     if from_environment:
-        print_success("Valore acquisito dall'ambiente e salvato con successo.")
+        print_success("Value acquired from environment and saved.")
     else:
-        print_success("Valore salvato con successo.")
+        print_success("Value saved successfully.")
     return 0
 
 
@@ -1085,7 +1085,7 @@ def do_unset(path: str | None) -> int:
         print_config_cli_help("--unset")
         return 1
     if _find_schema_node(parts) is None:
-        print_error(f"Percorso di configurazione sconosciuto: {path}.")
+        print_error(f"Unknown configuration path: {path}.")
         return 1
     overrides, load_error = _load_overrides()
     if overrides is None:
@@ -1093,13 +1093,13 @@ def do_unset(path: str | None) -> int:
         return 1
     removed = _pop_nested(overrides, parts)
     if removed is _MISSING:
-        print_error(f"Nessun parametro da rimuovere per: {path}.")
+        print_error(f"No parameter to remove for: {path}.")
         return 1
     _write_overrides(overrides)
     if isinstance(removed, dict):
-        print(f"ATTENZIONE: Rimossi tutti i parametri per {path}.")
+        print(f"WARNING: Removed all parameters for {path}.")
     else:
-        print_info(f"Parametro rimosso e default ripristinato: {path}.")
+        print_info(f"Parameter removed and default restored: {path}.")
     return 0
 
 

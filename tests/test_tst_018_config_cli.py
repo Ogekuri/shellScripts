@@ -44,7 +44,7 @@ import pytest
 from shell_scripts import config_cli
 
 _DIVERGENCE = ["default 'demo:x' is not covered by CONFIG_SCHEMA"]
-_DIVERGENCE_MARK = "non allineato"
+_DIVERGENCE_MARK = "not aligned"
 
 
 def _inject_divergence(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -183,16 +183,16 @@ def test_all_configuration_commands_fail_on_schema_mismatch(
     assert _DIVERGENCE_MARK in combined
 
 
-def test_do_print_renders_object_leaves_as_chiave_valore_tables(
+def test_do_print_renders_object_leaves_as_key_value_tables(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
     """@brief Verify `--print` details object leaves as box tables.
 
     @details Invokes `do_print` on the unmodified repository defaults; every
-    `oggetto` leaf MUST be detailed as a `Chiave`/`Valore` box table with one
+    `object` leaf MUST be detailed as a `Key`/`Value` box table with one
     row per entry (sorted keys, JSON-encoded cell values) instead of a
     single-line JSON blob, while remaining embedded in the REQ-095 tree.
-    expected_output: return code `0`; `Chiave`/`Valore` headers; per-entry
+    expected_output: return code `0`; `Key`/`Value` headers; per-entry
     rows; no `= {` scalar-leaf rendering for object leaves.
     @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
     @param tmp_path {pathlib.Path} Test-owned temporary directory.
@@ -205,7 +205,7 @@ def test_do_print_renders_object_leaves_as_chiave_valore_tables(
     return_code = config_cli.do_print()
     captured = capsys.readouterr()
     assert return_code == 0
-    assert "│ Chiave" in captured.out
+    assert "│ Key" in captured.out
     assert "│ code" in captured.out
     assert '["bcompare"]' in captured.out
     assert '= {"' not in captured.out
@@ -221,10 +221,10 @@ def test_do_print_renders_list_leaves_as_indexed_tables(
     """@brief Verify `--print` details list leaves as indexed box tables.
 
     @details Invokes `do_print` on the unmodified repository defaults; every
-    `elenco` leaf MUST be detailed as a `#`/`Valore` box table with one row
+    `list` leaf MUST be detailed as a `#`/`Value` box table with one row
     per element (1-based position, JSON-encoded cell values) instead of a
     single-line JSON blob.
-    expected_output: return code `0`; `#`/`Valore` headers; per-element rows;
+    expected_output: return code `0`; `#`/`Value` headers; per-element rows;
     no `= [` scalar-leaf rendering for list leaves.
     @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
     @param tmp_path {pathlib.Path} Test-owned temporary directory.
@@ -303,7 +303,7 @@ def test_do_params_appends_input_examples_to_scalar_lines(
 
     @details Invokes `do_params` on the unmodified repository; every scalar
     option line MUST append its schema-declared example as
-    `(Esempio di input: <token>)` per REQ-110.
+    `(Input example: <token>)` per REQ-110.
     expected_output: return code `0` and inline example suffixes on scalar
     option lines.
     @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
@@ -317,17 +317,17 @@ def test_do_params_appends_input_examples_to_scalar_lines(
     return_code = config_cli.do_params()
     captured = capsys.readouterr()
     assert return_code == 0
-    assert '(Esempio di input: "uv tool install shellscripts")' in captured.out
-    assert '(Esempio di input: "uv tool uninstall shellscripts")' in captured.out
+    assert '(Input example: "uv tool install shellscripts")' in captured.out
+    assert '(Input example: "uv tool uninstall shellscripts")' in captured.out
 
 
 def test_do_params_renders_object_shape_table_and_example(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
-    """@brief Verify `oggetto` options document format, shape, and example.
+    """@brief Verify `object` options document format, shape, and example.
 
-    @details Invokes `do_params` on the unmodified repository; `oggetto`
-    options MUST print the JSON-object input note, the `Chiave`/`Formato`
+    @details Invokes `do_params` on the unmodified repository; `object`
+    options MUST print the JSON-object input note, the `Key`/`Format`
     default-structure table resolved from `DEFAULT_RUNTIME_CONFIG`, and the
     schema-declared example continuation line per REQ-112.
     expected_output: return code `0`; input note; shape table rows; example
@@ -343,20 +343,20 @@ def test_do_params_renders_object_shape_table_and_example(
     return_code = config_cli.do_params()
     captured = capsys.readouterr()
     assert return_code == 0
-    assert "[Oggetto]" in captured.out
-    assert "Formato di input: oggetto JSON" in captured.out
-    assert "│ Chiave" in captured.out
+    assert "[Object]" in captured.out
+    assert "Input format: JSON object" in captured.out
+    assert "│ Key" in captured.out
     assert "│ code" in captured.out
-    assert '(Esempio di input: {"code": ["bcompare"], "pdf": ["okular"]})' in captured.out
+    assert '(Input example: {"code": ["bcompare"], "pdf": ["okular"]})' in captured.out
 
 
 def test_do_params_renders_list_format_table_and_example(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
-    """@brief Verify `elenco` options document format, elements, and example.
+    """@brief Verify `list` options document format, elements, and example.
 
-    @details Invokes `do_params` on the unmodified repository; `elenco`
-    options MUST print the JSON-array input note, the `Campo`/`Formato`
+    @details Invokes `do_params` on the unmodified repository; `list`
+    options MUST print the JSON-array input note, the `Field`/`Format`
     element-format table, and the schema-declared example continuation line
     per REQ-113.
     expected_output: return code `0`; input note; element-format row; example
@@ -372,10 +372,10 @@ def test_do_params_renders_list_format_table_and_example(
     return_code = config_cli.do_params()
     captured = capsys.readouterr()
     assert return_code == 0
-    assert "[Elenco]" in captured.out
-    assert "Formato di input: elenco JSON" in captured.out
-    assert "│ elementi" in captured.out
-    assert '(Esempio di input: ["codex:skills", "pi:prompts"])' in captured.out
+    assert "[List]" in captured.out
+    assert "Input format: JSON list" in captured.out
+    assert "│ elements" in captured.out
+    assert '(Input example: ["codex:skills", "pi:prompts"])' in captured.out
 
 
 def test_do_params_prints_example_line_after_selection_table(
@@ -384,7 +384,7 @@ def test_do_params_prints_example_line_after_selection_table(
     """@brief Verify selection tables are followed by the example line.
 
     @details Injects a synthetic selection schema and invokes `do_params`;
-    the `(Esempio di input: <token>)` continuation line MUST directly follow
+    the `(Input example: <token>)` continuation line MUST directly follow
     the allowed-value table bottom border per REQ-111, falling back to the
     first allowed choice quoted when no schema example is declared.
     expected_output: return code `0`; example line adjacent below the table
@@ -397,18 +397,18 @@ def test_do_params_prints_example_line_after_selection_table(
     """
 
     choice_spec = config_cli.OptionSpec(
-        "selezione",
-        "Scelta di test per la verifica dell'esempio.",
+        "selection",
+        "Test choice for example verification.",
         choices=(
-            config_cli.ChoiceSpec("A", "prima"),
-            config_cli.ChoiceSpec("B", "seconda"),
+            config_cli.ChoiceSpec("A", "first"),
+            config_cli.ChoiceSpec("B", "second"),
         ),
     )
     schema = (
         (
             "grp",
             config_cli.GroupSpec(
-                "Gruppo di test.",
+                "Test group.",
                 (("choice", choice_spec),),
             ),
         ),
@@ -422,7 +422,7 @@ def test_do_params_prints_example_line_after_selection_table(
     matching = [
         index
         for index, line in enumerate(out_lines)
-        if '(Esempio di input: "A")' in line
+        if '(Input example: "A")' in line
     ]
     assert return_code == 0
     assert matching

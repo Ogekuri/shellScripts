@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.8.0"
-date: "2026-11-10T17:30:00Z"
+version: "0.9.0"
+date: "2026-11-10T17:20:00Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -105,6 +105,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **CTN-004**: MUST restrict automatic self-upgrade and self-uninstall actions to Linux platforms and MUST print manual fallback commands on non-Linux platforms.
 - **CTN-005**: MUST treat Git repository root detection as a hard prerequisite for project-context commands.
 - **CTN-006**: MUST execute all GitHub Actions JavaScript action runtimes in `.github/workflows/release-pypi.yml` on Node24 or newer.
+- **CTN-007**: MUST write every user-visible CLI message, help text, evidence token, and schema label in English.
 
 ## 3. Requirements
 
@@ -203,7 +204,7 @@ No explicit performance optimizations identified.
 - **REQ-057**: MUST implement `video2h264` using `subprocess.run` with inherited stdio and blocking wait for `ffmpeg -i <input> -c:v libx264 -profile:v high -level 4.1 -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k <input>.mp4`.
 - **REQ-058**: MUST implement `video2h265` using `subprocess.run` with inherited stdio and blocking wait for `ffmpeg -i <input> -c:v libx265 -crf 23 -tag:v hvc1 -pix_fmt yuv420p -c:a aac -b:a 192k <input>.mp4`.
 - **REQ-059**: MUST skip the version-check HTTP request when the cooldown file exists, the persisted idle delay is active, and neither `--version` nor `--ver` is passed.
-- **REQ-060**: MUST print a bright-green line containing `Versione Disponibile` and `Versione Installata` when the latest release version differs from the installed version.
+- **REQ-060**: MUST print a bright-green line containing `Update Available` and `Installed Version` when the latest release version differs from the installed version.
 - **REQ-061**: MUST print a bright-red error line and apply an 86400-second cooldown when the version-check request returns an HTTP error response or raises a non-HTTP exception.
 - **REQ-062**: MUST print one cleanup evidence line per predefined cleanup path using status `deleted` for removed filesystem entries and status `skip` for absent paths.
 - **REQ-063**: MUST label each `deleted` cleanup evidence line with entry kind `file` or `dir` based on the removed filesystem entry type.
@@ -223,23 +224,23 @@ No explicit performance optimizations identified.
 - **REQ-094**: MUST implement `--print-raw` to print the on-disk `~/.config/shellScripts/config.json` content verbatim and return `0`, or print an error naming the path and return `1` when the file is missing.
 - **REQ-095**: MUST implement `--print` to render the effective configuration (defaults deep-merged with file overrides) as a tree using `├──`, `└──`, and `│` connectors.
 - **REQ-096**: MUST render `--print` scalar leaves as `= <JSON-encoded value>` with the option name left-justified to a fixed column width.
-- **REQ-097**: MUST render `--print` selection leaves as `Sel`/`Valore` tables using `┌`, `┬`, `┐`, `├`, `┼`, `┤`, `└`, `┴`, `┘`, `─`, marking the active choice with `[*]` and others with `[ ]`.
+- **REQ-097**: MUST render `--print` selection leaves as `Sel`/`Value` tables using `┌`, `┬`, `┐`, `├`, `┼`, `┤`, `└`, `┴`, `┘`, `─`, marking the active choice with `[*]` and others with `[ ]`.
 - **REQ-098**: MUST mask secret option values as `********` in `--print` and `--get` outputs.
 - **REQ-099**: MUST implement `--get <path>` to resolve `:`-separated hierarchical paths against the effective configuration and print scalar values as single-line JSON.
 - **REQ-100**: MUST make `--get` print object subtrees as indented JSON and print an error with return code `1` for unknown or non-configurable paths.
-- **REQ-101**: MUST implement `--set <path> <value>` to coerce values by schema kind (`stringa`, `intero`, `booleano`, `selezione`, `elenco`, `oggetto`) before persisting merged overrides.
+- **REQ-101**: MUST implement `--set <path> <value>` to coerce values by schema kind (`string`, `integer`, `boolean`, `selection`, `list`, `object`) before persisting merged overrides.
 - **REQ-102**: MUST validate `--set` values against schema-allowed choices and reject disallowed values with return code `1` without modifying the configuration file.
 - **REQ-103**: MUST make successful `--set` persist the merged on-disk configuration with sorted keys, two-space indentation, and unchanged unrelated keys, then print a success line and return `0`.
 - **REQ-104**: MUST make `--set` value tokens starting with `$` resolve from the named environment variable and print environment-acquisition evidence; missing variables MUST fail with return code `1`.
 - **REQ-105**: MUST implement `--unset <path>` to remove the override key from the on-disk configuration, persist the result, and reactivate the hardcoded default value.
-- **REQ-106**: MUST make `--unset` print `ATTENZIONE: Rimossi tutti i parametri per <path>.` when removing an object subtree and an error with return code `1` for absent paths.
-- **REQ-107**: MUST implement `--params` to render the schema hierarchy with per-option type labels (`[Stringa]`, `[Intero]`, `[Booleano]`, `[Selezione]`, `[Elenco]`, `[Oggetto]`) and short descriptions.
-- **REQ-108**: MUST render `--params` selection options with allowed-value tables using `Valore` and `Significato` columns.
+- **REQ-106**: MUST make `--unset` print `WARNING: Removed all parameters for <path>.` when removing an object subtree and an error with return code `1` for absent paths.
+- **REQ-107**: MUST implement `--params` to render the schema hierarchy with per-option type labels (`[String]`, `[Integer]`, `[Boolean]`, `[Selection]`, `[List]`, `[Object]`) and short descriptions.
+- **REQ-108**: MUST render `--params` selection options with allowed-value tables using `Value` and `Meaning` columns.
 - **REQ-109**: MUST make `--get`, `--set`, and `--unset` print command-specific inline usage help and return `1` when required path or value arguments are missing.
-- **REQ-110**: MUST render every `--params` scalar option line (`stringa`, `intero`, `booleano`) with its schema-declared input example appended as `(Esempio di input: <token>)`.
-- **REQ-111**: MUST print `(Esempio di input: <token>)` on one continuation line after each `--params` selection allowed-value table.
-- **REQ-112**: MUST render `--params` `oggetto` options with a JSON-object input note, a `Chiave`/`Formato` default-structure table derived from `DEFAULT_RUNTIME_CONFIG`, and an example continuation line.
-- **REQ-113**: MUST render `--params` `elenco` options with a JSON-array input note, an element-format table, and an example continuation line.
+- **REQ-110**: MUST render every `--params` scalar option line (`string`, `integer`, `boolean`) with its schema-declared input example appended as `(Input example: <token>)`.
+- **REQ-111**: MUST print `(Input example: <token>)` on one continuation line after each `--params` selection allowed-value table.
+- **REQ-112**: MUST render `--params` `object` options with a JSON-object input note, a `Key`/`Format` default-structure table derived from `DEFAULT_RUNTIME_CONFIG`, and an example continuation line.
+- **REQ-113**: MUST render `--params` `list` options with a JSON-array input note, an element-format table, and an example continuation line.
 
 ## 4. Test Requirements
 
@@ -308,4 +309,4 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
 | DES-021..DES-027, REQ-079..REQ-082, TST-015 | `scripts/pre-release-check.sh`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `check_artifacts`, `cleanup_artifacts`, `fail_fast` | Script resolves the repository root, runs pytest with `PYTHONPATH=src` via `.venv/bin/python3` or `python3`, removes `dist`, builds via `uv build` or `python3 -m build`, verifies sdist and wheel artifacts, removes `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories via an EXIT trap on success and failure paths, prints `PASS`/`FAIL`/`clean` evidence lines, exits `1` on first failure and `0` on full success; tests assert script structure and Bash syntax. |
 | DES-028, DES-029, REQ-083, TST-016 | `.github/workflows/release-pypi.yml`; `tests/test_tst_016_release_precheck_gating.py` | `jobs.pre-release-check`, `jobs.build-release.needs` | Workflow runs `scripts/pre-release-check.sh` in a dedicated `pre-release-check` job (checkout, `setup-uv@v10.3.3`, `uv sync`, script execution) and declares `needs: [check-branch, pre-release-check]` on `build-release`, so any check failure skips artifact creation, attestation, changelog, GitHub release, and PyPI publication steps; tests assert job presence, script invocation, and needs declaration. |
-| REQ-094 through REQ-113, DES-032 through DES-036 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `do_print_raw`, `do_print`, `do_params`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags print the raw file, render the tree and `Sel`/`Valore` selection tables with box-drawing characters, mask secrets, resolve, validate, and persist `:`-separated option paths with environment acquisition, and print `--params` descriptions with `Valore`/`Significato` tables, per-option input examples, and `oggetto`/`elenco` formatting tables. |
+| REQ-094 through REQ-113, DES-032 through DES-036 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `do_print_raw`, `do_print`, `do_params`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags print the raw file, render the tree and `Sel`/`Value` selection tables with box-drawing characters, mask secrets, resolve, validate, and persist `:`-separated option paths with environment acquisition, and print `--params` descriptions with `Value`/`Meaning` tables, per-option input examples, and `object`/`list` formatting tables. |

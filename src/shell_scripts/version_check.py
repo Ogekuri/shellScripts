@@ -341,8 +341,8 @@ def check_for_updates(current_version: str) -> None:
 
         if latest and _compare_versions(current_version, latest):
             print(
-                f"{BRIGHT_GREEN}Versione Disponibile: {latest} | "
-                f"Versione Installata: {current_version}{RESET}"
+                f"{BRIGHT_GREEN}Update Available: {latest} | "
+                f"Installed Version: {current_version}{RESET}"
             )
 
         _write_idle_config(now, IDLE_DELAY)
