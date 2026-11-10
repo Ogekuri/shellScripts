@@ -8,9 +8,10 @@ validation is derived from the declarative `CONFIG_SCHEMA` registry that MUST
 mirror `DEFAULT_RUNTIME_CONFIG` (DES-032, DES-033); divergence fails every
 configuration command at dispatch time (DES-034). Existing configuration
 load, merge, normalization, and accessor logic is not modified (DES-035).
-@satisfies DES-032, DES-033, DES-034, DES-035, REQ-094, REQ-095, REQ-096,
+@satisfies DES-032, DES-033, DES-034, DES-035, DES-036, REQ-094, REQ-095, REQ-096,
 REQ-097, REQ-098, REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104,
-REQ-105, REQ-106, REQ-107, REQ-108, REQ-109
+REQ-105, REQ-106, REQ-107, REQ-108, REQ-109, REQ-110, REQ-111, REQ-112,
+REQ-113
 """
 
 from __future__ import annotations
@@ -86,16 +87,18 @@ class OptionSpec:
     """@brief Declarative metadata of one configurable leaf option.
 
     @details Binds one configuration key to its value kind, short
-    description, optional allowed choices, and secret flag; drives `--params`
-    rendering, `--print` value rendering, `--get` masking, and `--set`
-    coercion plus choice validation.
-    @satisfies DES-032, REQ-096, REQ-097, REQ-098, REQ-101, REQ-102, REQ-107
+    description, optional allowed choices, secret flag, and input-example
+    token; drives `--params` rendering, `--print` value rendering, `--get`
+    masking, and `--set` coercion plus choice validation.
+    @satisfies DES-032, DES-036, REQ-096, REQ-097, REQ-098, REQ-101,
+      REQ-102, REQ-107, REQ-110
     """
 
     kind: str
     description: str
     choices: tuple[ChoiceSpec, ...] = ()
     secret: bool = False
+    example: str = ""
 
 
 @dataclass(frozen=True)
@@ -130,6 +133,7 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                     OptionSpec(
                         "stringa",
                         "Comando Linux per l'aggiornamento da PyPI.",
+                        example='"uv tool install shellscripts"',
                     ),
                 ),
                 (
@@ -138,6 +142,10 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                         "stringa",
                         "Template del comando di upgrade dal tag GitHub "
                         "({tag} sostituito a runtime).",
+                        example=(
+                            '"uv tool install shellscripts --from '
+                            'git+https://github.com/Ogekuri/shellScripts.git@{tag}"'
+                        ),
                     ),
                 ),
                 (
@@ -145,6 +153,7 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                     OptionSpec(
                         "stringa",
                         "Comando Linux per la disinstallazione.",
+                        example='"uv tool uninstall shellscripts"',
                     ),
                 ),
             ),
@@ -165,6 +174,8 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                                 OptionSpec(
                                     "oggetto",
                                     "Mappatura categoria-comando per il diff.",
+                                    example='{"code": ["bcompare"], '
+                                            '"pdf": ["okular"]}',
                                 ),
                             ),
                             (
@@ -172,6 +183,7 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                                 OptionSpec(
                                     "elenco",
                                     "Vettore comando di fallback per il diff.",
+                                    example='["bcompare"]',
                                 ),
                             ),
                         ),
@@ -187,6 +199,8 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                                 OptionSpec(
                                     "oggetto",
                                     "Mappatura categoria-comando per l'editor.",
+                                    example='{"image": ["gimp"], '
+                                            '"pdf": ["okular"]}',
                                 ),
                             ),
                             (
@@ -194,6 +208,7 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                                 OptionSpec(
                                     "elenco",
                                     "Vettore comando di fallback per l'editor.",
+                                    example='["gedit", "-w"]',
                                 ),
                             ),
                         ),
@@ -209,6 +224,8 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                                 OptionSpec(
                                     "oggetto",
                                     "Mappatura categoria-comando per il viewer.",
+                                    example='{"image": ["sushi"], '
+                                            '"pdf": ["sushi"]}',
                                 ),
                             ),
                             (
@@ -216,6 +233,7 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                                 OptionSpec(
                                     "elenco",
                                     "Vettore comando di fallback per il viewer.",
+                                    example='["sushi"]',
                                 ),
                             ),
                         ),
@@ -234,6 +252,7 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                     OptionSpec(
                         "elenco",
                         "Provider ripetuti passati a req con --provider.",
+                        example='["codex:skills", "pi:prompts"]',
                     ),
                 ),
                 (
@@ -242,6 +261,7 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
                         "elenco",
                         "Controlli statici ripetuti passati a req con "
                         "--enable-static-check.",
+                        example='["Python=Ruff"]',
                     ),
                 ),
             ),
@@ -618,22 +638,58 @@ def _render_print_children(
         lines.append(f"{prefix}{branch}{name}= {_render_json(rendered)}")
 
 
+def _describe_value_shape(value: Any) -> str:
+    """@brief Map one default configuration value to its shape label.
+
+    @details Normalizes Python runtime types into stable shape tokens
+    consumed by the `--params` `oggetto` default-structure table (REQ-112).
+    The boolean check precedes the integer check because `bool` subclasses
+    `int`. Time complexity O(1).
+    @param value {Any} Default configuration value to classify.
+    @return {str} Shape token: `stringa`, `intero`, `booleano`, `elenco di
+      stringhe`, `oggetto`, or `valore` for unclassified payloads.
+    @satisfies REQ-112
+    """
+
+    if isinstance(value, bool):
+        return "booleano"
+    if isinstance(value, str):
+        return "stringa"
+    if isinstance(value, (int, float)):
+        return "intero"
+    if isinstance(value, list):
+        return "elenco di stringhe"
+    if isinstance(value, dict):
+        return "oggetto"
+    return "valore"
+
+
 def _render_params_children(
     prefix: str,
     children: "tuple[tuple[str, OptionSpec | GroupSpec], ...]",
     lines: list[str],
+    prefix_parts: tuple[str, ...] = (),
 ) -> None:
     """@brief Render one `--params` hierarchy level.
 
     @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
-    connectors, left-justified names with `-` annotations, kind labels for
-    leaves, and `Valore`/`Significato` allowed-value tables for selection
-    leaves. Time complexity O(n) over subtree node count.
+    connectors, left-justified names with `-` annotations, and kind labels
+    for leaves. Scalar leaves append the schema-declared input example;
+    selection leaves append a `Valore`/`Significato` allowed-value table
+    followed by an example continuation line; `oggetto` leaves append a
+    JSON-object input note, a `Chiave`/`Formato` default-structure table
+    resolved from `DEFAULT_RUNTIME_CONFIG`, and an example continuation
+    line; `elenco` leaves append a JSON-array input note, an element-format
+    table, and an example continuation line. Table and example lines carry
+    the `│` tree continuation of `node_prefix` for non-final siblings.
+    Time complexity O(n) over subtree node count.
     @param prefix {str} Ancestor connector prefix for this level.
     @param children {tuple} Sibling schema nodes being rendered.
     @param lines {list[str]} Output accumulator mutated in place.
+    @param prefix_parts {tuple[str,...]} Schema path segments of this level,
+      used to resolve `oggetto` defaults for the structure table.
     @return {None} Appends rendered lines to `lines`.
-    @satisfies REQ-107, REQ-108
+    @satisfies DES-036, REQ-107, REQ-108, REQ-110, REQ-111, REQ-112, REQ-113
     """
 
     total = len(children)
@@ -641,11 +697,15 @@ def _render_params_children(
         last = index == total - 1
         branch = "└── " if last else "├── "
         node_prefix = prefix + ("    " if last else "│   ")
+        node_parts = prefix_parts + (key,)
+        indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
         name = key.ljust(NAME_COLUMN_WIDTH)
         if isinstance(node, GroupSpec):
             lines.append(f"{prefix}│")
             lines.append(f"{prefix}{branch}{name}- {node.description}")
-            _render_params_children(node_prefix, node.children, lines)
+            _render_params_children(
+                node_prefix, node.children, lines, node_parts
+            )
             continue
         kind_label = KIND_LABELS.get(node.kind, node.kind)
         if node.choices:
@@ -654,13 +714,51 @@ def _render_params_children(
                 "Valori ammessi:"
             )
             rows = [[choice.value, choice.meaning] for choice in node.choices]
-            indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
             lines.extend(
                 _render_box_table(["Valore", "Significato"], rows, indent)
             )
+            example = node.example
+            if not example:
+                example = f'"{node.choices[0].value}"'
+            lines.append(f"{indent}(Esempio di input: {example})")
             continue
+        if node.kind == "oggetto":
+            lines.append(
+                f"{prefix}{branch}{name}- [{kind_label}] {node.description} "
+                "Formato di input: oggetto JSON. Struttura predefinita:"
+            )
+            default_value = _resolve_value(
+                DEFAULT_RUNTIME_CONFIG, list(node_parts)
+            )
+            rows: list[list[str]] = []
+            if isinstance(default_value, dict):
+                rows = [
+                    [entry_key, _describe_value_shape(entry_value)]
+                    for entry_key, entry_value in sorted(default_value.items())
+                ]
+            if rows:
+                lines.extend(
+                    _render_box_table(["Chiave", "Formato"], rows, indent)
+                )
+            lines.append(f"{indent}(Esempio di input: {node.example})")
+            continue
+        if node.kind == "elenco":
+            lines.append(
+                f"{prefix}{branch}{name}- [{kind_label}] {node.description} "
+                "Formato di input: elenco JSON. Struttura ammessa:"
+            )
+            lines.extend(
+                _render_box_table(
+                    ["Campo", "Formato"],
+                    [["elementi", "stringhe non vuote"]],
+                    indent,
+                )
+            )
+            lines.append(f"{indent}(Esempio di input: {node.example})")
+            continue
+        suffix = f" (Esempio di input: {node.example})" if node.example else ""
         lines.append(
-            f"{prefix}{branch}{name}- [{kind_label}] {node.description}"
+            f"{prefix}{branch}{name}- [{kind_label}] {node.description}{suffix}"
         )
 
 
@@ -851,11 +949,15 @@ def do_params() -> int:
     """@brief Render the configurable parameter hierarchy with descriptions.
 
     @details Emits the schema-ordered tree with per-group descriptions,
-    per-option kind labels and short descriptions, and `Valore`/`Significato`
-    allowed-value tables for selection options. Time complexity O(n) over
-    schema node count.
+    per-option kind labels and short descriptions, schema-declared input
+    examples on scalar lines and continuation lines, `Valore`/`Significato`
+    allowed-value tables for selection options, `Chiave`/`Formato`
+    default-structure tables for `oggetto` options, and element-format
+    tables for `elenco` options. Time complexity O(n) over schema node
+    count.
     @return {int} `0` on success; `1` on schema divergence.
-    @satisfies REQ-107, REQ-108, DES-034
+    @satisfies DES-034, DES-036, REQ-107, REQ-108, REQ-110, REQ-111,
+      REQ-112, REQ-113
     """
 
     if _fail_on_schema_mismatch():

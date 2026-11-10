@@ -1599,7 +1599,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# config_cli.py | Python | 1016L | 34 symbols | 7 imports | 58 comments
+# config_cli.py | Python | 1119L | 35 symbols | 7 imports | 59 comments
 > Path: `src/shell_scripts/config_cli.py`
 
 ## Imports
@@ -1615,32 +1615,32 @@ from shell_scripts.utils import print_error, print_info, print_success
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L32)
+- var `PROGRAM = "shellscripts"` (L33)
 - @brief CLI program token used in inline usage help output.
-- var `ROOT_LABEL = "Configurazione_shellScripts"` (L36)
+- var `ROOT_LABEL = "Configurazione_shellScripts"` (L37)
 - @brief Root node label rendered by `--print` and `--params` trees.
-- var `NAME_COLUMN_WIDTH = 24` (L42)
-- var `PATH_SEPARATOR = ":"` (L46)
+- var `NAME_COLUMN_WIDTH = 24` (L43)
+- var `PATH_SEPARATOR = ":"` (L47)
 - @brief Hierarchical path separator accepted by `--get`/`--set`/`--unset`.
-- var `MASKED_SECRET = "********"` (L50)
+- var `MASKED_SECRET = "********"` (L51)
 - @brief Mask rendered in place of secret option values.
-- var `KIND_LABELS = {` (L56)
-### class `class ChoiceSpec` `@dataclass(frozen=True)` (L71-83)
+- var `KIND_LABELS = {` (L57)
+### class `class ChoiceSpec` `@dataclass(frozen=True)` (L72-84)
 - @brief One allowed value of a selection-type option.
 - @details Immutable registry record pairing an accepted value token with its meaning, rendered in `Sel`/`Valore` and `Valore`/`Significato` tables by `--print` and `--params`.
 - @satisfies REQ-097, REQ-108
 
-### class `class OptionSpec` `@dataclass(frozen=True)` (L85-100)
+### class `class OptionSpec` `@dataclass(frozen=True)` (L86-103)
 - @brief Declarative metadata of one configurable leaf option.
-- @details Binds one configuration key to its value kind, short description, optional allowed choices, and secret flag; drives `--params` rendering, `--print` value rendering, `--get` masking, and `--set` coercion plus choice validation.
-- @satisfies DES-032, REQ-096, REQ-097, REQ-098, REQ-101, REQ-102, REQ-107
+- @details Binds one configuration key to its value kind, short description, optional allowed choices, secret flag, and input-example token; drives `--params` rendering, `--print` value rendering, `--get` masking, and `--set` coercion plus choice validation.
+- @satisfies DES-032, DES-036, REQ-096, REQ-097, REQ-098, REQ-101, REQ-102, REQ-107, REQ-110
 
-### class `class GroupSpec` `@dataclass(frozen=True)` (L102-113)
+### class `class GroupSpec` `@dataclass(frozen=True)` (L105-116)
 - @brief Declarative metadata of one configuration subtree group.
 - @details Orders child schema nodes and carries the group description rendered by `--params` and the tree structure rendered by `--print`.
 - @satisfies DES-032, REQ-095, REQ-107
 
-### fn `def _split_path(path: str) -> list[str] | None` `priv` (L253-271)
+### fn `def _split_path(path: str) -> list[str] | None` `priv` (L273-291)
 - @brief Declarative configuration schema registry.
 - @brief Split one hierarchical configuration path.
 - @details Single source of truth for the configuration CLI surface; mirrors
@@ -1654,14 +1654,14 @@ whenever any configuration option, default, type, or allowed value changes
 - @satisfies DES-032, DES-033, DES-034
 - @satisfies REQ-099, REQ-109
 
-### fn `def _find_schema_node(parts: list[str]) -> "OptionSpec | GroupSpec | None"` `priv` (L272-297)
+### fn `def _find_schema_node(parts: list[str]) -> "OptionSpec | GroupSpec | None"` `priv` (L292-317)
 - @brief Resolve one path against the schema registry.
 - @details Walks `CONFIG_SCHEMA` by segments and returns the matching leaf or group record, or `None` for unknown or non-configurable paths. Time complexity O(n*m) over path depth and sibling count.
 - @param parts {list[str]} Non-empty path segments from `_split_path`.
 - @return {OptionSpec|GroupSpec|None} Schema record or `None` when absent.
 - @satisfies DES-032, REQ-100
 
-### fn `def _resolve_value(container: Any, parts: list[str]) -> Any` `priv` (L298-316)
+### fn `def _resolve_value(container: Any, parts: list[str]) -> Any` `priv` (L318-336)
 - @brief Navigate a nested mapping by path segments.
 - @details Returns `_MISSING` when any segment is absent or crosses a non-mapping value. Time complexity O(n) over path depth.
 - @param container {Any} Nested mapping candidate, usually a config dict.
@@ -1669,7 +1669,7 @@ whenever any configuration option, default, type, or allowed value changes
 - @return {Any} Resolved value or the `_MISSING` sentinel.
 - @satisfies REQ-099
 
-### fn `def _set_nested(container: dict[str, Any], parts: list[str], value: Any) -> None` `priv` (L317-338)
+### fn `def _set_nested(container: dict[str, Any], parts: list[str], value: Any) -> None` `priv` (L337-358)
 - @brief Write one value into a nested mapping by path segments.
 - @details Creates intermediate mappings for absent parents, replacing non-mapping parents with fresh mappings. Time complexity O(n) over depth.
 - @param container {dict[str,Any]} Target mapping mutated in place.
@@ -1678,7 +1678,7 @@ whenever any configuration option, default, type, or allowed value changes
 - @return {None} Mutates `container` in place.
 - @satisfies REQ-101, REQ-103
 
-### fn `def _pop_nested(container: dict[str, Any], parts: list[str]) -> Any` `priv` (L339-360)
+### fn `def _pop_nested(container: dict[str, Any], parts: list[str]) -> Any` `priv` (L359-380)
 - @brief Remove one key from a nested mapping by path segments.
 - @details Returns the removed value or `_MISSING` when any segment is absent or crosses a non-mapping value. Time complexity O(n) over depth.
 - @param container {dict[str,Any]} Target mapping mutated in place.
@@ -1686,9 +1686,9 @@ whenever any configuration option, default, type, or allowed value changes
 - @return {Any} Removed value or the `_MISSING` sentinel.
 - @satisfies REQ-105, REQ-106
 
-### fn `def _iter_schema_leaf_paths(` `priv` (L361-363)
+### fn `def _iter_schema_leaf_paths(` `priv` (L381-383)
 
-### fn `def _iter_default_leaf_paths(` `priv` (L383-385)
+### fn `def _iter_default_leaf_paths(` `priv` (L403-405)
 - @brief Enumerate every schema leaf path.
 - @details Depth-first recursion yielding tuples of path segments for every
 `OptionSpec` node. Time complexity O(n) over schema node count.
@@ -1697,7 +1697,7 @@ whenever any configuration option, default, type, or allowed value changes
 - @return {Iterator[tuple[str,...]]} Leaf path segment tuples.
 - @satisfies DES-034
 
-### fn `def find_schema_mismatches() -> list[str]` (L406-436)
+### fn `def find_schema_mismatches() -> list[str]` (L426-456)
 - @brief Enumerate every default configuration leaf path.
 - @brief Verify schema registry parity with configuration defaults.
 - @details Depth-first recursion yielding tuples of path segments for every
@@ -1711,16 +1711,16 @@ Time complexity O(n) over default node count.
 - @satisfies DES-034
 - @satisfies DES-033, DES-034
 
-### fn `def _fail_on_schema_mismatch() -> bool` `priv` (L442-460)
+### fn `def _fail_on_schema_mismatch() -> bool` `priv` (L462-480)
 - @brief Import-time snapshot of schema/defaults divergence descriptions.
 - @brief Enforce schema parity before configuration command execution.
 - @details Prints one bright-red error describing every divergence detected at import time and reports whether the calling command must abort. Time complexity O(n) over mismatch count.
 - @return {bool} `True` when the caller must fail with return code `1`.
 - @satisfies DES-034
 
-### fn `def _render_box_table(` `priv` (L461-462)
+### fn `def _render_box_table(` `priv` (L481-482)
 
-### fn `def _row(cells: list[str]) -> str` `priv` (L482-493)
+### fn `def _row(cells: list[str]) -> str` `priv` (L502-513)
 - @brief Render one box-drawing table.
 - @brief Render one padded table row line.
 - @details Builds column widths from headers and rows, then emits top,
@@ -1735,14 +1735,14 @@ O(n*m) over table cells.
 - @return {str} Indented line framed by `│` glyphs.
 - @satisfies REQ-097, REQ-108
 
-### fn `def _render_json(value: Any) -> str` `priv` (L503-515)
+### fn `def _render_json(value: Any) -> str` `priv` (L523-535)
 - @brief Render one configuration value as compact JSON.
 - @details Scalars, lists, and mappings serialize deterministically with sorted keys and no ASCII escaping. Time complexity O(n) over value size.
 - @param value {Any} Configuration value to serialize.
 - @return {str} Single-line JSON representation.
 - @satisfies REQ-096
 
-### fn `def _mask_secrets(node: "OptionSpec | GroupSpec | None", value: Any) -> Any` `priv` (L516-537)
+### fn `def _mask_secrets(node: "OptionSpec | GroupSpec | None", value: Any) -> Any` `priv` (L536-557)
 - @brief Replace secret leaf values with the mask constant.
 - @details Recursively walks schema groups and returns `MASKED_SECRET` for secret leaf values, leaving non-secret data unchanged. Time complexity O(n) over subtree size.
 - @param node {OptionSpec|GroupSpec|None} Schema record for `value`.
@@ -1750,10 +1750,11 @@ O(n*m) over table cells.
 - @return {Any} Masked copy of `value`.
 - @satisfies REQ-098
 
-### fn `def _render_print_children(` `priv` (L538-542)
+### fn `def _render_print_children(` `priv` (L558-562)
 
-### fn `def _render_params_children(` `priv` (L620-623)
+### fn `def _describe_value_shape(value: Any) -> str` `priv` (L641-666)
 - @brief Render one `--print` tree level.
+- @brief Map one default configuration value to its shape label.
 - @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
 connectors, left-justified names, `= <JSON>` scalar leaves, `Sel`/`Valore`
 selection tables for choice leaves with the active choice marked `[*]`,
@@ -1761,32 +1762,48 @@ selection tables for choice leaves with the active choice marked `[*]`,
 entry, JSON-encoded cell values), and `#`/`Valore` box tables for
 list-shaped leaves (one row per element, JSON-encoded cell values).
 Table lines carry the `│` tree continuation of `node_prefix` for
-non-final siblings. Masked secrets bypass table rendering and fall back to the scalar line.
+non-final siblings. Masked secrets bypass table rendering and fall
+back to the scalar line.
 Time complexity O(n) over subtree node count.
+- @details Normalizes Python runtime types into stable shape tokens consumed by the `--params` `oggetto` default-structure table (REQ-112). The boolean check precedes the integer check because `bool` subclasses `int`. Time complexity O(1).
 - @param prefix {str} Ancestor connector prefix for this level.
 - @param children {tuple} Sibling schema nodes being rendered.
 - @param values {Any} Effective configuration subtree for this level.
 - @param lines {list[str]} Output accumulator mutated in place.
+- @param value {Any} Default configuration value to classify.
 - @return {None} Appends rendered lines to `lines`.
+- @return {str} Shape token: `stringa`, `intero`, `booleano`, `elenco di stringhe`, `oggetto`, or `valore` for unclassified payloads.
 - @satisfies DES-032, REQ-095, REQ-096, REQ-097, REQ-098
+- @satisfies REQ-112
 
-### fn `def _load_overrides() -> "tuple[dict[str, Any] | None, str | None]"` `priv` (L666-691)
+### fn `def _render_params_children(` `priv` (L667-671)
+
+### fn `def _load_overrides() -> "tuple[dict[str, Any] | None, str | None]"` `priv` (L765-790)
 - @brief Render one `--params` hierarchy level.
 - @brief Load on-disk configuration overrides.
 - @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
-connectors, left-justified names with `-` annotations, kind labels for
-leaves, and `Valore`/`Significato` allowed-value tables for selection
-leaves. Time complexity O(n) over subtree node count.
+connectors, left-justified names with `-` annotations, and kind labels
+for leaves. Scalar leaves append the schema-declared input example;
+selection leaves append a `Valore`/`Significato` allowed-value table
+followed by an example continuation line; `oggetto` leaves append a
+JSON-object input note, a `Chiave`/`Formato` default-structure table
+resolved from `DEFAULT_RUNTIME_CONFIG`, and an example continuation
+line; `elenco` leaves append a JSON-array input note, an element-format
+table, and an example continuation line. Table and example lines carry
+the `│` tree continuation of `node_prefix` for non-final siblings.
+Time complexity O(n) over subtree node count.
 - @details Reads the canonical config file and returns its object payload; a missing file yields an empty mapping, while unreadable files, invalid JSON, and non-object roots yield an error message. Time complexity O(n) over file size.
 - @param prefix {str} Ancestor connector prefix for this level.
 - @param children {tuple} Sibling schema nodes being rendered.
 - @param lines {list[str]} Output accumulator mutated in place.
+- @param prefix_parts {tuple[str,...]} Schema path segments of this level,
+used to resolve `oggetto` defaults for the structure table.
 - @return {None} Appends rendered lines to `lines`.
 - @return {tuple[dict|None, str|None]} `(payload, None)` on success or `(None, error_message)` on failure.
-- @satisfies REQ-107, REQ-108
+- @satisfies DES-036, REQ-107, REQ-108, REQ-110, REQ-111, REQ-112, REQ-113
 - @satisfies REQ-101, REQ-103, REQ-105
 
-### fn `def _write_overrides(payload: dict[str, Any]) -> None` `priv` (L692-711)
+### fn `def _write_overrides(payload: dict[str, Any]) -> None` `priv` (L791-810)
 - @brief Persist configuration overrides to the canonical config file.
 - @details Creates parent directories when missing and writes sorted-key, two-space-indented JSON with a trailing newline for deterministic content. Time complexity O(n) over payload size.
 - @param payload {dict[str,Any]} Full on-disk override mapping.
@@ -1794,9 +1811,9 @@ leaves. Time complexity O(n) over subtree node count.
 - @throws {OSError} Propagated when filesystem write fails.
 - @satisfies REQ-103, REQ-105
 
-### fn `def _coerce_value(` `priv` (L712-713)
+### fn `def _coerce_value(` `priv` (L811-812)
 
-### fn `def print_config_cli_help(command: str) -> None` (L760-798)
+### fn `def print_config_cli_help(command: str) -> None` (L859-897)
 - @brief Coerce one raw CLI token by schema kind.
 - @brief Print command-specific inline usage help.
 - @details Maps `booleano` tokens to `true`/`false` (case-insensitive),
@@ -1813,32 +1830,32 @@ length.
 - @satisfies REQ-101
 - @satisfies REQ-109
 
-### fn `def do_print_raw() -> int` (L799-826)
+### fn `def do_print_raw() -> int` (L898-925)
 - @brief Print the on-disk configuration file verbatim.
 - @details Enforces schema registry parity with `DEFAULT_RUNTIME_CONFIG` before emitting output (DES-034, DES-032 surface membership), then emits the raw bytes of the canonical config file without parsing, or a bright-red error naming the path when the file is missing or unreadable. Time complexity O(n) over file size.
 - @return {int} `0` on success; `1` on schema divergence or when the file is missing or unreadable.
 - @satisfies DES-032, DES-034, REQ-094
 
-### fn `def do_print() -> int` (L827-848)
+### fn `def do_print() -> int` (L926-947)
 - @brief Render the effective configuration as an options tree.
 - @details Deep-merges on-disk overrides onto hardcoded defaults, then renders the schema-ordered tree with branch connectors, `= <JSON>` scalar leaves, masked secrets, and `Sel`/`Valore` selection tables. The root annotation reports `ATTIVA` when the config file exists and `PREDEFINITA` otherwise. Time complexity O(n) over configuration size.
 - @return {int} `0` on success; `1` on schema divergence.
 - @satisfies REQ-095, REQ-096, REQ-097, REQ-098, DES-034
 
-### fn `def do_params() -> int` (L849-867)
+### fn `def do_params() -> int` (L948-970)
 - @brief Render the configurable parameter hierarchy with descriptions.
-- @details Emits the schema-ordered tree with per-group descriptions, per-option kind labels and short descriptions, and `Valore`/`Significato` allowed-value tables for selection options. Time complexity O(n) over schema node count.
+- @details Emits the schema-ordered tree with per-group descriptions, per-option kind labels and short descriptions, schema-declared input examples on scalar lines and continuation lines, `Valore`/`Significato` allowed-value tables for selection options, `Chiave`/`Formato` default-structure tables for `oggetto` options, and element-format tables for `elenco` options. Time complexity O(n) over schema node count.
 - @return {int} `0` on success; `1` on schema divergence.
-- @satisfies REQ-107, REQ-108, DES-034
+- @satisfies DES-034, DES-036, REQ-107, REQ-108, REQ-110, REQ-111, REQ-112, REQ-113
 
-### fn `def do_get(path: str | None) -> int` (L868-903)
+### fn `def do_get(path: str | None) -> int` (L971-1006)
 - @brief Read one configuration value by hierarchical path.
 - @details Resolves the `:`-separated path against the schema registry and the effective configuration, masks secret leaves, prints scalars and lists as single-line JSON and object subtrees as indented JSON. Time complexity O(n) over subtree size.
 - @param path {str|None} Hierarchical path token, for example `management:upgrade`.
 - @return {int} `0` on success; `1` for missing arguments, unknown paths, or absent values.
 - @satisfies REQ-098, REQ-099, REQ-100, REQ-109, DES-034
 
-### fn `def do_set(path: str | None, value: str | None) -> int` (L904-964)
+### fn `def do_set(path: str | None, value: str | None) -> int` (L1007-1067)
 - @brief Set one configuration value by hierarchical path.
 - @details Resolves `$NAME` tokens from the environment, coerces the value by schema kind, validates schema-allowed choices, then loads the on-disk overrides, writes only the target key, and persists sorted-key indented JSON without touching unrelated keys. Time complexity O(n) over configuration size.
 - @param path {str|None} Hierarchical path token ending at a schema leaf.
@@ -1846,7 +1863,7 @@ length.
 - @return {int} `0` on success; `1` for missing arguments, unknown paths, invalid values, disallowed choices, undefined environment variables, or unreadable config files.
 - @satisfies REQ-101, REQ-102, REQ-103, REQ-104, REQ-109, DES-034
 
-### fn `def do_unset(path: str | None) -> int` (L965-1002)
+### fn `def do_unset(path: str | None) -> int` (L1068-1105)
 - @brief Remove one configuration override by hierarchical path.
 - @details Loads the on-disk overrides, removes the target key (leaf or object subtree), persists the result so hardcoded defaults reactivate, and prints the subtree-removal warning for object payloads. Time complexity O(n) over configuration size.
 - @param path {str|None} Hierarchical path token to remove.
@@ -1856,40 +1873,41 @@ length.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|32||
-|`ROOT_LABEL`|var|pub|36||
-|`NAME_COLUMN_WIDTH`|var|pub|42||
-|`PATH_SEPARATOR`|var|pub|46||
-|`MASKED_SECRET`|var|pub|50||
-|`KIND_LABELS`|var|pub|56||
-|`ChoiceSpec`|class|pub|71-83|class ChoiceSpec|
-|`OptionSpec`|class|pub|85-100|class OptionSpec|
-|`GroupSpec`|class|pub|102-113|class GroupSpec|
-|`_split_path`|fn|priv|253-271|def _split_path(path: str) -> list[str] | None|
-|`_find_schema_node`|fn|priv|272-297|def _find_schema_node(parts: list[str]) -> "OptionSpec | ...|
-|`_resolve_value`|fn|priv|298-316|def _resolve_value(container: Any, parts: list[str]) -> Any|
-|`_set_nested`|fn|priv|317-338|def _set_nested(container: dict[str, Any], parts: list[st...|
-|`_pop_nested`|fn|priv|339-360|def _pop_nested(container: dict[str, Any], parts: list[st...|
-|`_iter_schema_leaf_paths`|fn|priv|361-363|def _iter_schema_leaf_paths(|
-|`_iter_default_leaf_paths`|fn|priv|383-385|def _iter_default_leaf_paths(|
-|`find_schema_mismatches`|fn|pub|406-436|def find_schema_mismatches() -> list[str]|
-|`_fail_on_schema_mismatch`|fn|priv|442-460|def _fail_on_schema_mismatch() -> bool|
-|`_render_box_table`|fn|priv|461-462|def _render_box_table(|
-|`_row`|fn|priv|482-493|def _row(cells: list[str]) -> str|
-|`_render_json`|fn|priv|503-515|def _render_json(value: Any) -> str|
-|`_mask_secrets`|fn|priv|516-537|def _mask_secrets(node: "OptionSpec | GroupSpec | None", ...|
-|`_render_print_children`|fn|priv|538-542|def _render_print_children(|
-|`_render_params_children`|fn|priv|620-623|def _render_params_children(|
-|`_load_overrides`|fn|priv|666-691|def _load_overrides() -> "tuple[dict[str, Any] | None, st...|
-|`_write_overrides`|fn|priv|692-711|def _write_overrides(payload: dict[str, Any]) -> None|
-|`_coerce_value`|fn|priv|712-713|def _coerce_value(|
-|`print_config_cli_help`|fn|pub|760-798|def print_config_cli_help(command: str) -> None|
-|`do_print_raw`|fn|pub|799-826|def do_print_raw() -> int|
-|`do_print`|fn|pub|827-848|def do_print() -> int|
-|`do_params`|fn|pub|849-867|def do_params() -> int|
-|`do_get`|fn|pub|868-903|def do_get(path: str | None) -> int|
-|`do_set`|fn|pub|904-964|def do_set(path: str | None, value: str | None) -> int|
-|`do_unset`|fn|pub|965-1002|def do_unset(path: str | None) -> int|
+|`PROGRAM`|var|pub|33||
+|`ROOT_LABEL`|var|pub|37||
+|`NAME_COLUMN_WIDTH`|var|pub|43||
+|`PATH_SEPARATOR`|var|pub|47||
+|`MASKED_SECRET`|var|pub|51||
+|`KIND_LABELS`|var|pub|57||
+|`ChoiceSpec`|class|pub|72-84|class ChoiceSpec|
+|`OptionSpec`|class|pub|86-103|class OptionSpec|
+|`GroupSpec`|class|pub|105-116|class GroupSpec|
+|`_split_path`|fn|priv|273-291|def _split_path(path: str) -> list[str] | None|
+|`_find_schema_node`|fn|priv|292-317|def _find_schema_node(parts: list[str]) -> "OptionSpec | ...|
+|`_resolve_value`|fn|priv|318-336|def _resolve_value(container: Any, parts: list[str]) -> Any|
+|`_set_nested`|fn|priv|337-358|def _set_nested(container: dict[str, Any], parts: list[st...|
+|`_pop_nested`|fn|priv|359-380|def _pop_nested(container: dict[str, Any], parts: list[st...|
+|`_iter_schema_leaf_paths`|fn|priv|381-383|def _iter_schema_leaf_paths(|
+|`_iter_default_leaf_paths`|fn|priv|403-405|def _iter_default_leaf_paths(|
+|`find_schema_mismatches`|fn|pub|426-456|def find_schema_mismatches() -> list[str]|
+|`_fail_on_schema_mismatch`|fn|priv|462-480|def _fail_on_schema_mismatch() -> bool|
+|`_render_box_table`|fn|priv|481-482|def _render_box_table(|
+|`_row`|fn|priv|502-513|def _row(cells: list[str]) -> str|
+|`_render_json`|fn|priv|523-535|def _render_json(value: Any) -> str|
+|`_mask_secrets`|fn|priv|536-557|def _mask_secrets(node: "OptionSpec | GroupSpec | None", ...|
+|`_render_print_children`|fn|priv|558-562|def _render_print_children(|
+|`_describe_value_shape`|fn|priv|641-666|def _describe_value_shape(value: Any) -> str|
+|`_render_params_children`|fn|priv|667-671|def _render_params_children(|
+|`_load_overrides`|fn|priv|765-790|def _load_overrides() -> "tuple[dict[str, Any] | None, st...|
+|`_write_overrides`|fn|priv|791-810|def _write_overrides(payload: dict[str, Any]) -> None|
+|`_coerce_value`|fn|priv|811-812|def _coerce_value(|
+|`print_config_cli_help`|fn|pub|859-897|def print_config_cli_help(command: str) -> None|
+|`do_print_raw`|fn|pub|898-925|def do_print_raw() -> int|
+|`do_print`|fn|pub|926-947|def do_print() -> int|
+|`do_params`|fn|pub|948-970|def do_params() -> int|
+|`do_get`|fn|pub|971-1006|def do_get(path: str | None) -> int|
+|`do_set`|fn|pub|1007-1067|def do_set(path: str | None, value: str | None) -> int|
+|`do_unset`|fn|pub|1068-1105|def do_unset(path: str | None) -> int|
 
 
 ---

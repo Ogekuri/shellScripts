@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.7.0"
-date: "2026-11-10T16:00:00Z"
+version: "0.8.0"
+date: "2026-11-10T17:30:00Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -143,6 +143,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-033**: MUST update the schema registry, and thereby `--params`, `--print`, `--get`, `--set`, and `--unset`, in the same change whenever any configuration option, default, type, or allowed value is added, removed, or modified.
 - **DES-034**: MUST fail every configuration CLI command with an explicit error when the schema registry and `DEFAULT_RUNTIME_CONFIG` paths diverge.
 - **DES-035**: MUST implement configuration CLI mutations in a dedicated module without altering existing configuration load, merge, normalization, or accessor logic.
+- **DES-036**: MUST declare one input-example token in every `OptionSpec` schema record consumed by `--params` example rendering.
 
 No explicit performance optimizations identified.
 
@@ -235,6 +236,10 @@ No explicit performance optimizations identified.
 - **REQ-107**: MUST implement `--params` to render the schema hierarchy with per-option type labels (`[Stringa]`, `[Intero]`, `[Booleano]`, `[Selezione]`, `[Elenco]`, `[Oggetto]`) and short descriptions.
 - **REQ-108**: MUST render `--params` selection options with allowed-value tables using `Valore` and `Significato` columns.
 - **REQ-109**: MUST make `--get`, `--set`, and `--unset` print command-specific inline usage help and return `1` when required path or value arguments are missing.
+- **REQ-110**: MUST render every `--params` scalar option line (`stringa`, `intero`, `booleano`) with its schema-declared input example appended as `(Esempio di input: <token>)`.
+- **REQ-111**: MUST print `(Esempio di input: <token>)` on one continuation line after each `--params` selection allowed-value table.
+- **REQ-112**: MUST render `--params` `oggetto` options with a JSON-object input note, a `Chiave`/`Formato` default-structure table derived from `DEFAULT_RUNTIME_CONFIG`, and an example continuation line.
+- **REQ-113**: MUST render `--params` `elenco` options with a JSON-array input note, an element-format table, and an example continuation line.
 
 ## 4. Test Requirements
 
@@ -303,4 +308,4 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
 | DES-021..DES-027, REQ-079..REQ-082, TST-015 | `scripts/pre-release-check.sh`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `check_artifacts`, `cleanup_artifacts`, `fail_fast` | Script resolves the repository root, runs pytest with `PYTHONPATH=src` via `.venv/bin/python3` or `python3`, removes `dist`, builds via `uv build` or `python3 -m build`, verifies sdist and wheel artifacts, removes `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories via an EXIT trap on success and failure paths, prints `PASS`/`FAIL`/`clean` evidence lines, exits `1` on first failure and `0` on full success; tests assert script structure and Bash syntax. |
 | DES-028, DES-029, REQ-083, TST-016 | `.github/workflows/release-pypi.yml`; `tests/test_tst_016_release_precheck_gating.py` | `jobs.pre-release-check`, `jobs.build-release.needs` | Workflow runs `scripts/pre-release-check.sh` in a dedicated `pre-release-check` job (checkout, `setup-uv@v10.3.3`, `uv sync`, script execution) and declares `needs: [check-branch, pre-release-check]` on `build-release`, so any check failure skips artifact creation, attestation, changelog, GitHub release, and PyPI publication steps; tests assert job presence, script invocation, and needs declaration. |
-| REQ-094 through REQ-109, DES-032 through DES-035 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `do_print_raw`, `do_print`, `do_params`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags print the raw file, render the tree and `Sel`/`Valore` selection tables with box-drawing characters, mask secrets, resolve, validate, and persist `:`-separated option paths with environment acquisition, and print `--params` descriptions with `Valore`/`Significato` tables. |
+| REQ-094 through REQ-113, DES-032 through DES-036 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `do_print_raw`, `do_print`, `do_params`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags print the raw file, render the tree and `Sel`/`Valore` selection tables with box-drawing characters, mask secrets, resolve, validate, and persist `:`-separated option paths with environment acquisition, and print `--params` descriptions with `Valore`/`Significato` tables, per-option input examples, and `oggetto`/`elenco` formatting tables. |

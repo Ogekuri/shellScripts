@@ -267,3 +267,163 @@ def test_do_print_keeps_scalar_leaf_json_encoding(
     captured = capsys.readouterr()
     assert return_code == 0
     assert '= "uv tool install shellscripts"' in captured.out
+
+
+def test_config_schema_declares_input_example_for_every_option() -> None:
+    """@brief Verify DES-036 example coverage across the schema registry.
+
+    @details Walks `CONFIG_SCHEMA` depth-first; every `OptionSpec` leaf MUST
+    declare a non-empty `example` token consumed by `--params` example
+    rendering.
+    expected_output: no assertion failure on the shipped registry.
+    @return {None} Asserts behavioral outcome only.
+    @satisfies DES-036
+    """
+
+    def _walk(children):
+        """@brief Depth-first schema walker asserting example coverage.
+
+        @param children {tuple} Sibling schema nodes being visited.
+        @return {None} Asserts behavioral outcome only.
+        """
+
+        for _, node in children:
+            if isinstance(node, config_cli.GroupSpec):
+                _walk(node.children)
+                continue
+            assert node.example
+
+    _walk(config_cli.CONFIG_SCHEMA)
+
+
+def test_do_params_appends_input_examples_to_scalar_lines(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    """@brief Verify scalar `--params` lines carry inline input examples.
+
+    @details Invokes `do_params` on the unmodified repository; every scalar
+    option line MUST append its schema-declared example as
+    `(Esempio di input: <token>)` per REQ-110.
+    expected_output: return code `0` and inline example suffixes on scalar
+    option lines.
+    @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
+    @param tmp_path {pathlib.Path} Test-owned temporary directory.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @return {None} Asserts behavioral outcome only.
+    @satisfies REQ-110
+    """
+
+    _isolate_home(monkeypatch, tmp_path)
+    return_code = config_cli.do_params()
+    captured = capsys.readouterr()
+    assert return_code == 0
+    assert '(Esempio di input: "uv tool install shellscripts")' in captured.out
+    assert '(Esempio di input: "uv tool uninstall shellscripts")' in captured.out
+
+
+def test_do_params_renders_object_shape_table_and_example(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    """@brief Verify `oggetto` options document format, shape, and example.
+
+    @details Invokes `do_params` on the unmodified repository; `oggetto`
+    options MUST print the JSON-object input note, the `Chiave`/`Formato`
+    default-structure table resolved from `DEFAULT_RUNTIME_CONFIG`, and the
+    schema-declared example continuation line per REQ-112.
+    expected_output: return code `0`; input note; shape table rows; example
+    continuation line.
+    @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
+    @param tmp_path {pathlib.Path} Test-owned temporary directory.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @return {None} Asserts behavioral outcome only.
+    @satisfies REQ-112
+    """
+
+    _isolate_home(monkeypatch, tmp_path)
+    return_code = config_cli.do_params()
+    captured = capsys.readouterr()
+    assert return_code == 0
+    assert "[Oggetto]" in captured.out
+    assert "Formato di input: oggetto JSON" in captured.out
+    assert "│ Chiave" in captured.out
+    assert "│ code" in captured.out
+    assert '(Esempio di input: {"code": ["bcompare"], "pdf": ["okular"]})' in captured.out
+
+
+def test_do_params_renders_list_format_table_and_example(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    """@brief Verify `elenco` options document format, elements, and example.
+
+    @details Invokes `do_params` on the unmodified repository; `elenco`
+    options MUST print the JSON-array input note, the `Campo`/`Formato`
+    element-format table, and the schema-declared example continuation line
+    per REQ-113.
+    expected_output: return code `0`; input note; element-format row; example
+    continuation line.
+    @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
+    @param tmp_path {pathlib.Path} Test-owned temporary directory.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @return {None} Asserts behavioral outcome only.
+    @satisfies REQ-113
+    """
+
+    _isolate_home(monkeypatch, tmp_path)
+    return_code = config_cli.do_params()
+    captured = capsys.readouterr()
+    assert return_code == 0
+    assert "[Elenco]" in captured.out
+    assert "Formato di input: elenco JSON" in captured.out
+    assert "│ elementi" in captured.out
+    assert '(Esempio di input: ["codex:skills", "pi:prompts"])' in captured.out
+
+
+def test_do_params_prints_example_line_after_selection_table(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    """@brief Verify selection tables are followed by the example line.
+
+    @details Injects a synthetic selection schema and invokes `do_params`;
+    the `(Esempio di input: <token>)` continuation line MUST directly follow
+    the allowed-value table bottom border per REQ-111, falling back to the
+    first allowed choice quoted when no schema example is declared.
+    expected_output: return code `0`; example line adjacent below the table
+    bottom border.
+    @param monkeypatch {pytest.MonkeyPatch} Schema and snapshot isolation.
+    @param tmp_path {pathlib.Path} Test-owned temporary directory.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @return {None} Asserts behavioral outcome only.
+    @satisfies REQ-111
+    """
+
+    choice_spec = config_cli.OptionSpec(
+        "selezione",
+        "Scelta di test per la verifica dell'esempio.",
+        choices=(
+            config_cli.ChoiceSpec("A", "prima"),
+            config_cli.ChoiceSpec("B", "seconda"),
+        ),
+    )
+    schema = (
+        (
+            "grp",
+            config_cli.GroupSpec(
+                "Gruppo di test.",
+                (("choice", choice_spec),),
+            ),
+        ),
+    )
+    monkeypatch.setattr(config_cli, "CONFIG_SCHEMA", schema)
+    monkeypatch.setattr(config_cli, "_SCHEMA_MISMATCHES", [])
+    _isolate_home(monkeypatch, tmp_path)
+    return_code = config_cli.do_params()
+    captured = capsys.readouterr()
+    out_lines = captured.out.splitlines()
+    matching = [
+        index
+        for index, line in enumerate(out_lines)
+        if '(Esempio di input: "A")' in line
+    ]
+    assert return_code == 0
+    assert matching
+    assert "└" in out_lines[matching[0] - 1]
