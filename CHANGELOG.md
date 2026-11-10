@@ -1,7 +1,9 @@
 # Changelog
 
-## [0.25.1](https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.25.1) - 2026-11-09
+## [0.25.2](https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.25.2) - 2026-11-10
 ### 🚜  Changes
+- align --version report output columns [useReq] *(version-check)*
+REQUIREMENTS: reword REQ-075/REQ-084, add REQ-091 (label width 18); version_check: add REPORT_LABEL_WIDTH and format_version_report_line helper; version_check: emit Latest @ PyPI / Latest @ GitHub aligned report lines; core: print aligned Current Installed line for --version/--ver; tests: update TST-014 assertions to the aligned three-line report
 - add --force flag for forced reinstall on --upgrade [useReq] *(upgrade)*
 Add --force selector to --upgrade and --upgrade --develop/--dev: the
 resolved upgrade command gets ' --force --reinstall --refresh' appended
@@ -690,7 +692,7 @@ add deterministic Execution Units Index with stable IDs\n- map internal call-tra
 - \[0.23.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.0
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
-- \[0.25.1\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.1
+- \[0.25.2\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.2
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -717,4 +719,4 @@ add deterministic Execution Units Index with stable IDs\n- map internal call-tra
 [0.23.0]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
-[0.25.1]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.25.1
+[0.25.2]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.25.2
