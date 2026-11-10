@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.10.0"
-date: "2026-11-10T19:30:00Z"
+version: "0.11.0"
+date: "2026-11-10T18:45:00Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -144,7 +144,10 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-033**: MUST update the schema registry, and thereby `--params`, `--print`, `--get`, `--set`, and `--unset`, in the same change whenever any configuration option, default, type, or allowed value is added, removed, or modified.
 - **DES-034**: MUST fail every configuration CLI command with an explicit error when the schema registry and `DEFAULT_RUNTIME_CONFIG` paths diverge.
 - **DES-035**: MUST implement configuration CLI mutations in a dedicated module without altering existing configuration load, merge, normalization, or accessor logic.
-- **DES-036**: MUST declare one input-example token in every `OptionSpec` schema record consumed by `--params` example rendering.
+- **DES-036**: MUST declare one input-example token in every `OptionSpec` schema record consumed by `--params` command-template rendering.
+- **DES-037**: MUST implement every `--set` and `--unset` persistence as a write to a temporary file in the configuration directory followed by flush and atomic rename onto `config.json`.
+- **DES-038**: MUST perform all array and map manipulations exclusively through `:`-separated path tokens accepted by `--get`, `--set`, and `--unset`.
+- **DES-039**: MUST apply array and map manipulations to the effective configuration, defaults merged with overrides, and persist the resulting collection as one override value.
 
 No explicit performance optimizations identified.
 
@@ -221,33 +224,54 @@ No explicit performance optimizations identified.
 - **REQ-086**: MUST print every registered YOLO CLI command token with its executed option in alphabetical command order in each YOLO CLI inline help output.
 - **REQ-092**: MUST document the executed YOLO option and its behavioral note for every registered YOLO CLI inside each YOLO CLI inline help output.
 - **REQ-093**: MUST document the accepted alternative `--allow-all` Copilot option in the `copilot` inline help without appending it to the executed command vector.
-- **REQ-094**: MUST implement `--print-raw` to print the on-disk `~/.config/shellScripts/config.json` content verbatim and return `0`, or print an error naming the path and return `1` when the file is missing.
-- **REQ-095**: MUST implement `--print` to render the effective configuration (defaults deep-merged with file overrides) as a tree using `├──`, `└──`, and `│` connectors.
-- **REQ-096**: MUST render `--print` scalar leaves as `= <JSON-encoded value>` with the option name left-justified to a fixed column width.
-- **REQ-097**: MUST render `--print` selection leaves as `Sel`/`Value` tables using `┌`, `┬`, `┐`, `├`, `┼`, `┤`, `└`, `┴`, `┘`, `─`, marking the active choice with `[*]` and others with `[ ]`.
-- **REQ-098**: MUST mask secret option values as `********` in `--print` and `--get` outputs.
-- **REQ-099**: MUST implement `--get <path>` to resolve `:`-separated hierarchical paths against the effective configuration and print scalar values as single-line JSON.
-- **REQ-100**: MUST make `--get` print object subtrees as indented JSON and print an error with return code `1` for unknown or non-configurable paths.
-- **REQ-101**: MUST implement `--set <path> <value>` to coerce values by schema kind (`string`, `integer`, `boolean`, `selection`, `list`, `object`) before persisting merged overrides.
-- **REQ-102**: MUST validate `--set` values against schema-allowed choices and reject disallowed values with return code `1` without modifying the configuration file.
-- **REQ-103**: MUST make successful `--set` persist the merged on-disk configuration with sorted keys, two-space indentation, and unchanged unrelated keys, then print a success line and return `0`.
+- **REQ-094**: MUST implement `--print-raw` to bootstrap the configuration file when missing and print the on-disk `~/.config/shellScripts/config.json` content verbatim, returning code `0`.
+- **REQ-095**: MUST implement `--print [Optional:Sub:Path]` rendering the effective configuration or the addressed subtree as a tree using `├──`, `└──`, and `│` connectors.
+- **REQ-096**: MUST render `--print` scalar leaves as `= <JSON-encoded value>` followed by `(default)` or `(custom | default: <Default_Value>)`, names left-justified to a fixed column width.
+- **REQ-097**: MUST render `--print` selection leaves with the active value plus a `Sel`/`Value` table marking the active choice `[*]` and inactive choices `[ ]`.
+- **REQ-098**: MUST display every configuration value, including credentials and API keys, in plain text without masking or obfuscation in `--print-raw`, `--print`, and `--get` outputs.
+- **REQ-099**: MUST implement `--get <path>` resolving `:`-separated hierarchical paths against the effective configuration and printing scalar values as clean single-line JSON.
+- **REQ-100**: MUST make `--get` print object and array subtrees as indented JSON and fail with a stderr error and code `1` for unknown or non-configurable paths.
+- **REQ-101**: MUST implement `--set <path> <value>` coercing string arguments into strict schema types (`string`, `integer`, `float`, `boolean`, `selection`, `array`, `map`, `object`) before persisting.
+- **REQ-102**: MUST validate `--set` values against schema constraints and abort with a stderr error and code `1` without writing when validation or JSON parsing fails.
+- **REQ-103**: MUST make successful `--set` persist sorted-key, two-space-indented JSON preserving unrelated keys, print a confirmation, and return code `0`.
 - **REQ-104**: MUST make `--set` value tokens starting with `$` resolve from the named environment variable and print environment-acquisition evidence; missing variables MUST fail with return code `1`.
-- **REQ-105**: MUST implement `--unset <path>` to remove the override key from the on-disk configuration, persist the result, and reactivate the hardcoded default value.
-- **REQ-106**: MUST make `--unset` print `WARNING: Removed all parameters for <path>.` when removing an object subtree and an error with return code `1` for absent paths.
-- **REQ-107**: MUST implement `--params` to render the schema hierarchy with per-option type labels (`[String]`, `[Integer]`, `[Boolean]`, `[Selection]`, `[List]`, `[Object]`) and short descriptions.
-- **REQ-108**: MUST render `--params` selection options with allowed-value tables using `Value` and `Meaning` columns.
+- **REQ-105**: MUST implement `--unset <path>` removing the override key or applying the array/map removal encoded by trailing path tokens, then persisting atomically.
+- **REQ-106**: MUST make `--unset` print `WARNING: Removed all parameters for <path>.` when resetting a subtree and a stderr error with code `1` for invalid removals.
+- **REQ-107**: MUST implement `--params [Optional:Sub:Path]` rendering the schema hierarchy or the addressed subtree with per-option type labels and short descriptions.
+- **REQ-108**: MUST render `--params` selection options with allowed-value tables using `Value`, `Default`, and `Meaning` columns.
 - **REQ-109**: MUST make `--get`, `--set`, and `--unset` print command-specific inline usage help and return `1` when required path or value arguments are missing.
-- **REQ-110**: MUST render every `--params` scalar option line (`string`, `integer`, `boolean`) with its schema-declared input example appended as `(Input example: <token>)`.
-- **REQ-111**: MUST print `(Input example: <token>)` on one continuation line after each `--params` selection allowed-value table.
-- **REQ-112**: MUST render `--params` `object` options with a JSON-object input note, a `Key`/`Format` default-structure table derived from `DEFAULT_RUNTIME_CONFIG`, and an example continuation line.
-- **REQ-113**: MUST render `--params` `list` options with a JSON-array input note, an element-format table, and an example continuation line.
+- **REQ-110**: MUST render every `--params` scalar option with a `Default : <Default_Value> (restored via '--unset <Full:Path>')` line and a full-path `--set` command line.
+- **REQ-111**: MUST print full-path `--set` and `--unset` command lines after each `--params` selection allowed-value table.
+- **REQ-112**: MUST render `--params` `object` options with full-path full-overwrite and reset-block command lines above nested field documentation.
+- **REQ-113**: MUST render `--params` array options with add, insert, update, delete, full-overwrite, and clear command lines using complete canonical paths.
+- **REQ-114**: MUST fail `--print-raw` with a stderr error naming the configuration path and code `1` when the file exists but is unreadable.
+- **REQ-115**: MUST render `--print` selection leaves with an inline `set: <Full:Path> <Value>` action hint appended to the default or custom indicator.
+- **REQ-116**: MUST create missing configuration parent directories and initialize `~/.config/shellScripts/config.json` with system defaults before executing any configuration management command.
+- **REQ-117**: MUST render `[Path: <Full:Path>]` on every `--print` and `--params` section node using exact CLI path tokens.
+- **REQ-118**: MUST render `--print` map leaves as `(<N> entries | key target: <Full:Path>:<Key>)` followed by a `Key`/`Value` box table with one row per entry.
+- **REQ-119**: MUST render `--print` primitive-array leaves as `(<N> items | row target: <Full:Path>:<Idx> | add: :+)` followed by a 0-based `Idx`/`Value` box table.
+- **REQ-120**: MUST render `--print` object-array leaves as `(<N> rows | cell target: <Full:Path>:<Idx>:<Field> | add: :+)` followed by an `Idx` plus field-columns box table.
+- **REQ-121**: MUST render empty arrays as `= (empty list — add row with: --set <Full:Path>:+ <value>)` and empty maps as `= (empty map — set key with: --set <Full:Path>:<Key> <value>)`.
+- **REQ-122**: MUST make `--get <Path>:<Idx>` print the 0-based array element and fail with a stderr error stating the valid index range when out of bounds.
+- **REQ-123**: MUST make `--get <Path>:<Idx>:<Field>` print the row-cell JSON value and `--get <Path>:<Key>` print the map value for `<Key>`.
+- **REQ-124**: MUST make `--set <Path>:append` and `--set <Path>:+` validate the item against the array schema, append it, print the assigned index, and persist atomically.
+- **REQ-125**: MUST make `--set <Path>:insert:<Idx>` place the validated item at `<Idx>`, shift subsequent items by one, and treat `<Idx>` equal to array length as append.
+- **REQ-126**: MUST make `--set <Path>:<Idx>` replace the targeted row and fail with a stderr error stating the valid index range when out of bounds.
+- **REQ-127**: MUST make `--set <Path>:<Idx>:<Field>` update only that row field and `--set <Path>:<Key>` add or update one map entry with schema-typed values.
+- **REQ-128**: MUST make `--set <Path>` carrying a JSON array or JSON object token overwrite the entire array or map after schema validation.
+- **REQ-129**: MUST make `--unset <Path>:<Idx>` remove the row and immediately compact the array to contiguous 0-based indices without gaps or null holes.
+- **REQ-130**: MUST make `--unset <Path>:<Idx>:<Field>` restore the declared field default or remove the undeclared key, and `--unset <Path>:<Key>` remove one map key.
+- **REQ-131**: MUST print array index errors to stderr stating the valid index range and the `:append` alternative, and return code `1`.
+- **REQ-132**: MUST print valid `--get`, `--print`, `--print-raw`, and `--params` output to stdout, errors to stderr with code `1`, and successes with code `0`.
+- **REQ-133**: MUST render every `--print` and `--params` node name identical to its CLI path token and use complete canonical paths in all hints and examples.
 
 ## 4. Test Requirements
 
 ### 4.1 Coverage Summary
 Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, YOLO-mode AI CLI launches, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
-High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration, command-launch paths that depend on external binaries, and the configuration CLI management flags introduced by DES-032.
+High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
+The configuration CLI management flags introduced by DES-032 are covered by `tests/test_tst_018_config_cli.py` covering bootstrap, atomic persistence, path-token array/map manipulation, and rendering contracts.
 The release workflow gates all release artifact creation and publication on a dedicated pre-release verification job covered by static parsing tests.
 A pre-release verification shell script exists at `scripts/pre-release-check.sh`, and its mandatory structure, generated-artifact cleanup, and Bash syntax are covered by static parsing tests.
 
@@ -268,6 +292,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 - **TST-015**: MUST verify DES-021 through DES-027 and REQ-079 through REQ-082 by parsing `scripts/pre-release-check.sh`, passing only if mandatory commands, artifact gates, cleanup registration, failure semantics, and evidence lines are present.
 - **TST-016**: MUST verify DES-028, DES-029, and REQ-083 by parsing `.github/workflows/release-pypi.yml`, passing only if the dedicated pre-release job runs `scripts/pre-release-check.sh` and `build-release` declares `needs` on it.
 - **TST-017**: MUST verify REQ-085, REQ-086, REQ-092, and REQ-093 by monkeypatching `subprocess.run` and capturing YOLO CLI help outputs, passing only if each YOLO argv vector, stdio inheritance, registry exposure, alphabetical YOLO CLI help listing, per-CLI option documentation, and the Copilot `--allow-all` alternative note match specifications.
+- **TST-018**: MUST verify REQ-114 and REQ-116 through REQ-133, DES-037, DES-038, and DES-039 on isolated HOME directories, passing only if bootstrap, atomic persistence, path-token manipulation, rendering contracts, and error semantics match specifications.
 
 ## 5. Evidence
 
@@ -309,4 +334,4 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
 | DES-021..DES-027, REQ-079..REQ-082, TST-015 | `scripts/pre-release-check.sh`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `check_artifacts`, `cleanup_artifacts`, `fail_fast` | Script resolves the repository root, runs pytest with `PYTHONPATH=src` via `.venv/bin/python3` or `python3`, removes `dist`, builds via `uv build` or `python3 -m build`, verifies sdist and wheel artifacts, removes `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories via an EXIT trap on success and failure paths, prints `PASS`/`FAIL`/`clean` evidence lines, exits `1` on first failure and `0` on full success; tests assert script structure and Bash syntax. |
 | DES-028, DES-029, REQ-083, TST-016 | `.github/workflows/release-pypi.yml`; `tests/test_tst_016_release_precheck_gating.py` | `jobs.pre-release-check`, `jobs.build-release.needs` | Workflow runs `scripts/pre-release-check.sh` in a dedicated `pre-release-check` job (checkout, `setup-uv@v10.3.3`, `uv sync`, script execution) and declares `needs: [check-branch, pre-release-check]` on `build-release`, so any check failure skips artifact creation, attestation, changelog, GitHub release, and PyPI publication steps; tests assert job presence, script invocation, and needs declaration. |
-| REQ-094 through REQ-113, DES-032 through DES-036 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `do_print_raw`, `do_print`, `do_params`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags print the raw file, render the tree and `Sel`/`Value` selection tables with box-drawing characters, mask secrets, resolve, validate, and persist `:`-separated option paths with environment acquisition, and print `--params` descriptions with `Value`/`Meaning` tables, per-option input examples, and `object`/`list` formatting tables. |
+| REQ-094 through REQ-133, DES-032 through DES-039 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `_ensure_bootstrap`, `_resolve_target`, `_write_overrides`, `do_print_raw`, `do_print`, `do_params`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags bootstrap the missing config file, print the raw file verbatim, render trees with `[Path: ...]` badges, default/custom indicators, `Sel`/`Value` and collection tables with box-drawing characters, resolve `:`-separated paths including `:append`/`:+`/`:insert:<Idx>`/`:<Idx>`/`:<Idx>:<Field>`/`:<Key>` tokens, coerce strict JSON types, validate, and persist atomically via same-directory temporary-file rename with environment acquisition. |

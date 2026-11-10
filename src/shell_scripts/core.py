@@ -292,12 +292,14 @@ def main():
     versions; `--upgrade` upgrades from PyPI
     or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force`
     appends forced-reinstall options to the selected upgrade command; bare
-    `--develop`/`--dev`/`--force` selectors are rejected) and subcommands,
+    `--develop`/`--dev`/`--force` selectors are rejected; `--print` and
+    `--params` accept an optional ':'-separated sub-path restricting the
+    rendered subtree) and subcommands,
     then restores terminal raw/cbreak and disables legacy+xterm
     mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`,
     `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098, REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104, REQ-105, REQ-106, REQ-107, REQ-108, REQ-109
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098, REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104, REQ-105, REQ-106, REQ-107, REQ-108, REQ-109, REQ-114, REQ-115, REQ-116, REQ-117, REQ-118, REQ-119, REQ-120, REQ-121, REQ-122, REQ-123, REQ-124, REQ-125, REQ-126, REQ-127, REQ-128, REQ-129, REQ-130, REQ-131, REQ-132, REQ-133
     """
     saved_tty = capture_terminal_state()
     try:
@@ -350,9 +352,9 @@ def main():
             if first_arg == "--print-raw":
                 return config_cli.do_print_raw()
             if first_arg == "--print":
-                return config_cli.do_print()
+                return config_cli.do_print(args[1] if len(args) > 1 else None)
             if first_arg == "--params":
-                return config_cli.do_params()
+                return config_cli.do_params(args[1] if len(args) > 1 else None)
             if first_arg == "--get":
                 return config_cli.do_get(args[1] if len(args) > 1 else None)
             if first_arg == "--set":
