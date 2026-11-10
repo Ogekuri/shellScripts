@@ -181,3 +181,89 @@ def test_all_configuration_commands_fail_on_schema_mismatch(
     combined = captured.out + captured.err
     assert return_code == 1
     assert _DIVERGENCE_MARK in combined
+
+
+def test_do_print_renders_object_leaves_as_chiave_valore_tables(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    """@brief Verify `--print` details object leaves as box tables.
+
+    @details Invokes `do_print` on the unmodified repository defaults; every
+    `oggetto` leaf MUST be detailed as a `Chiave`/`Valore` box table with one
+    row per entry (sorted keys, JSON-encoded cell values) instead of a
+    single-line JSON blob, while remaining embedded in the REQ-095 tree.
+    expected_output: return code `0`; `Chiave`/`Valore` headers; per-entry
+    rows; no `= {` scalar-leaf rendering for object leaves.
+    @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
+    @param tmp_path {pathlib.Path} Test-owned temporary directory.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @return {None} Asserts behavioral outcome only.
+    @satisfies DES-032, REQ-095, REQ-096
+    """
+
+    _isolate_home(monkeypatch, tmp_path)
+    return_code = config_cli.do_print()
+    captured = capsys.readouterr()
+    assert return_code == 0
+    assert "│ Chiave" in captured.out
+    assert "│ code" in captured.out
+    assert '["bcompare"]' in captured.out
+    assert '= {"' not in captured.out
+    assert any(
+        line.startswith("│   │   │   ") and "┌" in line
+        for line in captured.out.splitlines()
+    )
+
+
+def test_do_print_renders_list_leaves_as_indexed_tables(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    """@brief Verify `--print` details list leaves as indexed box tables.
+
+    @details Invokes `do_print` on the unmodified repository defaults; every
+    `elenco` leaf MUST be detailed as a `#`/`Valore` box table with one row
+    per element (1-based position, JSON-encoded cell values) instead of a
+    single-line JSON blob.
+    expected_output: return code `0`; `#`/`Valore` headers; per-element rows;
+    no `= [` scalar-leaf rendering for list leaves.
+    @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
+    @param tmp_path {pathlib.Path} Test-owned temporary directory.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @return {None} Asserts behavioral outcome only.
+    @satisfies DES-032, REQ-095, REQ-096
+    """
+
+    _isolate_home(monkeypatch, tmp_path)
+    return_code = config_cli.do_print()
+    captured = capsys.readouterr()
+    assert return_code == 0
+    assert "│ #" in captured.out
+    assert "claude:prompts" in captured.out
+    assert '= ["' not in captured.out
+    assert any(
+        line.startswith("    │   ") and "┌" in line
+        for line in captured.out.splitlines()
+    )
+
+
+def test_do_print_keeps_scalar_leaf_json_encoding(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
+) -> None:
+    """@brief Verify scalar leaves keep the `= <JSON>` rendering contract.
+
+    @details Guards REQ-096 against the table-rendering change: string
+    scalar leaves (for example `management:upgrade`) MUST continue to render
+    as `= <JSON-encoded value>` on the fixed-width name column.
+    expected_output: `= "uv tool install shellscripts"` present in stdout.
+    @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
+    @param tmp_path {pathlib.Path} Test-owned temporary directory.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @return {None} Asserts behavioral outcome only.
+    @satisfies REQ-096
+    """
+
+    _isolate_home(monkeypatch, tmp_path)
+    return_code = config_cli.do_print()
+    captured = capsys.readouterr()
+    assert return_code == 0
+    assert '= "uv tool install shellscripts"' in captured.out

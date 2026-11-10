@@ -544,15 +544,21 @@ def _render_print_children(
     """@brief Render one `--print` tree level.
 
     @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
-    connectors, left-justified names, `= <JSON>` scalar leaves, and
-    `Sel`/`Valore` selection tables for choice leaves with the active choice
-    marked `[*]`. Time complexity O(n) over subtree node count.
+    connectors, left-justified names, `= <JSON>` scalar leaves, `Sel`/`Valore`
+    selection tables for choice leaves with the active choice marked `[*]`,
+    `Chiave`/`Valore` box tables for object-shaped leaves (one sorted row per
+    entry, JSON-encoded cell values), and `#`/`Valore` box tables for
+    list-shaped leaves (one row per element, JSON-encoded cell values).
+    Table lines carry the `│` tree continuation of `node_prefix` for
+    non-final siblings. Masked secrets bypass table rendering and fall
+    back to the scalar line.
+    Time complexity O(n) over subtree node count.
     @param prefix {str} Ancestor connector prefix for this level.
     @param children {tuple} Sibling schema nodes being rendered.
     @param values {Any} Effective configuration subtree for this level.
     @param lines {list[str]} Output accumulator mutated in place.
     @return {None} Appends rendered lines to `lines`.
-    @satisfies REQ-095, REQ-096, REQ-097, REQ-098
+    @satisfies DES-032, REQ-095, REQ-096, REQ-097, REQ-098
     """
 
     total = len(children)
@@ -583,12 +589,32 @@ def _render_print_children(
                 ["[*]" if choice.value == active else "[ ]", choice.value]
                 for choice in node.choices
             ]
-            indent = " " * (len(node_prefix) + NAME_COLUMN_WIDTH + 2)
+            indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
             lines.extend(_render_box_table(["Sel", "Valore"], rows, indent))
             continue
         rendered = (
             MASKED_SECRET if node.secret and value is not None else value
         )
+        if isinstance(rendered, dict):
+            lines.append(f"{prefix}{branch}{name}=")
+            rows = [
+                [entry_key, _render_json(entry_value)]
+                for entry_key, entry_value in sorted(rendered.items())
+            ]
+            indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
+            lines.extend(
+                _render_box_table(["Chiave", "Valore"], rows, indent)
+            )
+            continue
+        if isinstance(rendered, list):
+            lines.append(f"{prefix}{branch}{name}=")
+            rows = [
+                [str(position), _render_json(item)]
+                for position, item in enumerate(rendered, start=1)
+            ]
+            indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
+            lines.extend(_render_box_table(["#", "Valore"], rows, indent))
+            continue
         lines.append(f"{prefix}{branch}{name}= {_render_json(rendered)}")
 
 
@@ -628,7 +654,7 @@ def _render_params_children(
                 "Valori ammessi:"
             )
             rows = [[choice.value, choice.meaning] for choice in node.choices]
-            indent = " " * (len(node_prefix) + NAME_COLUMN_WIDTH + 2)
+            indent = node_prefix + " " * (NAME_COLUMN_WIDTH + 2)
             lines.extend(
                 _render_box_table(["Valore", "Significato"], rows, indent)
             )
