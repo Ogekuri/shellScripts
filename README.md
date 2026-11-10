@@ -190,13 +190,13 @@ Top-level configuration keys:
 
 | Command | Purpose |
 |---|---|
-| `agy` | Launch Antigravity CLI in project context (YOLO mode, pass-through args). |
-| `claude` | Launch Claude CLI in project context. |
-| `codex` | Launch Codex CLI in project context with auth sync and `CODEX_HOME`. |
-| `copilot` | Launch Copilot CLI in project context. |
+| `agy` | Launch Antigravity CLI in YOLO mode (`agy --dangerously-skip-permissions`). |
+| `claude` | Launch Claude CLI in YOLO mode (`claude --dangerously-skip-permissions`). |
+| `codex` | Launch Codex CLI in YOLO mode (`codex --yolo`). |
+| `copilot` | Launch Copilot CLI in YOLO mode (`copilot --yolo`; alternative `--allow-all` documented in help). |
 | `gemini` | Launch Gemini CLI in project context. |
 | `kiro` | Launch Kiro CLI in project context. |
-| `opencode` | Launch OpenCode CLI in project context. |
+| `opencode` | Launch OpenCode CLI in auto-approval mode (`opencode --auto`). |
 | `pi` | Launch pi.dev CLI in project context (forwards all arguments unchanged). |
 | `clean` | Find and delete cache directories under the project root (or a passed directory). |
 | `req` | Run useReq bootstrap on current directory, first-level dirs, or recursively. |
@@ -223,7 +223,7 @@ Top-level configuration keys:
 
 ### Selected Usage Examples
 
-Launch Antigravity CLI in YOLO mode (command help lists the available AI CLIs in alphabetical order):
+Launch Antigravity CLI in YOLO mode (each YOLO command help documents every registered YOLO CLI option in alphabetical order):
 
 ```bash
 s agy

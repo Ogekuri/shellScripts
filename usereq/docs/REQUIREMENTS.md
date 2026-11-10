@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.33"
-date: "2026-11-10T06:22:47Z"
+version: "0.6.34"
+date: "2026-11-10T11:58:44Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -135,6 +135,8 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-027**: MUST register artifact cleanup as an EXIT trap executed on success and failure paths and MUST print one `clean` evidence line listing the removed artifact groups.
 - **DES-028**: MUST execute `scripts/pre-release-check.sh` in a dedicated pre-release job within `.github/workflows/release-pypi.yml` before any release artifact creation step.
 - **DES-029**: MUST declare the pre-release job in the `needs` list of the `build-release` job in `.github/workflows/release-pypi.yml`.
+- **DES-030**: MUST implement YOLO CLI launching as a shared registry-based launcher module where each CLI is defined by one declarative record containing command token, executable token, executed option, and option note.
+- **DES-031**: MUST make integrating a new YOLO CLI require only one registry record plus one thin command module exposing `DESCRIPTION`, `print_help(version)`, and `run(args)`.
 
 No explicit performance optimizations identified.
 
@@ -154,11 +156,11 @@ No explicit performance optimizations identified.
 - **REQ-091**: MUST left-justify every `--version` report label (`Current Installed`, `Latest @ PyPI`, `Latest @ GitHub`) to fixed width 18 followed by `: ` and the version token.
 - **REQ-005**: MUST execute the Linux `--uninstall` command from runtime config key `management.uninstall`, using default `uv tool uninstall shellscripts` when unset.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
-- **REQ-014**: MUST set `CODEX_HOME` to `<project-root>/.codex` and execute `codex --yolo` in `codex` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-015**: MUST execute `copilot --yolo --allow-all-tools --no-auto-update` in `copilot` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-014**: MUST execute `codex --yolo` in `codex` through the shared YOLO CLI launcher via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-015**: MUST execute `copilot --yolo` in `copilot` through the shared YOLO CLI launcher via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-016**: MUST execute `gemini --yolo` in `gemini` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-017**: MUST execute `~/.claude/bin/claude --dangerously-skip-permissions` in `claude` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-018**: MUST execute `opencode` in `opencode` via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-017**: MUST execute the PATH-resolved `claude --dangerously-skip-permissions` in `claude` through the shared YOLO CLI launcher with inherited stdio and blocking wait.
+- **REQ-018**: MUST execute `opencode --auto` in `opencode` through the shared YOLO CLI launcher via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-068**: MUST execute `pi` with all CLI arguments forwarded unchanged and inherited stdio blocking behavior.
 - **REQ-069**: MUST NOT append, inject, or synthesize any implicit `--tools` argument during `pi` command execution.
 - **REQ-070**: MUST make `req` skip cleanup and installation when current directory is not a Git repository root and MUST print one skip evidence line for that directory.
@@ -183,8 +185,6 @@ No explicit performance optimizations identified.
 - **REQ-036**: MUST run pytest through `.venv/bin/python3` in `tests` and MUST prepend `<project-root>/src` to `PYTHONPATH`.
 - **REQ-037**: MUST create `.venv` in `tests` when missing and MUST install `requirements.txt` only when that file exists.
 - **REQ-038**: MUST recreate `.venv` in `venv` and MUST install `requirements.txt` when present; otherwise it MUST skip pip installation and continue successfully.
-- **REQ-043**: MUST copy `~/.codex/auth.json` to `<project-root>/.codex/auth.json` before `codex` executes `codex --yolo`, replacing any existing file or symlink at the project auth path, and MUST print one informational output line describing the copy operation.
-- **REQ-044**: MUST copy `<project-root>/.codex/auth.json` to `~/.codex/auth.json` after `codex --yolo` terminates, replacing any existing file or symlink at the user-home auth path, and MUST print one informational output line describing the copy operation.
 - **REQ-045**: MUST load runtime configuration from `~/.config/shellScripts/config.json` during CLI startup, and MUST keep hardcoded defaults for missing file, missing keys, or invalid value types.
 - **REQ-046**: MUST write the default runtime configuration JSON to `~/.config/shellScripts/config.json` and return code `0` when invoked with `--write-config`.
 - **REQ-047**: MUST determine and cache the runtime operating system at CLI startup before command dispatch.
@@ -213,13 +213,15 @@ No explicit performance optimizations identified.
 - **REQ-082**: MUST NOT remove any Git-tracked file during pre-release artifact cleanup.
 - **REQ-083**: MUST skip every release artifact creation, attestation, changelog, GitHub release, and PyPI publication step when the pre-release job fails.
 - **REQ-084**: MUST print each failed remote-source lookup during `--version` as the aligned `Latest @ <source>` label followed by `: unknown (<reason>)` where `<reason>` describes the actual request failure.
-- **REQ-085**: MUST execute `agy --dangerously-skip-permissions` in `agy` via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-086**: MUST print the AI CLI launch command tokens in alphabetical order in the `agy` inline help output.
+- **REQ-085**: MUST execute `agy --dangerously-skip-permissions` in `agy` through the shared YOLO CLI launcher via `subprocess.run` with inherited stdio and blocking wait.
+- **REQ-086**: MUST print every registered YOLO CLI command token with its executed option in alphabetical command order in each YOLO CLI inline help output.
+- **REQ-092**: MUST document the executed YOLO option and its behavioral note for every registered YOLO CLI inside each YOLO CLI inline help output.
+- **REQ-093**: MUST document the accepted alternative `--allow-all` Copilot option in the `copilot` inline help without appending it to the executed command vector.
 
 ## 4. Test Requirements
 
 ### 4.1 Coverage Summary
-Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, Antigravity CLI launch, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
+Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, YOLO-mode AI CLI launches, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
 High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
 The release workflow gates all release artifact creation and publication on a dedicated pre-release verification job covered by static parsing tests.
@@ -229,7 +231,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 - **TST-001**: MUST verify REQ-001, REQ-002, REQ-047, and REQ-066 by invoking `shell_scripts.core.main`, passing only if return codes, grouped help/error outputs, and startup OS-detection invocation match specified behavior.
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting command values resolved from runtime config with default command fallback and propagated return codes.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
-- **TST-005**: MUST verify REQ-014 through REQ-021, REQ-043 through REQ-044, and REQ-068 through REQ-069 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, `CODEX_HOME`, codex auth synchronization, absence of implicit `--tools` injection, and propagated return codes match requirements.
+- **TST-005**: MUST verify REQ-014 through REQ-021 and REQ-068 through REQ-069 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, `CODEX_HOME` for VS Code commands, absence of Codex auth synchronization, absence of implicit `--tools` injection, and propagated return codes match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
 - **TST-009**: MUST verify REQ-045 and REQ-046 by monkeypatching config I/O boundaries and asserting startup load invocation plus `--write-config` success behavior.
 - **TST-010**: MUST verify REQ-048 through REQ-054, REQ-062 through REQ-063, and REQ-070 through REQ-071 by monkeypatching filesystem and subprocess boundaries, passing only if target selection, git-root skip behavior, cleanup evidence output, and generated `req` argument vectors match required behavior.
@@ -241,7 +243,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 - **TST-014**: MUST verify REQ-003, REQ-075 through REQ-078, REQ-084, REQ-087 through REQ-091, DES-018, and DES-019 via monkeypatched HTTP and subprocess boundaries, passing only if PyPI update checks, three-line version output, default upgrade, forced-reinstall upgrade, and develop upgrade behaviors match specifications.
 - **TST-015**: MUST verify DES-021 through DES-027 and REQ-079 through REQ-082 by parsing `scripts/pre-release-check.sh`, passing only if mandatory commands, artifact gates, cleanup registration, failure semantics, and evidence lines are present.
 - **TST-016**: MUST verify DES-028, DES-029, and REQ-083 by parsing `.github/workflows/release-pypi.yml`, passing only if the dedicated pre-release job runs `scripts/pre-release-check.sh` and `build-release` declares `needs` on it.
-- **TST-017**: MUST verify REQ-085 and REQ-086 by monkeypatching `subprocess.run` and capturing `agy` help output, passing only if the `agy` argv vector, stdio inheritance, registry exposure, and alphabetical AI CLI help listing match specifications.
+- **TST-017**: MUST verify REQ-085, REQ-086, REQ-092, and REQ-093 by monkeypatching `subprocess.run` and capturing YOLO CLI help outputs, passing only if each YOLO argv vector, stdio inheritance, registry exposure, alphabetical YOLO CLI help listing, per-CLI option documentation, and the Copilot `--allow-all` alternative note match specifications.
 
 ## 5. Evidence
 
@@ -262,12 +264,12 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | DES-007, REQ-023, REQ-024, REQ-064 | `src/shell_scripts/commands/diff_cmd.py`; `src/shell_scripts/commands/edit_cmd.py`; `src/shell_scripts/commands/view_cmd.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `diff`/`edit`/`view` wrappers call shared dispatch; missing file argument returns `2`; selected external command is launched via `subprocess.run` with inherited stdio and blocking wait. |
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
-| REQ-014, REQ-043, REQ-044, REQ-064 | `src/shell_scripts/commands/codex.py` | `run` | Sets `CODEX_HOME=<project>/.codex`; copies `~/.codex/auth.json` into `<project>/.codex/auth.json` before launch and copies back after process termination, replacing existing file or symlink targets; emits one informational output line for each copy operation; executes `codex --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-015, REQ-064 | `src/shell_scripts/commands/copilot.py` | `run` | Executes `copilot --yolo --allow-all-tools --no-auto-update` via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-014, REQ-064 | `src/shell_scripts/commands/codex.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | `codex` delegates to the shared YOLO CLI launcher and executes `codex --yolo` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait; no auth-file synchronization, no `CODEX_HOME` assignment, and no copy evidence output. |
+| REQ-015, REQ-064 | `src/shell_scripts/commands/copilot.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | Executes `copilot --yolo` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait; inline help documents the accepted alternative `--allow-all` option. |
 | REQ-016, REQ-064 | `src/shell_scripts/commands/gemini.py` | `run` | Executes `gemini --yolo` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-017, REQ-064 | `src/shell_scripts/commands/claude.py` | `run` | Executes `~/.claude/bin/claude --dangerously-skip-permissions` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-018, REQ-064 | `src/shell_scripts/commands/opencode.py` | `run` | Executes `opencode` via `subprocess.run` with inherited stdio and blocking wait. |
-| REQ-085, REQ-086, TST-017 | `src/shell_scripts/commands/agy.py`; `src/shell_scripts/commands/__init__.py`; `src/shell_scripts/core.py`; `tests/test_tst_017_agy_command.py` | `run`, `print_help`, `AI_CLI_COMMANDS`, `_COMMAND_MODULES`, `HELP_SECTION_COMMANDS` | `agy` command resolves project root, validates the `agy` executable, and executes `agy --dangerously-skip-permissions` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait; inline help prints the AI CLI launch tokens in alphabetical order; static registry and AI help section expose `agy`. |
+| REQ-017, REQ-064 | `src/shell_scripts/commands/claude.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | Executes the PATH-resolved `claude --dangerously-skip-permissions` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-018, REQ-064 | `src/shell_scripts/commands/opencode.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | Executes `opencode --auto` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-085, REQ-086, REQ-092, REQ-093, DES-030, DES-031, TST-017 | `src/shell_scripts/commands/_yolo_common.py`; `src/shell_scripts/commands/{agy,claude,codex,copilot,opencode}.py`; `tests/test_tst_017_agy_command.py` | `YOLO_CLI_REGISTRY`, `run_yolo_cli`, `print_yolo_help`, `run`, `print_help` | Shared declarative registry defines command token, executable, executed option, and behavioral note per YOLO CLI; thin command modules delegate to the shared launcher, which executes each CLI with its YOLO option via `subprocess.run` with inherited stdio and blocking wait; every YOLO inline help prints the alphabetical registry with executed options plus the Copilot `--allow-all` alternative note. |
 | REQ-019, REQ-064 | `src/shell_scripts/commands/kiro.py` | `run` | Executes `kiro-cli` via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-020, REQ-021, REQ-064 | `src/shell_scripts/commands/vscode_cmd.py`; `src/shell_scripts/commands/vsinsider_cmd.py` | `run` | Commands set `CODEX_HOME`, append project path, and execute Code binaries via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-022 | `src/shell_scripts/commands/ubuntu_dark_theme.py` | `run` | Applies `gsettings ... gtk-theme Adwaita-dark` and conditionally launches `gtk-chtheme`, `qt5ct`, `qt6ct`. |

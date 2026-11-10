@@ -8,6 +8,7 @@
         ├── commands
         │   ├── __init__.py
         │   ├── _dc_common.py
+        │   ├── _yolo_common.py
         │   ├── agy.py
         │   ├── bin_links.py
         │   ├── claude.py
@@ -168,39 +169,93 @@ from shell_scripts.utils import is_executable_command, print_error
 
 ---
 
-# agy.py | Python | 81L | 5 symbols | 2 imports | 16 comments
-> Path: `src/shell_scripts/commands/agy.py`
+# _yolo_common.py | Python | 184L | 5 symbols | 4 imports | 29 comments
+> Path: `src/shell_scripts/commands/_yolo_common.py`
 
 ## Imports
 ```
+from __future__ import annotations
 import subprocess
+from dataclasses import dataclass
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L18)
+- var `PROGRAM = "shellscripts"` (L21)
 - @brief Base CLI program name used in help output.
 - @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch Antigravity CLI in the project context."` (L22)
+### class `class YoloCliSpec` `@dataclass(frozen=True)` (L25-52)
+- @brief Declarative definition of one YOLO-mode external AI CLI.
+- @details Immutable registry record; a command module becomes a YOLO launcher by binding exactly one instance of this record.
+- @satisfies DES-030
+
+### fn `def get_yolo_spec(command: str) -> YoloCliSpec` (L112-124)
+- @brief O(1) command-token lookup index over `YOLO_CLI_REGISTRY`.
+- @brief Resolve the declarative YOLO CLI record for one command token.
+- @details Performs O(1) dictionary lookup on `YOLO_CLI_INDEX`. Time complexity O(1).
+- @param command {str} Dispatcher command token (for example `codex`).
+- @return {YoloCliSpec} Registry record bound to the command token.
+- @throws {KeyError} If the command token is not registered.
+- @satisfies DES-030
+- @satisfies DES-030
+
+### fn `def print_yolo_help(command: str, version: str, description: str) -> None` (L125-163)
+- @brief Render YOLO command help documenting the full YOLO CLI registry.
+- @details Emits the command description, usage line, executed YOLO option with its behavioral note, optional documented alternative option, and the complete registry listing with every executed option and note in ascending alphabetical command order; does not mutate process state. Time complexity O(n) over registered YOLO CLI record count.
+- @param command {str} Dispatcher command token whose help is rendered.
+- @param version {str} CLI version string propagated by dispatcher.
+- @param description {str} One-line command description for the help header.
+- @return {None} Writes help text to stdout.
+- @satisfies DES-008, REQ-086, REQ-092, REQ-093
+
+### fn `def run_yolo_cli(command: str, args: list[str]) -> int` (L164-185)
+- @brief Launch one registered YOLO CLI after prerequisite validation.
+- @details Resolves project root, resolves the registry record, validates executable availability for the record executable, builds the command vector `[resolved_executable, option] + args`, then executes it through blocking `subprocess.run` with inherited stdio. Time complexity O(n) over forwarded argument count.
+- @param command {str} Registered dispatcher command token.
+- @param args {list[str]} Additional CLI args forwarded to the external CLI.
+- @return {int} Child process return code.
+- @throws {KeyError} If the command token is not registered.
+- @satisfies REQ-014, REQ-015, REQ-017, REQ-018, REQ-085, REQ-055, REQ-056, REQ-064
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|21||
+|`YoloCliSpec`|class|pub|25-52|class YoloCliSpec|
+|`get_yolo_spec`|fn|pub|112-124|def get_yolo_spec(command: str) -> YoloCliSpec|
+|`print_yolo_help`|fn|pub|125-163|def print_yolo_help(command: str, version: str, descripti...|
+|`run_yolo_cli`|fn|pub|164-185|def run_yolo_cli(command: str, args: list[str]) -> int|
+
+
+---
+
+# agy.py | Python | 50L | 4 symbols | 1 imports | 10 comments
+> Path: `src/shell_scripts/commands/agy.py`
+
+## Imports
+```
+from shell_scripts.commands._yolo_common import (
+```
+
+## Definitions
+
+- var `DESCRIPTION = "Launch Antigravity CLI in the project context."` (L19)
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
-- var `AI_CLI_COMMANDS = tuple(sorted((` (L29)
-- @brief Alphabetically sorted AI CLI launch command tokens rendered in inline help.
-- @details Derived through `sorted()` at import time so token-set edits preserve
-the REQ-086 alphabetical rendering contract; contains launcher commands only
-and excludes installer command tokens.
-- @satisfies REQ-086
-### fn `def print_help(version)` (L41-63)
+- var `SPEC = get_yolo_spec("agy")` (L23)
+- @brief Declarative YOLO CLI record bound to the `agy` command token.
+- @satisfies DES-030, REQ-085
+### fn `def print_help(version: str) -> None` (L26-38)
 - @brief Print command-specific help for `agy`.
-- @details Emits usage and pass-through argument behavior, then renders the AI CLI launch command tokens from `AI_CLI_COMMANDS`, one per line, in ascending alphabetical order; does not mutate process state. Time complexity O(n) over registered AI CLI token count.
+- @details Delegates to the shared YOLO help renderer, which emits the executed option documentation and the alphabetical YOLO CLI registry. Time complexity O(n) over registered YOLO CLI record count.
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
-- @satisfies DES-008, REQ-086
+- @satisfies DES-008, REQ-086, REQ-092
 
-### fn `def run(args)` (L64-82)
+### fn `def run(args: list[str]) -> int` (L39-51)
 - @brief Launch Antigravity CLI in YOLO mode after executable validation.
-- @details Resolves project root, builds the fixed command vector `[agy, --dangerously-skip-permissions] + args`, resolves the executable path via `require_commands`, then executes it through blocking `subprocess.run` with inherited stdio. Time complexity O(n) over forwarded argument count.
+- @details Delegates to the shared YOLO runner executing `agy --dangerously-skip-permissions` plus pass-through args through blocking subprocess run with inherited stdio. Time complexity O(n) over forwarded argument count.
 - @param args {list[str]} Additional CLI args forwarded to Antigravity.
 - @return {int} Child process return code.
 - @satisfies REQ-085, REQ-055, REQ-056, REQ-064
@@ -208,11 +263,10 @@ and excludes installer command tokens.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|18||
-|`DESCRIPTION`|var|pub|22||
-|`AI_CLI_COMMANDS`|var|pub|29||
-|`print_help`|fn|pub|41-63|def print_help(version)|
-|`run`|fn|pub|64-82|def run(args)|
+|`DESCRIPTION`|var|pub|19||
+|`SPEC`|var|pub|23||
+|`print_help`|fn|pub|26-38|def print_help(version: str) -> None|
+|`run`|fn|pub|39-51|def run(args: list[str]) -> int|
 
 
 ---
@@ -246,34 +300,32 @@ from shell_scripts.utils import print_error
 
 ---
 
-# claude.py | Python | 56L | 4 symbols | 3 imports | 10 comments
+# claude.py | Python | 50L | 4 symbols | 1 imports | 10 comments
 > Path: `src/shell_scripts/commands/claude.py`
 
 ## Imports
 ```
-import subprocess
-from pathlib import Path
-from shell_scripts.utils import require_project_root, require_commands
+from shell_scripts.commands._yolo_common import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L17)
-- @brief Base CLI program name used in help output.
-- @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L21)
+- var `DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."` (L19)
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version)` (L24-40)
+- var `SPEC = get_yolo_spec("claude")` (L23)
+- @brief Declarative YOLO CLI record bound to the `claude` command token.
+- @satisfies DES-030, REQ-017
+### fn `def print_help(version: str) -> None` (L26-38)
 - @brief Print command-specific help for `claude`.
-- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @details Delegates to the shared YOLO help renderer, which emits the executed option documentation and the alphabetical YOLO CLI registry. Time complexity O(n) over registered YOLO CLI record count.
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
-- @satisfies DES-008
+- @satisfies DES-008, REQ-086, REQ-092
 
-### fn `def run(args)` (L41-57)
-- @brief Launch Claude CLI after external executable validation.
-- @details Resolves project root, resolves user-local Claude executable path, validates executable availability, then executes command via subprocess.
+### fn `def run(args: list[str]) -> int` (L39-51)
+- @brief Launch Claude CLI in YOLO mode after executable validation.
+- @details Delegates to the shared YOLO runner executing the PATH-resolved `claude --dangerously-skip-permissions` plus pass-through args through blocking subprocess run with inherited stdio. Time complexity O(n) over forwarded argument count.
 - @param args {list[str]} Additional CLI args forwarded to Claude.
 - @return {int} Child process return code.
 - @satisfies REQ-017, REQ-055, REQ-056, REQ-064
@@ -281,10 +333,10 @@ from shell_scripts.utils import require_project_root, require_commands
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|17||
-|`DESCRIPTION`|var|pub|21||
-|`print_help`|fn|pub|24-40|def print_help(version)|
-|`run`|fn|pub|41-57|def run(args)|
+|`DESCRIPTION`|var|pub|19||
+|`SPEC`|var|pub|23||
+|`print_help`|fn|pub|26-38|def print_help(version: str) -> None|
+|`run`|fn|pub|39-51|def run(args: list[str]) -> int|
 
 
 ---
@@ -321,94 +373,73 @@ from shell_scripts.utils import require_project_root, print_error
 
 ---
 
-# codex.py | Python | 107L | 5 symbols | 5 imports | 11 comments
+# codex.py | Python | 50L | 4 symbols | 1 imports | 10 comments
 > Path: `src/shell_scripts/commands/codex.py`
 
 ## Imports
 ```
-import os
-import shutil
-import subprocess
-from pathlib import Path
-from shell_scripts.utils import print_info, require_project_root, require_commands
+from shell_scripts.commands._yolo_common import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L23)
-- @brief Base CLI program name used in help output.
-- @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch OpenAI Codex CLI in the project context."` (L27)
+- var `DESCRIPTION = "Launch OpenAI Codex CLI in the project context."` (L20)
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version: str) -> None` (L30-45)
+- var `SPEC = get_yolo_spec("codex")` (L24)
+- @brief Declarative YOLO CLI record bound to the `codex` command token.
+- @satisfies DES-030, REQ-014
+### fn `def print_help(version: str) -> None` (L27-39)
 - @brief Print command-specific help for `codex`.
-- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @details Delegates to the shared YOLO help renderer, which emits the executed option documentation and the alphabetical YOLO CLI registry. Time complexity O(n) over registered YOLO CLI record count.
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
-- @satisfies DES-008
+- @satisfies DES-008, REQ-086, REQ-092
 
-### fn `def _copy_auth_file(` `priv` (L46-49)
-
-### fn `def run(args: list[str]) -> int` (L74-108)
-- @brief Copy Codex auth file while replacing destination file or symlink.
-- @brief Launch Codex CLI with project-scoped environment preparation.
-- @details Ensures destination parent directory exists, removes an existing
-destination entry when it is a file or symbolic link, then copies source
-bytes to destination preserving metadata with `shutil.copy2`, then emits
-one informational output line for copy evidence. Time complexity O(n) where
-n is auth file size.
-- @details Resolves project root, copies auth from home into project auth file, emits copy evidence output, sets `CODEX_HOME=<project-root>/.codex`, executes `codex --yolo` plus pass-through args through blocking subprocess run, then copies project auth back to home path in a `finally` block with reverse-direction copy evidence output.
-- @param source_path {Path} Existing auth file source path.
-- @param destination_path {Path} Auth file destination path to overwrite.
-- @param direction_label {str} Copy direction descriptor shown in info output.
+### fn `def run(args: list[str]) -> int` (L40-51)
+- @brief Launch Codex CLI in YOLO mode after executable validation.
+- @details Delegates to the shared YOLO runner executing `codex --yolo` plus pass-through args through blocking subprocess run with inherited stdio. Time complexity O(n) over forwarded argument count.
 - @param args {list[str]} Additional CLI args forwarded to Codex.
-- @return {None} Applies destination filesystem mutation.
 - @return {int} Child process return code.
-- @throws {OSError} If source read, destination unlink, or copy operation fails.
-- @throws {OSError} Propagated for auth-file copy or process-launch failures.
-- @satisfies REQ-043, REQ-044
-- @satisfies REQ-014, REQ-043, REQ-044, REQ-064
+- @satisfies REQ-014, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|23||
-|`DESCRIPTION`|var|pub|27||
-|`print_help`|fn|pub|30-45|def print_help(version: str) -> None|
-|`_copy_auth_file`|fn|priv|46-49|def _copy_auth_file(|
-|`run`|fn|pub|74-108|def run(args: list[str]) -> int|
+|`DESCRIPTION`|var|pub|20||
+|`SPEC`|var|pub|24||
+|`print_help`|fn|pub|27-39|def print_help(version: str) -> None|
+|`run`|fn|pub|40-51|def run(args: list[str]) -> int|
 
 
 ---
 
-# copilot.py | Python | 54L | 4 symbols | 2 imports | 10 comments
+# copilot.py | Python | 51L | 4 symbols | 1 imports | 10 comments
 > Path: `src/shell_scripts/commands/copilot.py`
 
 ## Imports
 ```
-import subprocess
-from shell_scripts.utils import require_project_root, require_commands
+from shell_scripts.commands._yolo_common import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L16)
-- @brief Base CLI program name used in help output.
-- @details Constant identifier for usage-line rendering in command help.
 - var `DESCRIPTION = "Launch GitHub Copilot CLI in the project context."` (L20)
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version)` (L23-39)
+- var `SPEC = get_yolo_spec("copilot")` (L24)
+- @brief Declarative YOLO CLI record bound to the `copilot` command token.
+- @satisfies DES-030, REQ-015, REQ-093
+### fn `def print_help(version: str) -> None` (L27-40)
 - @brief Print command-specific help for `copilot`.
-- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @details Delegates to the shared YOLO help renderer, which emits the executed option documentation, the accepted `--allow-all` alternative, and the alphabetical YOLO CLI registry. Time complexity O(n) over registered YOLO CLI record count.
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
-- @satisfies DES-008
+- @satisfies DES-008, REQ-086, REQ-092, REQ-093
 
-### fn `def run(args)` (L40-55)
-- @brief Launch Copilot CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `copilot`, then executes pass-through args through blocking subprocess run.
+### fn `def run(args: list[str]) -> int` (L41-52)
+- @brief Launch Copilot CLI in YOLO mode after executable validation.
+- @details Delegates to the shared YOLO runner executing `copilot --yolo` plus pass-through args through blocking subprocess run with inherited stdio. Time complexity O(n) over forwarded argument count.
 - @param args {list[str]} Additional CLI args forwarded to Copilot.
 - @return {int} Child process return code.
 - @satisfies REQ-015, REQ-055, REQ-056, REQ-064
@@ -416,10 +447,10 @@ from shell_scripts.utils import require_project_root, require_commands
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|16||
 |`DESCRIPTION`|var|pub|20||
-|`print_help`|fn|pub|23-39|def print_help(version)|
-|`run`|fn|pub|40-55|def run(args)|
+|`SPEC`|var|pub|24||
+|`print_help`|fn|pub|27-40|def print_help(version: str) -> None|
+|`run`|fn|pub|41-52|def run(args: list[str]) -> int|
 
 
 ---
@@ -715,33 +746,32 @@ from shell_scripts.utils import require_project_root, require_commands
 
 ---
 
-# opencode.py | Python | 54L | 4 symbols | 2 imports | 10 comments
+# opencode.py | Python | 49L | 4 symbols | 1 imports | 10 comments
 > Path: `src/shell_scripts/commands/opencode.py`
 
 ## Imports
 ```
-import subprocess
-from shell_scripts.utils import require_project_root, require_commands
+from shell_scripts.commands._yolo_common import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L16)
-- @brief Base CLI program name used in help output.
-- @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch OpenCode CLI in the project context."` (L20)
+- var `DESCRIPTION = "Launch OpenCode CLI in the project context."` (L19)
 - @brief One-line command description for dispatcher help surfaces.
 - @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version)` (L23-39)
+- var `SPEC = get_yolo_spec("opencode")` (L23)
+- @brief Declarative YOLO CLI record bound to the `opencode` command token.
+- @satisfies DES-030, REQ-018
+### fn `def print_help(version: str) -> None` (L26-38)
 - @brief Print command-specific help for `opencode`.
-- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
+- @details Delegates to the shared YOLO help renderer, which emits the executed option documentation and the alphabetical YOLO CLI registry. Time complexity O(n) over registered YOLO CLI record count.
 - @param version {str} CLI version string propagated by dispatcher.
 - @return {None} Writes help text to stdout.
-- @satisfies DES-008
+- @satisfies DES-008, REQ-086, REQ-092
 
-### fn `def run(args)` (L40-55)
-- @brief Launch OpenCode CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `opencode`, then executes pass-through args through blocking subprocess run.
+### fn `def run(args: list[str]) -> int` (L39-50)
+- @brief Launch OpenCode CLI in auto-approval mode after validation.
+- @details Delegates to the shared YOLO runner executing `opencode --auto` plus pass-through args through blocking subprocess run with inherited stdio. Time complexity O(n) over forwarded argument count.
 - @param args {list[str]} Additional CLI args forwarded to OpenCode.
 - @return {int} Child process return code.
 - @satisfies REQ-018, REQ-055, REQ-056, REQ-064
@@ -749,10 +779,10 @@ from shell_scripts.utils import require_project_root, require_commands
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|16||
-|`DESCRIPTION`|var|pub|20||
-|`print_help`|fn|pub|23-39|def print_help(version)|
-|`run`|fn|pub|40-55|def run(args)|
+|`DESCRIPTION`|var|pub|19||
+|`SPEC`|var|pub|23||
+|`print_help`|fn|pub|26-38|def print_help(version: str) -> None|
+|`run`|fn|pub|39-50|def run(args: list[str]) -> int|
 
 
 ---

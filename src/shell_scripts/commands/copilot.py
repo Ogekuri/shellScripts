@@ -1,54 +1,51 @@
 #!/usr/bin/env python3
-"""@brief GitHub Copilot CLI launcher in project context.
+"""@brief GitHub Copilot CLI launcher in YOLO mode via the shared launcher.
 
-@details Ensures project-root prerequisite and executable availability before
-blocking subprocess invocation of `copilot`.
-@satisfies REQ-015, REQ-055, REQ-056, REQ-064
+@details Thin YOLO command module binding the `copilot` registry record and
+delegating project-root enforcement, executable validation, inline help
+rendering, and blocking subprocess invocation to `_yolo_common`. The accepted
+alternative `--allow-all` option is documented in inline help only.
+@satisfies REQ-015, REQ-093, DES-030, DES-031, DES-008
 """
 
-import subprocess
+from shell_scripts.commands._yolo_common import (
+    get_yolo_spec,
+    print_yolo_help,
+    run_yolo_cli,
+)
 
-from shell_scripts.utils import require_project_root, require_commands
-
-## @var PROGRAM
-#  @brief Base CLI program name used in help output.
-#  @details Constant identifier for usage-line rendering in command help.
-PROGRAM = "shellscripts"
 ## @var DESCRIPTION
 #  @brief One-line command description for dispatcher help surfaces.
 #  @details Exposed by command registry introspection (`get_all_commands`).
 DESCRIPTION = "Launch GitHub Copilot CLI in the project context."
+## @var SPEC
+#  @brief Declarative YOLO CLI record bound to the `copilot` command token.
+#  @satisfies DES-030, REQ-015, REQ-093
+SPEC = get_yolo_spec("copilot")
 
 
-def print_help(version):
+def print_help(version: str) -> None:
     """@brief Print command-specific help for `copilot`.
 
-    @details Emits usage and pass-through argument behavior for deterministic
-    terminal rendering; does not mutate process state.
+    @details Delegates to the shared YOLO help renderer, which emits the
+    executed option documentation, the accepted `--allow-all` alternative,
+    and the alphabetical YOLO CLI registry.
+    Time complexity O(n) over registered YOLO CLI record count.
     @param version {str} CLI version string propagated by dispatcher.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008
+    @satisfies DES-008, REQ-086, REQ-092, REQ-093
     """
-
-    print(f"Usage: {PROGRAM} copilot [args...] ({version})")
-    print()
-    print("copilot options:")
-    print("  All arguments are passed through to the Copilot CLI.")
-    print("  --help  - Show this help message.")
+    print_yolo_help(SPEC.command, version, DESCRIPTION)
 
 
-def run(args):
-    """@brief Launch Copilot CLI after external executable validation.
+def run(args: list[str]) -> int:
+    """@brief Launch Copilot CLI in YOLO mode after executable validation.
 
-    @details Resolves project root, checks executable availability for
-    `copilot`, then executes pass-through args through blocking subprocess run.
+    @details Delegates to the shared YOLO runner executing
+    `copilot --yolo` plus pass-through args through blocking subprocess run
+    with inherited stdio. Time complexity O(n) over forwarded argument count.
     @param args {list[str]} Additional CLI args forwarded to Copilot.
     @return {int} Child process return code.
     @satisfies REQ-015, REQ-055, REQ-056, REQ-064
     """
-
-    require_project_root()
-    cmd = ["copilot", "--yolo", "--allow-all-tools", "--no-auto-update"] + args
-    cmd[0] = require_commands(cmd[0])
-    result = subprocess.run(cmd)
-    return result.returncode
+    return run_yolo_cli(SPEC.command, args)

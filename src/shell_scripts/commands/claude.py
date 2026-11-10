@@ -1,56 +1,50 @@
 #!/usr/bin/env python3
-"""@brief Claude CLI launcher in project context.
+"""@brief Claude CLI launcher in YOLO mode via the shared registry launcher.
 
-@details Ensures project-root prerequisite and executable availability before
-blocking subprocess invocation of user-local Claude binary.
-@satisfies REQ-017, REQ-055, REQ-056, REQ-064
+@details Thin YOLO command module binding the `claude` registry record and
+delegating project-root enforcement, PATH-based executable validation, inline
+help rendering, and blocking subprocess invocation to `_yolo_common`.
+@satisfies REQ-017, DES-030, DES-031, DES-008
 """
 
-import subprocess
-from pathlib import Path
+from shell_scripts.commands._yolo_common import (
+    get_yolo_spec,
+    print_yolo_help,
+    run_yolo_cli,
+)
 
-from shell_scripts.utils import require_project_root, require_commands
-
-## @var PROGRAM
-#  @brief Base CLI program name used in help output.
-#  @details Constant identifier for usage-line rendering in command help.
-PROGRAM = "shellscripts"
 ## @var DESCRIPTION
 #  @brief One-line command description for dispatcher help surfaces.
 #  @details Exposed by command registry introspection (`get_all_commands`).
 DESCRIPTION = "Launch Claude CLI with skip-permissions in the project context."
+## @var SPEC
+#  @brief Declarative YOLO CLI record bound to the `claude` command token.
+#  @satisfies DES-030, REQ-017
+SPEC = get_yolo_spec("claude")
 
 
-def print_help(version):
+def print_help(version: str) -> None:
     """@brief Print command-specific help for `claude`.
 
-    @details Emits usage and pass-through argument behavior for deterministic
-    terminal rendering; does not mutate process state.
+    @details Delegates to the shared YOLO help renderer, which emits the
+    executed option documentation and the alphabetical YOLO CLI registry.
+    Time complexity O(n) over registered YOLO CLI record count.
     @param version {str} CLI version string propagated by dispatcher.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008
+    @satisfies DES-008, REQ-086, REQ-092
     """
-
-    print(f"Usage: {PROGRAM} claude [args...] ({version})")
-    print()
-    print("claude options:")
-    print("  All arguments are passed through to the Claude CLI.")
-    print("  --help  - Show this help message.")
+    print_yolo_help(SPEC.command, version, DESCRIPTION)
 
 
-def run(args):
-    """@brief Launch Claude CLI after external executable validation.
+def run(args: list[str]) -> int:
+    """@brief Launch Claude CLI in YOLO mode after executable validation.
 
-    @details Resolves project root, resolves user-local Claude executable path,
-    validates executable availability, then executes command via subprocess.
+    @details Delegates to the shared YOLO runner executing the PATH-resolved
+    `claude --dangerously-skip-permissions` plus pass-through args through
+    blocking subprocess run with inherited stdio. Time complexity O(n) over
+    forwarded argument count.
     @param args {list[str]} Additional CLI args forwarded to Claude.
     @return {int} Child process return code.
     @satisfies REQ-017, REQ-055, REQ-056, REQ-064
     """
-
-    require_project_root()
-    claude_bin = Path.home() / ".claude" / "bin" / "claude"
-    cmd = [str(claude_bin), "--dangerously-skip-permissions"] + args
-    cmd[0] = require_commands(cmd[0])
-    result = subprocess.run(cmd)
-    return result.returncode
+    return run_yolo_cli(SPEC.command, args)

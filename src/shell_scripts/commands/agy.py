@@ -1,81 +1,50 @@
 #!/usr/bin/env python3
-"""@brief Antigravity CLI launcher in project context.
+"""@brief Antigravity CLI launcher in YOLO mode via the shared registry launcher.
 
-@details Ensures project-root prerequisite and executable availability before
-blocking subprocess invocation of `agy` in YOLO mode
-(`--dangerously-skip-permissions`); inline help lists the registered AI CLI
-launch commands in alphabetical order.
-@satisfies REQ-085, REQ-086, REQ-055, REQ-056, REQ-064
+@details Thin YOLO command module binding the `agy` registry record and
+delegating project-root enforcement, executable validation, inline help
+rendering, and blocking subprocess invocation to `_yolo_common`.
+@satisfies REQ-085, DES-030, DES-031, DES-008
 """
 
-import subprocess
+from shell_scripts.commands._yolo_common import (
+    get_yolo_spec,
+    print_yolo_help,
+    run_yolo_cli,
+)
 
-from shell_scripts.utils import require_project_root, require_commands
-
-## @var PROGRAM
-#  @brief Base CLI program name used in help output.
-#  @details Constant identifier for usage-line rendering in command help.
-PROGRAM = "shellscripts"
 ## @var DESCRIPTION
 #  @brief One-line command description for dispatcher help surfaces.
 #  @details Exposed by command registry introspection (`get_all_commands`).
 DESCRIPTION = "Launch Antigravity CLI in the project context."
-## @var AI_CLI_COMMANDS
-#  @brief Alphabetically sorted AI CLI launch command tokens rendered in inline help.
-#  @details Derived through `sorted()` at import time so token-set edits preserve
-#  the REQ-086 alphabetical rendering contract; contains launcher commands only
-#  and excludes installer command tokens.
-#  @satisfies REQ-086
-AI_CLI_COMMANDS = tuple(sorted((
-    "agy",
-    "claude",
-    "codex",
-    "copilot",
-    "gemini",
-    "kiro",
-    "opencode",
-    "pi",
-)))
+## @var SPEC
+#  @brief Declarative YOLO CLI record bound to the `agy` command token.
+#  @satisfies DES-030, REQ-085
+SPEC = get_yolo_spec("agy")
 
 
-def print_help(version):
+def print_help(version: str) -> None:
     """@brief Print command-specific help for `agy`.
 
-    @details Emits usage and pass-through argument behavior, then renders the
-    AI CLI launch command tokens from `AI_CLI_COMMANDS`, one per line, in
-    ascending alphabetical order; does not mutate process state.
-    Time complexity O(n) over registered AI CLI token count.
+    @details Delegates to the shared YOLO help renderer, which emits the
+    executed option documentation and the alphabetical YOLO CLI registry.
+    Time complexity O(n) over registered YOLO CLI record count.
     @param version {str} CLI version string propagated by dispatcher.
     @return {None} Writes help text to stdout.
-    @satisfies DES-008, REQ-086
+    @satisfies DES-008, REQ-086, REQ-092
     """
-
-    print(f"Usage: {PROGRAM} agy [args...] ({version})")
-    print()
-    print("agy options:")
-    print("  All arguments are passed through to the Antigravity CLI.")
-    print("  --help  - Show this help message.")
-    print()
-    print("Available AI CLIs (alphabetical order):")
-    for command_token in AI_CLI_COMMANDS:
-        print(f"  {command_token}")
+    print_yolo_help(SPEC.command, version, DESCRIPTION)
 
 
-def run(args):
+def run(args: list[str]) -> int:
     """@brief Launch Antigravity CLI in YOLO mode after executable validation.
 
-    @details Resolves project root, builds the fixed command vector
-    `[agy, --dangerously-skip-permissions] + args`, resolves the executable
-    path via `require_commands`, then executes it through blocking
-    `subprocess.run` with inherited stdio. Time complexity O(n) over forwarded
-    argument count.
+    @details Delegates to the shared YOLO runner executing
+    `agy --dangerously-skip-permissions` plus pass-through args through
+    blocking subprocess run with inherited stdio. Time complexity O(n) over
+    forwarded argument count.
     @param args {list[str]} Additional CLI args forwarded to Antigravity.
     @return {int} Child process return code.
     @satisfies REQ-085, REQ-055, REQ-056, REQ-064
     """
-
-    require_project_root()
-    cmd = ["agy", "--dangerously-skip-permissions"] + args
-    cmd[0] = require_commands(cmd[0])
-    result = subprocess.run(cmd)
-    return result.returncode
+    return run_yolo_cli(SPEC.command, args)

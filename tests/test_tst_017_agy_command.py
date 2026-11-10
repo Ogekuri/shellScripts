@@ -1,132 +1,252 @@
 """
-@brief Validate Antigravity CLI launcher command and inline help contract.
+@brief Validate the shared YOLO CLI registry, launcher argv contracts, and
+  inline help documentation.
 @details HDT Generator-mode suite. Static analysis artifact:
-  UUTs: `shell_scripts.commands.agy.run` (Level 1: project-root guard,
-  executable resolution, subprocess boundary),
-  `shell_scripts.commands.agy.print_help` (Level 0: pure stdout rendering),
-  `shell_scripts.commands.agy.AI_CLI_COMMANDS` (Level 0 constant),
+  UUTs: `shell_scripts.commands._yolo_common.YOLO_CLI_REGISTRY` (Level 0
+  constant), `shell_scripts.commands._yolo_common.print_yolo_help` (Level 0:
+  pure stdout rendering), `shell_scripts.commands._yolo_common.run_yolo_cli`
+  (Level 1: project-root guard, executable resolution, subprocess boundary),
+  thin delegation in
+  `shell_scripts.commands.{agy,claude,codex,copilot,opencode}.run` (Level 1),
   registry/global-help exposure (Level 0 lookups).
   External dependencies isolated: `subprocess.run`, `require_project_root`,
   `require_commands`. The missing-executable error path terminates through the
-  shared `require_commands` helper already covered by the TST-005 policy, so no
-  launcher-local error case exists in this module.
-@satisfies TST-017, REQ-085, REQ-086
+  shared `require_commands` helper already covered by the TST-005 policy, so
+  no launcher-local error case exists in this module.
+@satisfies TST-017, REQ-085, REQ-086, REQ-092, REQ-093, DES-030, DES-031
 @return {None} Pytest module scope.
 """
 
 from pathlib import Path
 import types
 
+import pytest
+
+import shell_scripts.commands._yolo_common as yolo_common
 import shell_scripts.commands.agy as agy
+import shell_scripts.commands.claude as claude
+import shell_scripts.commands.codex as codex
+import shell_scripts.commands.copilot as copilot
+import shell_scripts.commands.opencode as opencode
 import shell_scripts.core as core
 from shell_scripts.commands import get_command
 
+_HELP_LISTING_HEADER = "Registered YOLO CLIs (alphabetical order):"
+_YOLO_MODULES = (agy, claude, codex, copilot, opencode)
 
-def test_agy_executes_expected_command(monkeypatch):
+
+def _expected_registry_rows() -> list[str]:
     """
-    @brief Validate agy YOLO-mode execution contract with forwarded arguments.
-    @details Stubs project-root guard and subprocess boundary to assert the
-      fixed command vector, argument forwarding, default stdio/wait kwargs,
-      and return-code propagation.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @brief Build the expected alphabetical registry help rows.
+    @details Mirrors the `print_yolo_help` row format
+      `  <command token> <executable> <option>` for every registry record in
+      registry order.
+    @return {list[str]} Expected registry rows in ascending command order.
+    """
+
+    return [
+        f"  {spec.command:<9} {spec.executable} {spec.option}"
+        for spec in yolo_common.YOLO_CLI_REGISTRY
+    ]
+
+
+def test_yolo_registry_is_alphabetically_ordered_and_complete():
+    """
+    @brief Validate registry completeness and alphabetical command ordering.
+    @details Asserts the exact registered command token set in ascending
+      alphabetical order and that every record exposes a non-empty
+      executable, an executed option, and a behavioral note.
     @return {None} Assertions only.
-    @satisfies TST-017, REQ-085, REQ-064
+    @satisfies TST-017, REQ-086, DES-030
+    """
+
+    commands = [spec.command for spec in yolo_common.YOLO_CLI_REGISTRY]
+
+    assert commands == ["agy", "claude", "codex", "copilot", "opencode"]
+    assert commands == sorted(commands)
+    for spec in yolo_common.YOLO_CLI_REGISTRY:
+        assert spec.executable
+        assert spec.option.startswith("--")
+        assert spec.note
+
+
+def test_yolo_registry_records_define_expected_yolo_options():
+    """
+    @brief Validate per-CLI executed option contracts in the registry.
+    @details Asserts each registered CLI maps to its verified YOLO command
+      syntax and that only the Copilot record documents an accepted
+      alternative option.
+    @return {None} Assertions only.
+    @satisfies TST-017, REQ-014, REQ-015, REQ-017, REQ-018, REQ-085, REQ-093
+    """
+
+    expected_options = {
+        "agy": "--dangerously-skip-permissions",
+        "claude": "--dangerously-skip-permissions",
+        "codex": "--yolo",
+        "copilot": "--yolo",
+        "opencode": "--auto",
+    }
+
+    for command, option in expected_options.items():
+        spec = yolo_common.get_yolo_spec(command)
+        assert spec.executable == command
+        assert spec.option == option
+
+    copilot_spec = yolo_common.get_yolo_spec("copilot")
+    assert copilot_spec.alternative == "--allow-all"
+    assert copilot_spec.alternative_note
+    for spec in yolo_common.YOLO_CLI_REGISTRY:
+        if spec.command != "copilot":
+            assert spec.alternative == ""
+            assert spec.alternative_note == ""
+
+
+@pytest.mark.parametrize(
+    ("module", "args", "expected_command_tail"),
+    [
+        (agy, ["--flag"], ["--dangerously-skip-permissions", "--flag"]),
+        (claude, ["--session"], ["--dangerously-skip-permissions", "--session"]),
+        (codex, ["--x"], ["--yolo", "--x"]),
+        (copilot, ["--extra"], ["--yolo", "--extra"]),
+        (opencode, ["--inspect"], ["--auto", "--inspect"]),
+    ],
+)
+def test_yolo_modules_delegate_expected_yolo_argv(
+    monkeypatch,
+    module,
+    args,
+    expected_command_tail,
+):
+    """
+    @brief Validate thin module delegation to the shared YOLO runner.
+    @details Stubs the shared launcher boundaries and asserts each thin module
+      produces the fixed `[resolved_executable, option] + args` vector with
+      default stdio/wait kwargs and propagated return code.
+    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
+    @param module {module} Thin YOLO command module under test.
+    @param args {list[str]} Forwarded command arguments.
+    @param expected_command_tail {list[str]} Expected fixed and forwarded tail.
+    @return {None} Assertions only.
+    @satisfies TST-017, REQ-085, REQ-014, REQ-015, REQ-017, REQ-018, REQ-064
     """
 
     observed = {}
+    resolved_exec = "/opt/tools/resolved-cli"
 
     def _fake_run(command, **kwargs):
         observed["command"] = command
         observed["kwargs"] = kwargs
         return types.SimpleNamespace(returncode=11)
 
-    monkeypatch.setattr(agy, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(agy, "require_commands", lambda *cmds: cmds[0])
-    monkeypatch.setattr(agy.subprocess, "run", _fake_run)
+    monkeypatch.setattr(yolo_common, "require_project_root", lambda: Path("/tmp/p"))
+    monkeypatch.setattr(yolo_common, "require_commands", lambda *_cmds: resolved_exec)
+    monkeypatch.setattr(yolo_common.subprocess, "run", _fake_run)
 
-    result = agy.run(["--flag"])
+    result = module.run(args)
 
     assert result == 11
-    assert observed["command"] == [
-        "agy",
-        "--dangerously-skip-permissions",
-        "--flag",
-    ]
+    assert observed["command"] == [resolved_exec] + expected_command_tail
     assert observed["kwargs"] == {}
 
 
-def test_agy_empty_args_execute_fixed_yolo_vector_only(monkeypatch):
+def test_yolo_runner_with_empty_args_executes_fixed_yolo_vector_only(
+    monkeypatch,
+):
     """
-    @brief Validate agy boundary behavior with empty forwarded arguments.
-    @details Asserts that the command vector contains exactly the executable
-      and the YOLO flag when no pass-through arguments are supplied.
+    @brief Validate boundary behavior with empty forwarded arguments.
+    @details Asserts that the shared runner command vector contains exactly
+      the resolved executable and the YOLO option when no pass-through
+      arguments are supplied.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
     @satisfies TST-017, REQ-085
     """
 
     observed = {}
+    resolved_exec = "/opt/tools/resolved-cli"
 
     def _fake_run(command, **kwargs):
         observed["command"] = command
         return types.SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr(agy, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(agy, "require_commands", lambda *cmds: cmds[0])
-    monkeypatch.setattr(agy.subprocess, "run", _fake_run)
+    monkeypatch.setattr(yolo_common, "require_project_root", lambda: Path("/tmp/p"))
+    monkeypatch.setattr(yolo_common, "require_commands", lambda *_cmds: resolved_exec)
+    monkeypatch.setattr(yolo_common.subprocess, "run", _fake_run)
 
-    result = agy.run([])
+    result = yolo_common.run_yolo_cli("agy", [])
 
     assert result == 0
-    assert observed["command"] == ["agy", "--dangerously-skip-permissions"]
+    assert observed["command"] == [
+        resolved_exec,
+        "--dangerously-skip-permissions",
+    ]
 
 
-def test_agy_print_help_lists_ai_cli_tokens_alphabetically(capsys):
+@pytest.mark.parametrize("module", list(_YOLO_MODULES))
+def test_yolo_help_lists_registry_alphabetically_with_options(capsys, module):
     """
-    @brief Validate alphabetical AI CLI listing inside agy inline help.
-    @details Captures `print_help` output, isolates the AI CLI listing section,
-      and asserts the exact expected token set rendered once each in ascending
-      alphabetical order.
+    @brief Validate registry documentation inside each YOLO inline help.
+    @details Captures `print_help` output, isolates the registry listing
+      section, and asserts every registry row with its executed option appears
+      exactly once in ascending alphabetical order together with every
+      behavioral note and executed option.
     @param capsys {pytest.CaptureFixture} Stdout capture fixture.
+    @param module {module} Thin YOLO command module under test.
     @return {None} Assertions only.
-    @satisfies TST-017, REQ-086
+    @satisfies TST-017, REQ-086, REQ-092
     """
 
-    expected_tokens = (
-        "agy",
-        "claude",
-        "codex",
-        "copilot",
-        "gemini",
-        "kiro",
-        "opencode",
-        "pi",
-    )
-
-    agy.print_help("0.0.0-test")
+    module.print_help("0.0.0-test")
 
     output = capsys.readouterr().out
-    assert "Available AI CLIs (alphabetical order):" in output
-    listing = output.split("Available AI CLIs (alphabetical order):", 1)[1]
-    positions = [listing.index(f"  {token}\n") for token in expected_tokens]
+    assert _HELP_LISTING_HEADER in output
+    listing = output.split(_HELP_LISTING_HEADER, 1)[1]
+    rows = _expected_registry_rows()
+    positions = [listing.index(row) for row in rows]
     assert positions == sorted(positions)
-    assert len(set(positions)) == len(expected_tokens)
+    assert len(set(positions)) == len(rows)
+    for spec in yolo_common.YOLO_CLI_REGISTRY:
+        assert spec.option in output
+        assert spec.note in output
 
 
-def test_agy_registry_and_global_help_expose_command():
+def test_copilot_help_documents_allow_all_alternative(capsys):
     """
-    @brief Validate registry mapping and AI help section exposure for agy.
-    @details Asserts lazy registry resolution returns the agy module with a
-      non-empty description and that the global-help AI section contains the
-      agy token.
+    @brief Validate Copilot alternative option documentation in inline help.
+    @details Asserts the `copilot` inline help documents the accepted
+      `--allow-all` alternative with its behavioral note while the executed
+      option remains `--yolo` and is never replaced by the alternative.
+    @param capsys {pytest.CaptureFixture} Stdout capture fixture.
     @return {None} Assertions only.
-    @satisfies TST-017, DES-001, DES-008, DES-014
+    @satisfies TST-017, REQ-092, REQ-093
     """
 
-    resolved = get_command("agy")
+    copilot.print_help("0.0.0-test")
 
-    assert resolved is agy
-    assert agy.DESCRIPTION == "Launch Antigravity CLI in the project context."
+    output = capsys.readouterr().out
+    assert "--allow-all" in output
+    copilot_spec = yolo_common.get_yolo_spec("copilot")
+    assert copilot_spec.alternative_note in output
+    assert copilot.SPEC.option == "--yolo"
+    assert copilot.SPEC.alternative == "--allow-all"
+
+
+def test_yolo_registry_and_global_help_expose_commands():
+    """
+    @brief Validate registry mapping and AI help section exposure for YOLO CLIs.
+    @details Asserts lazy registry resolution returns each thin YOLO module
+      with a non-empty description and that the global-help AI section
+      contains the `agy` token.
+    @return {None} Assertions only.
+    @satisfies TST-017, DES-001, DES-008, DES-014, DES-031
+    """
+
+    for module in _YOLO_MODULES:
+        resolved = get_command(module.SPEC.command)
+        assert resolved is module
+        assert module.DESCRIPTION
+
     ai_section = next(
         section
         for section_name, section in core.HELP_SECTION_COMMANDS
