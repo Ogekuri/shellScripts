@@ -85,10 +85,7 @@ HELP_SECTION_COMMANDS = (
             "claude",
             "codex",
             "copilot",
-            "gemini",
-            "kiro",
             "opencode",
-            "pi",
         ),
     ),
     (

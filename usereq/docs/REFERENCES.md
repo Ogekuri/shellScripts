@@ -69,7 +69,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 81L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 78L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -80,7 +80,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L51-66)
+### fn `def get_command(name: str) -> ModuleType | None` (L48-63)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -92,7 +92,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @satisfies PRJ-003, DES-001
 - @satisfies PRJ-001, DES-001, DES-008, REQ-057, REQ-058
 
-### fn `def get_all_commands() -> dict[str, str]` (L67-82)
+### fn `def get_all_commands() -> dict[str, str]` (L64-79)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
@@ -102,8 +102,8 @@ Removing an entry removes command discoverability and dispatch reachability.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|51-66|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|67-82|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|48-63|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|64-79|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -662,90 +662,6 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# gemini.py | Python | 54L | 4 symbols | 2 imports | 10 comments
-> Path: `src/shell_scripts/commands/gemini.py`
-
-## Imports
-```
-import subprocess
-from shell_scripts.utils import require_project_root, require_commands
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L16)
-- @brief Base CLI program name used in help output.
-- @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch Google Gemini CLI in the project context."` (L20)
-- @brief One-line command description for dispatcher help surfaces.
-- @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version)` (L23-39)
-- @brief Print command-specific help for `gemini`.
-- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
-- @param version {str} CLI version string propagated by dispatcher.
-- @return {None} Writes help text to stdout.
-- @satisfies DES-008
-
-### fn `def run(args)` (L40-55)
-- @brief Launch Gemini CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `gemini`, then executes pass-through args through blocking subprocess run.
-- @param args {list[str]} Additional CLI args forwarded to Gemini.
-- @return {int} Child process return code.
-- @satisfies REQ-016, REQ-055, REQ-056, REQ-064
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|16||
-|`DESCRIPTION`|var|pub|20||
-|`print_help`|fn|pub|23-39|def print_help(version)|
-|`run`|fn|pub|40-55|def run(args)|
-
-
----
-
-# kiro.py | Python | 54L | 4 symbols | 2 imports | 10 comments
-> Path: `src/shell_scripts/commands/kiro.py`
-
-## Imports
-```
-import subprocess
-from shell_scripts.utils import require_project_root, require_commands
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L16)
-- @brief Base CLI program name used in help output.
-- @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch Kiro CLI in the project context."` (L20)
-- @brief One-line command description for dispatcher help surfaces.
-- @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version)` (L23-39)
-- @brief Print command-specific help for `kiro`.
-- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; does not mutate process state.
-- @param version {str} CLI version string propagated by dispatcher.
-- @return {None} Writes help text to stdout.
-- @satisfies DES-008
-
-### fn `def run(args)` (L40-55)
-- @brief Launch Kiro CLI after external executable validation.
-- @details Resolves project root, validates executable availability for `kiro-cli`, then executes pass-through args through blocking subprocess run.
-- @param args {list[str]} Additional CLI args forwarded to Kiro.
-- @return {int} Child process return code.
-- @satisfies REQ-019, REQ-055, REQ-056, REQ-064
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|16||
-|`DESCRIPTION`|var|pub|20||
-|`print_help`|fn|pub|23-39|def print_help(version)|
-|`run`|fn|pub|40-55|def run(args)|
-
-
----
-
 # opencode.py | Python | 49L | 4 symbols | 1 imports | 10 comments
 > Path: `src/shell_scripts/commands/opencode.py`
 
@@ -1153,48 +1069,6 @@ from shell_scripts.utils import require_commands, print_error
 |`_has_out_of_range`|fn|priv|56-73|def _has_out_of_range(dump_content, max_pages)|
 |`_clean_one`|fn|priv|74-161|def _clean_one(input_pdf)|
 |`run`|fn|pub|162-176|def run(args)|
-
-
----
-
-# pi.py | Python | 61L | 4 symbols | 2 imports | 10 comments
-> Path: `src/shell_scripts/commands/pi.py`
-
-## Imports
-```
-import subprocess
-from shell_scripts.utils import require_project_root, require_commands
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L18)
-- @brief Base CLI program name used in help output.
-- @details Constant identifier for usage-line rendering in command help.
-- var `DESCRIPTION = "Launch pi.dev CLI in the project context."` (L23)
-- @brief One-line command description for dispatcher help surfaces.
-- @details Exposed by command registry introspection (`get_all_commands`).
-### fn `def print_help(version: str) -> None` (L26-45)
-- @brief Print command-specific help for `pi`.
-- @details Emits usage and pass-through argument behavior for deterministic terminal rendering; documents that every CLI argument is forwarded to the pi.dev CLI without mutation or implicit option injection. Time complexity O(1).
-- @param version {str} CLI version string propagated by dispatcher.
-- @return {None} Writes help text to stdout.
-- @satisfies DES-008, REQ-068, REQ-069
-
-### fn `def run(args: list[str]) -> int` (L46-62)
-- @brief Launch pi.dev CLI after external executable validation.
-- @details Resolves project root, checks executable availability for `pi`, and forwards all CLI arguments unchanged to the child process. The command vector shape is `[resolved_pi_exec] + args`. Time complexity O(n), where n is forwarded argument count.
-- @param args {list[str]} Additional CLI args forwarded to pi.dev.
-- @return {int} Child process return code.
-- @satisfies REQ-055, REQ-056, REQ-064, REQ-068, REQ-069
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|18||
-|`DESCRIPTION`|var|pub|23||
-|`print_help`|fn|pub|26-45|def print_help(version: str) -> None|
-|`run`|fn|pub|46-62|def run(args: list[str]) -> int|
 
 
 ---
@@ -1727,7 +1601,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 355L | 10 symbols | 7 imports | 25 comments
+# core.py | Python | 352L | 10 symbols | 7 imports | 25 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1761,7 +1635,7 @@ metadata so the upgrade performs a full re-download and reinstallation.
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L127-185)
+### fn `def print_help(command_name=None)` (L124-182)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -1769,14 +1643,14 @@ maps directly to REQ-066 output expectations.
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L186-201)
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L183-198)
 - @brief Compose the develop upgrade command for one GitHub release tag.
 - @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
 - @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
 - @return {str} Fully substituted shell upgrade command.
 - @satisfies REQ-076, DES-019
 
-### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L202-241)
+### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L199-238)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; appends ` --force --reinstall --refresh` to the resolved command when `force` is set; executes the composed command on Linux via shell invocation and prints the manual fallback command on non-Linux systems. Complexity O(n) over the composed command string length.
 - @param develop {bool} Select upgrade from the latest GitHub release tag.
@@ -1784,20 +1658,20 @@ maps directly to REQ-066 output expectations.
 - @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-076, REQ-078, REQ-087, REQ-088, REQ-089, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L242-264)
+### fn `def do_uninstall()` (L239-261)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L265-280)
+### fn `def do_write_config()` (L262-277)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L281-356)
+### fn `def main()` (L278-353)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints the aligned three-line report with installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
@@ -1810,12 +1684,12 @@ maps directly to REQ-066 output expectations.
 |`HELP_COMMAND_COLUMN_WIDTH`|var|pub|44||
 |`FORCED_REINSTALL_OPTIONS`|var|pub|52||
 |`HELP_SECTION_COMMANDS`|var|pub|60||
-|`print_help`|fn|pub|127-185|def print_help(command_name=None)|
-|`_build_develop_upgrade_command`|fn|priv|186-201|def _build_develop_upgrade_command(latest_tag: str) -> str|
-|`do_upgrade`|fn|pub|202-241|def do_upgrade(develop: bool = False, force: bool = False...|
-|`do_uninstall`|fn|pub|242-264|def do_uninstall()|
-|`do_write_config`|fn|pub|265-280|def do_write_config()|
-|`main`|fn|pub|281-356|def main()|
+|`print_help`|fn|pub|124-182|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|183-198|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|199-238|def do_upgrade(develop: bool = False, force: bool = False...|
+|`do_uninstall`|fn|pub|239-261|def do_uninstall()|
+|`do_write_config`|fn|pub|262-277|def do_write_config()|
+|`main`|fn|pub|278-353|def main()|
 
 
 ---

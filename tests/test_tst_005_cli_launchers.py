@@ -3,9 +3,9 @@
 @details Verifies subprocess command vectors, project-path handling, absence
   of Codex auth synchronization and `CODEX_HOME` mutation in `codex`,
   `CODEX_HOME` setup for VS Code commands, and argument pass-through contracts
-  across YOLO-mode and remaining AI launcher commands.
-@satisfies TST-005, REQ-014, REQ-015, REQ-016, REQ-017, REQ-018, REQ-019,
-  REQ-020, REQ-021, REQ-064, REQ-068, REQ-069
+  across YOLO-mode launcher commands and VS Code editor commands.
+@satisfies TST-005, REQ-014, REQ-015, REQ-017, REQ-018, REQ-020, REQ-021,
+  REQ-064
 @return {None} Pytest module scope.
 """
 
@@ -19,10 +19,7 @@ import shell_scripts.commands._yolo_common as yolo_common
 import shell_scripts.commands.claude as claude
 import shell_scripts.commands.codex as codex
 import shell_scripts.commands.copilot as copilot
-import shell_scripts.commands.gemini as gemini
-import shell_scripts.commands.kiro as kiro
 import shell_scripts.commands.opencode as opencode
-import shell_scripts.commands.pi as pi
 import shell_scripts.commands.vscode_cmd as vscode_cmd
 import shell_scripts.commands.vsinsider_cmd as vsinsider_cmd
 
@@ -118,191 +115,6 @@ def test_yolo_launchers_use_resolved_executable_path(
     monkeypatch.setattr(yolo_common.subprocess, "run", _fake_run)
 
     result = module.run(pass_through)
-
-    assert result == 27
-    assert observed["command"] == [resolved_exec] + expected_tail
-    assert observed["kwargs"] == {}
-
-
-def test_gemini_executes_expected_command(monkeypatch):
-    """
-    @brief Validate gemini execution contract.
-    @details Stubs project-root guard and subprocess boundary to assert command
-      vector and propagated return code.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @return {None} Assertions only.
-    @satisfies TST-005, REQ-016, REQ-064
-    """
-
-    observed = {}
-
-    def _fake_run(command, **kwargs):
-        observed["command"] = command
-        observed["kwargs"] = kwargs
-        return types.SimpleNamespace(returncode=12)
-
-    monkeypatch.setattr(gemini, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(gemini, "require_commands", lambda *cmds: cmds[0])
-    monkeypatch.setattr(gemini.subprocess, "run", _fake_run)
-
-    result = gemini.run(["--flag"])
-
-    assert result == 12
-    assert observed["command"] == ["gemini", "--yolo", "--flag"]
-    assert observed["kwargs"] == {}
-
-
-def test_opencode_pre_change_contract_is_gone():
-    """
-    @brief Validate the opencode registry option is the verified `--auto` flag.
-    @details Guards against regression to the pre-refactor contract that
-      executed `opencode` without any YOLO option.
-    @return {None} Assertions only.
-    @satisfies TST-005, REQ-018
-    """
-
-    assert opencode.SPEC.option == "--auto"
-
-
-def test_kiro_executes_expected_command(monkeypatch):
-    """
-    @brief Validate kiro execution contract.
-    @details Stubs project-root guard and subprocess boundary to assert command
-      vector and propagated return code.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @return {None} Assertions only.
-    @satisfies TST-005, REQ-019, REQ-064
-    """
-
-    observed = {}
-
-    def _fake_run(command, **kwargs):
-        observed["command"] = command
-        observed["kwargs"] = kwargs
-        return types.SimpleNamespace(returncode=15)
-
-    monkeypatch.setattr(kiro, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(kiro, "require_commands", lambda *cmds: cmds[0])
-    monkeypatch.setattr(kiro.subprocess, "run", _fake_run)
-
-    result = kiro.run(["--ai"])
-
-    assert result == 15
-    assert observed["command"] == ["kiro-cli", "--ai"]
-    assert observed["kwargs"] == {}
-
-
-def test_pi_forwards_args_without_implicit_tools_injection(monkeypatch):
-    """
-    @brief Validate pi command pass-through behavior without tools mutation.
-    @details Stubs project-root guard and subprocess boundary to assert the
-      pi launcher forwards CLI arguments unchanged and never appends an
-      implicit `--tools` option.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @return {None} Assertions only.
-    @satisfies TST-005, REQ-068, REQ-069, REQ-064
-    """
-
-    observed = {}
-
-    def _fake_run(command, **kwargs):
-        observed["command"] = command
-        observed["kwargs"] = kwargs
-        return types.SimpleNamespace(returncode=16)
-
-    monkeypatch.setattr(pi, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(pi, "require_commands", lambda *cmds: cmds[0])
-    monkeypatch.setattr(pi.subprocess, "run", _fake_run)
-
-    result = pi.run(["--agent", "coder"])
-
-    assert result == 16
-    assert observed["command"] == ["pi", "--agent", "coder"]
-    assert observed["kwargs"] == {}
-
-
-@pytest.mark.parametrize(
-    "tools_args",
-    [
-        ["--tools", "read,bash"],
-        ["--tools=read,bash"],
-    ],
-)
-def test_pi_preserves_tools_override_without_argument_mutation(
-    monkeypatch,
-    tools_args,
-):
-    """
-    @brief Validate pi command preservation of explicit tools arguments.
-    @details Verifies argument forwarding remains unchanged when any `--tools`
-      token is present and confirms no implicit argument injection occurs.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @param tools_args {list[str]} Explicit tools-option argument vectors.
-    @return {None} Assertions only.
-    @satisfies TST-005, REQ-068, REQ-069, REQ-064
-    """
-
-    observed = {}
-
-    def _fake_run(command, **kwargs):
-        observed["command"] = command
-        observed["kwargs"] = kwargs
-        return types.SimpleNamespace(returncode=19)
-
-    monkeypatch.setattr(pi, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(pi, "require_commands", lambda *cmds: cmds[0])
-    monkeypatch.setattr(pi.subprocess, "run", _fake_run)
-
-    result = pi.run(tools_args + ["--mode", "fast"])
-
-    assert result == 19
-    assert observed["command"] == ["pi"] + tools_args + ["--mode", "fast"]
-    assert observed["kwargs"] == {}
-
-
-@pytest.mark.parametrize(
-    ("module", "args", "expected_tail"),
-    [
-        (gemini, ["--flag"], ["--yolo", "--flag"]),
-        (
-            pi,
-            ["--agent", "coder"],
-            ["--agent", "coder"],
-        ),
-        (kiro, ["--ai"], ["--ai"]),
-    ],
-)
-def test_ai_launchers_use_resolved_executable_path_from_require_commands(
-    monkeypatch,
-    module,
-    args,
-    expected_tail,
-):
-    """
-    @brief Validate non-registry AI launchers execute the resolved executable.
-    @details Mocks `require_commands` to return a Windows-style resolved path
-      and verifies launcher execution uses that resolved token as argv[0].
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @param module {module} CLI launcher module under test.
-    @param args {list[str]} Pass-through command arguments.
-    @param expected_tail {list[str]} Expected fixed and forwarded argument tail.
-    @return {None} Assertions only.
-    @satisfies TST-005, REQ-055, REQ-056, REQ-064, REQ-068, REQ-069
-    """
-
-    observed = {}
-    resolved_exec = r"C:\Tools\resolved-tool.cmd"
-
-    def _fake_run(command, **kwargs):
-        observed["command"] = command
-        observed["kwargs"] = kwargs
-        return types.SimpleNamespace(returncode=27)
-
-    monkeypatch.setattr(module, "require_project_root", lambda: Path("/tmp/p"))
-    monkeypatch.setattr(module, "require_commands", lambda *_cmds: resolved_exec)
-    monkeypatch.setattr(module.subprocess, "run", _fake_run)
-
-    result = module.run(args)
 
     assert result == 27
     assert observed["command"] == [resolved_exec] + expected_tail

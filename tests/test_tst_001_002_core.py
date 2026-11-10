@@ -64,13 +64,6 @@ def test_main_without_args_returns_zero_and_prints_help(
         in captured.out
     )
     assert (
-        "  gemini           - Launch Google Gemini CLI in the project context."
-        in captured.out
-    )
-    assert (
-        "  kiro             - Launch Kiro CLI in the project context." in captured.out
-    )
-    assert (
         "  opencode         - Launch OpenCode CLI in the project context."
         in captured.out
     )

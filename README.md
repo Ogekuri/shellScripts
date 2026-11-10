@@ -44,7 +44,7 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 
 ## Feature Highlights
 - Single CLI entrypoint with command dispatch and grouped built-in help (`shellscripts` and alias `s`).
-- Project-context launchers for AI CLIs (`agy`, `claude`, `codex`, `copilot`, `gemini`, `kiro`, `opencode`, `pi`) and IDEs (`vscode`, `vsinsider`).
+- Project-context launchers for AI CLIs (`agy`, `claude`, `codex`, `copilot`, `opencode`) and IDEs (`vscode`, `vsinsider`).
 - PDF workflow commands for crop, merge, split, TOC cleanup, and tiling.
 - DICOM helpers (`dicom2jpg`, `dicomviewer`) and video transcoders (`video2h264`, `video2h265`).
 - Project maintenance and automation commands (`req`, `clean`, `venv`, `tests`, `doxygen`, `ubuntu-dark-theme`).
@@ -55,7 +55,7 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 
 - Python `>=3.11`.
 - Astral `uv` is required for install and runtime flows (`uv tool install`, `uvx`, `uv run`).
-- Git is required for commands that enforce repository-root execution (`agy`, `claude`, `codex`, `copilot`, `gemini`, `kiro`, `opencode`, `pi`, `clean`, `venv`, `tests`, `doxygen`, `vscode`, `vsinsider`).
+- Git is required for commands that enforce repository-root execution (`agy`, `claude`, `codex`, `copilot`, `opencode`, `clean`, `venv`, `tests`, `doxygen`, `vscode`, `vsinsider`).
 - Command-specific external tools are required only for related commands:
   - `req` for the `req` command.
   - `doxygen` (plus optional `make` and `pdflatex`) for `doxygen`.
@@ -194,10 +194,7 @@ Top-level configuration keys:
 | `claude` | Launch Claude CLI in YOLO mode (`claude --dangerously-skip-permissions`). |
 | `codex` | Launch Codex CLI in YOLO mode (`codex --yolo`). |
 | `copilot` | Launch Copilot CLI in YOLO mode (`copilot --yolo`; alternative `--allow-all` documented in help). |
-| `gemini` | Launch Gemini CLI in project context. |
-| `kiro` | Launch Kiro CLI in project context. |
 | `opencode` | Launch OpenCode CLI in auto-approval mode (`opencode --auto`). |
-| `pi` | Launch pi.dev CLI in project context (forwards all arguments unchanged). |
 | `clean` | Find and delete cache directories under the project root (or a passed directory). |
 | `req` | Run useReq bootstrap on current directory, first-level dirs, or recursively. |
 | `venv` | Recreate `.venv` and install `requirements.txt` if present. |
@@ -227,12 +224,6 @@ Launch Antigravity CLI in YOLO mode (each YOLO command help documents every regi
 
 ```bash
 s agy
-```
-
-Run pi.dev CLI forwarding all arguments unchanged (no implicit option injection):
-
-```bash
-s pi --tools read,bash,grep,find
 ```
 
 Run useReq bootstrap on first-level child directories:
