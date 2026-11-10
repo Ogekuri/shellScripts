@@ -88,7 +88,7 @@
   - Shutdown: restores saved TTY state and disables legacy+xterm mouse tracking (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before returning explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
-  - `main(...)`: Entry dispatcher for all CLI invocations, resolving the `--upgrade` develop (`--develop`/`--dev`) and forced-reinstall (`--force`) selectors and rejecting bare selector flags [`src/shell_scripts/core.py`]
+  - `main(...)`: Entry dispatcher for all CLI invocations, resolving the `--upgrade` develop (`--develop`/`--dev`) and forced-reinstall (`--force`) selectors, rejecting bare selector flags, and routing the schema-driven configuration CLI flags (`--print-raw`, `--print`, `--params`, `--get`, `--set`, `--unset`) to the lazily imported configuration module [`src/shell_scripts/core.py`]
     - `capture_terminal_state(...)`: Snapshot stdin termios attributes when stdin is a TTY and `termios` support is available [`src/shell_scripts/utils.py`]
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
     - `detect_runtime_os(...)`: Detect and cache normalized runtime OS token for startup-wide platform decisions [`src/shell_scripts/utils.py`]
@@ -140,6 +140,47 @@
     - `do_write_config(...)`: Write default runtime config file to user config directory [`src/shell_scripts/core.py`]
       - `write_default_runtime_config(...)`: Persist default runtime config JSON to filesystem [`src/shell_scripts/config.py`]
         - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
+    - `config_cli.do_print_raw(...)`: Print the on-disk config file content verbatim or fail with an error naming the path when the file is missing [`src/shell_scripts/config_cli.py`]
+      - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
+    - `config_cli.do_print(...)`: Render the effective configuration as a schema-ordered tree with `Sel`/`Valore` selection tables and secret masking [`src/shell_scripts/config_cli.py`]
+      - `config_cli._fail_on_schema_mismatch(...)`: Abort the configuration command when the schema registry and defaults diverge [`src/shell_scripts/config_cli.py`]
+      - `load_runtime_config(...)`: Load JSON overrides into active runtime config snapshot [`src/shell_scripts/config.py`]
+      - `config_cli._render_print_children(...)`: Emit branch connectors, `= <JSON>` scalar leaves, and selection tables for one tree level [`src/shell_scripts/config_cli.py`]
+        - `config_cli._render_box_table(...)`: Render one box-drawing table using `┌ ┬ ┐ ├ ┼ ┤ └ ┴ ┘ ─` and `│` glyphs [`src/shell_scripts/config_cli.py`]
+        - `config_cli._render_json(...)`: Serialize one configuration value as deterministic compact JSON [`src/shell_scripts/config_cli.py`]
+        - `config_cli._mask_secrets(...)`: Replace secret leaf values with the mask constant [`src/shell_scripts/config_cli.py`]
+    - `config_cli.do_params(...)`: Render the schema hierarchy with kind labels, short descriptions, and `Valore`/`Significato` allowed-value tables [`src/shell_scripts/config_cli.py`]
+      - `config_cli._fail_on_schema_mismatch(...)`: Abort the configuration command when the schema registry and defaults diverge [`src/shell_scripts/config_cli.py`]
+      - `config_cli._render_params_children(...)`: Emit per-level group descriptions, option kind labels, and allowed-value tables [`src/shell_scripts/config_cli.py`]
+        - `config_cli._render_box_table(...)`: Render one box-drawing table using `┌ ┬ ┐ ├ ┼ ┤ └ ┴ ┘ ─` and `│` glyphs [`src/shell_scripts/config_cli.py`]
+    - `config_cli.do_get(...)`: Resolve one `:`-separated hierarchical path against the effective configuration and print single-line scalar JSON or indented subtree JSON [`src/shell_scripts/config_cli.py`]
+      - `config_cli._fail_on_schema_mismatch(...)`: Abort the configuration command when the schema registry and defaults diverge [`src/shell_scripts/config_cli.py`]
+      - `config_cli._split_path(...)`: Split and validate one hierarchical path token [`src/shell_scripts/config_cli.py`]
+      - `config_cli._find_schema_node(...)`: Resolve one path against the schema registry [`src/shell_scripts/config_cli.py`]
+      - `load_runtime_config(...)`: Load JSON overrides into active runtime config snapshot [`src/shell_scripts/config.py`]
+      - `config_cli._mask_secrets(...)`: Replace secret leaf values with the mask constant [`src/shell_scripts/config_cli.py`]
+      - `config_cli.print_config_cli_help(...)`: Print command-specific inline usage help for `--get` [`src/shell_scripts/config_cli.py`]
+    - `config_cli.do_set(...)`: Acquire `$NAME` values from the environment, coerce by schema kind, validate choices, and persist one merged override key [`src/shell_scripts/config_cli.py`]
+      - `config_cli._fail_on_schema_mismatch(...)`: Abort the configuration command when the schema registry and defaults diverge [`src/shell_scripts/config_cli.py`]
+      - `config_cli._split_path(...)`: Split and validate one hierarchical path token [`src/shell_scripts/config_cli.py`]
+      - `config_cli._find_schema_node(...)`: Resolve one path against the schema registry [`src/shell_scripts/config_cli.py`]
+      - `config_cli._coerce_value(...)`: Coerce one raw CLI token by schema kind [`src/shell_scripts/config_cli.py`]
+      - `config_cli._load_overrides(...)`: Read the on-disk override object payload [`src/shell_scripts/config_cli.py`]
+        - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
+      - `config_cli._set_nested(...)`: Write one value into the nested override mapping [`src/shell_scripts/config_cli.py`]
+      - `config_cli._write_overrides(...)`: Persist sorted-key indented override JSON to the config file [`src/shell_scripts/config_cli.py`]
+        - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
+      - `config_cli.print_config_cli_help(...)`: Print command-specific inline usage help for `--set` [`src/shell_scripts/config_cli.py`]
+    - `config_cli.do_unset(...)`: Remove one override key (leaf or object subtree) from the config file and reactivate hardcoded defaults [`src/shell_scripts/config_cli.py`]
+      - `config_cli._fail_on_schema_mismatch(...)`: Abort the configuration command when the schema registry and defaults diverge [`src/shell_scripts/config_cli.py`]
+      - `config_cli._split_path(...)`: Split and validate one hierarchical path token [`src/shell_scripts/config_cli.py`]
+      - `config_cli._find_schema_node(...)`: Resolve one path against the schema registry [`src/shell_scripts/config_cli.py`]
+      - `config_cli._load_overrides(...)`: Read the on-disk override object payload [`src/shell_scripts/config_cli.py`]
+        - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
+      - `config_cli._pop_nested(...)`: Remove one key from the nested override mapping [`src/shell_scripts/config_cli.py`]
+      - `config_cli._write_overrides(...)`: Persist sorted-key indented override JSON to the config file [`src/shell_scripts/config_cli.py`]
+        - `get_config_path(...)`: Resolve runtime config file location [`src/shell_scripts/config.py`]
+      - `config_cli.print_config_cli_help(...)`: Print command-specific inline usage help for `--unset` [`src/shell_scripts/config_cli.py`]
     - `get_command(...)`: Resolve first positional argument to command module [`src/shell_scripts/commands/__init__.py`]
       - `agy.run(...)`: Launch Antigravity CLI in YOLO mode via the shared launcher command token `agy --dangerously-skip-permissions` and document the executed option plus the alphabetical YOLO CLI registry in its inline help [`src/shell_scripts/commands/agy.py`]
         - `_yolo_common.run_yolo_cli(...)`: Shared registry-based launcher resolving the declarative record, enforcing prerequisites, and executing the fixed YOLO command vector via blocking subprocess run [`src/shell_scripts/commands/_yolo_common.py`]
@@ -321,7 +362,7 @@
   - Terminal boundary: ANSI control-sequence writes for legacy+xterm mouse-mode disable (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) and best-effort `termios`/`stty sane` restoration.
   - Process-replacement boundary: none; launcher-style commands now execute external tools via `subprocess.run`.
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
-  - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`.
+  - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`; reads environment variables for `--set` `$NAME` value acquisition.
 
 ### `PROC:release-pypi`
 

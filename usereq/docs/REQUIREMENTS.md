@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.35"
-date: "2026-11-10T12:49:37Z"
+version: "0.7.0"
+date: "2026-11-10T16:00:00Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -53,6 +53,8 @@ Repository structure (evidence-oriented view, depth-limited):
 │   ├── shell_scripts/
 │   │   ├── __init__.py
 │   │   ├── __main__.py
+│   │   ├── config.py
+│   │   ├── config_cli.py
 │   │   ├── core.py
 │   │   ├── utils.py
 │   │   ├── version_check.py
@@ -88,7 +90,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ## 2. Project Requirements
 
 ### 2.1 Project Functions
-- **PRJ-001**: MUST parse CLI arguments and route execution to management flags (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`) or registered subcommands with explicit process return codes.
+- **PRJ-001**: MUST parse CLI arguments and route execution to management flags (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`, `--print-raw`, `--print`, `--params`, `--get`, `--set`, `--unset`) or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
 - **PRJ-003**: MUST expose subcommands for AI CLI launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against the PyPI registry with cooldown caching.
@@ -137,6 +139,10 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-029**: MUST declare the pre-release job in the `needs` list of the `build-release` job in `.github/workflows/release-pypi.yml`.
 - **DES-030**: MUST implement YOLO CLI launching as a shared registry-based launcher module where each CLI is defined by one declarative record containing command token, executable token, executed option, and option note.
 - **DES-031**: MUST make integrating a new YOLO CLI require only one registry record plus one thin command module exposing `DESCRIPTION`, `print_help(version)`, and `run(args)`.
+- **DES-032**: MUST implement the configuration CLI surface (`--print-raw`, `--print`, `--params`, `--get`, `--set`, `--unset`) as views over one declarative schema registry co-located with runtime configuration defaults.
+- **DES-033**: MUST update the schema registry, and thereby `--params`, `--print`, `--get`, `--set`, and `--unset`, in the same change whenever any configuration option, default, type, or allowed value is added, removed, or modified.
+- **DES-034**: MUST fail every configuration CLI command with an explicit error when the schema registry and `DEFAULT_RUNTIME_CONFIG` paths diverge.
+- **DES-035**: MUST implement configuration CLI mutations in a dedicated module without altering existing configuration load, merge, normalization, or accessor logic.
 
 No explicit performance optimizations identified.
 
@@ -213,13 +219,29 @@ No explicit performance optimizations identified.
 - **REQ-086**: MUST print every registered YOLO CLI command token with its executed option in alphabetical command order in each YOLO CLI inline help output.
 - **REQ-092**: MUST document the executed YOLO option and its behavioral note for every registered YOLO CLI inside each YOLO CLI inline help output.
 - **REQ-093**: MUST document the accepted alternative `--allow-all` Copilot option in the `copilot` inline help without appending it to the executed command vector.
+- **REQ-094**: MUST implement `--print-raw` to print the on-disk `~/.config/shellScripts/config.json` content verbatim and return `0`, or print an error naming the path and return `1` when the file is missing.
+- **REQ-095**: MUST implement `--print` to render the effective configuration (defaults deep-merged with file overrides) as a tree using `├──`, `└──`, and `│` connectors.
+- **REQ-096**: MUST render `--print` scalar leaves as `= <JSON-encoded value>` with the option name left-justified to a fixed column width.
+- **REQ-097**: MUST render `--print` selection leaves as `Sel`/`Valore` tables using `┌`, `┬`, `┐`, `├`, `┼`, `┤`, `└`, `┴`, `┘`, `─`, marking the active choice with `[*]` and others with `[ ]`.
+- **REQ-098**: MUST mask secret option values as `********` in `--print` and `--get` outputs.
+- **REQ-099**: MUST implement `--get <path>` to resolve `:`-separated hierarchical paths against the effective configuration and print scalar values as single-line JSON.
+- **REQ-100**: MUST make `--get` print object subtrees as indented JSON and print an error with return code `1` for unknown or non-configurable paths.
+- **REQ-101**: MUST implement `--set <path> <value>` to coerce values by schema kind (`stringa`, `intero`, `booleano`, `selezione`, `elenco`, `oggetto`) before persisting merged overrides.
+- **REQ-102**: MUST validate `--set` values against schema-allowed choices and reject disallowed values with return code `1` without modifying the configuration file.
+- **REQ-103**: MUST make successful `--set` persist the merged on-disk configuration with sorted keys, two-space indentation, and unchanged unrelated keys, then print a success line and return `0`.
+- **REQ-104**: MUST make `--set` value tokens starting with `$` resolve from the named environment variable and print environment-acquisition evidence; missing variables MUST fail with return code `1`.
+- **REQ-105**: MUST implement `--unset <path>` to remove the override key from the on-disk configuration, persist the result, and reactivate the hardcoded default value.
+- **REQ-106**: MUST make `--unset` print `ATTENZIONE: Rimossi tutti i parametri per <path>.` when removing an object subtree and an error with return code `1` for absent paths.
+- **REQ-107**: MUST implement `--params` to render the schema hierarchy with per-option type labels (`[Stringa]`, `[Intero]`, `[Booleano]`, `[Selezione]`, `[Elenco]`, `[Oggetto]`) and short descriptions.
+- **REQ-108**: MUST render `--params` selection options with allowed-value tables using `Valore` and `Significato` columns.
+- **REQ-109**: MUST make `--get`, `--set`, and `--unset` print command-specific inline usage help and return `1` when required path or value arguments are missing.
 
 ## 4. Test Requirements
 
 ### 4.1 Coverage Summary
 Unit test source files exist under `tests/` and provide coverage for core CLI flows, environment commands, YOLO-mode AI CLI launches, command dispatch wrappers, PDF pipelines, release-workflow Node24 runtime pinning, PyPI release gating, and PyPI version-source flows.
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
-High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
+High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration, command-launch paths that depend on external binaries, and the configuration CLI management flags introduced by DES-032.
 The release workflow gates all release artifact creation and publication on a dedicated pre-release verification job covered by static parsing tests.
 A pre-release verification shell script exists at `scripts/pre-release-check.sh`, and its mandatory structure, generated-artifact cleanup, and Bash syntax are covered by static parsing tests.
 
@@ -281,3 +303,4 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
 | DES-021..DES-027, REQ-079..REQ-082, TST-015 | `scripts/pre-release-check.sh`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `check_artifacts`, `cleanup_artifacts`, `fail_fast` | Script resolves the repository root, runs pytest with `PYTHONPATH=src` via `.venv/bin/python3` or `python3`, removes `dist`, builds via `uv build` or `python3 -m build`, verifies sdist and wheel artifacts, removes `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories via an EXIT trap on success and failure paths, prints `PASS`/`FAIL`/`clean` evidence lines, exits `1` on first failure and `0` on full success; tests assert script structure and Bash syntax. |
 | DES-028, DES-029, REQ-083, TST-016 | `.github/workflows/release-pypi.yml`; `tests/test_tst_016_release_precheck_gating.py` | `jobs.pre-release-check`, `jobs.build-release.needs` | Workflow runs `scripts/pre-release-check.sh` in a dedicated `pre-release-check` job (checkout, `setup-uv@v10.3.3`, `uv sync`, script execution) and declares `needs: [check-branch, pre-release-check]` on `build-release`, so any check failure skips artifact creation, attestation, changelog, GitHub release, and PyPI publication steps; tests assert job presence, script invocation, and needs declaration. |
+| REQ-094 through REQ-109, DES-032 through DES-035 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `do_print_raw`, `do_print`, `do_params`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags print the raw file, render the tree and `Sel`/`Valore` selection tables with box-drawing characters, mask secrets, resolve, validate, and persist `:`-separated option paths with environment acquisition, and print `--params` descriptions with `Valore`/`Significato` tables. |

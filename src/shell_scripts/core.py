@@ -3,10 +3,12 @@
 
 @details Provides global help rendering, management command execution
 (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`,
-`--develop`/`--dev` upgrade selector, `--force` forced-reinstall selector),
+`--develop`/`--dev` upgrade selector, `--force` forced-reinstall selector,
+configuration CLI flags `--print-raw`, `--print`, `--params`, `--get`,
+`--set`, `--unset`),
 runtime configuration bootstrap, and subcommand delegation to lazily imported
 modules.
-@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
+@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098, REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104, REQ-105, REQ-106, REQ-107, REQ-108, REQ-109, DES-032, DES-033, DES-034, DES-035
 """
 
 import sys
@@ -161,6 +163,12 @@ def print_help(command_name=None):
         f"  --uninstall  - Uninstall {PROGRAM} on Linux; print manual command elsewhere."
     )
     print("  --write-config - Write default runtime config to user config directory.")
+    print("  --print-raw  - Print the raw runtime config file content from disk.")
+    print("  --print      - Print the active configuration as an options tree.")
+    print("  --params     - Print configurable parameters with descriptions.")
+    print("  --get <path> - Read one configuration value; path parts separated by ':'.")
+    print("  --set <path> <value> - Set one configuration value; path separated by ':'.")
+    print("  --unset <path> - Remove one configuration override; path separated by ':'.")
     print(
         f"  --ver        - Print the {PROGRAM} version plus latest PyPI and GitHub versions."
     )
@@ -289,7 +297,7 @@ def main():
     mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`,
     `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098, REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104, REQ-105, REQ-106, REQ-107, REQ-108, REQ-109
     """
     saved_tty = capture_terminal_state()
     try:
@@ -328,6 +336,31 @@ def main():
 
         if first_arg == "--write-config":
             return do_write_config()
+
+        if first_arg in (
+            "--print-raw",
+            "--print",
+            "--params",
+            "--get",
+            "--set",
+            "--unset",
+        ):
+            from shell_scripts import config_cli
+
+            if first_arg == "--print-raw":
+                return config_cli.do_print_raw()
+            if first_arg == "--print":
+                return config_cli.do_print()
+            if first_arg == "--params":
+                return config_cli.do_params()
+            if first_arg == "--get":
+                return config_cli.do_get(args[1] if len(args) > 1 else None)
+            if first_arg == "--set":
+                return config_cli.do_set(
+                    args[1] if len(args) > 1 else None,
+                    args[2] if len(args) > 2 else None,
+                )
+            return config_cli.do_unset(args[1] if len(args) > 1 else None)
 
         if first_arg == "--help":
             if len(args) > 1:

@@ -20,8 +20,6 @@
         │   ├── diff_cmd.py
         │   ├── doxygen_cmd.py
         │   ├── edit_cmd.py
-        │   ├── gemini.py
-        │   ├── kiro.py
         │   ├── opencode.py
         │   ├── pdf_crop.py
         │   ├── pdf_merge.py
@@ -30,7 +28,6 @@
         │   ├── pdf_tiler_090.py
         │   ├── pdf_tiler_100.py
         │   ├── pdf_toc_clean.py
-        │   ├── pi.py
         │   ├── req_cmd.py
         │   ├── tests_cmd.py
         │   ├── ubuntu_dark_theme.py
@@ -40,6 +37,7 @@
         │   ├── view_cmd.py
         │   ├── vscode_cmd.py
         │   └── vsinsider_cmd.py
+        ├── config_cli.py
         ├── config.py
         ├── core.py
         ├── utils.py
@@ -1601,7 +1599,297 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 352L | 10 symbols | 7 imports | 25 comments
+# config_cli.py | Python | 986L | 34 symbols | 7 imports | 58 comments
+> Path: `src/shell_scripts/config_cli.py`
+
+## Imports
+```
+from __future__ import annotations
+import json
+import os
+from dataclasses import dataclass
+from typing import Any
+from shell_scripts.config import (
+from shell_scripts.utils import print_error, print_info, print_success
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L32)
+- @brief CLI program token used in inline usage help output.
+- var `ROOT_LABEL = "Configurazione_shellScripts"` (L36)
+- @brief Root node label rendered by `--print` and `--params` trees.
+- var `NAME_COLUMN_WIDTH = 24` (L42)
+- var `PATH_SEPARATOR = ":"` (L46)
+- @brief Hierarchical path separator accepted by `--get`/`--set`/`--unset`.
+- var `MASKED_SECRET = "********"` (L50)
+- @brief Mask rendered in place of secret option values.
+- var `KIND_LABELS = {` (L56)
+### class `class ChoiceSpec` `@dataclass(frozen=True)` (L71-83)
+- @brief One allowed value of a selection-type option.
+- @details Immutable registry record pairing an accepted value token with its meaning, rendered in `Sel`/`Valore` and `Valore`/`Significato` tables by `--print` and `--params`.
+- @satisfies REQ-097, REQ-108
+
+### class `class OptionSpec` `@dataclass(frozen=True)` (L85-100)
+- @brief Declarative metadata of one configurable leaf option.
+- @details Binds one configuration key to its value kind, short description, optional allowed choices, and secret flag; drives `--params` rendering, `--print` value rendering, `--get` masking, and `--set` coercion plus choice validation.
+- @satisfies DES-032, REQ-096, REQ-097, REQ-098, REQ-101, REQ-102, REQ-107
+
+### class `class GroupSpec` `@dataclass(frozen=True)` (L102-113)
+- @brief Declarative metadata of one configuration subtree group.
+- @details Orders child schema nodes and carries the group description rendered by `--params` and the tree structure rendered by `--print`.
+- @satisfies DES-032, REQ-095, REQ-107
+
+### fn `def _split_path(path: str) -> list[str] | None` `priv` (L253-271)
+- @brief Declarative configuration schema registry.
+- @brief Split one hierarchical configuration path.
+- @details Single source of truth for the configuration CLI surface; mirrors
+the `DEFAULT_RUNTIME_CONFIG` tree and MUST be updated in the same change
+whenever any configuration option, default, type, or allowed value changes
+(DES-033). Parity with defaults is verified at import time by
+`find_schema_mismatches` and enforced per command (DES-034).
+- @details Splits by `PATH_SEPARATOR` and rejects empty paths and empty segments, returning `None` for malformed input so callers can emit inline usage help. Time complexity O(n) over path length.
+- @param path {str} Raw path token, for example `management:upgrade`.
+- @return {list[str]|None} Non-empty path segments or `None` when malformed.
+- @satisfies DES-032, DES-033, DES-034
+- @satisfies REQ-099, REQ-109
+
+### fn `def _find_schema_node(parts: list[str]) -> "OptionSpec | GroupSpec | None"` `priv` (L272-297)
+- @brief Resolve one path against the schema registry.
+- @details Walks `CONFIG_SCHEMA` by segments and returns the matching leaf or group record, or `None` for unknown or non-configurable paths. Time complexity O(n*m) over path depth and sibling count.
+- @param parts {list[str]} Non-empty path segments from `_split_path`.
+- @return {OptionSpec|GroupSpec|None} Schema record or `None` when absent.
+- @satisfies DES-032, REQ-100
+
+### fn `def _resolve_value(container: Any, parts: list[str]) -> Any` `priv` (L298-316)
+- @brief Navigate a nested mapping by path segments.
+- @details Returns `_MISSING` when any segment is absent or crosses a non-mapping value. Time complexity O(n) over path depth.
+- @param container {Any} Nested mapping candidate, usually a config dict.
+- @param parts {list[str]} Non-empty path segments.
+- @return {Any} Resolved value or the `_MISSING` sentinel.
+- @satisfies REQ-099
+
+### fn `def _set_nested(container: dict[str, Any], parts: list[str], value: Any) -> None` `priv` (L317-338)
+- @brief Write one value into a nested mapping by path segments.
+- @details Creates intermediate mappings for absent parents, replacing non-mapping parents with fresh mappings. Time complexity O(n) over depth.
+- @param container {dict[str,Any]} Target mapping mutated in place.
+- @param parts {list[str]} Non-empty path segments ending at the leaf key.
+- @param value {Any} Coerced value to persist.
+- @return {None} Mutates `container` in place.
+- @satisfies REQ-101, REQ-103
+
+### fn `def _pop_nested(container: dict[str, Any], parts: list[str]) -> Any` `priv` (L339-360)
+- @brief Remove one key from a nested mapping by path segments.
+- @details Returns the removed value or `_MISSING` when any segment is absent or crosses a non-mapping value. Time complexity O(n) over depth.
+- @param container {dict[str,Any]} Target mapping mutated in place.
+- @param parts {list[str]} Non-empty path segments ending at the target key.
+- @return {Any} Removed value or the `_MISSING` sentinel.
+- @satisfies REQ-105, REQ-106
+
+### fn `def _iter_schema_leaf_paths(` `priv` (L361-363)
+
+### fn `def _iter_default_leaf_paths(` `priv` (L383-385)
+- @brief Enumerate every schema leaf path.
+- @details Depth-first recursion yielding tuples of path segments for every
+`OptionSpec` node. Time complexity O(n) over schema node count.
+- @param children {tuple} Sibling nodes being expanded.
+- @param prefix {tuple[str,...]} Parent path segments.
+- @return {Iterator[tuple[str,...]]} Leaf path segment tuples.
+- @satisfies DES-034
+
+### fn `def find_schema_mismatches() -> list[str]` (L406-436)
+- @brief Enumerate every default configuration leaf path.
+- @brief Verify schema registry parity with configuration defaults.
+- @details Depth-first recursion yielding tuples of path segments for every
+non-mapping value, expanding nested mappings as intermediate groups.
+Time complexity O(n) over default node count.
+- @details Fails when any default leaf is not covered by a schema leaf (equal path or schema-leaf prefix) or when any schema leaf path cannot be resolved inside `DEFAULT_RUNTIME_CONFIG`. Time complexity O(n*m) over default leaves and schema leaves.
+- @param node {dict[str,Any]} Mapping being expanded.
+- @param prefix {tuple[str,...]} Parent path segments.
+- @return {Iterator[tuple[str,...]]} Leaf path segment tuples.
+- @return {list[str]} Human-readable divergence descriptions; empty when the registry and defaults are aligned.
+- @satisfies DES-034
+- @satisfies DES-033, DES-034
+
+### fn `def _fail_on_schema_mismatch() -> bool` `priv` (L442-460)
+- @brief Import-time snapshot of schema/defaults divergence descriptions.
+- @brief Enforce schema parity before configuration command execution.
+- @details Prints one bright-red error describing every divergence detected at import time and reports whether the calling command must abort. Time complexity O(n) over mismatch count.
+- @return {bool} `True` when the caller must fail with return code `1`.
+- @satisfies DES-034
+
+### fn `def _render_box_table(` `priv` (L461-462)
+
+### fn `def _row(cells: list[str]) -> str` `priv` (L482-493)
+- @brief Render one box-drawing table.
+- @brief Render one padded table row line.
+- @details Builds column widths from headers and rows, then emits top,
+header, separator, body, and bottom lines using `┌ ┬ ┐ ├ ┼ ┤ └ ┴ ┘ ─`
+and `│` glyphs, prefixing every line with `indent`. Time complexity
+O(n*m) over table cells.
+- @param headers {list[str]} Column header cells.
+- @param rows {list[list[str]]} Body rows with one cell per column.
+- @param indent {str} Left padding applied to every rendered line.
+- @param cells {list[str]} Cell texts for the row.
+- @return {list[str]} Fully rendered table lines.
+- @return {str} Indented line framed by `│` glyphs.
+- @satisfies REQ-097, REQ-108
+
+### fn `def _render_json(value: Any) -> str` `priv` (L503-515)
+- @brief Render one configuration value as compact JSON.
+- @details Scalars, lists, and mappings serialize deterministically with sorted keys and no ASCII escaping. Time complexity O(n) over value size.
+- @param value {Any} Configuration value to serialize.
+- @return {str} Single-line JSON representation.
+- @satisfies REQ-096
+
+### fn `def _mask_secrets(node: "OptionSpec | GroupSpec | None", value: Any) -> Any` `priv` (L516-537)
+- @brief Replace secret leaf values with the mask constant.
+- @details Recursively walks schema groups and returns `MASKED_SECRET` for secret leaf values, leaving non-secret data unchanged. Time complexity O(n) over subtree size.
+- @param node {OptionSpec|GroupSpec|None} Schema record for `value`.
+- @param value {Any} Configuration value to mask.
+- @return {Any} Masked copy of `value`.
+- @satisfies REQ-098
+
+### fn `def _render_print_children(` `priv` (L538-542)
+
+### fn `def _render_params_children(` `priv` (L595-598)
+- @brief Render one `--print` tree level.
+- @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
+connectors, left-justified names, `= <JSON>` scalar leaves, and
+`Sel`/`Valore` selection tables for choice leaves with the active choice
+marked `[*]`. Time complexity O(n) over subtree node count.
+- @param prefix {str} Ancestor connector prefix for this level.
+- @param children {tuple} Sibling schema nodes being rendered.
+- @param values {Any} Effective configuration subtree for this level.
+- @param lines {list[str]} Output accumulator mutated in place.
+- @return {None} Appends rendered lines to `lines`.
+- @satisfies REQ-095, REQ-096, REQ-097, REQ-098
+
+### fn `def _load_overrides() -> "tuple[dict[str, Any] | None, str | None]"` `priv` (L641-666)
+- @brief Render one `--params` hierarchy level.
+- @brief Load on-disk configuration overrides.
+- @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
+connectors, left-justified names with `-` annotations, kind labels for
+leaves, and `Valore`/`Significato` allowed-value tables for selection
+leaves. Time complexity O(n) over subtree node count.
+- @details Reads the canonical config file and returns its object payload; a missing file yields an empty mapping, while unreadable files, invalid JSON, and non-object roots yield an error message. Time complexity O(n) over file size.
+- @param prefix {str} Ancestor connector prefix for this level.
+- @param children {tuple} Sibling schema nodes being rendered.
+- @param lines {list[str]} Output accumulator mutated in place.
+- @return {None} Appends rendered lines to `lines`.
+- @return {tuple[dict|None, str|None]} `(payload, None)` on success or `(None, error_message)` on failure.
+- @satisfies REQ-107, REQ-108
+- @satisfies REQ-101, REQ-103, REQ-105
+
+### fn `def _write_overrides(payload: dict[str, Any]) -> None` `priv` (L667-686)
+- @brief Persist configuration overrides to the canonical config file.
+- @details Creates parent directories when missing and writes sorted-key, two-space-indented JSON with a trailing newline for deterministic content. Time complexity O(n) over payload size.
+- @param payload {dict[str,Any]} Full on-disk override mapping.
+- @return {None} Applies destination filesystem mutation.
+- @throws {OSError} Propagated when filesystem write fails.
+- @satisfies REQ-103, REQ-105
+
+### fn `def _coerce_value(` `priv` (L687-688)
+
+### fn `def print_config_cli_help(command: str) -> None` (L735-773)
+- @brief Coerce one raw CLI token by schema kind.
+- @brief Print command-specific inline usage help.
+- @details Maps `booleano` tokens to `true`/`false` (case-insensitive),
+`intero` tokens to `int`, `elenco` tokens to JSON arrays of non-empty
+strings, `oggetto` tokens to JSON objects, and leaves `stringa` and
+`selezione` tokens as non-empty strings. Time complexity O(n) over token
+length.
+- @details Documents the `:` hierarchical path syntax, accepted value formats, environment acquisition, and per-command examples for one of `--get`, `--set`, or `--unset`. Time complexity O(1).
+- @param raw {str} Raw value token from the CLI.
+- @param spec {OptionSpec} Target option schema record.
+- @param command {str} Command token requesting inline help.
+- @return {tuple[bool, Any, str|None]} `(ok, value, error)` triple.
+- @return {None} Writes help text to stdout.
+- @satisfies REQ-101
+- @satisfies REQ-109
+
+### fn `def do_print_raw() -> int` (L774-796)
+- @brief Print the on-disk configuration file verbatim.
+- @details Emits the raw bytes of the canonical config file without parsing, or a bright-red error naming the path when the file is missing or unreadable. Time complexity O(n) over file size.
+- @return {int} `0` on success; `1` when the file is missing or unreadable.
+- @satisfies REQ-094
+
+### fn `def do_print() -> int` (L797-818)
+- @brief Render the effective configuration as an options tree.
+- @details Deep-merges on-disk overrides onto hardcoded defaults, then renders the schema-ordered tree with branch connectors, `= <JSON>` scalar leaves, masked secrets, and `Sel`/`Valore` selection tables. The root annotation reports `ATTIVA` when the config file exists and `PREDEFINITA` otherwise. Time complexity O(n) over configuration size.
+- @return {int} `0` on success; `1` on schema divergence.
+- @satisfies REQ-095, REQ-096, REQ-097, REQ-098, DES-034
+
+### fn `def do_params() -> int` (L819-837)
+- @brief Render the configurable parameter hierarchy with descriptions.
+- @details Emits the schema-ordered tree with per-group descriptions, per-option kind labels and short descriptions, and `Valore`/`Significato` allowed-value tables for selection options. Time complexity O(n) over schema node count.
+- @return {int} `0` on success; `1` on schema divergence.
+- @satisfies REQ-107, REQ-108, DES-034
+
+### fn `def do_get(path: str | None) -> int` (L838-873)
+- @brief Read one configuration value by hierarchical path.
+- @details Resolves the `:`-separated path against the schema registry and the effective configuration, masks secret leaves, prints scalars and lists as single-line JSON and object subtrees as indented JSON. Time complexity O(n) over subtree size.
+- @param path {str|None} Hierarchical path token, for example `management:upgrade`.
+- @return {int} `0` on success; `1` for missing arguments, unknown paths, or absent values.
+- @satisfies REQ-098, REQ-099, REQ-100, REQ-109, DES-034
+
+### fn `def do_set(path: str | None, value: str | None) -> int` (L874-934)
+- @brief Set one configuration value by hierarchical path.
+- @details Resolves `$NAME` tokens from the environment, coerces the value by schema kind, validates schema-allowed choices, then loads the on-disk overrides, writes only the target key, and persists sorted-key indented JSON without touching unrelated keys. Time complexity O(n) over configuration size.
+- @param path {str|None} Hierarchical path token ending at a schema leaf.
+- @param value {str|None} Raw value token or `$NAME` environment token.
+- @return {int} `0` on success; `1` for missing arguments, unknown paths, invalid values, disallowed choices, undefined environment variables, or unreadable config files.
+- @satisfies REQ-101, REQ-102, REQ-103, REQ-104, REQ-109, DES-034
+
+### fn `def do_unset(path: str | None) -> int` (L935-972)
+- @brief Remove one configuration override by hierarchical path.
+- @details Loads the on-disk overrides, removes the target key (leaf or object subtree), persists the result so hardcoded defaults reactivate, and prints the subtree-removal warning for object payloads. Time complexity O(n) over configuration size.
+- @param path {str|None} Hierarchical path token to remove.
+- @return {int} `0` on success; `1` for missing arguments, unknown paths, absent overrides, or unreadable config files.
+- @satisfies REQ-105, REQ-106, REQ-109, DES-034
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|32||
+|`ROOT_LABEL`|var|pub|36||
+|`NAME_COLUMN_WIDTH`|var|pub|42||
+|`PATH_SEPARATOR`|var|pub|46||
+|`MASKED_SECRET`|var|pub|50||
+|`KIND_LABELS`|var|pub|56||
+|`ChoiceSpec`|class|pub|71-83|class ChoiceSpec|
+|`OptionSpec`|class|pub|85-100|class OptionSpec|
+|`GroupSpec`|class|pub|102-113|class GroupSpec|
+|`_split_path`|fn|priv|253-271|def _split_path(path: str) -> list[str] | None|
+|`_find_schema_node`|fn|priv|272-297|def _find_schema_node(parts: list[str]) -> "OptionSpec | ...|
+|`_resolve_value`|fn|priv|298-316|def _resolve_value(container: Any, parts: list[str]) -> Any|
+|`_set_nested`|fn|priv|317-338|def _set_nested(container: dict[str, Any], parts: list[st...|
+|`_pop_nested`|fn|priv|339-360|def _pop_nested(container: dict[str, Any], parts: list[st...|
+|`_iter_schema_leaf_paths`|fn|priv|361-363|def _iter_schema_leaf_paths(|
+|`_iter_default_leaf_paths`|fn|priv|383-385|def _iter_default_leaf_paths(|
+|`find_schema_mismatches`|fn|pub|406-436|def find_schema_mismatches() -> list[str]|
+|`_fail_on_schema_mismatch`|fn|priv|442-460|def _fail_on_schema_mismatch() -> bool|
+|`_render_box_table`|fn|priv|461-462|def _render_box_table(|
+|`_row`|fn|priv|482-493|def _row(cells: list[str]) -> str|
+|`_render_json`|fn|priv|503-515|def _render_json(value: Any) -> str|
+|`_mask_secrets`|fn|priv|516-537|def _mask_secrets(node: "OptionSpec | GroupSpec | None", ...|
+|`_render_print_children`|fn|priv|538-542|def _render_print_children(|
+|`_render_params_children`|fn|priv|595-598|def _render_params_children(|
+|`_load_overrides`|fn|priv|641-666|def _load_overrides() -> "tuple[dict[str, Any] | None, st...|
+|`_write_overrides`|fn|priv|667-686|def _write_overrides(payload: dict[str, Any]) -> None|
+|`_coerce_value`|fn|priv|687-688|def _coerce_value(|
+|`print_config_cli_help`|fn|pub|735-773|def print_config_cli_help(command: str) -> None|
+|`do_print_raw`|fn|pub|774-796|def do_print_raw() -> int|
+|`do_print`|fn|pub|797-818|def do_print() -> int|
+|`do_params`|fn|pub|819-837|def do_params() -> int|
+|`do_get`|fn|pub|838-873|def do_get(path: str | None) -> int|
+|`do_set`|fn|pub|874-934|def do_set(path: str | None, value: str | None) -> int|
+|`do_unset`|fn|pub|935-972|def do_unset(path: str | None) -> int|
+
+
+---
+
+# core.py | Python | 385L | 10 symbols | 8 imports | 25 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1613,29 +1901,30 @@ from shell_scripts.config import (
 from shell_scripts.version_check import (
 from shell_scripts.commands import get_command
 from shell_scripts.utils import (
+from shell_scripts import config_cli
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L38)
-- var `HELP_COMMAND_COLUMN_WIDTH = 16` (L44)
+- var `PROGRAM = "shellscripts"` (L40)
+- var `HELP_COMMAND_COLUMN_WIDTH = 16` (L46)
 - @brief Fixed command-name column width for grouped help rendering.
 - @details Forces deterministic spacing for all command rows across grouped
 global help sections.
 - @satisfies REQ-066
-- var `FORCED_REINSTALL_OPTIONS = "--force --reinstall --refresh"` (L52)
+- var `FORCED_REINSTALL_OPTIONS = "--force --reinstall --refresh"` (L54)
 - @brief Option suffix appended to upgrade commands when `--force` is active.
 - @details Standard forced-reinstall options for `uv tool install`: replace
 the installed tool entry, reinstall the package, and refresh cached remote
 metadata so the upgrade performs a full re-download and reinstallation.
 - @satisfies REQ-088, REQ-089
-- var `HELP_SECTION_COMMANDS = (` (L60)
+- var `HELP_SECTION_COMMANDS = (` (L62)
 - @brief Ordered command groups for global help rendering.
 - @details Defines deterministic section order and command-token order used by
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L124-182)
+### fn `def print_help(command_name=None)` (L126-190)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -1643,14 +1932,14 @@ maps directly to REQ-066 output expectations.
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L183-198)
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L191-206)
 - @brief Compose the develop upgrade command for one GitHub release tag.
 - @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
 - @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
 - @return {str} Fully substituted shell upgrade command.
 - @satisfies REQ-076, DES-019
 
-### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L199-238)
+### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L207-246)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; appends ` --force --reinstall --refresh` to the resolved command when `force` is set; executes the composed command on Linux via shell invocation and prints the manual fallback command on non-Linux systems. Complexity O(n) over the composed command string length.
 - @param develop {bool} Select upgrade from the latest GitHub release tag.
@@ -1658,38 +1947,38 @@ maps directly to REQ-066 output expectations.
 - @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-076, REQ-078, REQ-087, REQ-088, REQ-089, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L239-261)
+### fn `def do_uninstall()` (L247-269)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L262-277)
+### fn `def do_write_config()` (L270-285)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L278-353)
+### fn `def main()` (L286-386)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints the aligned three-line report with installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
-- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098, REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104, REQ-105, REQ-106, REQ-107, REQ-108, REQ-109
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|38||
-|`HELP_COMMAND_COLUMN_WIDTH`|var|pub|44||
-|`FORCED_REINSTALL_OPTIONS`|var|pub|52||
-|`HELP_SECTION_COMMANDS`|var|pub|60||
-|`print_help`|fn|pub|124-182|def print_help(command_name=None)|
-|`_build_develop_upgrade_command`|fn|priv|183-198|def _build_develop_upgrade_command(latest_tag: str) -> str|
-|`do_upgrade`|fn|pub|199-238|def do_upgrade(develop: bool = False, force: bool = False...|
-|`do_uninstall`|fn|pub|239-261|def do_uninstall()|
-|`do_write_config`|fn|pub|262-277|def do_write_config()|
-|`main`|fn|pub|278-353|def main()|
+|`PROGRAM`|var|pub|40||
+|`HELP_COMMAND_COLUMN_WIDTH`|var|pub|46||
+|`FORCED_REINSTALL_OPTIONS`|var|pub|54||
+|`HELP_SECTION_COMMANDS`|var|pub|62||
+|`print_help`|fn|pub|126-190|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|191-206|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|207-246|def do_upgrade(develop: bool = False, force: bool = False...|
+|`do_uninstall`|fn|pub|247-269|def do_uninstall()|
+|`do_write_config`|fn|pub|270-285|def do_write_config()|
+|`main`|fn|pub|286-386|def main()|
 
 
 ---
