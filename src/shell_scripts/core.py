@@ -6,7 +6,7 @@
 `--develop`/`--dev` upgrade selector, `--force` forced-reinstall selector),
 runtime configuration bootstrap, and subcommand delegation to lazily imported
 modules.
-@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090
+@satisfies PRJ-001, PRJ-002, PRJ-003, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-056, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
 """
 
 import sys
@@ -18,7 +18,12 @@ from shell_scripts.config import (
     load_runtime_config,
     write_default_runtime_config,
 )
-from shell_scripts.version_check import check_for_updates, fetch_github_latest_release, print_remote_latest_versions
+from shell_scripts.version_check import (
+    check_for_updates,
+    fetch_github_latest_release,
+    format_version_report_line,
+    print_remote_latest_versions,
+)
 from shell_scripts.commands import get_command
 from shell_scripts.utils import (
     capture_terminal_state,
@@ -278,7 +283,8 @@ def main():
 
     @details Performs runtime OS detection, update check, runtime configuration
     load, and argument dispatch through management flags (`--version` prints
-    installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI
+    the aligned three-line report with installed plus PyPI/GitHub latest
+    versions; `--upgrade` upgrades from PyPI
     or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force`
     appends forced-reinstall options to the selected upgrade command; bare
     `--develop`/`--dev`/`--force` selectors are rejected) and subcommands,
@@ -286,7 +292,7 @@ def main():
     mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`,
     `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
     @return {int} Process-compatible return code for caller (`sys.exit`).
-    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090
+    @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
     """
     saved_tty = capture_terminal_state()
     try:
@@ -303,7 +309,7 @@ def main():
         first_arg = args[0]
 
         if first_arg in ("--version", "--ver"):
-            print(__version__)
+            print(format_version_report_line("Current Installed", __version__))
             print_remote_latest_versions(__version__)
             return 0
 

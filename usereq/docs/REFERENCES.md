@@ -1697,7 +1697,7 @@ from shell_scripts.utils import print_warn
 
 ---
 
-# core.py | Python | 349L | 10 symbols | 7 imports | 25 comments
+# core.py | Python | 355L | 10 symbols | 7 imports | 25 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -1706,32 +1706,32 @@ import sys
 import subprocess
 from shell_scripts import __version__
 from shell_scripts.config import (
-from shell_scripts.version_check import check_for_updates, fetch_github_latest_release, print_remote_latest_versions
+from shell_scripts.version_check import (
 from shell_scripts.commands import get_command
 from shell_scripts.utils import (
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L33)
-- var `HELP_COMMAND_COLUMN_WIDTH = 16` (L39)
+- var `PROGRAM = "shellscripts"` (L38)
+- var `HELP_COMMAND_COLUMN_WIDTH = 16` (L44)
 - @brief Fixed command-name column width for grouped help rendering.
 - @details Forces deterministic spacing for all command rows across grouped
 global help sections.
 - @satisfies REQ-066
-- var `FORCED_REINSTALL_OPTIONS = "--force --reinstall --refresh"` (L47)
+- var `FORCED_REINSTALL_OPTIONS = "--force --reinstall --refresh"` (L52)
 - @brief Option suffix appended to upgrade commands when `--force` is active.
 - @details Standard forced-reinstall options for `uv tool install`: replace
 the installed tool entry, reinstall the package, and refresh cached remote
 metadata so the upgrade performs a full re-download and reinstallation.
 - @satisfies REQ-088, REQ-089
-- var `HELP_SECTION_COMMANDS = (` (L55)
+- var `HELP_SECTION_COMMANDS = (` (L60)
 - @brief Ordered command groups for global help rendering.
 - @details Defines deterministic section order and command-token order used by
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L122-180)
+### fn `def print_help(command_name=None)` (L127-185)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -1739,14 +1739,14 @@ maps directly to REQ-066 output expectations.
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L181-196)
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L186-201)
 - @brief Compose the develop upgrade command for one GitHub release tag.
 - @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
 - @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
 - @return {str} Fully substituted shell upgrade command.
 - @satisfies REQ-076, DES-019
 
-### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L197-236)
+### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L202-241)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; appends ` --force --reinstall --refresh` to the resolved command when `force` is set; executes the composed command on Linux via shell invocation and prints the manual fallback command on non-Linux systems. Complexity O(n) over the composed command string length.
 - @param develop {bool} Select upgrade from the latest GitHub release tag.
@@ -1754,38 +1754,38 @@ maps directly to REQ-066 output expectations.
 - @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-076, REQ-078, REQ-087, REQ-088, REQ-089, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L237-259)
+### fn `def do_uninstall()` (L242-264)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L260-275)
+### fn `def do_write_config()` (L265-280)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L276-350)
+### fn `def main()` (L281-356)
 - @brief Entrypoint for shellscripts argument dispatch.
-- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
+- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints the aligned three-line report with installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
-- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090
+- @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|33||
-|`HELP_COMMAND_COLUMN_WIDTH`|var|pub|39||
-|`FORCED_REINSTALL_OPTIONS`|var|pub|47||
-|`HELP_SECTION_COMMANDS`|var|pub|55||
-|`print_help`|fn|pub|122-180|def print_help(command_name=None)|
-|`_build_develop_upgrade_command`|fn|priv|181-196|def _build_develop_upgrade_command(latest_tag: str) -> str|
-|`do_upgrade`|fn|pub|197-236|def do_upgrade(develop: bool = False, force: bool = False...|
-|`do_uninstall`|fn|pub|237-259|def do_uninstall()|
-|`do_write_config`|fn|pub|260-275|def do_write_config()|
-|`main`|fn|pub|276-350|def main()|
+|`PROGRAM`|var|pub|38||
+|`HELP_COMMAND_COLUMN_WIDTH`|var|pub|44||
+|`FORCED_REINSTALL_OPTIONS`|var|pub|52||
+|`HELP_SECTION_COMMANDS`|var|pub|60||
+|`print_help`|fn|pub|127-185|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|186-201|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|202-241|def do_upgrade(develop: bool = False, force: bool = False...|
+|`do_uninstall`|fn|pub|242-264|def do_uninstall()|
+|`do_write_config`|fn|pub|265-280|def do_write_config()|
+|`main`|fn|pub|281-356|def main()|
 
 
 ---
@@ -1994,7 +1994,7 @@ common xterm mouse tracking modes (`?1000l`..`?1016l`).
 
 ---
 
-# version_check.py | Python | 324L | 26 symbols | 8 imports | 15 comments
+# version_check.py | Python | 353L | 31 symbols | 8 imports | 21 comments
 > Path: `src/shell_scripts/version_check.py`
 
 ## Imports
@@ -2120,14 +2120,31 @@ object. Time complexity O(n) over payload size.
 - @throws {KeyError} When `tag_name` field is absent.
 - @satisfies DES-019, REQ-076
 
-### fn `def print_remote_latest_versions(current_version: str) -> None` (L261-288)
+- var `BRIGHT_GREEN = "\033[92m"` (L261)
+- var `BRIGHT_RED = "\033[91m"` (L262)
+- var `RESET = "\033[0m"` (L263)
+- var `REPORT_LABEL_WIDTH = 18` (L270)
+- @brief Fixed label column width for aligned `--version` report lines.
+- @details Left-justifies every report label (`Current Installed`,
+`Latest @ PyPI`, `Latest @ GitHub`) before the `: ` value separator so all
+version tokens start at the same output column.
+- @satisfies REQ-091
+### fn `def format_version_report_line(label: str, value: str) -> str` (L273-287)
+- @brief Render one aligned `--version` report line.
+- @details Left-justifies the report label to `REPORT_LABEL_WIDTH` characters, then appends `: ` and the raw value without color codes so callers keep control of terminal coloring. Time complexity O(1).
+- @param label {str} Report label token (for example `Latest @ PyPI`).
+- @param value {str} Report value token (version string or `unknown (<reason>)`).
+- @return {str} Aligned report line shaped as `<label>: <value>`.
+- @satisfies REQ-075, REQ-091
+
+### fn `def print_remote_latest_versions(current_version: str) -> None` (L288-317)
 - @brief Print PyPI and GitHub latest-version report lines.
-- @details Emits one `<source> latest: <version>` line per remote source in fixed order (PyPI, GitHub). A failed source lookup prints one bright-red `<source> latest: unknown (<reason>)` line where `<reason>` is the `_format_request_error` descriptor of the actual failure, and the remaining source is still processed. Complexity O(1) excluding network latency.
+- @details Emits one aligned `Latest @ <source>` line per remote source in fixed order (PyPI, GitHub), left-justifying each label to `REPORT_LABEL_WIDTH` characters. A failed source lookup prints one bright-red aligned line whose value is `unknown (<reason>)` where `<reason>` is the `_format_request_error` descriptor of the actual failure, and the remaining source is still processed. Complexity O(1) excluding network latency.
 - @param current_version {str} Installed package version used in User-Agent.
 - @return {None} Writes two report or error lines to stdout.
-- @satisfies REQ-003, REQ-075, REQ-084, DES-020
+- @satisfies REQ-003, REQ-075, REQ-084, REQ-091, DES-020
 
-### fn `def check_for_updates(current_version: str) -> None` (L289-325)
+### fn `def check_for_updates(current_version: str) -> None` (L318-354)
 - @brief Execute the startup PyPI registry version check.
 - @details Applies cooldown gating unless the current CLI invocation requests `--version` or `--ver`, performs the PyPI latest-version HTTP request, prints a bright-green update line for newer releases, persists a 3600-second success cooldown or an 86400-second request-error cooldown for every request outcome, prints bright-red request errors, and suppresses propagation of non-HTTP request exceptions. Complexity O(1) excluding network latency and JSON parsing.
 - @param current_version {str} Installed package version string.
@@ -2162,6 +2179,11 @@ object. Time complexity O(n) over payload size.
 |`_fetch_json_payload`|fn|priv|194-195|def _fetch_json_payload(|
 |`fetch_pypi_latest_version`|fn|pub|219-239|def fetch_pypi_latest_version(current_version: str) -> str|
 |`fetch_github_latest_release`|fn|pub|240-260|def fetch_github_latest_release(current_version: str) -> str|
-|`print_remote_latest_versions`|fn|pub|261-288|def print_remote_latest_versions(current_version: str) ->...|
-|`check_for_updates`|fn|pub|289-325|def check_for_updates(current_version: str) -> None|
+|`BRIGHT_GREEN`|var|pub|261||
+|`BRIGHT_RED`|var|pub|262||
+|`RESET`|var|pub|263||
+|`REPORT_LABEL_WIDTH`|var|pub|270||
+|`format_version_report_line`|fn|pub|273-287|def format_version_report_line(label: str, value: str) ->...|
+|`print_remote_latest_versions`|fn|pub|288-317|def print_remote_latest_versions(current_version: str) ->...|
+|`check_for_updates`|fn|pub|318-354|def check_for_updates(current_version: str) -> None|
 

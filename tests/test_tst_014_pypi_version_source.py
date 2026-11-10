@@ -1,7 +1,7 @@
 """
 @brief Validate PyPI-primary version sourcing, version reporting, and upgrade flows.
 @details Verifies startup update checks against the PyPI JSON API, GitHub
-  latest-release resolution, the three-line `--version` report, the PyPI
+  latest-release resolution, the aligned three-line `--version` report, the PyPI
   default upgrade command, the forced-reinstall `--force` suffix on PyPI and
   GitHub-tagged upgrade commands, the `--upgrade --dev`/`--develop`
   GitHub-tagged upgrade command, develop-upgrade failure handling, and
@@ -196,7 +196,7 @@ def test_print_remote_latest_versions_prints_both_latest_lines(
     version_check.print_remote_latest_versions("0.1.0")
     captured = capsys.readouterr()
 
-    expected_output = ["PyPI latest: 1.2.3", "GitHub latest: 4.5.6"]
+    expected_output = ["Latest @ PyPI     : 1.2.3", "Latest @ GitHub   : 4.5.6"]
     assert captured.out.splitlines() == expected_output
 
 
@@ -207,8 +207,8 @@ def test_print_remote_latest_versions_reports_failed_source_and_continues(
     """
     @brief Validate per-source error reporting during version report.
     @details Forces the PyPI lookup to raise a non-HTTP exception and asserts
-      the bright-red `PyPI latest: unknown (<reason>)` failure line while the
-      GitHub line is still emitted.
+      the bright-red aligned `Latest @ PyPI     : unknown (<reason>)` failure
+      line while the GitHub line is still emitted.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
@@ -232,10 +232,10 @@ def test_print_remote_latest_versions_reports_failed_source_and_continues(
     version_check.print_remote_latest_versions("0.1.0")
     captured = capsys.readouterr()
 
-    expected_output = "PyPI latest: unknown (URLError: <urlopen error pypi unreachable>)"
+    expected_output = "Latest @ PyPI     : unknown (URLError: <urlopen error pypi unreachable>)"
     assert expected_output in captured.out
     assert "PyPI latest check failed" not in captured.out
-    assert "GitHub latest: 0.1.0" in captured.out
+    assert "Latest @ GitHub   : 0.1.0" in captured.out
 
 
 def test_print_remote_latest_versions_reports_github_http_404(
@@ -245,8 +245,8 @@ def test_print_remote_latest_versions_reports_github_http_404(
     """
     @brief Validate GitHub HTTP failure rendering during version report.
     @details Forces the GitHub lookup to raise an HTTP 404 error and asserts
-      the bright-red `GitHub latest: unknown (HTTP 404)` failure line while
-      the PyPI line is still emitted.
+      the bright-red aligned `Latest @ GitHub   : unknown (HTTP 404)` failure
+      line while the PyPI line is still emitted.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
@@ -274,10 +274,10 @@ def test_print_remote_latest_versions_reports_github_http_404(
     version_check.print_remote_latest_versions("0.1.0")
     captured = capsys.readouterr()
 
-    expected_output = "GitHub latest: unknown (HTTP 404)"
+    expected_output = "Latest @ GitHub   : unknown (HTTP 404)"
     assert expected_output in captured.out
     assert "GitHub latest check failed" not in captured.out
-    assert "PyPI latest: 0.1.0" in captured.out
+    assert "Latest @ PyPI     : 0.1.0" in captured.out
 
 
 def test_main_version_prints_installed_pypi_and_github_lines(
@@ -307,9 +307,9 @@ def test_main_version_prints_installed_pypi_and_github_lines(
     captured = capsys.readouterr()
 
     expected_output = [
-        core.__version__,
-        "PyPI latest: 2.0.0",
-        "GitHub latest: 3.0.0",
+        f"Current Installed : {core.__version__}",
+        "Latest @ PyPI     : 2.0.0",
+        "Latest @ GitHub   : 3.0.0",
     ]
     assert result == 0
     assert captured.out.splitlines()[:3] == expected_output

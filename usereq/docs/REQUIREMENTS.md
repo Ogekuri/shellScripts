@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.6.32"
-date: "2026-11-09T15:47:13Z"
+version: "0.6.33"
+date: "2026-11-10T06:22:47Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -142,7 +142,7 @@ No explicit performance optimizations identified.
 - **REQ-001**: MUST print global help and return code `0` when invoked without CLI arguments.
 - **REQ-002**: MUST print an error plus global help and return code `1` when the first argument is an unknown command.
 - **REQ-003**: MUST force PyPI and GitHub remote lookups, print installed and latest versions, and return code `0` for `--version` and `--ver`.
-- **REQ-075**: MUST print `--version` output as exactly three lines on successful remote lookups: installed version, `PyPI latest: <version>`, and `GitHub latest: <version>`.
+- **REQ-075**: MUST print `--version` output as exactly three lines on successful remote lookups: the `Current Installed` installed-version line, the `Latest @ PyPI` line, and the `Latest @ GitHub` line.
 - **REQ-004**: MUST execute the Linux `--upgrade` command from runtime config key `management.upgrade`, using default `uv tool install shellscripts` when unset.
 - **REQ-076**: MUST make `--upgrade --develop` and `--upgrade --dev` upgrade from the latest GitHub release tag regardless of its source branch.
 - **REQ-077**: MUST reject `--develop` and `--dev` flags passed without `--upgrade` with an error line and return code `1`.
@@ -151,6 +151,7 @@ No explicit performance optimizations identified.
 - **REQ-088**: MUST make `--upgrade --force` append ` --force --reinstall --refresh` to the resolved `management.upgrade` command before execution.
 - **REQ-089**: MUST make develop upgrade invoked with `--force` append ` --force --reinstall --refresh` to the resolved develop upgrade command before execution.
 - **REQ-090**: MUST reject `--force` passed without `--upgrade` with an error line and return code `1`.
+- **REQ-091**: MUST left-justify every `--version` report label (`Current Installed`, `Latest @ PyPI`, `Latest @ GitHub`) to fixed width 18 followed by `: ` and the version token.
 - **REQ-005**: MUST execute the Linux `--uninstall` command from runtime config key `management.uninstall`, using default `uv tool uninstall shellscripts` when unset.
 - **REQ-013**: MUST discover predefined cache directory names and delete them only after explicit confirmation or `--yes`.
 - **REQ-014**: MUST set `CODEX_HOME` to `<project-root>/.codex` and execute `codex --yolo` in `codex` via `subprocess.run` with inherited stdio and blocking wait.
@@ -211,7 +212,7 @@ No explicit performance optimizations identified.
 - **REQ-081**: MUST terminate with no generated build or test intermediate artifacts present in the repository working tree on the success path.
 - **REQ-082**: MUST NOT remove any Git-tracked file during pre-release artifact cleanup.
 - **REQ-083**: MUST skip every release artifact creation, attestation, changelog, GitHub release, and PyPI publication step when the pre-release job fails.
-- **REQ-084**: MUST print each failed remote-source lookup during `--version` as `<source> latest: unknown (<reason>)` where `<reason>` describes the actual request failure.
+- **REQ-084**: MUST print each failed remote-source lookup during `--version` as the aligned `Latest @ <source>` label followed by `: unknown (<reason>)` where `<reason>` describes the actual request failure.
 - **REQ-085**: MUST execute `agy --dangerously-skip-permissions` in `agy` via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-086**: MUST print the AI CLI launch command tokens in alphabetical order in the `agy` inline help output.
 
@@ -237,7 +238,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 - **TST-011**: MUST verify REQ-057 and REQ-058 by monkeypatching executable checks and `subprocess.run`, passing only if FFmpeg argv vectors, `<input>.mp4` output naming, and propagated return codes are exact.
 - **TST-012**: MUST verify CTN-006 and DES-015 by parsing `.github/workflows/release-pypi.yml`, passing only if every referenced action runtime matches the approved Node24-native mapping and no Node20 compatibility override environment variables are present.
 - **TST-013**: MUST verify PRJ-007, DES-016, and DES-017 by parsing `.github/workflows/release-pypi.yml`, passing only if the PyPI publish step is master-gated, OIDC-based without credential secrets, and all preexisting release steps are retained.
-- **TST-014**: MUST verify REQ-003, REQ-075 through REQ-078, REQ-084, REQ-087 through REQ-090, DES-018, and DES-019 via monkeypatched HTTP and subprocess boundaries, passing only if PyPI update checks, three-line version output, default upgrade, forced-reinstall upgrade, and develop upgrade behaviors match specifications.
+- **TST-014**: MUST verify REQ-003, REQ-075 through REQ-078, REQ-084, REQ-087 through REQ-091, DES-018, and DES-019 via monkeypatched HTTP and subprocess boundaries, passing only if PyPI update checks, three-line version output, default upgrade, forced-reinstall upgrade, and develop upgrade behaviors match specifications.
 - **TST-015**: MUST verify DES-021 through DES-027 and REQ-079 through REQ-082 by parsing `scripts/pre-release-check.sh`, passing only if mandatory commands, artifact gates, cleanup registration, failure semantics, and evidence lines are present.
 - **TST-016**: MUST verify DES-028, DES-029, and REQ-083 by parsing `.github/workflows/release-pypi.yml`, passing only if the dedicated pre-release job runs `scripts/pre-release-check.sh` and `build-release` declares `needs` on it.
 - **TST-017**: MUST verify REQ-085 and REQ-086 by monkeypatching `subprocess.run` and capturing `agy` help output, passing only if the `agy` argv vector, stdio inheritance, registry exposure, and alphabetical AI CLI help listing match specifications.
@@ -246,9 +247,9 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 
 | Requirement IDs | File Path | Symbol / Function | Short Evidence Excerpt |
 |---|---|---|---|
-| PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047, REQ-064, REQ-065, REQ-066 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `main`, `capture_terminal_state`, `reset_terminal_state`, `print_help` | Startup detects runtime OS before dispatch; empty args print grouped help and return `0`; unknown command path returns `1`; `--version`/`--ver` print `__version__`; wrapper exit restores saved TTY attributes and writes full mouse-off escape sequence including `?9l` through `?1016l`. |
+| PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047, REQ-064, REQ-065, REQ-066 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `main`, `capture_terminal_state`, `reset_terminal_state`, `print_help` | Startup detects runtime OS before dispatch; empty args print grouped help and return `0`; unknown command path returns `1`; `--version`/`--ver` print the aligned `Current Installed` line; wrapper exit restores saved TTY attributes and writes full mouse-off escape sequence including `?9l` through `?1016l`. |
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
-| PRJ-004, DES-002..DES-006, DES-018, DES-019, DES-020, REQ-003, REQ-075, REQ-084, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `fetch_pypi_latest_version`, `fetch_github_latest_release`, `print_remote_latest_versions`, `_write_idle_config`, `_should_check` | Startup update check queries the PyPI JSON API; `--version` prints installed, PyPI latest, and GitHub latest lines; forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every outcome, applies 3600s success and 86400s error cooldowns, prints colored update/error lines, and renders failed source lines as `<source> latest: unknown (<reason>)`. |
+| PRJ-004, DES-002..DES-006, DES-018, DES-019, DES-020, REQ-003, REQ-075, REQ-084, REQ-091, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `fetch_pypi_latest_version`, `fetch_github_latest_release`, `print_remote_latest_versions`, `_write_idle_config`, `_should_check` | Startup update check queries the PyPI JSON API; `--version` prints aligned `Current Installed`, `Latest @ PyPI`, and `Latest @ GitHub` lines; forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every outcome, applies 3600s success and 86400s error cooldowns, prints colored update/error lines, and renders failed source lines as aligned `Latest @ <source>` labels with `unknown (<reason>)` values. |
 | PRJ-005, PRJ-007, DES-016, DES-017 | `.github/workflows/release-pypi.yml` | `jobs.check-branch`, `jobs.build-release`, `jobs.build-release.steps.Publish` | Workflow script is present at required path, retains check-branch/build/attest/changelog/GitHub-release steps, and publishes to PyPI via `pypa/gh-action-pypi-publish@release/v1` gated on `origin/master` tag membership with workflow-level `id-token: write` and no credential secrets. |
 | CTN-006, DES-015 | `.github/workflows/release-pypi.yml`; `tests/test_tst_012_workflow_runtime.py` | `jobs.check-branch.steps`, `jobs.build-release.steps`, `NODE24_NATIVE_ACTION_RUNTIMES` | Every `uses` reference pins a Node24-native runtime (`checkout@v7`, `setup-python@v7`, `setup-uv@v10`, `attest-build-provenance@v4`, `release-changelog-builder-action@v6`, `action-gh-release@v3`, `gh-action-pypi-publish@release/v1`); static test asserts full mapping coverage and absence of Node20 compatibility override variables. |
 | REQ-004, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, CTN-004 | `src/shell_scripts/core.py`; `src/shell_scripts/config.py`; `tests/test_tst_014_pypi_version_source.py` | `do_upgrade`, `_build_develop_upgrade_command`, `main`, `DEFAULT_RUNTIME_CONFIG` | Default upgrade resolves `management.upgrade` to `uv tool install shellscripts` (PyPI); `--upgrade --develop`/`--dev` resolves the latest GitHub release tag and upgrades from `git+...@<tag>`; `--force` appends ` --force --reinstall --refresh` to both upgrade modes; bare `--develop`/`--dev` and bare `--force` are rejected with code `1`; tag-resolution failure emits a bright-red error and code `1`. |

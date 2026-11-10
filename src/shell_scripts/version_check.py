@@ -258,32 +258,61 @@ def fetch_github_latest_release(current_version: str) -> str:
     return str(payload["tag_name"])
 
 
+BRIGHT_GREEN = "\033[92m"
+BRIGHT_RED = "\033[91m"
+RESET = "\033[0m"
+
+# @brief Fixed label column width for aligned `--version` report lines.
+# @details Left-justifies every report label (`Current Installed`,
+# `Latest @ PyPI`, `Latest @ GitHub`) before the `: ` value separator so all
+# version tokens start at the same output column.
+# @satisfies REQ-091
+REPORT_LABEL_WIDTH = 18
+
+
+def format_version_report_line(label: str, value: str) -> str:
+    """@brief Render one aligned `--version` report line.
+
+    @details Left-justifies the report label to `REPORT_LABEL_WIDTH`
+    characters, then appends `: ` and the raw value without color codes so
+    callers keep control of terminal coloring. Time complexity O(1).
+    @param label {str} Report label token (for example `Latest @ PyPI`).
+    @param value {str} Report value token (version string or
+    `unknown (<reason>)`).
+    @return {str} Aligned report line shaped as `<label>: <value>`.
+    @satisfies REQ-075, REQ-091
+    """
+    return f"{label:<{REPORT_LABEL_WIDTH}}: {value}"
+
+
 def print_remote_latest_versions(current_version: str) -> None:
     """@brief Print PyPI and GitHub latest-version report lines.
 
-    @details Emits one `<source> latest: <version>` line per remote source in
-    fixed order (PyPI, GitHub). A failed source lookup prints one bright-red
-    `<source> latest: unknown (<reason>)` line where `<reason>` is the
-    `_format_request_error` descriptor of the actual failure, and the remaining
-    source is still processed. Complexity O(1) excluding network latency.
+    @details Emits one aligned `Latest @ <source>` line per remote source in
+    fixed order (PyPI, GitHub), left-justifying each label to
+    `REPORT_LABEL_WIDTH` characters. A failed source lookup prints one
+    bright-red aligned line whose value is `unknown (<reason>)` where
+    `<reason>` is the `_format_request_error` descriptor of the actual
+    failure, and the remaining source is still processed. Complexity O(1)
+    excluding network latency.
     @param current_version {str} Installed package version used in User-Agent.
     @return {None} Writes two report or error lines to stdout.
-    @satisfies REQ-003, REQ-075, REQ-084, DES-020
+    @satisfies REQ-003, REQ-075, REQ-084, REQ-091, DES-020
     """
 
     for source_label, fetch_version in (
-        ("PyPI", fetch_pypi_latest_version),
-        ("GitHub", fetch_github_latest_release),
+        ("Latest @ PyPI", fetch_pypi_latest_version),
+        ("Latest @ GitHub", fetch_github_latest_release),
     ):
         try:
             latest_version = fetch_version(current_version).lstrip("v")
         except Exception as error:
-            print(
-                f"{BRIGHT_RED}{source_label} latest: unknown "
-                f"({_format_request_error(error)}){RESET}"
+            failure_line = format_version_report_line(
+                source_label, f"unknown ({_format_request_error(error)})"
             )
+            print(f"{BRIGHT_RED}{failure_line}{RESET}")
             continue
-        print(f"{source_label} latest: {latest_version}")
+        print(format_version_report_line(source_label, latest_version))
 
 
 def check_for_updates(current_version: str) -> None:
