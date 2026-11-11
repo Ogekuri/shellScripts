@@ -1,0 +1,3 @@
+# Source distribution file selection: the test suite is not part of the sdist.
+# @satisfies DES-048
+prune tests

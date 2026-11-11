@@ -72,7 +72,7 @@
 - Lifecycle/trigger:
   - Trigger: developer, automation, or `scripts/pre-release-check.sh` invokes the build script.
   - Startup: resolves canonical script and base directories, resolves the Git repository root, selects `.venv/bin/python3` when present or `python3` otherwise, validates Python 3.11 or newer, and selects `uv build` or `<python> -m build`.
-  - Runtime mode: sequential fail-fast pipeline; stale generated archives and intermediate build trees are removed before the build tool executes, then generated archives are validated and summarized.
+  - Runtime mode: sequential fail-fast pipeline; stale generated archives and intermediate build trees are removed before the build tool executes; after packaging, the sdist is rewritten without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members, build-tool metadata and intermediate build trees are removed, then generated archives are validated (readability plus required and forbidden members) and summarized.
   - Shutdown: exits `1` on the first mandatory failure and `0` after a successful build, validation, and summary; final deliverables remain in `dist/`.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
@@ -82,14 +82,19 @@
   - `clean_stale_artifacts(...)`: Remove stale untracked generated archives and intermediate build trees while preserving tracked and non-generated entries [`scripts/build.sh`]
     - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
     - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata that would hide non-generated files [`scripts/build.sh`]
-  - `run_distribution_build(...)`: Execute packaging and normalize generated dist metadata [`scripts/build.sh`]
+  - `run_distribution_build(...)`: Execute packaging, rewrite generated sdist members, and normalize generated dist and source-tree metadata [`scripts/build.sh`]
     - `build_distributions(...)`: Execute the resolved build command vector from the repository root [`scripts/build.sh`]
+    - `strip_sdist_generated_members(...)`: Rewrite each sdist without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members through an atomic same-directory replacement [`scripts/build.sh`]
     - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata after a successful build [`scripts/build.sh`]
-  - `verify_artifacts(...)`: Require non-empty sdist and wheel deliverables and validate archive readability with `tarfile` and `zipfile` [`scripts/build.sh`]
+    - `remove_intermediate_build_trees(...)`: Remove `build` and `src/shellscripts.egg-info` after packaging, refusing tracked entries [`scripts/build.sh`]
+      - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
+  - `verify_artifacts(...)`: Require non-empty sdist and wheel deliverables, validate archive readability with `tarfile` and `zipfile`, and validate archive members [`scripts/build.sh`]
+    - `verify_sdist_members(...)`: Require `pyproject.toml` and `src/shell_scripts/__init__.py`; reject `tests/`, `src/shellscripts.egg-info/`, `setup.cfg`, and `MANIFEST.in` members [`scripts/build.sh`]
+    - `verify_wheel_members(...)`: Require `*.dist-info/licenses/LICENSE` and an `entry_points.txt` declaring `shellscripts` and `s`; reject members outside `shell_scripts/` and `*.dist-info/` [`scripts/build.sh`]
   - `print_summary(...)`: List every deliverable file in `dist/` with its size [`scripts/build.sh`]
 - External Boundaries:
   - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `python3`/`.venv/bin/python3`, `uv build` or `python3 -m build`, `rm`, `mkdir`, `du`, `cut`).
-  - File-system boundary: creates `dist/`, removes untracked generated archives and intermediate build trees, and writes sdist and wheel deliverables into `dist/`.
+  - File-system boundary: creates `dist/`, removes untracked generated archives and intermediate build trees, rewrites the sdist archive in place, and writes sdist and wheel deliverables into `dist/`.
   - Terminal boundary: `PASS`-style phase progress, build-tool output, artifact validation evidence, and the `BUILD SUMMARY` deliverable list on stdout/stderr.
 
 ### `PROC:pre-release-check`

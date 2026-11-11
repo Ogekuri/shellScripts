@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.13.0"
-date: "2026-11-11T10:50:54Z"
+version: "0.14.0"
+date: "2026-11-11T13:11:57Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -155,8 +155,14 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-043**: MUST abort the pre-release pipeline before destructive operations when cleanup targets contain tracked files or non-generated `dist` entries.
 - **DES-044**: MUST capture pre-run tracked and non-managed untracked repository state and fail when post-cleanup state diverges from that baseline.
 - **DES-045**: MUST handle `EXIT`, `INT`, and `TERM` conditions so generated-artifact cleanup runs on every termination path without overriding a failed check result.
-- **DES-046**: MUST validate generated archive readability in `scripts/build.sh` and print one summary listing every deliverable stored in `dist/`.
+- **DES-046**: MUST validate generated archive readability and required archive members in `scripts/build.sh` and print one summary listing every deliverable stored in `dist/`.
 - **DES-047**: MUST print phase headers, `PASS`/`FAIL`/`SKIP` evidence lines, and a final summary naming the failed check or confirming success.
+- **DES-048**: MUST exclude the `tests/` tree from the sdist via a repository-root `MANIFEST.in`.
+- **DES-049**: MUST retain `pyproject.toml`, `README.md`, `LICENSE`, `PKG-INFO`, and `src/shell_scripts/` sources in the sdist.
+- **DES-050**: MUST restrict wheel contents to the `shell_scripts` package, the `*.dist-info/` directory, and the `shellscripts` and `s` console entry points.
+- **DES-051**: MUST declare `setuptools>=77.0.0` as the lower bound in `[build-system].requires`, the minimum version supporting the PEP 639 `license` and `license-files` fields.
+- **DES-052**: MUST remove `src/shellscripts.egg-info/` and intermediate `build/` trees in `scripts/build.sh` after packaging, leaving no generated metadata residue in the working tree.
+- **DES-053**: MUST remove the `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members from each sdist archive in `scripts/build.sh` after packaging.
 
 No explicit performance optimizations identified.
 
@@ -274,7 +280,7 @@ No explicit performance optimizations identified.
 - **REQ-132**: MUST print valid `--get`, `--print`, `--print-raw`, and `--info` output to stdout, errors to stderr with code `1`, and successes with code `0`.
 - **REQ-133**: MUST render every `--print` and `--info` node name identical to its CLI path token and use complete canonical paths in all hints and examples.
 - **REQ-134**: MUST make `scripts/build.sh` resolve the repository root, validate Python 3.11 or newer plus one available build tool, and build sdist and wheel packages into `dist/`.
-- **REQ-135**: MUST make `scripts/build.sh` verify that generated sdist and wheel archives are non-empty and readable and print a summary of every deliverable in `dist/`.
+- **REQ-135**: MUST make `scripts/build.sh` verify that generated sdist and wheel archives are non-empty, readable, and compliant with REQ-145 and REQ-146, and print a summary of every deliverable in `dist/`.
 - **REQ-136**: MUST make `scripts/pre-release-check.sh` execute project-structure, toolchain, script-executable, Bash-syntax, Python-compilation, unit-test, `scripts/build.sh`, and artifact-validation checks.
 - **REQ-137**: MUST make `scripts/pre-release-check.sh` remove all generated artifacts on every termination path and exit non-zero when cleanup fails after all checks passed.
 - **REQ-138**: MUST make `scripts/pre-release-check.sh` compare post-cleanup tracked modifications and non-managed untracked files with the pre-run baseline and fail on divergence.
@@ -284,6 +290,8 @@ No explicit performance optimizations identified.
 - **REQ-142**: MUST make `scripts/pre-release-check.sh` print phase headers, `PASS`/`FAIL`/`SKIP` evidence lines, and a final success or failure summary naming the failed check.
 - **REQ-143**: MUST make `scripts/pre-release-check.sh` report non-applicable formatter, linter, type-checker, security, integration, and end-to-end checks as `SKIP` without counting them as `PASS`.
 - **REQ-144**: MUST make `scripts/pre-release-check.sh` verify that `scripts/pre-release-check.sh` and `scripts/build.sh` are executable files.
+- **REQ-145**: MUST make `scripts/build.sh` verify that the wheel contains `*.dist-info/licenses/LICENSE` and `*.dist-info/entry_points.txt` declaring `shellscripts` and `s`, and no member outside `shell_scripts/` or `*.dist-info/`.
+- **REQ-146**: MUST make `scripts/build.sh` verify that the sdist contains `pyproject.toml` and `src/shell_scripts/__init__.py` and no `tests/`, `src/shellscripts.egg-info/`, `setup.cfg`, or `MANIFEST.in` member.
 
 ## 4. Test Requirements
 

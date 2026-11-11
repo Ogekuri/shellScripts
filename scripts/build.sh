@@ -152,12 +152,7 @@ clean_stale_artifacts() {
 
     remove_generated_dist_metadata || return 1
 
-    if [ -d "build" ]; then
-        rm -rf -- "build" || return 1
-    fi
-    if [ -d "src/shellscripts.egg-info" ]; then
-        rm -rf -- "src/shellscripts.egg-info" || return 1
-    fi
+    remove_intermediate_build_trees || return 1
     return 0
 }
 
@@ -181,6 +176,68 @@ remove_generated_dist_metadata() {
     return 0
 }
 
+# @brief Remove intermediate build trees produced by the packaging backend.
+# @details Refuses removal when tracked files exist under `build` or
+#   `src/shellscripts.egg-info`, then deletes both directories when present.
+#   Invoked before the build (stale trees) and after packaging (generated
+#   metadata residue). Time complexity O(n) over removed entries.
+# @return {int} 0 on success; 1 when a tracked entry or removal blocks.
+# @satisfies DES-041, DES-052, REQ-141
+remove_intermediate_build_trees() {
+    assert_no_tracked_intermediates || return 1
+    if [ -d "build" ]; then
+        rm -rf -- "build" || return 1
+    fi
+    if [ -d "src/shellscripts.egg-info" ]; then
+        rm -rf -- "src/shellscripts.egg-info" || return 1
+    fi
+    return 0
+}
+
+# @brief Remove setuptools-generated metadata members from every sdist archive.
+# @details Removes the `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/`
+#   tree from every sdist. Setuptools writes `setup.cfg` and copies the egg-info
+#   tree unconditionally, and `MANIFEST.in` is build configuration rather than
+#   runtime content. Rewrites each sdist through a same-directory temporary
+#   archive that replaces the original atomically; the temporary archive is
+#   removed on failure. Time complexity O(n) over sdist size.
+# @return {int} 0 on success; 1 when a rewrite fails.
+# @satisfies DES-053
+strip_sdist_generated_members() {
+    local code
+
+    code='
+import glob
+import os
+import sys
+import tarfile
+
+def is_generated(name):
+    rel = name.split("/", 1)[1] if "/" in name else ""
+    return rel in ("setup.cfg", "MANIFEST.in", "src/shellscripts.egg-info") or rel.startswith("src/shellscripts.egg-info/")
+
+for path in sorted(glob.glob(os.path.join(sys.argv[1], "*.tar.gz"))):
+    temp = path + ".tmp"
+    try:
+        with tarfile.open(path, "r:gz") as source, tarfile.open(temp, "w:gz") as target:
+            for member in source.getmembers():
+                if is_generated(member.name):
+                    continue
+                payload = source.extractfile(member) if member.isfile() else None
+                target.addfile(member, payload)
+        os.replace(temp, path)
+    except BaseException:
+        if os.path.exists(temp):
+            os.unlink(temp)
+        raise
+'
+    if ! "${PYTHON_BIN}" -c "${code}" "${DIST_DIR}"; then
+        log_error "Unable to strip generated metadata members from sdist archives."
+        return 1
+    fi
+    return 0
+}
+
 # @brief Execute the selected distribution build tool.
 # @details Runs the resolved build command vector from the repository root so
 #   sdist and wheel packages are written into `dist/`. Time complexity O(n)
@@ -199,20 +256,110 @@ build_distributions() {
 #   project size plus toolchain latency.
 # @return {int} 0 when the build and metadata normalization succeed; 1
 #   otherwise.
-# @satisfies DES-040, REQ-134, REQ-141
+# @satisfies DES-040, DES-052, DES-053, REQ-134, REQ-141
 run_distribution_build() {
     build_distributions || return 1
+    strip_sdist_generated_members || return 1
     remove_generated_dist_metadata || return 1
+    remove_intermediate_build_trees || return 1
+    return 0
+}
+
+# @brief Validate required and forbidden members of one sdist archive.
+# @details Lists archive members with `tarfile`, strips the single top-level
+#   directory prefix, requires `pyproject.toml` and
+#   `src/shell_scripts/__init__.py`, and rejects every member under `tests/`
+#   or `src/shellscripts.egg-info/` and any `setup.cfg` or `MANIFEST.in` member.
+#   Time complexity O(n) over archive member count.
+# @param $1 {str} Sdist archive path.
+# @return {int} 0 when the member set is compliant; 1 otherwise.
+# @satisfies DES-048, DES-049, REQ-146
+verify_sdist_members() {
+    local artifact="$1"
+    local code
+
+    code='
+import sys
+import tarfile
+
+def under(name, prefix):
+    return name == prefix or name.startswith(prefix + "/")
+
+with tarfile.open(sys.argv[1], "r:gz") as archive:
+    names = [m.name.split("/", 1)[1] for m in archive.getmembers() if "/" in m.name]
+required = ["pyproject.toml", "src/shell_scripts/__init__.py"]
+forbidden = ["tests", "src/shellscripts.egg-info"]
+missing = [name for name in required if name not in names]
+rejected = [name for name in names if name in ("setup.cfg", "MANIFEST.in") or any(under(name, p) for p in forbidden)]
+if missing:
+    print("Missing sdist members: " + ", ".join(missing), file=sys.stderr)
+if rejected:
+    print("Forbidden sdist members: " + ", ".join(rejected), file=sys.stderr)
+if missing or rejected:
+    sys.exit(1)
+'
+    if ! "${PYTHON_BIN}" -c "${code}" "${artifact}"; then
+        log_error "Sdist member validation failed: ${artifact}"
+        return 1
+    fi
+    return 0
+}
+
+# @brief Validate required and forbidden members of one wheel archive.
+# @details Lists archive members with `zipfile`, requires
+#   `*.dist-info/licenses/LICENSE` and a `*.dist-info/entry_points.txt` that
+#   declares the `shellscripts` and `s` console scripts as exact lines, and
+#   rejects every member outside the `shell_scripts/` package and
+#   `*.dist-info/` directories. Time complexity O(n) over archive member count.
+# @param $1 {str} Wheel archive path.
+# @return {int} 0 when the member set is compliant; 1 otherwise.
+# @satisfies DES-050, REQ-145
+verify_wheel_members() {
+    local artifact="$1"
+    local code
+
+    code='
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    names = archive.namelist()
+    entry_files = [n for n in names if n.endswith(".dist-info/entry_points.txt")]
+    license_files = [n for n in names if n.endswith(".dist-info/licenses/LICENSE")]
+    entry_lines = set()
+    for n in entry_files:
+        entry_lines.update(line.strip() for line in archive.read(n).decode("utf-8").splitlines())
+rejected = [n for n in names if not (n.startswith("shell_scripts/") or n.split("/", 1)[0].endswith(".dist-info"))]
+missing = []
+if not license_files:
+    missing.append("*.dist-info/licenses/LICENSE")
+if not entry_files:
+    missing.append("*.dist-info/entry_points.txt")
+for line in ("shellscripts = shell_scripts.core:main", "s = shell_scripts.core:main"):
+    if line not in entry_lines:
+        missing.append(line)
+if missing:
+    print("Missing wheel members: " + ", ".join(missing), file=sys.stderr)
+if rejected:
+    print("Forbidden wheel members: " + ", ".join(rejected), file=sys.stderr)
+if missing or rejected:
+    sys.exit(1)
+'
+    if ! "${PYTHON_BIN}" -c "${code}" "${artifact}"; then
+        log_error "Wheel member validation failed: ${artifact}"
+        return 1
+    fi
     return 0
 }
 
 # @brief Validate generated sdist and wheel deliverables.
 # @details Requires at least one non-empty `.tar.gz` sdist and one non-empty
-#   `.whl` wheel, then verifies archive readability with the Python standard
-#   library (`tarfile` listing and `zipfile` CRC test). Time complexity O(n)
-#   over archive contents.
+#   `.whl` wheel, verifies archive readability with the Python standard
+#   library (`tarfile` listing and `zipfile` CRC test), and checks the
+#   required and forbidden archive members. Time complexity O(n) over archive
+#   contents.
 # @return {int} 0 when every generated archive is valid; 1 otherwise.
-# @satisfies DES-046, REQ-135
+# @satisfies DES-046, REQ-135, REQ-145, REQ-146
 verify_artifacts() {
     local -a sdists=("${DIST_DIR}"/*.tar.gz)
     local -a wheels=("${DIST_DIR}"/*.whl)
@@ -236,6 +383,9 @@ verify_artifacts() {
             log_error "Unreadable sdist artifact: ${artifact}"
             return 1
         fi
+        if ! verify_sdist_members "${artifact}"; then
+            return 1
+        fi
     done
 
     for artifact in "${wheels[@]}"; do
@@ -245,6 +395,9 @@ verify_artifacts() {
         fi
         if ! "${PYTHON_BIN}" -m zipfile -t "${artifact}" >/dev/null; then
             log_error "Unreadable wheel artifact: ${artifact}"
+            return 1
+        fi
+        if ! verify_wheel_members "${artifact}"; then
             return 1
         fi
     done
