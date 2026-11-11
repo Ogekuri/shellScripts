@@ -1,7 +1,91 @@
 # Changelog
 
-## [0.25.2](https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.25.2) - 2026-11-10
+## [0.26.0](https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0) - 2026-11-11
+### 🐛  Bug Fixes
+- render object and list leaves as box tables in --print [useReq] *(config-cli)*
+--print now details oggetto leaves as Chiave/Valore box tables (one
+sorted row per entry) and elenco leaves as indexed Valore tables (one
+row per element) instead of single-line JSON blobs, matching the
+tabular-detail requirement for dict/hash/array-shaped parameters;
+scalar leaves keep the REQ-096 = <JSON> rendering. Box-table lines now
+carry the tree continuation bars for non-final siblings, also for
+Sel/Valore and Valore/Significato tables. Extend the config-CLI HDT
+suite with red/green reproducer tests; update WORKFLOW.md call-trace
+roles and regenerate REFERENCES.md.
+- enforce DES-034 schema parity gate on --print-raw [useReq] *(config-cli)*
+--print-raw now aborts with the explicit schema-mismatch error when
+CONFIG_SCHEMA and DEFAULT_RUNTIME_CONFIG diverge, matching the parity
+enforcement already applied to --print/--params/--get/--set/--unset
+(DES-032, DES-034); healthy-path REQ-094 behavior is unchanged.
+Add HDT reproducer suite tests/test_tst_018_config_cli.py covering the
+divergence gate for all six configuration commands plus REQ-094 verbatim
+output. Update WORKFLOW.md call-trace and regenerate REFERENCES.md.
+
 ### 🚜  Changes
+- BREAKING CHANGE: rename --params management flag to --info [useReq] *(config-cli)*
+Replace the --params CLI flag with --info across dispatcher help and routing.; Rename config_cli.do_params to do_info and the info tree renderers.; Update REQ/DES/PRJ wording, WORKFLOW runtime model, REFERENCES index, and TST-018 tests.
+- add bootstrap, atomic writes, and path-token management [useReq] *(config-cli)*
+Update SRS: REQ-094..REQ-113 rewritten, REQ-114..REQ-133 and
+DES-037..DES-039 added, TST-018 added for the configuration CLI.
+Bootstrap missing config.json with defaults (REQ-116) and persist
+--set/--unset atomically via same-directory temp rename (DES-037).
+Support array/map path tokens (:append/:+/:insert:<Idx>/:<Idx>/
+:<Idx>:<Field>/:<Key>) with re-indexing and range errors.
+Render --print/--params with optional sub-path, [Path] badges,
+default/custom indicators, and copy-pasteable command templates.
+Display all values in plain text without masking (REQ-098).; Enforce stdout/stderr and exit-code contract (REQ-132).
+- drop git-root prerequisite from YOLO CLI launchers [useReq] *(ai-commands)*
+YOLO AI CLI commands (agy, claude, codex, copilot, opencode) now execute
+only the registry-defined command vector without Git repository root
+validation and without the project-root error path. CTN-005 scope is
+narrowed to non-YOLO project-context commands; REQ-014/015/017/018/085
+execution semantics unchanged. Test mocks, WORKFLOW call-traces, and
+requirements evidence aligned with the new contract.
+- translate Italian user-facing text to English [useReq] *(config-cli)*
+Translate every Italian user-facing string, schema label, and evidence
+token to English per new CTN-007 and updated REQ-060, REQ-097,
+REQ-101, REQ-106, REQ-107..REQ-113: schema kinds (string, integer,
+boolean, selection, list, object), table headers (Sel/Value,
+Value/Meaning, Key/Value, Key/Format, Field/Format), input-example
+notes, --unset warning, req skip-evidence token, and the version-check
+update line; sync SRS, WORKFLOW.md, REFERENCES.md, and unit tests;
+logic and behavior preserved (136 tests pass, static-check clean).
+- add input examples and shape tables to --params [useReq] *(config-cli)*
+--params now renders every option with its input type, short
+description, and schema-declared input example (REQ-110/111):
+scalars get an inline (Esempio di input:) suffix, selections get an
+example continuation line below the Valore/Significato table,
+oggetto options get a JSON-object note plus a Chiave/Formato
+default-structure table (REQ-112), and elenco options get a
+JSON-array note plus an element-format table (REQ-113). OptionSpec
+declares a mandatory example token (DES-036); SRS bumped to 0.8.0
+with REQ-110..113 and DES-036. HDT suite extended to 136 passing
+tests; WORKFLOW.md call-trace and REFERENCES.md regenerated.
+- BREAKING CHANGE: add schema-driven config CLI (--print-raw/--print/--params/--get/--set/--unset) [useReq] *(config)*
+Add src/shell_scripts/config_cli.py: declarative CONFIG_SCHEMA registry
+mirroring DEFAULT_RUNTIME_CONFIG with import-time parity enforcement
+Implement --print-raw raw file dump, --print box-drawing option tree with
+Sel/Valore selection tables and secret masking, --params hierarchy with
+Valore/Significato tables, and --get/--set/--unset over ':'-separated
+hierarchical paths with typed coercion, choice validation, env acquisition,
+and sorted-key persistence
+Route the new management flags in core.main with lazy module import and
+extend global help
+Requirements: add DES-032..DES-035, REQ-094..REQ-109 (config-CLI sync
+constraint); update WORKFLOW.md runtime model and REFERENCES.md
+Existing tests: 119 passed; static-check clean
+- BREAKING CHANGE: remove kiro, gemini, and pi commands [useReq] *(commands)*
+Delete gemini.py, kiro.py, and pi.py launcher modules plus their _COMMAND_MODULES registry entries and HELP_SECTION_COMMANDS AI-section tokens.
+Remove REQ-016, REQ-019, REQ-068, and REQ-069 from SRS 0.6.35; rewrite TST-005 scope and purge affected Evidence rows.
+Drop gemini/kiro/pi launcher tests from the TST-005 suite and gemini/kiro help-row assertions from the TST-001 suite.
+Update README command list, git-prerequisite list, and pi usage example; purge WORKFLOW.md call-trace nodes.
+No backward-compatibility shims per explicit change request.
+- refactor YOLO CLI launchers into shared registry [useReq] *(yolo-cli)*
+Add shared registry-based launcher _yolo_common with declarative YoloCliSpec records (DES-030, DES-031).
+agy, claude, codex, copilot, and opencode become thin modules executing the verified YOLO vectors: agy/claude --dangerously-skip-permissions, codex --yolo, copilot --yolo, opencode --auto (REQ-085, REQ-014, REQ-015, REQ-017, REQ-018).
+Remove codex auth-file synchronization and CODEX_HOME mutation (REQ-043, REQ-044 dropped).
+Inline help documents every executed option plus the copilot --allow-all alternative (REQ-086, REQ-092, REQ-093).
+Update TST-005 and TST-017 suites, README, SRS 0.6.34, WORKFLOW, REFERENCES.
 - align --version report output columns [useReq] *(version-check)*
 REQUIREMENTS: reword REQ-075/REQ-084, add REQ-091 (label width 18); version_check: add REPORT_LABEL_WIDTH and format_version_report_line helper; version_check: emit Latest @ PyPI / Latest @ GitHub aligned report lines; core: print aligned Current Installed line for --version/--ver; tests: update TST-014 assertions to the aligned three-line report
 - add --force flag for forced reinstall on --upgrade [useReq] *(upgrade)*
@@ -692,7 +776,7 @@ add deterministic Execution Units Index with stable IDs\n- map internal call-tra
 - \[0.23.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.23.0
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
-- \[0.25.2\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.2
+- \[0.26.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.0
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -719,4 +803,4 @@ add deterministic Execution Units Index with stable IDs\n- map internal call-tra
 [0.23.0]: https://github.com/Ogekuri/shellScripts/compare/v0.22.0..v0.23.0
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
-[0.25.2]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.25.2
+[0.26.0]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0
