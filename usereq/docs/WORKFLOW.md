@@ -18,6 +18,15 @@
   - defining_files:
     - `scripts/pre-release-check.sh`
 
+- ID: `PROC:build`
+  - type: `process`
+  - parent_process: `null`
+  - role: `Local shell script that cleans stale release artifacts, compiles sdist and wheel packages, and verifies deliverables in dist/`
+  - entrypoint_symbols:
+    - `scripts/build.sh (top-level script entrypoint)`
+  - defining_files:
+    - `scripts/build.sh`
+
 - ID: `PROC:main`
   - type: `process`
   - parent_process: `null`
@@ -69,12 +78,34 @@
 - Internal Call-Trace Tree:
   - `run_check(...)`: Execute one mandatory check, print `PASS`/`FAIL` evidence line, and record the failed check name [`scripts/pre-release-check.sh`]
   - `fail_fast(...)`: Print the failure summary naming the failed check and terminate with exit code `1` [`scripts/pre-release-check.sh`]
+  - `check_project_structure(...)`: Verify presence of essential project files and directories [`scripts/pre-release-check.sh`]
   - `check_artifacts(...)`: Verify at least one sdist and one wheel artifact exist under `dist/` via `compgen` glob probes [`scripts/pre-release-check.sh`]
   - `cleanup_artifacts(...)`: Remove `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories and print one `clean` evidence line [`scripts/pre-release-check.sh`]
 - External Boundaries:
-  - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `env`, `python3`/`.venv/bin/python3` running pytest, `uv build` or `python3 -m build`, `rm`, `compgen`).
+  - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `env`, `bash -n`, `python3`/`.venv/bin/python3` running pytest and compileall, `bash scripts/build.sh`, `rm`, `compgen`).
   - File-system boundary: removes the preexisting `dist` directory, reads built `dist/*.tar.gz` and `dist/*.whl` artifacts, and deletes generated artifacts (`dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, `__pycache__` under `src`/`tests`) before termination.
   - Terminal boundary: parser-stable `PASS:`/`FAIL:`/`clean` evidence lines and final `Pre-release check PASSED`/`FAILED` summary lines on stdout.
+
+### `PROC:build`
+
+- Entrypoint(s):
+  - `scripts/build.sh (top-level script entrypoint)` [`scripts/build.sh`]
+- Lifecycle/trigger:
+  - Trigger: invoked directly by developer or called by pre-release check pipeline.
+  - Startup: resolves canonical script and base directories, resolves Git repository root via `git rev-parse --show-toplevel`, and changes working directory to repository root.
+  - Runtime mode: cleans stale package files under `dist/` while preserving non-generated files, resolves available build toolchain (`uv build` or `python3 -m build`), compiles sdist and wheel distributions, verifies that at least one `.tar.gz` and one `.whl` exist, and outputs artifact summary.
+  - Shutdown: exits `0` on successful build and verification; exits `1` on error.
+  - Thread model: `no explicit threads detected`.
+- Internal Call-Trace Tree:
+  - `clean_stale_artifacts(...)`: Remove stale archive files in `dist/` and intermediate build directories [`scripts/build.sh`]
+  - `resolve_build_tool(...)`: Resolve and validate build toolchain (`uv` or `build` module) [`scripts/build.sh`]
+  - `build_distributions(...)`: Compile sdist and wheel distribution packages into `dist/` [`scripts/build.sh`]
+  - `verify_artifacts(...)`: Verify presence and non-zero size of generated packages in `dist/` [`scripts/build.sh`]
+  - `print_summary(...)`: Output formatted summary of generated deliverables [`scripts/build.sh`]
+- External Boundaries:
+  - OS/process boundary: external commands (`git`, `cd`, `pwd`, `mkdir`, `rm`, `uv build` or `python3 -m build`, `ls`, `awk`).
+  - File-system boundary: creates `dist/`, removes stale `dist/*.tar.gz`, `dist/*.whl`, `dist/*.zip`, `dist/*.egg`, removes `build/` and `src/shellscripts.egg-info`, outputs packages to `dist/`.
+  - Terminal boundary: status messages and formatted build summary on stdout/stderr.
 
 ### `PROC:main`
 
@@ -452,3 +483,14 @@
   - declaration_file_paths:
     - `.github/workflows/release-pypi.yml`
     - `scripts/pre-release-check.sh`
+
+- Edge ID: `EDGE:004`
+  - source_execution_unit: `PROC:pre-release-check`
+  - destination_execution_unit: `PROC:build`
+  - direction: `PROC:pre-release-check -> PROC:build`
+  - mechanism: `OS child process spawn`
+  - endpoint_channel: `run_check build executing bash scripts/build.sh`
+  - payload_data_shape_reference: `build packages generated in dist/; return code propagated to caller`
+  - declaration_file_paths:
+    - `scripts/pre-release-check.sh`
+    - `scripts/build.sh`

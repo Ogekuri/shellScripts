@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.12.0"
-date: "2026-11-11T08:15:02Z"
+version: "0.13.0"
+date: "2026-11-11T10:27:02Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -47,6 +47,7 @@ Repository structure (evidence-oriented view, depth-limited):
 │       └── release-pypi.yml
 ├── docs/
 ├── scripts/
+│   ├── build.sh
 │   ├── pre-release-check.sh
 │   └── s.sh
 ├── src/
@@ -148,6 +149,9 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-037**: MUST implement every `--set` and `--unset` persistence as a write to a temporary file in the configuration directory followed by flush and atomic rename onto `config.json`.
 - **DES-038**: MUST perform all array and map manipulations exclusively through `:`-separated path tokens accepted by `--get`, `--set`, and `--unset`.
 - **DES-039**: MUST apply array and map manipulations to the effective configuration, defaults merged with overrides, and persist the resulting collection as one override value.
+- **DES-040**: MUST implement the reproducible distribution package build pipeline as an executable Bash script at `scripts/build.sh`.
+- **DES-041**: MUST clean preexisting generated release artifacts in `dist` while preserving versioned files and build sdist and wheel into `dist` via `uv build` or `python3 -m build`.
+- **DES-042**: MUST maintain inverted exclusion logic in `.gitignore` by making `dist/` traversable and specifically ignoring generated distribution archives without ignoring non-generated files.
 
 No explicit performance optimizations identified.
 
@@ -264,6 +268,10 @@ No explicit performance optimizations identified.
 - **REQ-131**: MUST print array index errors to stderr stating the valid index range and the `:append` alternative, and return code `1`.
 - **REQ-132**: MUST print valid `--get`, `--print`, `--print-raw`, and `--info` output to stdout, errors to stderr with code `1`, and successes with code `0`.
 - **REQ-133**: MUST render every `--print` and `--info` node name identical to its CLI path token and use complete canonical paths in all hints and examples.
+- **REQ-134**: MUST make `scripts/build.sh` resolve the Git repository root, validate toolchain availability, execute the distribution build, and output all package deliverables in `dist/`.
+- **REQ-135**: MUST make `scripts/build.sh` verify that `dist/` contains at least one sdist `.tar.gz` archive and one wheel `.whl` package and print an artifact summary.
+- **REQ-136**: MUST make `scripts/pre-release-check.sh` execute bash syntax checks, python compilation checks, unit tests, artifact builds via `scripts/build.sh`, and artifact validation.
+- **REQ-137**: MUST make `scripts/pre-release-check.sh` verify repository cleanliness after cleanup and fail if uncommitted modifications or untracked generated artifacts remain.
 
 ## 4. Test Requirements
 
@@ -334,4 +342,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
 | DES-021..DES-027, REQ-079..REQ-082, TST-015 | `scripts/pre-release-check.sh`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `check_artifacts`, `cleanup_artifacts`, `fail_fast` | Script resolves the repository root, runs pytest with `PYTHONPATH=src` via `.venv/bin/python3` or `python3`, removes `dist`, builds via `uv build` or `python3 -m build`, verifies sdist and wheel artifacts, removes `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories via an EXIT trap on success and failure paths, prints `PASS`/`FAIL`/`clean` evidence lines, exits `1` on first failure and `0` on full success; tests assert script structure and Bash syntax. |
 | DES-028, DES-029, REQ-083, TST-016 | `.github/workflows/release-pypi.yml`; `tests/test_tst_016_release_precheck_gating.py` | `jobs.pre-release-check`, `jobs.build-release.needs` | Workflow runs `scripts/pre-release-check.sh` in a dedicated `pre-release-check` job (checkout, `setup-uv@v10.3.3`, `uv sync`, script execution) and declares `needs: [check-branch, pre-release-check]` on `build-release`, so any check failure skips artifact creation, attestation, changelog, GitHub release, and PyPI publication steps; tests assert job presence, script invocation, and needs declaration. |
+| DES-040, DES-041, REQ-134, REQ-135 | `scripts/build.sh` | `clean_stale_artifacts`, `build_distributions`, `verify_artifacts`, `print_summary` | Script resolves the Git repository root, cleans stale generated archives under `dist/` while preserving non-generated files, builds sdist (.tar.gz) and wheel (.whl) via `uv build` or `python3 -m build`, verifies presence and non-zero size of generated packages, and outputs artifact summary. |
+| DES-042 | `.gitignore` | Include/exclude rules | Inverted `.gitignore` unignores `dist/` and `dist/**/*` in the include section while specifically excluding `dist/*.tar.gz`, `dist/*.whl`, `dist/*.zip`, and `dist/*.egg` in the packaging exclude section. |
+| REQ-136, REQ-137, DES-021..DES-027, REQ-079..REQ-082 | `scripts/pre-release-check.sh` | `run_check`, `check_artifacts`, `cleanup_artifacts`, `fail_fast` | Script executes project structure validation, toolchain checks, bash syntax validation (`bash -n`), python compilation (`compileall`), unit tests (`pytest`), artifact generation (`scripts/build.sh`), and artifact verification; registers EXIT trap cleanup; and verifies post-cleanup repository cleanliness. |
 | REQ-094 through REQ-133, DES-032 through DES-039 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `_ensure_bootstrap`, `_resolve_target`, `_write_overrides`, `do_print_raw`, `do_print`, `do_info`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags bootstrap the missing config file, print the raw file verbatim, render trees with `[Path: ...]` badges, default/custom indicators, `Sel`/`Value` and collection tables with box-drawing characters, resolve `:`-separated paths including `:append`/`:+`/`:insert:<Idx>`/`:<Idx>`/`:<Idx>:<Field>`/`:<Key>` tokens, coerce strict JSON types, validate, and persist atomically via same-directory temporary-file rename with environment acquisition. |
