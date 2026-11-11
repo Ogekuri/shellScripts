@@ -50,7 +50,7 @@
 - ID: `PROC:release-pypi`
   - type: `process`
   - parent_process: `null`
-  - role: `GitHub Actions release workflow that gates artifact creation and publication on a dedicated pre-release verification job for tag-based package release and conditional PyPI trusted publication`
+  - role: `GitHub Actions tag-release workflow that gates publication on pytest, validates tracked dist/ archives from the tagged commit, and publishes them without building distributions`
   - entrypoint_symbols:
     - `.github/workflows/release-pypi.yml::jobs.build-release`
   - defining_files:
@@ -79,7 +79,7 @@
 - Entrypoint(s):
   - `scripts/build.sh (top-level script entrypoint)` [`scripts/build.sh`]
 - Lifecycle/trigger:
-  - Trigger: developer, automation, or `scripts/pre-release-check.sh` invokes the build script.
+  - Trigger: developer or the standalone `scripts/pre-release-check.sh` invokes the build script.
   - Startup: registers EXIT, INT, and TERM traps before phase 1; resolves canonical script and base directories, resolves the Git repository root, selects `.venv/bin/python3` when present or `python3` otherwise, validates Python 3.11 or newer, selects `uv build` or `<python> -m build`, and resolves and exports `SOURCE_DATE_EPOCH` (validated environment value or `HEAD` committer timestamp). Trap cleanup runs only after the project root is resolved.
   - Runtime mode: sequential fail-fast pipeline; stale generated archives and intermediate build trees are removed before the build tool executes; after packaging, the sdist is rewritten without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members, build-tool metadata and intermediate build trees are removed, then generated archives are validated (readability plus required and forbidden members) and summarized. Each phase emits `PASS:` or `FAIL:` evidence; the sdist rewrite pins the gzip header and member mtimes to `SOURCE_DATE_EPOCH`.
   - Shutdown: exits `1` on the first mandatory failure and `0` after a successful build, validation, and summary; final deliverables remain in `dist/`. The EXIT trap removes `build/` and `src/shellscripts.egg-info/` on every termination path, preserves a non-zero status, and prints `BUILD FAILED during: <phase>`; INT and TERM terminate with statuses 130 and 143.
@@ -139,7 +139,7 @@
 - Entrypoint(s):
   - `scripts/pre-release-check.sh (top-level script entrypoint)` [`scripts/pre-release-check.sh`]
 - Lifecycle/trigger:
-  - Trigger: developer or automation invokes the script before an official release.
+  - Trigger: developer invokes the standalone script before an official release.
   - Startup: resolves canonical script and base directories, resolves the Git repository root via `git rev-parse --show-toplevel`, and changes the working directory to the repository root.
   - Safety preflight: validates that managed artifact paths contain no tracked files and that untracked `dist` entries are generated archives, then captures the pre-run tracked and non-managed untracked baseline before enabling cleanup.
   - Runtime mode: sequential fail-fast pipeline with phase headers; structure, permissions, toolchain, Bash/Python syntax, optional configured quality tools, pytest, delegated `scripts/build.sh`, artifact validation, cleanup, and repository-integrity checks run in order.
@@ -510,16 +510,16 @@
 - Entrypoint(s):
   - `.github/workflows/release-pypi.yml::jobs.build-release` [`.github/workflows/release-pypi.yml`]
 - Lifecycle/trigger:
-  - Trigger: GitHub push event on tags matching `v[0-9]+.[0-9]+.[0-9]+`.
-  - Runtime: GitHub runner executes check-branch and pre-release-check jobs; the `pre-release-check` job provisions dependencies via `uv sync --frozen` and executes `scripts/pre-release-check.sh` (unit tests, build, artifact gates); the `build-release` job declares `needs: [check-branch, pre-release-check]`, so any verification failure skips distribution build, artifact attestation, changelog generation, GitHub release, and PyPI publication steps (DES-028, DES-029, REQ-083); PyPI publication via OIDC Trusted Publishing runs only when the tag is reachable from `master` (DES-016).
+  - Trigger: GitHub push event on tags matching `v[0-9]+.[0-9]+.[0-9]+` or `workflow_dispatch`; `build-release` executes only for tag refs.
+  - Runtime: `check-branch` and `pre-release-check` jobs run before release; the `pre-release-check` job runs `uv sync --frozen --no-install-project` and executes `PYTHONPATH=src .venv/bin/python -m pytest tests/` without installing the project or invoking either build script; `build-release` runs only for tag refs, declares `needs: [check-branch, pre-release-check]`, checks out `github.sha`, verifies non-empty tracked sdist and wheel archives under `dist/`, and passes those committed files to attestation, GitHub Release assets, and PyPI publication (DES-028, DES-029, DES-056 through DES-059, REQ-083); the PyPI action remains OIDC-authenticated and master-tag-gated (DES-016, DES-017).
   - Shutdown: job ends after release or publication step completion or earlier on step failure.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - No internal function declarations detected in workflow YAML.
 - External Boundaries:
   - GitHub Actions boundaries: reusable actions executing on Node24 runtime (CTN-006: `actions/checkout`, `actions/setup-python`, `astral-sh/setup-uv`, `actions/attest-build-provenance`, `mikepenz/release-changelog-builder-action`, `softprops/action-gh-release`, `pypa/gh-action-pypi-publish`).
-  - Tooling boundaries: external shell commands (`git`, `uv`, `python -m build`).
-  - Network/API boundary: GitHub Releases publication with built artifacts and conditional PyPI upload via OIDC Trusted Publishing (`pypi.org`) for master tags.
+  - Tooling boundaries: external commands (`git`, `uv sync --frozen --no-install-project`, `.venv/bin/python -m pytest tests/`, `git ls-files`).
+  - Network/API boundary: GitHub Releases publication with committed `dist/` artifacts and conditional PyPI upload via OIDC Trusted Publishing (`pypi.org`) for master tags.
 
 ## Communication Edges
 
@@ -545,17 +545,6 @@
   - declaration_file_paths:
     - `src/shell_scripts/core.py`
     - `.github/workflows/release-pypi.yml`
-
-- Edge ID: `EDGE:003`
-  - source_execution_unit: `PROC:release-pypi`
-  - destination_execution_unit: `PROC:pre-release-check`
-  - direction: `PROC:release-pypi -> PROC:pre-release-check`
-  - mechanism: `OS child process spawn inside workflow job`
-  - endpoint_channel: `jobs.pre-release-check runner step executing bash scripts/pre-release-check.sh`
-  - payload_data_shape_reference: `repository checkout at the pushed tag; script exit code gates the build-release job via needs dependency`
-  - declaration_file_paths:
-    - `.github/workflows/release-pypi.yml`
-    - `scripts/pre-release-check.sh`
 
 - Edge ID: `EDGE:004`
   - source_execution_unit: `PROC:pre-release-check`

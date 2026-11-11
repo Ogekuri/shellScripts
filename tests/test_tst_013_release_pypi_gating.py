@@ -3,8 +3,8 @@
 @details Parses the repository workflow artifact
   `.github/workflows/release-pypi.yml` as static text and verifies that the
   PyPI publication step is gated on `master` tag membership, authenticates via
-  OIDC Trusted Publishing without embedded credential secrets, retains all
-  preexisting release steps for any tagged branch (PRJ-007, DES-016, DES-017),
+  OIDC Trusted Publishing without embedded credential secrets, retains every
+  non-build release step for tag refs (PRJ-007, DES-016, DES-017),
   and validates that every `pyproject.toml` classifier is a canonical PyPI
   trove entry so upload requests cannot be rejected with metadata 400 errors
   (PRJ-007).
@@ -60,7 +60,6 @@ INVALID_TOPIC_CLASSIFIER = "Topic :: Software Development :: Configuration Manag
 RETAINED_ACTION_REFS = (
     "uses: actions/checkout@v7",
     "uses: actions/setup-python@v7",
-    "uses: astral-sh/setup-uv@v10",
     "uses: actions/attest-build-provenance@v4",
     "uses: mikepenz/release-changelog-builder-action@v6",
     "uses: softprops/action-gh-release@v3",
@@ -203,24 +202,26 @@ def test_release_workflow_uses_oidc_trusted_publishing_without_credentials():
         )
 
 
-def test_release_workflow_retains_preexisting_release_steps():
-    """@brief Verify all preexisting release steps are retained after migration.
+def test_release_workflow_retains_nonbuild_release_steps():
+    """@brief Verify non-build release steps remain present after migration.
 
-    @details Regression guard for the requested logic preservation: the
-      check-branch job, tag trigger, distribution build, provenance attestation,
-      changelog generation, and GitHub release publication references must all
-      remain present in the renamed workflow.
-    @return {None} Asserts retained references only.
-    @satisfies TST-013, PRJ-005, PRJ-007
+    @details Regression guard: the check-branch job, tag trigger, provenance
+      attestation, changelog generation, and GitHub release publication must
+      remain present, while release-job distribution-build commands are absent.
+    @return {None} Asserts retained non-build references and build absence.
+    @satisfies TST-013, PRJ-005, PRJ-007, DES-057
     """
     workflow_text = _read_workflow_text()
 
     assert "v[0-9]+.[0-9]+.[0-9]+" in workflow_text, "tag trigger pattern missing"
     assert "jobs:" in workflow_text
     assert "  check-branch:" in workflow_text, "check-branch job missing"
-    assert "python -m build" in workflow_text, "distribution build step missing"
-
     build_release_block = _extract_job_block(workflow_text, "build-release")
+    for build_command in ("uv build", "python -m build", "-m build"):
+        assert build_command not in build_release_block, (
+            f"distribution build command remains in release job: {build_command}"
+        )
+
     for action_ref in RETAINED_ACTION_REFS:
         assert action_ref in build_release_block, (
             f"preexisting release action missing: {action_ref}"

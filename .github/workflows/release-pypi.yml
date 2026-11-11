@@ -36,10 +36,9 @@ jobs:
             echo "is_master=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # 1b. Runs the mandatory pre-release verification pipeline (unit tests, build,
-  # artifact gates) before any release artifact is created (DES-028); the
-  # build-release job declares needs on this job so a failing check blocks every
-  # artifact-creation and publication step (DES-029, REQ-083).
+  # 1b. Runs the unit-test gate before committed artifacts are validated or
+  # published (DES-028); build-release declares needs on this job so test
+  # failures block every release-side effect (DES-029, REQ-083).
   pre-release-check:
     runs-on: ubuntu-latest
 
@@ -49,26 +48,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Install project and dev dependencies
-        run: uv sync --frozen
-
-      - name: Run pre-release checks (tests, build, artifact gates)
-        run: bash scripts/pre-release-check.sh
-
-  # 2. Effetua la build
-  build-release:
-    needs: [check-branch, pre-release-check]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0 
-
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -77,8 +56,69 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.3.3
 
-      - name: Build distributions
-        run: uv run --frozen --with build python -m build
+      - name: Install test dependencies without the project
+        run: uv sync --frozen --no-install-project
+
+      - name: Run pre-release unit tests
+        run: .venv/bin/python -m pytest tests/
+        env:
+          PYTHONPATH: src
+
+  # 2. Publish distributions tracked at the tagged commit.
+  build-release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check-branch, pre-release-check]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Verify committed distribution artifacts
+        run: |
+          python - <<'PY'
+          """
+          @brief Validate non-empty distribution archives tracked by Git.
+          @details Reads the repository index under `dist/`, then requires at
+          least one existing non-empty sdist and wheel before release actions.
+          @return {None} Exits with status 1 when either archive class is absent.
+          """
+          import pathlib
+          import subprocess
+          import sys
+
+          tracked_paths = subprocess.run(
+              ["git", "ls-files", "-z", "--", "dist"],
+              check=True,
+              capture_output=True,
+          ).stdout.split(bytes([0]))
+          artifacts = [
+              pathlib.Path(path.decode("utf-8"))
+              for path in tracked_paths
+              if path
+          ]
+          for suffix, label in ((".tar.gz", "sdist"), (".whl", "wheel")):
+              matching = [
+                  path for path in artifacts if path.name.endswith(suffix)
+              ]
+              if not any(
+                  path.is_file() and path.stat().st_size > 0
+                  for path in matching
+              ):
+                  print(
+                      f"Missing non-empty tracked {label} archive in dist/.",
+                      file=sys.stderr,
+                  )
+                  raise SystemExit(1)
+          PY
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4

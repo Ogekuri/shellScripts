@@ -1,12 +1,12 @@
 """
-@brief Validate release workflow pre-release verification gating contract.
+@brief Validate release workflow pytest gating contract.
 @details Parses the repository workflow artifact
   `.github/workflows/release-pypi.yml` as static text and verifies that a
-  dedicated `pre-release-check` job executes `scripts/pre-release-check.sh`
-  before release artifact creation and that the `build-release` job declares
-  `needs` on it, so any verification failure prevents artifact creation,
-  attestation, changelog, GitHub release, and PyPI publication (DES-028,
-  DES-029, REQ-083).
+  dedicated `pre-release-check` job installs test dependencies without
+  installing the project and runs the unit suite, and `build-release` declares
+  `needs` on it, so a test failure prevents
+  artifact attestation, changelog, GitHub release, and PyPI publication
+  (DES-028, DES-029, REQ-083).
   Level classification: all helpers are Level 0 (pure text parsing over a
   tracked static artifact); test functions are Level 1 consumers with no
   cross-test dependencies and no network, filesystem side effects, clock,
@@ -25,11 +25,11 @@ WORKFLOW_PATH = (
 # @var PRECHECK_JOB_HEADER {str} Exact two-space-indented job header declaring the dedicated pre-release verification job (DES-028).
 PRECHECK_JOB_HEADER = "  pre-release-check:"
 
-# @var PRECHECK_SCRIPT_COMMAND {str} Runner line that must execute the mandatory pre-release pipeline inside the dedicated job (DES-028).
-PRECHECK_SCRIPT_COMMAND = "run: bash scripts/pre-release-check.sh"
+# @var TEST_SUITE_COMMAND {str} Runner line that executes the project pytest suite inside the dedicated verification job (DES-028).
+TEST_SUITE_COMMAND = "run: .venv/bin/python -m pytest tests/"
 
-# @var PRECHECK_SYNC_COMMAND {str} Runner line that provisions the project virtual environment with dev dependencies before script execution (DES-028).
-PRECHECK_SYNC_COMMAND = "run: uv sync --frozen"
+# @var TEST_DEPENDENCY_COMMAND {str} Runner line that synchronizes dependency groups without installing the project (DES-028).
+TEST_DEPENDENCY_COMMAND = "run: uv sync --frozen --no-install-project"
 
 # @var BUILD_RELEASE_NEEDS_LINE {str} Exact `needs` declaration that gates the release build job on the pre-release verification job (DES-029, REQ-083).
 BUILD_RELEASE_NEEDS_LINE = "needs: [check-branch, pre-release-check]"
@@ -87,11 +87,10 @@ def _extract_job_block(workflow_text: str, job_name: str) -> str:
 
 def test_release_workflow_declares_pre_release_check_job():
     """
-    @brief Verify the dedicated pre-release verification job exists and runs
-      the mandatory pipeline before artifact creation.
+    @brief Verify the dedicated pytest job runs before artifact publication.
     @details Asserts the `pre-release-check` job is declared before the
-      `build-release` job, provisions dependencies with `uv sync --frozen`,
-      and executes `scripts/pre-release-check.sh` as a runner step.
+      `build-release` job, provisions dependencies without installing or
+      building the project, and executes the repository unit suite as a runner step.
     @return {None} Assertions only.
     @satisfies TST-016, DES-028
     """
@@ -105,12 +104,27 @@ def test_release_workflow_declares_pre_release_check_job():
     ), "pre-release-check job must be declared before build-release"
 
     precheck_block = _extract_job_block(workflow_text, "pre-release-check")
-    assert PRECHECK_SYNC_COMMAND in precheck_block, (
-        "pre-release-check job must provision the virtual environment with uv sync"
+    assert TEST_DEPENDENCY_COMMAND in precheck_block, (
+        "pre-release-check job must sync dependencies without the project"
     )
-    assert PRECHECK_SCRIPT_COMMAND in precheck_block, (
-        "pre-release-check job must execute scripts/pre-release-check.sh"
+    assert TEST_SUITE_COMMAND in precheck_block, (
+        "pre-release-check job must execute the pytest suite"
     )
+
+    forbidden_release_steps = (
+        "scripts/pre-release-check.sh",
+        "scripts/build.sh",
+        "uv build",
+        "python -m build",
+        "actions/attest-build-provenance@",
+        "mikepenz/release-changelog-builder-action@",
+        "softprops/action-gh-release@",
+        "pypa/gh-action-pypi-publish@",
+    )
+    for forbidden_step in forbidden_release_steps:
+        assert forbidden_step not in precheck_block, (
+            f"pre-release-check job must not execute release steps: {forbidden_step}"
+        )
 
 
 def test_release_workflow_build_release_needs_pre_release_check():
