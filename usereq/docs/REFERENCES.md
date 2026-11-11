@@ -1636,22 +1636,22 @@ from shell_scripts.utils import print_error, print_info, print_success
 - @brief Schema kinds whose JSON value is a scalar.
 ### class `class ChoiceSpec` `@dataclass(frozen=True)` (L95-107)
 - @brief One allowed value of a selection-type option.
-- @details Immutable registry record pairing an accepted value token with its meaning, rendered in `Sel`/`Value` and `Value`/`Default`/`Meaning` tables by `--print` and `--params`.
+- @details Immutable registry record pairing an accepted value token with its meaning, rendered in `Sel`/`Value` and `Value`/`Default`/`Meaning` tables by `--print` and `--info`.
 - @satisfies REQ-097, REQ-108
 
 ### class `class FieldSpec` `@dataclass(frozen=True)` (L109-125)
 - @brief One declared field of an object-row item schema.
-- @details Describes one column of an `Array[Dictionary]` option consumed by row validation, cell coercion, cell reset, `--print` row tables, and the `--params` Item Schema table.
+- @details Describes one column of an `Array[Dictionary]` option consumed by row validation, cell coercion, cell reset, `--print` row tables, and the `--info` Item Schema table.
 - @satisfies REQ-120, REQ-127, REQ-130
 
 ### class `class OptionSpec` `@dataclass(frozen=True)` (L127-148)
 - @brief Declarative metadata of one configurable leaf option.
-- @details Binds one configuration key to its value kind, short description, optional allowed choices, input-example token, constraint label, array item kind, object-row item fields, and dynamic map value kind; drives `--params` rendering, `--print` value rendering, `--get` resolution, and `--set`/`--unset` coercion plus validation.
+- @details Binds one configuration key to its value kind, short description, optional allowed choices, input-example token, constraint label, array item kind, object-row item fields, and dynamic map value kind; drives `--info` rendering, `--print` value rendering, `--get` resolution, and `--set`/`--unset` coercion plus validation.
 - @satisfies DES-032, DES-036, DES-038, REQ-096, REQ-097, REQ-098, REQ-101, REQ-102, REQ-107, REQ-110, REQ-118, REQ-119, REQ-120
 
 ### class `class GroupSpec` `@dataclass(frozen=True)` (L150-161)
 - @brief Declarative metadata of one configuration subtree group.
-- @details Orders child schema nodes and carries the group description rendered by `--params` and the tree structure rendered by `--print`.
+- @details Orders child schema nodes and carries the group description rendered by `--info` and the tree structure rendered by `--print`.
 - @satisfies DES-032, REQ-095, REQ-107, REQ-117
 
 ### class `class TargetSpec` `@dataclass(frozen=True)` (L163-182)
@@ -1841,7 +1841,7 @@ REQ-118, REQ-119, REQ-120, REQ-121, REQ-133
 - @satisfies REQ-107
 
 ### fn `def _render_kind_label(node: OptionSpec) -> str` `priv` (L955-990)
-- @brief Render the composite `--params` type label of one option.
+- @brief Render the composite `--info` type label of one option.
 - @details Produces `[String]`, `[Integer]`, `[Float]`, `[Boolean]`, `[Selection]`, `[Array[<Item>]]`, `[Array[Dictionary]]`, `[Map[String, <Value>]]`, and `[Dictionary]` labels, appending the schema-declared constraint after a colon when declared. Time complexity O(1).
 - @param node {OptionSpec} Schema record of the option.
 - @return {str} Bracketed type label without the surrounding brackets content markers applied by the caller.
@@ -1855,10 +1855,10 @@ REQ-118, REQ-119, REQ-120, REQ-121, REQ-133
 - @return {tuple[str,str]} `(item_or_key_token, value_token)`.
 - @satisfies REQ-110, REQ-113, REQ-133
 
-### fn `def _render_params_leaf(` `priv` (L1015-1022)
+### fn `def _render_info_leaf(` `priv` (L1015-1022)
 
 ### fn `def _render_object_row_template(node: OptionSpec) -> str` `priv` (L1155-1177)
-- @brief Render one `--params` leaf option block.
+- @brief Render one `--info` leaf option block.
 - @brief Build one ready-to-use JSON row template for an object array.
 - @details Emits the `[<Type>] <description>` header line and the
 structured multi-line metadata: `Default` and `Set cmd` lines for
@@ -1882,15 +1882,15 @@ Time complexity O(n) over declared choices and item fields.
 REQ-117, REQ-133
 - @satisfies REQ-112, REQ-133
 
-### fn `def _render_params_children(` `priv` (L1178-1182)
+### fn `def _render_info_children(` `priv` (L1178-1182)
 
 ### fn `def _atomic_write_text(target: Path, content: str) -> None` `priv` (L1217-1254)
-- @brief Render one `--params` hierarchy level.
+- @brief Render one `--info` hierarchy level.
 - @brief Write one text file atomically via a same-directory temporary.
 - @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
 connectors, node names printed verbatim as CLI path tokens, and the
 `[Path: ...]` badge on every group; delegates leaf rendering to
-`_render_params_leaf`. Time complexity O(n) over subtree node count.
+`_render_info_leaf`. Time complexity O(n) over subtree node count.
 - @details Creates the parent directory, writes `content` into a temporary file in the target directory, flushes and fsyncs the stream, then atomically renames the temporary onto the target so crashes never leave truncated or partial JSON content. The temporary file is removed when any step fails. Time complexity O(n) over content size.
 - @param prefix {str} Ancestor connector prefix for this level.
 - @param children {tuple} Sibling schema nodes being rendered.
@@ -2055,7 +2055,7 @@ against the declared item kind. Time complexity O(n) over token length.
 ### fn `def _resolve_subtree_node(` `priv` (L1765-1766)
 
 ### fn `def do_print_raw() -> int` (L1789-1816)
-- @brief Resolve one `--print`/`--params` sub-path into a render unit.
+- @brief Resolve one `--print`/`--info` sub-path into a render unit.
 - @brief Print the on-disk configuration file verbatim.
 - @details Walks the schema by the full path and wraps the reached node as
 a single-child render tuple so subtree rendering reuses the standard
@@ -2076,7 +2076,7 @@ one-entry render tuple, or `(None, error_message)` on failure.
 - @return {int} `0` on success; `1` on schema divergence or unknown paths.
 - @satisfies DES-034, REQ-095, REQ-096, REQ-097, REQ-098, REQ-115, REQ-116, REQ-117, REQ-118, REQ-119, REQ-120, REQ-121, REQ-132, REQ-133
 
-### fn `def do_params(path: str | None = None) -> int` (L1869-1905)
+### fn `def do_info(path: str | None = None) -> int` (L1869-1905)
 - @brief Render the configurable parameter hierarchy with descriptions.
 - @details Emits the schema-ordered tree with per-group descriptions and `[Path: ...]` badges, per-option type labels and short descriptions, `Default` and full-path `Set cmd` lines for scalars, `Value`/`Default`/`Meaning` allowed-value tables with `Set cmd` and `Reset cmd` lines for selections, add/insert/update/delete/overwrite clear command lines for arrays, set/remove/overwrite/clear command lines for maps, and full-overwrite/reset lines for objects; an optional `:`-separated sub-path restricts rendering to that subtree or leaf. Time complexity O(n) over schema node count.
 - @param path {str|None} Optional sub-path restricting the rendered documentation subtree, for example `req`.
@@ -2144,9 +2144,9 @@ one-entry render tuple, or `(None, error_message)` on failure.
 |`_plain_kind_label`|fn|priv|935-954|def _plain_kind_label(kind: str) -> str|
 |`_render_kind_label`|fn|priv|955-990|def _render_kind_label(node: OptionSpec) -> str|
 |`_first_default_collection_sample`|fn|priv|991-1014|def _first_default_collection_sample(node: OptionSpec, pa...|
-|`_render_params_leaf`|fn|priv|1015-1022|def _render_params_leaf(|
+|`_render_info_leaf`|fn|priv|1015-1022|def _render_info_leaf(|
 |`_render_object_row_template`|fn|priv|1155-1177|def _render_object_row_template(node: OptionSpec) -> str|
-|`_render_params_children`|fn|priv|1178-1182|def _render_params_children(|
+|`_render_info_children`|fn|priv|1178-1182|def _render_info_children(|
 |`_atomic_write_text`|fn|priv|1217-1254|def _atomic_write_text(target: Path, content: str) -> None|
 |`_render_default_config_text`|fn|priv|1255-1272|def _render_default_config_text() -> str|
 |`_ensure_bootstrap`|fn|priv|1273-1296|def _ensure_bootstrap() -> bool|
@@ -2169,7 +2169,7 @@ one-entry render tuple, or `(None, error_message)` on failure.
 |`_resolve_subtree_node`|fn|priv|1765-1766|def _resolve_subtree_node(|
 |`do_print_raw`|fn|pub|1789-1816|def do_print_raw() -> int|
 |`do_print`|fn|pub|1817-1868|def do_print(path: str | None = None) -> int|
-|`do_params`|fn|pub|1869-1905|def do_params(path: str | None = None) -> int|
+|`do_info`|fn|pub|1869-1905|def do_info(path: str | None = None) -> int|
 |`do_get`|fn|pub|1906-1999|def do_get(path: str | None) -> int|
 |`do_set`|fn|pub|2000-2196|def do_set(path: str | None, value: str | None) -> int|
 |`do_unset`|fn|pub|2197-2325|def do_unset(path: str | None) -> int|
@@ -2250,7 +2250,7 @@ maps directly to REQ-066 output expectations.
 
 ### fn `def main()` (L286-388)
 - @brief Entrypoint for shellscripts argument dispatch.
-- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints the aligned three-line report with installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected; `--print` and `--params` accept an optional ':'-separated sub-path restricting the rendered subtree) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
+- @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints the aligned three-line report with installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected; `--print` and `--info` accept an optional ':'-separated sub-path restricting the rendered subtree) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
 - @satisfies PRJ-001, REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-064, REQ-065, REQ-066, REQ-068, REQ-069, REQ-075, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, REQ-091, REQ-094, REQ-095, REQ-096, REQ-097, REQ-098, REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104, REQ-105, REQ-106, REQ-107, REQ-108, REQ-109, REQ-114, REQ-115, REQ-116, REQ-117, REQ-118, REQ-119, REQ-120, REQ-121, REQ-122, REQ-123, REQ-124, REQ-125, REQ-126, REQ-127, REQ-128, REQ-129, REQ-130, REQ-131, REQ-132, REQ-133
 

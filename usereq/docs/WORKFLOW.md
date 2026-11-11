@@ -88,7 +88,7 @@
   - Shutdown: restores saved TTY state and disables legacy+xterm mouse tracking (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before returning explicit integer exit code; module bootstrap converts return to process exit status via `sys.exit(...)`.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
-  - `main(...)`: Entry dispatcher for all CLI invocations, resolving the `--upgrade` develop (`--develop`/`--dev`) and forced-reinstall (`--force`) selectors, rejecting bare selector flags, and routing the schema-driven configuration CLI flags (`--print-raw`, `--print`, `--params`, `--get`, `--set`, `--unset`, with optional `:`-separated sub-path arguments for `--print` and `--params`) to the lazily imported configuration module [`src/shell_scripts/core.py`]
+  - `main(...)`: Entry dispatcher for all CLI invocations, resolving the `--upgrade` develop (`--develop`/`--dev`) and forced-reinstall (`--force`) selectors, rejecting bare selector flags, and routing the schema-driven configuration CLI flags (`--print-raw`, `--print`, `--info`, `--get`, `--set`, `--unset`, with optional `:`-separated sub-path arguments for `--print` and `--info`) to the lazily imported configuration module [`src/shell_scripts/core.py`]
     - `capture_terminal_state(...)`: Snapshot stdin termios attributes when stdin is a TTY and `termios` support is available [`src/shell_scripts/utils.py`]
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
     - `detect_runtime_os(...)`: Detect and cache normalized runtime OS token for startup-wide platform decisions [`src/shell_scripts/utils.py`]
@@ -157,13 +157,13 @@
           - `config_cli._render_default_value(...)`: Resolve one schema default value by path segments [`src/shell_scripts/config_cli.py`]
         - `config_cli._render_box_table(...)`: Render one box-drawing table using `┌ ┬ ┐ ├ ┼ ┤ └ ┴ ┘ ─` and `│` glyphs [`src/shell_scripts/config_cli.py`]
         - `config_cli._render_json(...)`: Serialize one configuration value as deterministic compact JSON [`src/shell_scripts/config_cli.py`]
-    - `config_cli.do_params(...)`: Render the schema hierarchy or an optional sub-path subtree with kind labels, short descriptions, `Default`/`Set cmd`/`Reset cmd` command lines, `Value`/`Default`/`Meaning` allowed-value tables, and array/map/object command templates [`src/shell_scripts/config_cli.py`]
+    - `config_cli.do_info(...)`: Render the schema hierarchy or an optional sub-path subtree with kind labels, short descriptions, `Default`/`Set cmd`/`Reset cmd` command lines, `Value`/`Default`/`Meaning` allowed-value tables, and array/map/object command templates [`src/shell_scripts/config_cli.py`]
       - `config_cli._fail_on_schema_mismatch(...)`: Abort the configuration command when the schema registry and defaults diverge [`src/shell_scripts/config_cli.py`]
       - `config_cli._ensure_bootstrap(...)`: Initialize the missing config file with system defaults via the atomic write path [`src/shell_scripts/config_cli.py`]
         - `config_cli._atomic_write_text(...)`: Write content to a same-directory temporary file, flush and fsync, and atomically rename onto the target [`src/shell_scripts/config_cli.py`]
       - `config_cli._resolve_subtree_node(...)`: Resolve one optional sub-path into the one-entry render unit or an explicit unknown-path error [`src/shell_scripts/config_cli.py`]
         - `config_cli._find_schema_node(...)`: Resolve one full path against the schema registry [`src/shell_scripts/config_cli.py`]
-      - `config_cli._render_params_children(...)`: Emit per-level group descriptions with `[Path: ...]` badges, option kind labels, scalar Default/Set cmd lines, selection allowed-value tables with Set/Reset cmd lines, array add/insert/update/delete/overwrite/clear command lines, map set/remove/overwrite/clear command lines, and object overwrite/reset lines [`src/shell_scripts/config_cli.py`]
+      - `config_cli._render_info_children(...)`: Emit per-level group descriptions with `[Path: ...]` badges, option kind labels, scalar Default/Set cmd lines, selection allowed-value tables with Set/Reset cmd lines, array add/insert/update/delete/overwrite/clear command lines, map set/remove/overwrite/clear command lines, and object overwrite/reset lines [`src/shell_scripts/config_cli.py`]
         - `config_cli._render_kind_label(...)`: Render the composite type label of one option kind [`src/shell_scripts/config_cli.py`]
         - `config_cli._render_default_value(...)`: Resolve one schema default value by path segments [`src/shell_scripts/config_cli.py`]
         - `config_cli._first_default_collection_sample(...)`: Derive one concrete copy-pasteable collection sample token [`src/shell_scripts/config_cli.py`]

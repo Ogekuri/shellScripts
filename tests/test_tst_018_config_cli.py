@@ -11,7 +11,7 @@ Static Analysis (HDT Refactorer mode; suite exists, contracts updated):
 - UUT list:
   - `config_cli.find_schema_mismatches` (Level 0; pure tree walk over
     `CONFIG_SCHEMA` and `DEFAULT_RUNTIME_CONFIG`).
-  - `config_cli.do_print_raw`, `config_cli.do_print`, `config_cli.do_params`,
+  - `config_cli.do_print_raw`, `config_cli.do_print`, `config_cli.do_info`,
     `config_cli.do_get`, `config_cli.do_set`, `config_cli.do_unset` (Level 1;
     each calls `_fail_on_schema_mismatch` and `_ensure_bootstrap` first).
   - `config_cli._ensure_bootstrap` (Level 1; calls `_atomic_write_text` and
@@ -51,10 +51,10 @@ Test Matrix (abridged; each test carries its full expected outcome):
 | do_print            | 1     | selection table + hint          | `Sel`/`[*]`, `set: <path> <Value>`                    |
 | do_print            | 1     | empty collections               | empty list/map hints                                  |
 | do_print            | 1     | object-array rows               | `Idx` plus field columns                              |
-| do_params           | 1     | scalar metadata lines           | `Default :` and `Set cmd :` full paths (REQ-110)      |
-| do_params           | 1     | selection table columns         | `Value`/`Default`/`Meaning` + cmd lines (REQ-108/111) |
-| do_params           | 1     | array command lines             | add/insert/update/delete/overwrite/clear (REQ-113)    |
-| do_params           | 1     | sub-path filtering              | only addressed subtree documented                     |
+| do_info           | 1     | scalar metadata lines           | `Default :` and `Set cmd :` full paths (REQ-110)      |
+| do_info           | 1     | selection table columns         | `Value`/`Default`/`Meaning` + cmd lines (REQ-108/111) |
+| do_info           | 1     | array command lines             | add/insert/update/delete/overwrite/clear (REQ-113)    |
+| do_info           | 1     | sub-path filtering              | only addressed subtree documented                     |
 | do_get              | 1     | scalar, row, cell, key reads    | clean single-line or indented JSON                    |
 | do_get              | 1     | error reads                     | stderr message plus return code `1`                   |
 | do_set              | 1     | append/insert/update semantics  | indices, shifting, messages, persisted JSON           |
@@ -229,12 +229,12 @@ def test_do_print_raw_fails_on_schema_mismatch(
     [
         lambda: config_cli.do_print_raw(),
         lambda: config_cli.do_print(),
-        lambda: config_cli.do_params(),
+        lambda: config_cli.do_info(),
         lambda: config_cli.do_get("management:upgrade"),
         lambda: config_cli.do_set("management:upgrade", "x"),
         lambda: config_cli.do_unset("management:upgrade"),
     ],
-    ids=["--print-raw", "--print", "--params", "--get", "--set", "--unset"],
+    ids=["--print-raw", "--print", "--info", "--get", "--set", "--unset"],
 )
 def test_all_configuration_commands_fail_on_schema_mismatch(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys, invoke
@@ -524,12 +524,12 @@ def test_do_print_renders_object_array_rows(
     assert '│ 1   │ "Pay"' in captured.out
 
 
-def test_do_params_renders_scalar_default_and_set_cmd_lines(
+def test_do_info_renders_scalar_default_and_set_cmd_lines(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
-    """@brief Verify scalar `--params` metadata lines use full paths.
+    """@brief Verify scalar `--info` metadata lines use full paths.
 
-    @details Invokes `do_params` on the repository defaults; every scalar
+    @details Invokes `do_info` on the repository defaults; every scalar
     option MUST render the `Default : <value> (restored via: --unset <path>)`
     line and the full-path `Set cmd : --set <path> <example>` line
     (REQ-110, REQ-133).
@@ -543,7 +543,7 @@ def test_do_params_renders_scalar_default_and_set_cmd_lines(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    return_code = config_cli.do_params()
+    return_code = config_cli.do_info()
     captured = capsys.readouterr()
     assert return_code == 0
     assert (
@@ -555,12 +555,12 @@ def test_do_params_renders_scalar_default_and_set_cmd_lines(
     ) in captured.out
 
 
-def test_do_params_renders_selection_value_default_meaning_table(
+def test_do_info_renders_selection_value_default_meaning_table(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
     """@brief Verify selection tables use Value/Default/Meaning columns.
 
-    @details Injects a synthetic selection schema and invokes `do_params`;
+    @details Injects a synthetic selection schema and invokes `do_info`;
     the allowed-value table MUST use the `Value`, `Default`, and `Meaning`
     columns, mark the schema default with `Yes`, and be followed by the
     full-path `Set cmd` and `Reset cmd` lines (REQ-108, REQ-111).
@@ -586,7 +586,7 @@ def test_do_params_renders_selection_value_default_meaning_table(
     _inject_schema_and_payload(monkeypatch, schema, {"grp": {"choice": "A"}})
     monkeypatch.setattr(config_cli, "DEFAULT_RUNTIME_CONFIG", {"grp": {"choice": "A"}})
     _isolate_home(monkeypatch, tmp_path)
-    return_code = config_cli.do_params()
+    return_code = config_cli.do_info()
     captured = capsys.readouterr()
     assert return_code == 0
     assert "│ Value │ Default │ Meaning" in captured.out
@@ -596,12 +596,12 @@ def test_do_params_renders_selection_value_default_meaning_table(
     assert "Reset cmd : --unset grp:choice" in captured.out
 
 
-def test_do_params_renders_array_command_templates(
+def test_do_info_renders_array_command_templates(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
     """@brief Verify array options document every row operation.
 
-    @details Invokes `do_params` on the repository defaults; every array
+    @details Invokes `do_info` on the repository defaults; every array
     option MUST render add, insert, update, delete, full-overwrite, and
     clear command lines using complete canonical paths (REQ-113, REQ-133).
     expected_output: return code `0`; the six operation lines for
@@ -614,7 +614,7 @@ def test_do_params_renders_array_command_templates(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    return_code = config_cli.do_params()
+    return_code = config_cli.do_info()
     captured = capsys.readouterr()
     assert return_code == 0
     assert ': --set req:providers:+ "claude:prompts" (or :append)' in captured.out
@@ -625,12 +625,12 @@ def test_do_params_renders_array_command_templates(
     assert ": --unset req:providers" in captured.out
 
 
-def test_do_params_renders_map_command_templates(
+def test_do_info_renders_map_command_templates(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
     """@brief Verify map options document key and overwrite operations.
 
-    @details Invokes `do_params` on the repository defaults; every map
+    @details Invokes `do_info` on the repository defaults; every map
     option MUST render the set/add-key, remove-key, full-overwrite, and
     clear-map command lines using complete canonical paths
     (REQ-112, REQ-133).
@@ -644,7 +644,7 @@ def test_do_params_renders_map_command_templates(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    return_code = config_cli.do_params()
+    return_code = config_cli.do_info()
     captured = capsys.readouterr()
     assert return_code == 0
     assert "[Map[String, Array[String]]]" in captured.out
@@ -653,12 +653,12 @@ def test_do_params_renders_map_command_templates(
     assert ": --unset dispatch:diff:categories" in captured.out
 
 
-def test_do_params_renders_only_requested_subtree(
+def test_do_info_renders_only_requested_subtree(
     monkeypatch: pytest.MonkeyPatch, tmp_path, capsys
 ) -> None:
-    """@brief Verify `--params <Sub:Path>` restricts the documented tree.
+    """@brief Verify `--info <Sub:Path>` restricts the documented tree.
 
-    @details Invokes `do_params` with the `dispatch:diff:categories`
+    @details Invokes `do_info` with the `dispatch:diff:categories`
     sub-path; only that option block MUST be documented and sibling options
     MUST be absent (REQ-107).
     expected_output: return code `0`; `categories` documentation present;
@@ -671,7 +671,7 @@ def test_do_params_renders_only_requested_subtree(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    return_code = config_cli.do_params("dispatch:diff:categories")
+    return_code = config_cli.do_info("dispatch:diff:categories")
     captured = capsys.readouterr()
     assert return_code == 0
     assert "Category-to-command mapping for diff." in captured.out
@@ -1148,7 +1148,7 @@ def test_config_schema_declares_input_example_for_every_option() -> None:
     """@brief Verify DES-036 example coverage across the schema registry.
 
     @details Walks `CONFIG_SCHEMA` depth-first; every `OptionSpec` leaf MUST
-    declare a non-empty `example` token consumed by `--params` command
+    declare a non-empty `example` token consumed by `--info` command
     rendering.
     expected_output: no assertion failure on the shipped registry.
     @return {None} Asserts behavioral outcome only.

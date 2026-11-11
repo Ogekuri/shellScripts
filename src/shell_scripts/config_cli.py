@@ -2,7 +2,7 @@
 """@brief Schema-driven command-line configuration manager.
 
 @details Implements the management flags `--print-raw`, `--print`,
-`--params`, `--get`, `--set`, and `--unset` over the canonical runtime
+`--info`, `--get`, `--set`, and `--unset` over the canonical runtime
 configuration file `$HOME/.config/shellScripts/config.json`. All rendering,
 path resolution, validation, and persistence is derived from the declarative
 `CONFIG_SCHEMA` registry that MUST mirror `DEFAULT_RUNTIME_CONFIG`
@@ -49,7 +49,7 @@ from shell_scripts.utils import print_error, print_info, print_success
 PROGRAM = "shellscripts"
 
 ## @var ROOT_LABEL
-#  @brief Visual-only root label rendered by `--print` and `--params` trees.
+#  @brief Visual-only root label rendered by `--print` and `--info` trees.
 #  @details Omitted from every CLI path token; paths address children of the
 #  root directly (REQ-133).
 ROOT_LABEL = "shellScripts_Configuration"
@@ -97,7 +97,7 @@ class ChoiceSpec:
 
     @details Immutable registry record pairing an accepted value token with
     its meaning, rendered in `Sel`/`Value` and `Value`/`Default`/`Meaning`
-    tables by `--print` and `--params`.
+    tables by `--print` and `--info`.
     @satisfies REQ-097, REQ-108
     """
 
@@ -111,7 +111,7 @@ class FieldSpec:
 
     @details Describes one column of an `Array[Dictionary]` option consumed
     by row validation, cell coercion, cell reset, `--print` row tables, and
-    the `--params` Item Schema table.
+    the `--info` Item Schema table.
     @satisfies REQ-120, REQ-127, REQ-130
     """
 
@@ -130,7 +130,7 @@ class OptionSpec:
     @details Binds one configuration key to its value kind, short
     description, optional allowed choices, input-example token, constraint
     label, array item kind, object-row item fields, and dynamic map value
-    kind; drives `--params` rendering, `--print` value rendering, `--get`
+    kind; drives `--info` rendering, `--print` value rendering, `--get`
     resolution, and `--set`/`--unset` coercion plus validation.
     @satisfies DES-032, DES-036, DES-038, REQ-096, REQ-097, REQ-098,
       REQ-101, REQ-102, REQ-107, REQ-110, REQ-118, REQ-119, REQ-120
@@ -151,7 +151,7 @@ class GroupSpec:
     """@brief Declarative metadata of one configuration subtree group.
 
     @details Orders child schema nodes and carries the group description
-    rendered by `--params` and the tree structure rendered by `--print`.
+    rendered by `--info` and the tree structure rendered by `--print`.
     @satisfies DES-032, REQ-095, REQ-107, REQ-117
     """
 
@@ -953,7 +953,7 @@ def _plain_kind_label(kind: str) -> str:
 
 
 def _render_kind_label(node: OptionSpec) -> str:
-    """@brief Render the composite `--params` type label of one option.
+    """@brief Render the composite `--info` type label of one option.
 
     @details Produces `[String]`, `[Integer]`, `[Float]`, `[Boolean]`,
     `[Selection]`, `[Array[<Item>]]`, `[Array[Dictionary]]`,
@@ -1012,7 +1012,7 @@ def _first_default_collection_sample(node: OptionSpec, parts: tuple[str, ...]) -
     return "<KEY>", "<value>"
 
 
-def _render_params_leaf(
+def _render_info_leaf(
     prefix: str,
     branch: str,
     node_prefix: str,
@@ -1021,7 +1021,7 @@ def _render_params_leaf(
     lines: list[str],
     parts: tuple[str, ...],
 ) -> None:
-    """@brief Render one `--params` leaf option block.
+    """@brief Render one `--info` leaf option block.
 
     @details Emits the `[<Type>] <description>` header line and the
     structured multi-line metadata: `Default` and `Set cmd` lines for
@@ -1175,18 +1175,18 @@ def _render_object_row_template(node: OptionSpec) -> str:
     return _render_json(payload)
 
 
-def _render_params_children(
+def _render_info_children(
     prefix: str,
     children: "tuple[tuple[str, OptionSpec | GroupSpec], ...]",
     lines: list[str],
     base_parts: tuple[str, ...] = (),
 ) -> None:
-    """@brief Render one `--params` hierarchy level.
+    """@brief Render one `--info` hierarchy level.
 
     @details Emits a `│` bar line before each subgroup, `├──`/`└──` branch
     connectors, node names printed verbatim as CLI path tokens, and the
     `[Path: ...]` badge on every group; delegates leaf rendering to
-    `_render_params_leaf`. Time complexity O(n) over subtree node count.
+    `_render_info_leaf`. Time complexity O(n) over subtree node count.
     @param prefix {str} Ancestor connector prefix for this level.
     @param children {tuple} Sibling schema nodes being rendered.
     @param lines {list[str]} Output accumulator mutated in place.
@@ -1207,9 +1207,9 @@ def _render_params_children(
             path = PATH_SEPARATOR.join(node_parts)
             lines.append(f"{prefix}│")
             lines.append(f"{prefix}{branch}{name}- {node.description} [Path: {path}]")
-            _render_params_children(node_prefix, node.children, lines, node_parts)
+            _render_info_children(node_prefix, node.children, lines, node_parts)
             continue
-        _render_params_leaf(
+        _render_info_leaf(
             prefix, branch, node_prefix, key, node, lines, node_parts
         )
 
@@ -1765,7 +1765,7 @@ def print_config_cli_help(command: str) -> None:
 def _resolve_subtree_node(
     path: str,
 ) -> "tuple[tuple[tuple[str, OptionSpec | GroupSpec], ...] | None, str | None]":
-    """@brief Resolve one `--print`/`--params` sub-path into a render unit.
+    """@brief Resolve one `--print`/`--info` sub-path into a render unit.
 
     @details Walks the schema by the full path and wraps the reached node as
     a single-child render tuple so subtree rendering reuses the standard
@@ -1866,7 +1866,7 @@ def do_print(path: str | None = None) -> int:
     return 0
 
 
-def do_params(path: str | None = None) -> int:
+def do_info(path: str | None = None) -> int:
     """@brief Render the configurable parameter hierarchy with descriptions.
 
     @details Emits the schema-ordered tree with per-group descriptions and
@@ -1891,14 +1891,14 @@ def do_params(path: str | None = None) -> int:
         return 1
     lines = [f"{ROOT_LABEL} - Root of the {PROGRAM} settings."]
     if path is None:
-        _render_params_children("", CONFIG_SCHEMA, lines)
+        _render_info_children("", CONFIG_SCHEMA, lines)
     else:
         unit, error = _resolve_subtree_node(path)
         if unit is None:
             print_error(error or f"Unknown configuration path: {path}.")
             return 1
         parts = _split_path(path) or []
-        _render_params_children("", unit, lines, tuple(parts[:-1]))
+        _render_info_children("", unit, lines, tuple(parts[:-1]))
     print("\n".join(lines))
     return 0
 
@@ -2331,7 +2331,7 @@ __all__ = [
     "OptionSpec",
     "TargetSpec",
     "do_get",
-    "do_params",
+    "do_info",
     "do_print",
     "do_print_raw",
     "do_set",

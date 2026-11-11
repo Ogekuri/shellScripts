@@ -4,7 +4,7 @@
 @details Provides global help rendering, management command execution
 (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`,
 `--develop`/`--dev` upgrade selector, `--force` forced-reinstall selector,
-configuration CLI flags `--print-raw`, `--print`, `--params`, `--get`,
+configuration CLI flags `--print-raw`, `--print`, `--info`, `--get`,
 `--set`, `--unset`),
 runtime configuration bootstrap, and subcommand delegation to lazily imported
 modules.
@@ -165,7 +165,7 @@ def print_help(command_name=None):
     print("  --write-config - Write default runtime config to user config directory.")
     print("  --print-raw  - Print the raw runtime config file content from disk.")
     print("  --print      - Print the active configuration as an options tree.")
-    print("  --params     - Print configurable parameters with descriptions.")
+    print("  --info       - Print configurable parameters with descriptions.")
     print("  --get <path> - Read one configuration value; path parts separated by ':'.")
     print("  --set <path> <value> - Set one configuration value; path separated by ':'.")
     print("  --unset <path> - Remove one configuration override; path separated by ':'.")
@@ -293,7 +293,7 @@ def main():
     or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force`
     appends forced-reinstall options to the selected upgrade command; bare
     `--develop`/`--dev`/`--force` selectors are rejected; `--print` and
-    `--params` accept an optional ':'-separated sub-path restricting the
+    `--info` accept an optional ':'-separated sub-path restricting the
     rendered subtree) and subcommands,
     then restores terminal raw/cbreak and disables legacy+xterm
     mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`,
@@ -342,7 +342,7 @@ def main():
         if first_arg in (
             "--print-raw",
             "--print",
-            "--params",
+            "--info",
             "--get",
             "--set",
             "--unset",
@@ -353,8 +353,8 @@ def main():
                 return config_cli.do_print_raw()
             if first_arg == "--print":
                 return config_cli.do_print(args[1] if len(args) > 1 else None)
-            if first_arg == "--params":
-                return config_cli.do_params(args[1] if len(args) > 1 else None)
+            if first_arg == "--info":
+                return config_cli.do_info(args[1] if len(args) > 1 else None)
             if first_arg == "--get":
                 return config_cli.do_get(args[1] if len(args) > 1 else None)
             if first_arg == "--set":
