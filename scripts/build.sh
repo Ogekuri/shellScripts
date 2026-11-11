@@ -256,11 +256,11 @@ assert_no_tracked_intermediates() {
 
 # @brief Remove stale generated archives and intermediate build trees.
 # @details Creates `dist/` when absent, iterates every top-level generated
-#   archive pattern, refuses to delete any tracked archive, removes the
+#   archive pattern, leaves every tracked archive untouched, removes the
 #   untracked generated archives, and deletes the `build` and
 #   `src/shellscripts.egg-info` intermediate trees. Non-generated or tracked
 #   `dist/` entries are preserved. Time complexity O(n) over removed entries.
-# @return {int} 0 on success; 1 when a tracked artifact or removal blocks.
+# @return {int} 0 on success; 1 when the intermediate-tree guard or a removal blocks.
 # @satisfies DES-041, REQ-141
 clean_stale_artifacts() {
     local artifact
@@ -270,8 +270,7 @@ clean_stale_artifacts() {
 
     for artifact in "${DIST_DIR}"/*.tar.gz "${DIST_DIR}"/*.whl "${DIST_DIR}"/*.zip "${DIST_DIR}"/*.egg; do
         if git ls-files --error-unmatch -- "${artifact}" >/dev/null 2>&1; then
-            log_error "Refusing to delete tracked release artifact: ${artifact}"
-            return 1
+            continue
         fi
         rm -f -- "${artifact}" || return 1
     done

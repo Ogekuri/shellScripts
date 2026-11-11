@@ -8,7 +8,8 @@
   real `.gitignore` behavior with `git check-ignore --no-index`.
 @satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, DES-026,
   DES-027, DES-040, DES-041, DES-042, DES-043, DES-044, DES-045, DES-046,
-  DES-047, REQ-079, REQ-080, REQ-081, REQ-082, REQ-134, REQ-135, REQ-136,
+  DES-047, DES-054, REQ-079, REQ-080, REQ-081, REQ-082, REQ-134, REQ-135,
+  REQ-136,
   REQ-137, REQ-138, REQ-139, REQ-140, REQ-141, REQ-142, REQ-143, REQ-144
 @return {None} Pytest module scope.
 """
@@ -111,6 +112,7 @@ def test_build_script_selects_tool_and_validates_dist():
     assert "tarfile" in content
     assert "zipfile" in content
     assert "git ls-files --error-unmatch" in content
+    assert "Refusing to delete tracked release artifact" not in content
     assert "non-generated" in content or "preserved" in content
     assert "BUILD SUMMARY" in content
 
@@ -141,8 +143,9 @@ def test_pre_release_script_cleans_and_verifies_repository_integrity():
     """
     @brief Validate cleanup traps, safety guard, and integrity verification.
     @details Asserts `cleanup_artifacts` is registered through the `EXIT` trap
-      and signal traps, removes `dist`, `build`, `.pytest_cache`,
-      `src/shellscripts.egg-info`, and `__pycache__` directories, refuses to
+      and signal traps, removes `build`, `.pytest_cache`,
+      `src/shellscripts.egg-info`, `__pycache__` directories, and untracked
+      `dist` archives, refuses to
       remove tracked files, and compares post-cleanup repository state with the
       pre-run baseline.
     @return {None} Assertions only.
@@ -155,14 +158,18 @@ def test_pre_release_script_cleans_and_verifies_repository_integrity():
     assert "trap on_exit EXIT" in content
     assert "trap 'handle_signal INT 130' INT" in content
     assert "trap 'handle_signal TERM 143' TERM" in content
-    assert "MANAGED_PATHS=(dist build .pytest_cache src/shellscripts.egg-info)" in content
+    assert "MANAGED_PATHS=(build .pytest_cache src/shellscripts.egg-info)" in content
     assert "find src tests -type d -name __pycache__" in content
-    assert "clean: dist build .pytest_cache src/shellscripts.egg-info __pycache__" in content
+    assert (
+        "clean: build .pytest_cache src/shellscripts.egg-info __pycache__ "
+        "dist:untracked-archives"
+    ) in content
     assert "git ls-files --" in content
     assert "git status --porcelain=v1 --untracked-files=no" in content
     assert "BASELINE_TRACKED" in content
     assert "BASELINE_UNTRACKED" in content
     assert "assert_safe_cleanup_targets" in content
+    assert "list_untracked_dist_archives" in content
 
 
 def test_pre_release_script_records_artifact_checks():
@@ -219,12 +226,13 @@ def _matched_rule(result: subprocess.CompletedProcess) -> str:
     return prefix.split(":", 2)[2]
 
 
-def test_gitignore_inverts_dist_and_ignores_generated_archives():
+def test_gitignore_reincludes_dist_deliverables():
     """
     @brief Validate inverse `.gitignore` behavior for `dist/`.
-    @details Asserts `dist/` remains traversable, generated distribution
-      archives are ignored, and non-generated `dist` files remain visible to
-      Git by inspecting the last matching `.gitignore` pattern.
+    @details Asserts `dist/` and every `dist/` file, including generated
+      distribution archives, are re-included by the `!dist/**/*` rule and no
+      exclusion rule matches them, by inspecting the last matching `.gitignore`
+      pattern.
     @return {None} Assertions only.
     @satisfies TST-015, DES-042, REQ-140
     """
@@ -235,14 +243,39 @@ def test_gitignore_inverts_dist_and_ignores_generated_archives():
 
     sdist_result = _check_ignore("dist/shellscripts-0.26.0.tar.gz")
     assert sdist_result.returncode == 0, sdist_result.stdout
-    assert not _matched_rule(sdist_result).startswith("!"), sdist_result.stdout
-    assert ".gitignore" in sdist_result.stdout
+    assert _matched_rule(sdist_result).startswith("!"), sdist_result.stdout
 
     wheel_result = _check_ignore("dist/shellscripts-0.26.0-py3-none-any.whl")
     assert wheel_result.returncode == 0, wheel_result.stdout
-    assert not _matched_rule(wheel_result).startswith("!"), wheel_result.stdout
-    assert ".gitignore" in wheel_result.stdout
+    assert _matched_rule(wheel_result).startswith("!"), wheel_result.stdout
 
     documentation_result = _check_ignore("dist/RELEASE-NOTES.md")
     assert documentation_result.returncode == 0, documentation_result.stdout
     assert _matched_rule(documentation_result).startswith("!"), documentation_result.stdout
+
+
+def test_gitignore_has_no_dist_targeting_exclusion_rules():
+    """
+    @brief Validate absence of dist-targeting exclusion rules in `.gitignore`.
+    @details Parses every non-comment `.gitignore` rule and asserts that no
+      exclusion (non-negated) rule targets a `dist` path, and that the
+      `!dist/` and `!dist/**/*` re-include rules are present. Time complexity
+      O(n) over rule count.
+    @return {None} Assertions only.
+    @satisfies TST-015, DES-042, DES-054, REQ-140
+    """
+
+    gitignore_text = (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8")
+    rules = [
+        line.strip()
+        for line in gitignore_text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    dist_exclusions = [
+        rule
+        for rule in rules
+        if not rule.startswith("!") and rule.lstrip("/").startswith("dist")
+    ]
+    assert dist_exclusions == []
+    assert "!dist/" in rules
+    assert "!dist/**/*" in rules

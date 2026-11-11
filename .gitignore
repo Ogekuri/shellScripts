@@ -64,11 +64,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/**/*.tar.gz
-dist/**/*.whl
-dist/**/*.zip
-dist/**/*.egg
-dist/**/*.egg-info/
 downloads/
 eggs/
 .eggs/

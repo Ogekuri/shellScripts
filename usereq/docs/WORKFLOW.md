@@ -111,20 +111,20 @@
 - Lifecycle/trigger:
   - Trigger: developer or automation invokes the script before an official release.
   - Startup: resolves canonical script and base directories, resolves the Git repository root via `git rev-parse --show-toplevel`, and changes the working directory to the repository root.
-  - Safety preflight: validates that managed artifact paths contain no tracked files and that `dist` contains only generated archives, then captures the pre-run tracked and non-managed untracked baseline before enabling cleanup.
+  - Safety preflight: validates that managed artifact paths contain no tracked files and that untracked `dist` entries are generated archives, then captures the pre-run tracked and non-managed untracked baseline before enabling cleanup.
   - Runtime mode: sequential fail-fast pipeline with phase headers; structure, permissions, toolchain, Bash/Python syntax, optional configured quality tools, pytest, delegated `scripts/build.sh`, artifact validation, cleanup, and repository-integrity checks run in order.
   - Shutdown: `EXIT`, `INT`, and `TERM` traps remove generated artifacts on every termination path without overriding a failed check; a cleanup failure after passing checks forces exit `1`; the final summary names the failed check or confirms success.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - `resolve_project_root(...)`: Resolve the Git repository root from the script location and change into it [`scripts/pre-release-check.sh`]
   - `preflight(...)`: Validate cleanup safety and capture the pre-run repository baseline [`scripts/pre-release-check.sh`]
-    - `assert_safe_cleanup_targets(...)`: Refuse cleanup when tracked files or non-generated `dist` entries exist [`scripts/pre-release-check.sh`]
+    - `assert_safe_cleanup_targets(...)`: Refuse cleanup when tracked files exist under `build`, `.pytest_cache`, `src/shellscripts.egg-info`, or `__pycache__`, or when untracked non-generated `dist` entries exist [`scripts/pre-release-check.sh`]
     - `capture_baseline(...)`: Store tracked and filtered untracked repository state [`scripts/pre-release-check.sh`]
       - `collect_untracked_nonmanaged(...)`: Filter managed artifact paths from the untracked file list [`scripts/pre-release-check.sh`]
   - `run_check(...)`: Execute one mandatory check and print `PASS`/`FAIL` evidence [`scripts/pre-release-check.sh`]
   - `skip_check(...)`: Record one non-applicable check as `SKIP` without counting it as passed [`scripts/pre-release-check.sh`]
   - `fail_fast(...)`: Clean generated artifacts, print the failed-check summary, and exit `1` [`scripts/pre-release-check.sh`]
-    - `cleanup_artifacts(...)`: Remove managed artifact paths and `__pycache__` trees without touching tracked files [`scripts/pre-release-check.sh`]
+    - `cleanup_artifacts(...)`: Remove managed artifact paths, untracked generated `dist` archives, and `__pycache__` trees without touching tracked files [`scripts/pre-release-check.sh`]
   - `check_project_structure(...)`: Validate mandatory project files and directories [`scripts/pre-release-check.sh`]
   - `check_script_permissions(...)`: Validate executable bits on both release scripts [`scripts/pre-release-check.sh`]
   - `resolve_python_interpreter(...)`: Select `.venv/bin/python3` when executable, otherwise `python3` [`scripts/pre-release-check.sh`]
@@ -138,15 +138,16 @@
   - `check_integration_tests(...)`: Run `tests/integration` or `SKIP` when absent [`scripts/pre-release-check.sh`]
   - `check_e2e_tests(...)`: Run `tests/e2e` or `SKIP` when absent [`scripts/pre-release-check.sh`]
   - `check_artifacts(...)`: Validate non-empty readable sdist and wheel deliverables in `dist/` [`scripts/pre-release-check.sh`]
-  - `cleanup_artifacts(...)`: Remove every generated artifact group and print one `clean` evidence line [`scripts/pre-release-check.sh`]
-  - `check_repository_integrity(...)`: Compare post-cleanup tracked and non-managed untracked state with the baseline and assert managed paths are absent [`scripts/pre-release-check.sh`]
+  - `cleanup_artifacts(...)`: Remove build and test artifact groups plus untracked generated `dist` archives, and print one `clean` evidence line [`scripts/pre-release-check.sh`]
+    - `list_untracked_dist_archives(...)`: Enumerate untracked generated `dist` archives; tracked `dist` deliverables are excluded [`scripts/pre-release-check.sh`]
+  - `check_repository_integrity(...)`: Compare post-cleanup tracked and non-managed untracked state with the baseline, assert managed paths and untracked generated `dist` archives are absent [`scripts/pre-release-check.sh`]
     - `collect_untracked_nonmanaged(...)`: Recompute the filtered untracked file list for comparison [`scripts/pre-release-check.sh`]
   - `on_exit(...)`: Run cleanup for unexpected exits while preserving the original result [`scripts/pre-release-check.sh`]
     - `cleanup_artifacts(...)`: Remove managed artifact paths when preflight allowed cleanup [`scripts/pre-release-check.sh`]
   - `handle_signal(...)`: Convert `INT`/`TERM` into a cleanup-eligible failure exit status [`scripts/pre-release-check.sh`]
 - External Boundaries:
   - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `env`, `python3`/`.venv/bin/python3` running pytest/compileall/tarfile/zipfile, `bash -n`, `bash scripts/build.sh`, `rm`, `find`).
-  - File-system boundary: reads and writes only managed generated-artifact paths, removes `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` trees, and never deletes tracked files.
+  - File-system boundary: reads and writes only managed generated-artifact paths, removes `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` trees plus untracked generated `dist` archives, and never deletes tracked files (including tracked `dist/` deliverables).
   - Terminal boundary: phase headers, parser-stable `PASS:`/`FAIL:`/`SKIP:`/`clean` evidence lines, and final `Pre-release check PASSED`/`FAILED` summary lines on stdout/stderr.
 
 ### `PROC:main`
