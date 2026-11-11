@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.15.0"
-date: "2026-11-11T14:14:31Z"
+version: "0.16.0"
+date: "2026-11-11T14:26:37Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -48,6 +48,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ├── docs/
 ├── scripts/
 │   ├── build.sh
+│   ├── clean.sh
 │   ├── pre-release-check.sh
 │   └── s.sh
 ├── src/
@@ -164,6 +165,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-052**: MUST remove `src/shellscripts.egg-info/` and intermediate `build/` trees in `scripts/build.sh` after packaging, leaving no generated metadata residue in the working tree.
 - **DES-053**: MUST remove the `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members from each sdist archive in `scripts/build.sh` after packaging.
 - **DES-054**: MUST track the `dist/` sdist and wheel deliverables as version-controlled Git repository content.
+- **DES-055**: MUST implement the build-artifact cleanup pipeline as an executable Bash script at `scripts/clean.sh`.
 
 No explicit performance optimizations identified.
 
@@ -283,6 +285,7 @@ No explicit performance optimizations identified.
 - **REQ-134**: MUST make `scripts/build.sh` resolve the repository root, validate Python 3.11 or newer plus one available build tool, and build sdist and wheel packages into `dist/`.
 - **REQ-135**: MUST make `scripts/build.sh` verify that generated sdist and wheel archives are non-empty, readable, and compliant with REQ-145 and REQ-146, and print a summary of every deliverable in `dist/`.
 - **REQ-136**: MUST make `scripts/pre-release-check.sh` execute project-structure, toolchain, script-executable, Bash-syntax, Python-compilation, unit-test, `scripts/build.sh`, and artifact-validation checks.
+- **REQ-147**: MUST make `scripts/clean.sh` resolve the repository root and remove the `build/` and `src/shellscripts.egg-info/` paths plus every untracked generated archive in `dist/`, preserving tracked and non-generated entries.
 - **REQ-137**: MUST make `scripts/pre-release-check.sh` remove all generated artifacts on every termination path and exit non-zero when cleanup fails after all checks passed.
 - **REQ-138**: MUST make `scripts/pre-release-check.sh` compare post-cleanup tracked modifications and non-managed untracked files with the pre-run baseline and fail on divergence.
 - **REQ-139**: MUST make `scripts/pre-release-check.sh` abort before destructive operations when `build`, `.pytest_cache`, or `src/shellscripts.egg-info` contain tracked files, or `dist` contains untracked non-generated entries.
@@ -290,7 +293,7 @@ No explicit performance optimizations identified.
 - **REQ-141**: MUST make `scripts/build.sh` remove only untracked generated archives from `dist/` and leave tracked or non-generated entries untouched.
 - **REQ-142**: MUST make `scripts/pre-release-check.sh` print phase headers, `PASS`/`FAIL`/`SKIP` evidence lines, and a final success or failure summary naming the failed check.
 - **REQ-143**: MUST make `scripts/pre-release-check.sh` report non-applicable formatter, linter, type-checker, security, integration, and end-to-end checks as `SKIP` without counting them as `PASS`.
-- **REQ-144**: MUST make `scripts/pre-release-check.sh` verify that `scripts/pre-release-check.sh` and `scripts/build.sh` are executable files.
+- **REQ-144**: MUST make `scripts/pre-release-check.sh` verify that `scripts/pre-release-check.sh`, `scripts/build.sh`, and `scripts/clean.sh` are executable files.
 - **REQ-145**: MUST make `scripts/build.sh` verify that the wheel contains `*.dist-info/licenses/LICENSE` and `*.dist-info/entry_points.txt` declaring `shellscripts` and `s`, and no member outside `shell_scripts/` or `*.dist-info/`.
 - **REQ-146**: MUST make `scripts/build.sh` verify that the sdist contains `pyproject.toml` and `src/shell_scripts/__init__.py` and no `tests/`, `src/shellscripts.egg-info/`, `setup.cfg`, or `MANIFEST.in` member.
 
@@ -302,7 +305,7 @@ Implemented verification support exists via the `tests` command (`tests_cmd.py`)
 High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
 The configuration CLI management flags introduced by DES-032 are covered by `tests/test_tst_018_config_cli.py` covering bootstrap, atomic persistence, path-token array/map manipulation, and rendering contracts.
 The release workflow gates all release artifact creation and publication on a dedicated pre-release verification job covered by static parsing tests.
-A pre-release verification shell script exists at `scripts/pre-release-check.sh` plus a distribution build script at `scripts/build.sh`; their mandatory structure, generated-artifact cleanup, repository-integrity checks, `.gitignore` inversion behavior, and Bash syntax are covered by static parsing tests.
+A distribution cleanup script exists at `scripts/clean.sh`; it removes the `build/` and `src/shellscripts.egg-info/` intermediate trees plus untracked generated `dist` archives, and its structure, tracked-guard behavior, Bash syntax, and executable bit are covered by static parsing tests.
 
 ### 4.2 Verification Requirements
 - **TST-001**: MUST verify REQ-001, REQ-002, REQ-047, and REQ-066 by invoking `shell_scripts.core.main`, passing only if return codes, grouped help/error outputs, and startup OS-detection invocation match specified behavior.
@@ -322,6 +325,7 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 - **TST-016**: MUST verify DES-028, DES-029, and REQ-083 by parsing `.github/workflows/release-pypi.yml`, passing only if the dedicated pre-release job runs `scripts/pre-release-check.sh` and `build-release` declares `needs` on it.
 - **TST-017**: MUST verify REQ-085, REQ-086, REQ-092, and REQ-093 by monkeypatching `subprocess.run` and capturing YOLO CLI help outputs, passing only if each YOLO argv vector, stdio inheritance, registry exposure, alphabetical YOLO CLI help listing, per-CLI option documentation, and the Copilot `--allow-all` alternative note match specifications.
 - **TST-018**: MUST verify REQ-114 and REQ-116 through REQ-133, DES-037, DES-038, and DES-039 on isolated HOME directories, passing only if bootstrap, atomic persistence, path-token manipulation, rendering contracts, and error semantics match specifications.
+- **TST-019**: MUST verify DES-055 and REQ-147 by parsing `scripts/clean.sh` and probing its behavior, passing only if repository-root resolution, tracked preservation, and untracked build-artifact removal match specifications.
 
 ## 5. Evidence
 
@@ -361,6 +365,6 @@ A pre-release verification shell script exists at `scripts/pre-release-check.sh`
 | REQ-036, REQ-037 | `src/shell_scripts/commands/tests_cmd.py` | `run` | Creates `.venv` if missing, conditionally installs `requirements.txt`, runs pytest with `PYTHONPATH` prefixed by `src`. |
 | REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-062, REQ-063 | `src/shell_scripts/commands/req_cmd.py`; `src/shell_scripts/config.py` | `run`, `_prepare_target_directory`, `_build_req_args`, `get_req_profile` | `req` command resolves targets by selector mode, removes predefined cleanup paths, emits `deleted`/`skip` cleanup evidence with file-or-dir labels for removals, and executes external `req` with hardcoded base args plus runtime-configured providers/static checks. |
 | TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
-| DES-021..DES-027, DES-040..DES-047, REQ-079..REQ-082, REQ-134..REQ-144, TST-015 | `scripts/pre-release-check.sh`; `scripts/build.sh`; `.gitignore`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `skip_check`, `check_artifacts`, `check_repository_integrity`, `cleanup_artifacts`, `fail_fast`, `on_exit`, `clean_stale_artifacts`, `resolve_build_tool`, `verify_artifacts`, `print_summary` | Pre-release resolves the repository root, validates project structure, toolchain and executable bits, runs Bash/Python syntax checks, pytest with `PYTHONPATH=src`, delegates distribution building to `scripts/build.sh`, validates sdist and wheel archives, runs cleanup and baseline repository-integrity checks, and reports `PASS`/`FAIL`/`SKIP` plus a final summary; cleanup is registered on `EXIT`/`INT`/`TERM` and preserves the original failure result. Build script cleans only untracked generated archives, preserves tracked/non-generated `dist` entries, builds via `uv build` or `python3 -m build`, validates archive readability, and summarizes deliverables. `.gitignore` re-includes `dist/` and `dist/**/*` without dist-targeting ignore rules. Tests assert both script structures, Bash syntax, executable bits, and real `git check-ignore` behavior. |
+| DES-021..DES-027, DES-040..DES-047, REQ-079..REQ-082, REQ-134..REQ-144, TST-015 | `scripts/pre-release-check.sh`; `scripts/build.sh`; `.gitignore`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `skip_check`, `check_artifacts`, `check_repository_integrity`, `cleanup_artifacts`, `fail_fast`, `on_exit`, `clean_stale_artifacts`, `resolve_build_tool`, `verify_artifacts`, `print_summary` | Pre-release resolves the repository root, validates project structure, toolchain and executable bits, runs Bash/Python syntax checks, pytest with `PYTHONPATH=src`, delegates distribution building to `scripts/build.sh`, validates sdist and wheel archives, runs cleanup and baseline repository-integrity checks, and reports `PASS`/`FAIL`/`SKIP` plus a final summary; cleanup is registered on `EXIT`/`INT`/`TERM` and preserves the original failure result. Build script cleans only untracked generated archives, preserves tracked/non-generated `dist` entries, builds via `uv build` or `python3 -m build`, validates archive readability, and summarizes deliverables. Clean script removes `build/` and `src/shellscripts.egg-info/` plus untracked generated `dist` archives and preserves tracked entries. `.gitignore` re-includes `dist/` and `dist/**/*` without dist-targeting ignore rules. Tests assert both script structures, Bash syntax, executable bits, and real `git check-ignore` behavior. |
 | DES-028, DES-029, REQ-083, TST-016 | `.github/workflows/release-pypi.yml`; `tests/test_tst_016_release_precheck_gating.py` | `jobs.pre-release-check`, `jobs.build-release.needs` | Workflow runs `scripts/pre-release-check.sh` in a dedicated `pre-release-check` job (checkout, `setup-uv@v10.3.3`, `uv sync`, script execution) and declares `needs: [check-branch, pre-release-check]` on `build-release`, so any check failure skips artifact creation, attestation, changelog, GitHub release, and PyPI publication steps; tests assert job presence, script invocation, and needs declaration. |
 | REQ-094 through REQ-133, DES-032 through DES-039 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `_ensure_bootstrap`, `_resolve_target`, `_write_overrides`, `do_print_raw`, `do_print`, `do_info`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags bootstrap the missing config file, print the raw file verbatim, render trees with `[Path: ...]` badges, default/custom indicators, `Sel`/`Value` and collection tables with box-drawing characters, resolve `:`-separated paths including `:append`/`:+`/`:insert:<Idx>`/`:<Idx>`/`:<Idx>:<Field>`/`:<Key>` tokens, coerce strict JSON types, validate, and persist atomically via same-directory temporary-file rename with environment acquisition. |

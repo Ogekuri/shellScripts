@@ -18,6 +18,15 @@
   - defining_files:
     - `scripts/build.sh`
 
+- ID: `PROC:clean`
+  - type: `process`
+  - parent_process: `null`
+  - role: `Local shell pipeline that removes every generated artifact produced by scripts/build.sh (intermediate build trees and untracked generated dist archives) while preserving tracked dist deliverables and non-generated dist entries`
+  - entrypoint_symbols:
+    - `scripts/clean.sh (top-level script entrypoint)`
+  - defining_files:
+    - `scripts/clean.sh`
+
 - ID: `PROC:pre-release-check`
   - type: `process`
   - parent_process: `null`
@@ -104,6 +113,27 @@
   - Terminal boundary: `PASS:`/`FAIL:` phase evidence lines, build-tool output, artifact validation evidence, and the `BUILD SUMMARY` deliverable list on stdout; diagnostics and signal notices on stderr.
   - Environment boundary: reads the `SOURCE_DATE_EPOCH` variable, exports the resolved value to the build backend, and reads the `HEAD` committer timestamp through `git log` when the variable is unset.
 
+### `PROC:clean`
+
+- Entrypoint(s):
+  - `scripts/clean.sh (top-level script entrypoint)` [`scripts/clean.sh`]
+- Lifecycle/trigger:
+  - Trigger: developer or automation invokes the script to remove generated build artifacts.
+  - Startup: resolves canonical script and base directories and resolves the Git repository root via `git rev-parse --show-toplevel`, then changes the working directory to the repository root.
+  - Runtime mode: sequential cleanup pipeline; removes intermediate build trees and untracked generated `dist` archives, refusing tracked intermediate-tree entries and preserving tracked/non-generated `dist` entries.
+  - Shutdown: exits `0` after successful cleanup with one `clean` evidence line; exits `1` on root-resolution, tracked-guard, or deletion failure.
+  - Thread model: `no explicit threads detected`.
+- Internal Call-Trace Tree:
+  - `resolve_project_root(...)`: Resolve the Git repository root from the script location and change into it [`scripts/clean.sh`]
+  - `clean_build_artifacts(...)`: Remove build trees and untracked generated `dist` archives, then print one `clean` evidence line [`scripts/clean.sh`]
+    - `remove_intermediate_build_trees(...)`: Refuse tracked entries and remove `build` and `src/shellscripts.egg-info` [`scripts/clean.sh`]
+    - `remove_untracked_dist_archives(...)`: Remove untracked generated `dist` archives, preserving tracked and non-generated entries [`scripts/clean.sh`]
+  - `log_error(...)`: Print one `ERROR:` diagnostic line to stderr [`scripts/clean.sh`]
+- External Boundaries:
+  - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `dirname`, `rm`).
+  - File-system boundary: removes `build/` and `src/shellscripts.egg-info/` trees plus untracked generated `dist` archives; never deletes tracked files.
+  - Terminal boundary: one parser-stable `clean` evidence line on stdout; `ERROR:` diagnostics on stderr.
+
 ### `PROC:pre-release-check`
 
 - Entrypoint(s):
@@ -126,7 +156,7 @@
   - `fail_fast(...)`: Clean generated artifacts, print the failed-check summary, and exit `1` [`scripts/pre-release-check.sh`]
     - `cleanup_artifacts(...)`: Remove managed artifact paths, untracked generated `dist` archives, and `__pycache__` trees without touching tracked files [`scripts/pre-release-check.sh`]
   - `check_project_structure(...)`: Validate mandatory project files and directories [`scripts/pre-release-check.sh`]
-  - `check_script_permissions(...)`: Validate executable bits on both release scripts [`scripts/pre-release-check.sh`]
+  - `check_script_permissions(...)`: Validate executable bits on `scripts/pre-release-check.sh`, `scripts/build.sh`, and `scripts/clean.sh` [`scripts/pre-release-check.sh`]
   - `resolve_python_interpreter(...)`: Select `.venv/bin/python3` when executable, otherwise `python3` [`scripts/pre-release-check.sh`]
   - `check_toolchain(...)`: Validate Python 3.11 or newer, pytest, and one build tool [`scripts/pre-release-check.sh`]
   - `check_bash_syntax(...)`: Run `bash -n` over every `scripts/*.sh` file [`scripts/pre-release-check.sh`]
@@ -536,4 +566,15 @@
   - payload_data_shape_reference: `repository working tree; child exit code gates the pre-release build check; generated sdist and wheel archives are written to dist/`
   - declaration_file_paths:
     - `scripts/pre-release-check.sh`
+    - `scripts/build.sh`
+
+- Edge ID: `EDGE:005`
+  - source_execution_unit: `PROC:clean`
+  - destination_execution_unit: `PROC:build`
+  - direction: `none`
+  - mechanism: `none`
+  - endpoint_channel: `none`
+  - payload_data_shape_reference: `No explicit runtime communication path; clean.sh removes by convention the build/, src/shellscripts.egg-info/, and untracked generated dist archives produced by build.sh without invoking it`
+  - declaration_file_paths:
+    - `scripts/clean.sh`
     - `scripts/build.sh`

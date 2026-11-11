@@ -275,14 +275,14 @@ check_project_structure() {
 }
 
 # @brief Validate that repository release scripts are executable.
-# @details Verifies the executable bit on `scripts/pre-release-check.sh` and
-#   `scripts/build.sh` so the documented invocation contract works. Time
-#   complexity O(1).
-# @return {int} 0 when both scripts are executable; 1 otherwise.
+# @details Verifies the executable bit on `scripts/pre-release-check.sh`,
+#   `scripts/build.sh`, and `scripts/clean.sh` so the documented invocation
+#   contract works. Time complexity O(1).
+# @return {int} 0 when all release scripts are executable; 1 otherwise.
 # @satisfies REQ-144
 check_script_permissions() {
     local script
-    local -a scripts=("scripts/pre-release-check.sh" "scripts/build.sh")
+    local -a scripts=("scripts/pre-release-check.sh" "scripts/build.sh" "scripts/clean.sh")
 
     for script in "${scripts[@]}"; do
         if [ ! -x "${script}" ]; then

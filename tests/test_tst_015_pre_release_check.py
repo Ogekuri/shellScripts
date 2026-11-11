@@ -4,8 +4,10 @@
   repository-root resolution, delegated build invocation, pytest execution with
   `PYTHONPATH=src`, artifact validation, cleanup safety and trap registration,
   repository-integrity verification, fail-fast semantics, evidence lines, and
-  executable permissions. Validates Bash syntax via `bash -n` and probes the
-  real `.gitignore` behavior with `git check-ignore --no-index`.
+  executable permissions. Parses `scripts/clean.sh` for root resolution,
+  tracked preservation, and untracked `dist` archive removal. Validates Bash
+  syntax via `bash -n` and probes the real `.gitignore` behavior with
+  `git check-ignore --no-index`.
 @satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, DES-026,
   DES-027, DES-040, DES-041, DES-042, DES-043, DES-044, DES-045, DES-046,
   DES-047, DES-054, REQ-079, REQ-080, REQ-081, REQ-082, REQ-134, REQ-135,
@@ -20,6 +22,7 @@ import subprocess
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PRECHECK_PATH = PROJECT_ROOT / "scripts" / "pre-release-check.sh"
 BUILD_PATH = PROJECT_ROOT / "scripts" / "build.sh"
+CLEAN_PATH = PROJECT_ROOT / "scripts" / "clean.sh"
 
 
 def _read(path: pathlib.Path) -> str:
@@ -47,10 +50,13 @@ def test_release_scripts_exist_and_are_executable():
 
     assert PRECHECK_PATH.is_file()
     assert BUILD_PATH.is_file()
+    assert CLEAN_PATH.is_file()
     assert _read(PRECHECK_PATH).strip()
     assert _read(BUILD_PATH).strip()
+    assert _read(CLEAN_PATH).strip()
     assert PRECHECK_PATH.stat().st_mode & 0o111
     assert BUILD_PATH.stat().st_mode & 0o111
+    assert CLEAN_PATH.stat().st_mode & 0o111
 
 
 def test_release_scripts_pass_bash_syntax_check():
@@ -62,7 +68,7 @@ def test_release_scripts_pass_bash_syntax_check():
     @satisfies TST-015, DES-021, DES-040
     """
 
-    for script_path in (PRECHECK_PATH, BUILD_PATH):
+    for script_path in (PRECHECK_PATH, BUILD_PATH, CLEAN_PATH):
         result = subprocess.run(
             ["bash", "-n", str(script_path)],
             capture_output=True,
@@ -190,6 +196,8 @@ def test_pre_release_script_records_artifact_checks():
     assert 'run_check "repository-integrity"' in content
     assert 'dist"/*.tar.gz' in content
     assert 'dist"/*.whl' in content
+    assert "scripts/clean.sh" in content
+    assert '"scripts/pre-release-check.sh" "scripts/build.sh" "scripts/clean.sh"' in content
 
 
 def _check_ignore(relative_path: str) -> subprocess.CompletedProcess:
