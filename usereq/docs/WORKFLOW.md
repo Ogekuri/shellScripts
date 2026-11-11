@@ -9,10 +9,19 @@
   - defining_files:
     - `scripts/s.sh`
 
+- ID: `PROC:build`
+  - type: `process`
+  - parent_process: `null`
+  - role: `Local shell pipeline that cleans stale generated archives and builds validated sdist and wheel deliverables in dist/`
+  - entrypoint_symbols:
+    - `scripts/build.sh (top-level script entrypoint)`
+  - defining_files:
+    - `scripts/build.sh`
+
 - ID: `PROC:pre-release-check`
   - type: `process`
   - parent_process: `null`
-  - role: `Local shell pipeline that executes mandatory pre-release verification checks (unit tests, distribution build, artifact gates)`
+  - role: `Local shell pipeline that executes mandatory pre-release verification checks (structure, toolchain, syntax, optional quality, tests, delegated build, artifacts, cleanup, repository integrity)`
   - entrypoint_symbols:
     - `scripts/pre-release-check.sh (top-level script entrypoint)`
   - defining_files:
@@ -56,25 +65,77 @@
   - OS/process boundary: shell built-ins and external commands (`dirname`, `cd`, `pwd`, `git`, `cygpath`, `uv`, `python`).
   - Environment boundary: positional argument vector `$@` forwarded unchanged.
 
+### `PROC:build`
+
+- Entrypoint(s):
+  - `scripts/build.sh (top-level script entrypoint)` [`scripts/build.sh`]
+- Lifecycle/trigger:
+  - Trigger: developer, automation, or `scripts/pre-release-check.sh` invokes the build script.
+  - Startup: resolves canonical script and base directories, resolves the Git repository root, selects `.venv/bin/python3` when present or `python3` otherwise, validates Python 3.11 or newer, and selects `uv build` or `<python> -m build`.
+  - Runtime mode: sequential fail-fast pipeline; stale generated archives and intermediate build trees are removed before the build tool executes, then generated archives are validated and summarized.
+  - Shutdown: exits `1` on the first mandatory failure and `0` after a successful build, validation, and summary; final deliverables remain in `dist/`.
+  - Thread model: `no explicit threads detected`.
+- Internal Call-Trace Tree:
+  - `resolve_project_root(...)`: Resolve the Git repository root from the script location and change into it [`scripts/build.sh`]
+  - `resolve_python_interpreter(...)`: Select `.venv/bin/python3` when executable, otherwise `python3` [`scripts/build.sh`]
+  - `resolve_build_tool(...)`: Validate Python 3.11 or newer and select `uv build` or `<python> -m build` [`scripts/build.sh`]
+  - `clean_stale_artifacts(...)`: Remove stale untracked generated archives and intermediate build trees while preserving tracked and non-generated entries [`scripts/build.sh`]
+    - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
+    - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata that would hide non-generated files [`scripts/build.sh`]
+  - `run_distribution_build(...)`: Execute packaging and normalize generated dist metadata [`scripts/build.sh`]
+    - `build_distributions(...)`: Execute the resolved build command vector from the repository root [`scripts/build.sh`]
+    - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata after a successful build [`scripts/build.sh`]
+  - `verify_artifacts(...)`: Require non-empty sdist and wheel deliverables and validate archive readability with `tarfile` and `zipfile` [`scripts/build.sh`]
+  - `print_summary(...)`: List every deliverable file in `dist/` with its size [`scripts/build.sh`]
+- External Boundaries:
+  - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `python3`/`.venv/bin/python3`, `uv build` or `python3 -m build`, `rm`, `mkdir`, `du`, `cut`).
+  - File-system boundary: creates `dist/`, removes untracked generated archives and intermediate build trees, and writes sdist and wheel deliverables into `dist/`.
+  - Terminal boundary: `PASS`-style phase progress, build-tool output, artifact validation evidence, and the `BUILD SUMMARY` deliverable list on stdout/stderr.
+
 ### `PROC:pre-release-check`
 
 - Entrypoint(s):
   - `scripts/pre-release-check.sh (top-level script entrypoint)` [`scripts/pre-release-check.sh`]
 - Lifecycle/trigger:
   - Trigger: developer or automation invokes the script before an official release.
-  - Startup: resolves canonical script and base directories, resolves the Git repository root via `git rev-parse --show-toplevel`, selects `.venv/bin/python3` when present or `python3` otherwise, and changes the working directory to the repository root.
-  - Runtime mode: sequential fail-fast check pipeline; each check runs as a child process via `run_check` and any failure aborts all remaining checks.
-  - Shutdown: prints `Pre-release check FAILED at check: <name>` and exits `1` on the first failed check, or `Pre-release check PASSED` and exits `0` when every mandatory check passes; an EXIT trap removes every generated artifact before termination on both paths.
+  - Startup: resolves canonical script and base directories, resolves the Git repository root via `git rev-parse --show-toplevel`, and changes the working directory to the repository root.
+  - Safety preflight: validates that managed artifact paths contain no tracked files and that `dist` contains only generated archives, then captures the pre-run tracked and non-managed untracked baseline before enabling cleanup.
+  - Runtime mode: sequential fail-fast pipeline with phase headers; structure, permissions, toolchain, Bash/Python syntax, optional configured quality tools, pytest, delegated `scripts/build.sh`, artifact validation, cleanup, and repository-integrity checks run in order.
+  - Shutdown: `EXIT`, `INT`, and `TERM` traps remove generated artifacts on every termination path without overriding a failed check; a cleanup failure after passing checks forces exit `1`; the final summary names the failed check or confirms success.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
-  - `run_check(...)`: Execute one mandatory check, print `PASS`/`FAIL` evidence line, and record the failed check name [`scripts/pre-release-check.sh`]
-  - `fail_fast(...)`: Print the failure summary naming the failed check and terminate with exit code `1` [`scripts/pre-release-check.sh`]
-  - `check_artifacts(...)`: Verify at least one sdist and one wheel artifact exist under `dist/` via `compgen` glob probes [`scripts/pre-release-check.sh`]
-  - `cleanup_artifacts(...)`: Remove `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` directories and print one `clean` evidence line [`scripts/pre-release-check.sh`]
+  - `resolve_project_root(...)`: Resolve the Git repository root from the script location and change into it [`scripts/pre-release-check.sh`]
+  - `preflight(...)`: Validate cleanup safety and capture the pre-run repository baseline [`scripts/pre-release-check.sh`]
+    - `assert_safe_cleanup_targets(...)`: Refuse cleanup when tracked files or non-generated `dist` entries exist [`scripts/pre-release-check.sh`]
+    - `capture_baseline(...)`: Store tracked and filtered untracked repository state [`scripts/pre-release-check.sh`]
+      - `collect_untracked_nonmanaged(...)`: Filter managed artifact paths from the untracked file list [`scripts/pre-release-check.sh`]
+  - `run_check(...)`: Execute one mandatory check and print `PASS`/`FAIL` evidence [`scripts/pre-release-check.sh`]
+  - `skip_check(...)`: Record one non-applicable check as `SKIP` without counting it as passed [`scripts/pre-release-check.sh`]
+  - `fail_fast(...)`: Clean generated artifacts, print the failed-check summary, and exit `1` [`scripts/pre-release-check.sh`]
+    - `cleanup_artifacts(...)`: Remove managed artifact paths and `__pycache__` trees without touching tracked files [`scripts/pre-release-check.sh`]
+  - `check_project_structure(...)`: Validate mandatory project files and directories [`scripts/pre-release-check.sh`]
+  - `check_script_permissions(...)`: Validate executable bits on both release scripts [`scripts/pre-release-check.sh`]
+  - `resolve_python_interpreter(...)`: Select `.venv/bin/python3` when executable, otherwise `python3` [`scripts/pre-release-check.sh`]
+  - `check_toolchain(...)`: Validate Python 3.11 or newer, pytest, and one build tool [`scripts/pre-release-check.sh`]
+  - `check_bash_syntax(...)`: Run `bash -n` over every `scripts/*.sh` file [`scripts/pre-release-check.sh`]
+  - `check_python_syntax(...)`: Run `compileall` over `src` and `tests` [`scripts/pre-release-check.sh`]
+  - `check_formatter(...)`: Run the configured formatter check or `SKIP` when none is configured [`scripts/pre-release-check.sh`]
+  - `check_linter(...)`: Run the configured linter or `SKIP` when none is configured [`scripts/pre-release-check.sh`]
+  - `check_type_checker(...)`: Run the configured type checker or `SKIP` when none is configured [`scripts/pre-release-check.sh`]
+  - `check_security(...)`: Run the configured security checker or `SKIP` when none is configured [`scripts/pre-release-check.sh`]
+  - `check_integration_tests(...)`: Run `tests/integration` or `SKIP` when absent [`scripts/pre-release-check.sh`]
+  - `check_e2e_tests(...)`: Run `tests/e2e` or `SKIP` when absent [`scripts/pre-release-check.sh`]
+  - `check_artifacts(...)`: Validate non-empty readable sdist and wheel deliverables in `dist/` [`scripts/pre-release-check.sh`]
+  - `cleanup_artifacts(...)`: Remove every generated artifact group and print one `clean` evidence line [`scripts/pre-release-check.sh`]
+  - `check_repository_integrity(...)`: Compare post-cleanup tracked and non-managed untracked state with the baseline and assert managed paths are absent [`scripts/pre-release-check.sh`]
+    - `collect_untracked_nonmanaged(...)`: Recompute the filtered untracked file list for comparison [`scripts/pre-release-check.sh`]
+  - `on_exit(...)`: Run cleanup for unexpected exits while preserving the original result [`scripts/pre-release-check.sh`]
+    - `cleanup_artifacts(...)`: Remove managed artifact paths when preflight allowed cleanup [`scripts/pre-release-check.sh`]
+  - `handle_signal(...)`: Convert `INT`/`TERM` into a cleanup-eligible failure exit status [`scripts/pre-release-check.sh`]
 - External Boundaries:
-  - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `env`, `python3`/`.venv/bin/python3` running pytest, `uv build` or `python3 -m build`, `rm`, `compgen`).
-  - File-system boundary: removes the preexisting `dist` directory, reads built `dist/*.tar.gz` and `dist/*.whl` artifacts, and deletes generated artifacts (`dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, `__pycache__` under `src`/`tests`) before termination.
-  - Terminal boundary: parser-stable `PASS:`/`FAIL:`/`clean` evidence lines and final `Pre-release check PASSED`/`FAILED` summary lines on stdout.
+  - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `env`, `python3`/`.venv/bin/python3` running pytest/compileall/tarfile/zipfile, `bash -n`, `bash scripts/build.sh`, `rm`, `find`).
+  - File-system boundary: reads and writes only managed generated-artifact paths, removes `dist`, `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` trees, and never deletes tracked files.
+  - Terminal boundary: phase headers, parser-stable `PASS:`/`FAIL:`/`SKIP:`/`clean` evidence lines, and final `Pre-release check PASSED`/`FAILED` summary lines on stdout/stderr.
 
 ### `PROC:main`
 
@@ -452,3 +513,14 @@
   - declaration_file_paths:
     - `.github/workflows/release-pypi.yml`
     - `scripts/pre-release-check.sh`
+
+- Edge ID: `EDGE:004`
+  - source_execution_unit: `PROC:pre-release-check`
+  - destination_execution_unit: `PROC:build`
+  - direction: `PROC:pre-release-check -> PROC:build`
+  - mechanism: `OS child process spawn`
+  - endpoint_channel: `bash scripts/build.sh`
+  - payload_data_shape_reference: `repository working tree; child exit code gates the pre-release build check; generated sdist and wheel archives are written to dist/`
+  - declaration_file_paths:
+    - `scripts/pre-release-check.sh`
+    - `scripts/build.sh`
