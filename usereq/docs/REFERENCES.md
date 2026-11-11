@@ -10,7 +10,6 @@
         │   ├── _dc_common.py
         │   ├── _yolo_common.py
         │   ├── agy.py
-        │   ├── bin_links.py
         │   ├── claude.py
         │   ├── clean.py
         │   ├── codex.py
@@ -265,35 +264,6 @@ from shell_scripts.commands._yolo_common import (
 |`SPEC`|var|pub|23||
 |`print_help`|fn|pub|26-38|def print_help(version: str) -> None|
 |`run`|fn|pub|39-51|def run(args: list[str]) -> int|
-
-
----
-
-# bin_links.py | Python | 78L | 4 symbols | 3 imports | 1 comments
-> Path: `src/shell_scripts/commands/bin_links.py`
-
-## Imports
-```
-import sys
-from pathlib import Path
-from shell_scripts.utils import print_error
-```
-
-## Definitions
-
-- var `PROGRAM = "shellscripts"` (L7)
-- var `DESCRIPTION = "Create or update command symlinks in $HOME/bin."` (L8)
-### fn `def print_help(version)` (L11-21)
-
-### fn `def run(args)` (L22-79)
-
-## Symbol Index
-|Symbol|Kind|Vis|Lines|Sig|
-|---|---|---|---|---|
-|`PROGRAM`|var|pub|7||
-|`DESCRIPTION`|var|pub|8||
-|`print_help`|fn|pub|11-21|def print_help(version)|
-|`run`|fn|pub|22-79|def run(args)|
 
 
 ---
