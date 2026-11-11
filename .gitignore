@@ -33,8 +33,6 @@
 !tests/**/*
 !scripts/
 !scripts/**/*.sh
-!dist/
-!dist/**/*
 !images/
 !images/**/*
 !.pi-usereq.json
@@ -63,10 +61,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/*.tar.gz
-dist/*.whl
-dist/*.zip
-dist/*.egg
+dist/
 downloads/
 eggs/
 .eggs/
