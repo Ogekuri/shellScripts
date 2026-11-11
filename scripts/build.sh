@@ -7,14 +7,17 @@
 # @brief Build every distribution deliverable and keep it available in dist/.
 # @details Resolves the Git repository root from the script location, validates
 #   Python 3.11 or newer plus one supported build tool (`uv build` preferred,
-#   `python3 -m build` fallback), removes stale generated archives and
-#   intermediate build trees without touching tracked or non-generated
-#   `dist/` entries, builds sdist and wheel packages into `dist/`, validates
-#   that both archive classes are non-empty and readable, and prints one
-#   summary listing every deliverable left in `dist/`. Terminates with a
-#   non-zero status on any mandatory failure and never deletes artifacts it
-#   has just produced.
-# @satisfies DES-040, DES-041, DES-046, REQ-134, REQ-135, REQ-141
+#   `python3 -m build` fallback), resolves a deterministic SOURCE_DATE_EPOCH,
+#   removes stale generated archives and intermediate build trees without
+#   touching tracked or non-generated `dist/` entries, builds sdist and wheel
+#   packages into `dist/`, validates that both archive classes are non-empty
+#   and readable, and prints one summary listing every deliverable left in
+#   `dist/`. Registers EXIT, INT, and TERM traps so generated `build/` and
+#   `src/shellscripts.egg-info/` trees are removed on every termination path
+#   after the project root is resolved. Emits one PASS or FAIL evidence line
+#   per phase and terminates with a non-zero status on any mandatory failure.
+# @satisfies DES-040, DES-041, DES-045, DES-046, DES-047, DES-052, DES-053,
+#   REQ-134, REQ-135, REQ-141, REQ-145, REQ-146
 
 set -Eeuo pipefail
 shopt -s nullglob
@@ -23,11 +26,15 @@ DIST_DIR="dist"
 PYTHON_BIN=""
 BUILD_TOOL=""
 BUILD_CMD=()
+PROJECT_ROOT_READY=0
+CURRENT_PHASE="startup"
+CLEANUP_DONE=0
+SUMMARY_PRINTED=0
 
 # @brief Print one labeled phase header.
 # @details Centralizes the phase-header format so build logs are parser-stable
 #   and every mandatory phase is clearly delimited. Time complexity O(1).
-# @param $1 Phase title text.
+# @param $1 {str} Phase title text.
 # @return {None} Writes one stdout line.
 # @satisfies REQ-142
 log_phase() {
@@ -38,11 +45,93 @@ log_phase() {
 # @details Keeps every failure message on the error stream with a fixed
 #   `ERROR: ` prefix so callers and CI logs can classify failures. Time
 #   complexity O(1).
-# @param $1 Diagnostic text.
+# @param $1 {str} Diagnostic text.
 # @return {None} Writes one stderr line.
 # @satisfies REQ-134
 log_error() {
     printf 'ERROR: %s\n' "$1" >&2
+}
+
+# @brief Start one phase and record it as the active phase.
+# @details Prints the phase header and stores the title in `CURRENT_PHASE`
+#   so the EXIT trap can name the failed phase in the final summary. Time
+#   complexity O(1).
+# @param $1 {str} Phase title text.
+# @return {None} Writes one stdout line and updates `CURRENT_PHASE`.
+# @satisfies DES-047, REQ-142
+begin_phase() {
+    CURRENT_PHASE="$1"
+    log_phase "$1"
+}
+
+# @brief Emit one PASS evidence line for the active phase.
+# @details Prints `PASS: <phase title>` to stdout. Called only after every
+#   mandatory check of the phase succeeded. Time complexity O(1).
+# @return {None} Writes one stdout line.
+# @satisfies DES-047, REQ-142
+pass_phase() {
+    printf 'PASS: %s\n' "${CURRENT_PHASE}"
+}
+
+# @brief Emit one FAIL evidence line for the active phase and abort.
+# @details Prints `FAIL: <phase title>` to stdout, the diagnostic to stderr
+#   through `log_error`, and exits with status 1. The EXIT trap then performs
+#   cleanup and prints the failure summary. Time complexity O(1).
+# @param $1 {str} Diagnostic text.
+# @return Does not return; exits the process with status 1.
+# @satisfies DES-047, DES-045
+fail_phase() {
+    printf 'FAIL: %s\n' "${CURRENT_PHASE}"
+    log_error "$1"
+    exit 1
+}
+
+# @brief Convert an interrupt signal into a cleanup-eligible failure exit.
+# @details Logs the received signal name and exits with the conventional
+#   status so the EXIT trap removes generated build trees while the non-zero
+#   status is preserved. Time complexity O(1).
+# @param $1 {str} Signal name token (`INT` or `TERM`).
+# @param $2 {int} Conventional exit status (130 for INT, 143 for TERM).
+# @return Does not return; exits the process with status `$2`.
+# @satisfies DES-045
+on_signal() {
+    log_error "Interrupted by $1 signal."
+    exit "$2"
+}
+
+# @brief EXIT trap: remove generated build trees on every termination path.
+# @details Captures the process status on entry, removes `build/` and
+#   `src/shellscripts.egg-info/` through `remove_intermediate_build_trees`
+#   once the project root is resolved (`PROJECT_ROOT_READY=1`), so relative
+#   paths never resolve against the invocation directory. The tracked-file
+#   guard inside `remove_intermediate_build_trees` refuses removal when
+#   tracked entries exist. A cleanup failure forces status 1 only when the
+#   status was 0; a non-zero status is never overridden. Prints one
+#   `BUILD FAILED` summary line naming the active phase when the status is
+#   non-zero. Idempotent through `CLEANUP_DONE`. Time complexity O(n) over
+#   removed entries.
+# @return Does not return; exits the process with the resolved status.
+# @satisfies DES-045, DES-052, REQ-141
+on_exit() {
+    local exit_code=$?
+    trap - EXIT INT TERM
+
+    if [ "${PROJECT_ROOT_READY}" -eq 1 ] && [ "${CLEANUP_DONE}" -eq 0 ]; then
+        CLEANUP_DONE=1
+        if ! remove_intermediate_build_trees; then
+            log_error "Generated build-tree cleanup failed."
+            if [ "${exit_code}" -eq 0 ]; then
+                exit_code=1
+            fi
+        fi
+    fi
+
+    if [ "${exit_code}" -ne 0 ] && [ "${SUMMARY_PRINTED}" -eq 0 ]; then
+        SUMMARY_PRINTED=1
+        printf '\nBUILD FAILED during: %s (exit status %d)\n' \
+            "${CURRENT_PHASE}" "${exit_code}"
+    fi
+    exit "${exit_code}"
 }
 
 # @brief Resolve the repository root and change into it.
@@ -85,6 +174,14 @@ resolve_python_interpreter() {
 # @details Requires Python 3.11 or newer, then selects `uv build` when `uv`
 #   is executable or `<python> -m build` when the `build` module is
 #   importable. Time complexity O(1) excluding interpreter startup.
+# @note Build-backend constraints: `pyproject.toml` `[build-system].requires`
+#   declares lower bounds only (`setuptools>=77.0.0`, `wheel>=0.41.0`,
+#   `build>=1.0.0`). The backend version is therefore resolved at build time
+#   by the selected tool. The generator version is recorded in the wheel
+#   `WHEEL` metadata (`Generator:` line). Byte-identical rebuilds require the
+#   same backend version; the deterministic SOURCE_DATE_EPOCH is exported by
+#   `resolve_source_date_epoch` and honored by the backend and by
+#   `strip_sdist_generated_members`.
 # @return {int} 0 when both validations succeed; 1 otherwise.
 # @satisfies DES-040, REQ-134
 resolve_build_tool() {
@@ -107,6 +204,35 @@ resolve_build_tool() {
 
     log_error "No supported build tool found; install uv or the Python build module."
     return 1
+}
+
+# @brief Resolve the deterministic SOURCE_DATE_EPOCH for packaging.
+# @details Honors an externally supplied SOURCE_DATE_EPOCH after validating it
+#   as a non-negative decimal integer. When the variable is unset or empty,
+#   derives it from the committer timestamp of `HEAD` (`git log -1 --format=%ct`)
+#   so rebuilds of the same commit receive the same archive timestamps. The
+#   value is exported so the build backend and the sdist rewrite share one
+#   timestamp. Time complexity O(1) excluding Git startup latency.
+# @pre `PROJECT_ROOT_READY` equals 1 when HEAD derivation is required.
+# @post `SOURCE_DATE_EPOCH` is exported and matches `^[0-9]+$`.
+# @return {int} 0 on success; 1 when the supplied value is malformed or HEAD
+#   has no commit timestamp.
+# @satisfies DES-040, REQ-134
+resolve_source_date_epoch() {
+    case "${SOURCE_DATE_EPOCH:-}" in
+        '')
+            SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) || {
+                log_error "Unable to derive SOURCE_DATE_EPOCH from HEAD; set SOURCE_DATE_EPOCH explicitly."
+                return 1
+            }
+            ;;
+        *[!0-9]*)
+            log_error "SOURCE_DATE_EPOCH must be a non-negative integer: ${SOURCE_DATE_EPOCH}"
+            return 1
+            ;;
+    esac
+    export SOURCE_DATE_EPOCH
+    return 0
 }
 
 # @brief Abort when tracked files live under removable generated paths.
@@ -179,10 +305,16 @@ remove_generated_dist_metadata() {
 # @brief Remove intermediate build trees produced by the packaging backend.
 # @details Refuses removal when tracked files exist under `build` or
 #   `src/shellscripts.egg-info`, then deletes both directories when present.
-#   Invoked before the build (stale trees) and after packaging (generated
-#   metadata residue). Time complexity O(n) over removed entries.
+#   Invoked before the build (stale trees), after packaging (generated
+#   metadata residue), and from the EXIT trap `on_exit` on every termination
+#   path. Idempotent: absent trees are skipped. Time complexity O(n) over
+#   removed entries.
+# @pre Current directory equals the repository root (`PROJECT_ROOT_READY=1`
+#   when called from `on_exit`).
+# @post `build/` and `src/shellscripts.egg-info/` are absent when no tracked
+#   entry blocks removal.
 # @return {int} 0 on success; 1 when a tracked entry or removal blocks.
-# @satisfies DES-041, DES-052, REQ-141
+# @satisfies DES-041, DES-052, DES-045, REQ-141
 remove_intermediate_build_trees() {
     assert_no_tracked_intermediates || return 1
     if [ -d "build" ]; then
@@ -198,40 +330,96 @@ remove_intermediate_build_trees() {
 # @details Removes the `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/`
 #   tree from every sdist. Setuptools writes `setup.cfg` and copies the egg-info
 #   tree unconditionally, and `MANIFEST.in` is build configuration rather than
-#   runtime content. Rewrites each sdist through a same-directory temporary
-#   archive that replaces the original atomically; the temporary archive is
-#   removed on failure. Time complexity O(n) over sdist size.
+#   runtime content. The embedded Python program rewrites each sdist through a
+#   same-directory temporary archive that replaces the original atomically; the
+#   temporary archive is removed on failure. The gzip header modification time
+#   is pinned to `SOURCE_DATE_EPOCH` and the gzip file name is left empty, so
+#   the rewritten archive bytes do not depend on the wall clock. Every member
+#   mtime is pinned to `SOURCE_DATE_EPOCH` because setuptools writes build-time
+#   mtimes into the sdist; source PAX headers carrying the original mtime are
+#   cleared so the pinned value is emitted. Member mode and ownership are
+#   copied unchanged.
+#   Time complexity O(n) over sdist size.
+# @pre `SOURCE_DATE_EPOCH` is exported and matches `^[0-9]+$`.
 # @return {int} 0 on success; 1 when a rewrite fails.
-# @satisfies DES-053
+# @satisfies DES-053, REQ-146
 strip_sdist_generated_members() {
     local code
 
     code='
+"""Rewrite sdist archives without setuptools-generated metadata members."""
 import glob
+import gzip
 import os
 import sys
 import tarfile
 
-def is_generated(name):
-    rel = name.split("/", 1)[1] if "/" in name else ""
-    return rel in ("setup.cfg", "MANIFEST.in", "src/shellscripts.egg-info") or rel.startswith("src/shellscripts.egg-info/")
+GENERATED_NAMES = ("setup.cfg", "MANIFEST.in", "src/shellscripts.egg-info")
 
-for path in sorted(glob.glob(os.path.join(sys.argv[1], "*.tar.gz"))):
+
+def is_generated(name):
+    """Return True when an archive member is generated metadata.
+
+    Args:
+        name: Archive member path including the sdist root directory.
+
+    Returns:
+        True when the member must be removed from the sdist.
+    """
+    rel = name.split("/", 1)[1] if "/" in name else ""
+    return rel in GENERATED_NAMES or rel.startswith(
+        GENERATED_NAMES[-1] + "/")
+
+
+def rewrite(path, epoch):
+    """Rewrite one sdist without generated members, atomically.
+
+    Args:
+        path: Sdist archive path replaced in place.
+        epoch: Integer SOURCE_DATE_EPOCH written to the gzip header.
+
+    Raises:
+        OSError: When reading, writing, or replacing the archive fails.
+    """
     temp = path + ".tmp"
     try:
-        with tarfile.open(path, "r:gz") as source, tarfile.open(temp, "w:gz") as target:
-            for member in source.getmembers():
-                if is_generated(member.name):
-                    continue
-                payload = source.extractfile(member) if member.isfile() else None
-                target.addfile(member, payload)
+        with open(temp, "wb") as raw:
+            with gzip.GzipFile(filename="", mode="wb", fileobj=raw,
+                               mtime=epoch) as gz:
+                with tarfile.open(fileobj=gz, mode="w") as target:
+                    with tarfile.open(path, "r:gz") as source:
+                        for member in source.getmembers():
+                            if is_generated(member.name):
+                                continue
+                            member.mtime = epoch
+                            member.pax_headers = {}
+                            payload = None
+                            if member.isfile():
+                                payload = source.extractfile(member)
+                            target.addfile(member, payload)
         os.replace(temp, path)
     except BaseException:
         if os.path.exists(temp):
             os.unlink(temp)
         raise
+
+
+def main(dist_dir, epoch):
+    """Rewrite every sdist archive found in one directory.
+
+    Args:
+        dist_dir: Directory containing `*.tar.gz` sdist archives.
+        epoch: Integer SOURCE_DATE_EPOCH value.
+    """
+    pattern = os.path.join(dist_dir, "*.tar.gz")
+    for path in sorted(glob.glob(pattern)):
+        rewrite(path, epoch)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1], int(sys.argv[2]))
 '
-    if ! "${PYTHON_BIN}" -c "${code}" "${DIST_DIR}"; then
+    if ! "${PYTHON_BIN}" -c "${code}" "${DIST_DIR}" "${SOURCE_DATE_EPOCH}"; then
         log_error "Unable to strip generated metadata members from sdist archives."
         return 1
     fi
@@ -240,20 +428,25 @@ for path in sorted(glob.glob(os.path.join(sys.argv[1], "*.tar.gz"))):
 
 # @brief Execute the selected distribution build tool.
 # @details Runs the resolved build command vector from the repository root so
-#   sdist and wheel packages are written into `dist/`. Time complexity O(n)
+#   sdist and wheel packages are written into `dist/`. The exported
+#   SOURCE_DATE_EPOCH is inherited by the build process. Time complexity O(n)
 #   over project size plus toolchain latency.
-# @return Propagates the build tool exit status.
+# @pre `BUILD_CMD` is a non-empty command vector set by `resolve_build_tool`.
+# @return {int} 0 on success; 1 when the build tool exits non-zero.
 # @satisfies DES-040, REQ-134
 build_distributions() {
     printf 'Build tool: %s\n' "${BUILD_TOOL}"
-    "${BUILD_CMD[@]}"
+    printf 'SOURCE_DATE_EPOCH: %s\n' "${SOURCE_DATE_EPOCH}"
+    "${BUILD_CMD[@]}" || return 1
+    return 0
 }
 
 # @brief Execute the build tool and normalize generated dist metadata.
-# @details Delegates packaging to the selected build tool, then removes the
-#   build-tool `dist/.gitignore` metadata so the repository root ignore rules
-#   remain authoritative for non-generated files. Time complexity O(n) over
-#   project size plus toolchain latency.
+# @details Delegates packaging to the selected build tool, then rewrites the
+#   sdist without generated members, removes the build-tool `dist/.gitignore`
+#   metadata so the repository root ignore rules remain authoritative for
+#   non-generated files, and removes intermediate build trees. Time complexity
+#   O(n) over project size plus toolchain latency.
 # @return {int} 0 when the build and metadata normalization succeed; 1
 #   otherwise.
 # @satisfies DES-040, DES-052, DES-053, REQ-134, REQ-141
@@ -279,24 +472,59 @@ verify_sdist_members() {
     local code
 
     code='
+"""Validate required and forbidden members of one sdist archive."""
 import sys
 import tarfile
 
-def under(name, prefix):
+REQUIRED = ("pyproject.toml", "src/shell_scripts/__init__.py")
+FORBIDDEN_PREFIXES = ("tests", "src/shellscripts.egg-info")
+FORBIDDEN_NAMES = ("setup.cfg", "MANIFEST.in")
+
+
+def is_below(name, prefix):
+    """Return True when a member equals or lies below a path prefix.
+
+    Args:
+        name: Member path relative to the sdist root directory.
+        prefix: Directory or file path prefix.
+
+    Returns:
+        True when name equals prefix or starts with prefix plus a slash.
+    """
     return name == prefix or name.startswith(prefix + "/")
 
-with tarfile.open(sys.argv[1], "r:gz") as archive:
-    names = [m.name.split("/", 1)[1] for m in archive.getmembers() if "/" in m.name]
-required = ["pyproject.toml", "src/shell_scripts/__init__.py"]
-forbidden = ["tests", "src/shellscripts.egg-info"]
-missing = [name for name in required if name not in names]
-rejected = [name for name in names if name in ("setup.cfg", "MANIFEST.in") or any(under(name, p) for p in forbidden)]
-if missing:
-    print("Missing sdist members: " + ", ".join(missing), file=sys.stderr)
-if rejected:
-    print("Forbidden sdist members: " + ", ".join(rejected), file=sys.stderr)
-if missing or rejected:
-    sys.exit(1)
+
+def main(path):
+    """Exit with status 1 when required or forbidden members violate rules.
+
+    Args:
+        path: Sdist archive path.
+    """
+    with tarfile.open(path, "r:gz") as archive:
+        names = [
+            member.name.split("/", 1)[1]
+            for member in archive.getmembers()
+            if "/" in member.name
+        ]
+    missing = [name for name in REQUIRED if name not in names]
+    rejected = [
+        name
+        for name in names
+        if name in FORBIDDEN_NAMES
+        or any(is_below(name, prefix) for prefix in FORBIDDEN_PREFIXES)
+    ]
+    if missing:
+        print("Missing sdist members: " + ", ".join(missing),
+              file=sys.stderr)
+    if rejected:
+        print("Forbidden sdist members: " + ", ".join(rejected),
+              file=sys.stderr)
+    if missing or rejected:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1])
 '
     if ! "${PYTHON_BIN}" -c "${code}" "${artifact}"; then
         log_error "Sdist member validation failed: ${artifact}"
@@ -319,31 +547,57 @@ verify_wheel_members() {
     local code
 
     code='
+"""Validate required and forbidden members of one wheel archive."""
 import sys
 import zipfile
 
-with zipfile.ZipFile(sys.argv[1]) as archive:
-    names = archive.namelist()
-    entry_files = [n for n in names if n.endswith(".dist-info/entry_points.txt")]
-    license_files = [n for n in names if n.endswith(".dist-info/licenses/LICENSE")]
-    entry_lines = set()
-    for n in entry_files:
-        entry_lines.update(line.strip() for line in archive.read(n).decode("utf-8").splitlines())
-rejected = [n for n in names if not (n.startswith("shell_scripts/") or n.split("/", 1)[0].endswith(".dist-info"))]
-missing = []
-if not license_files:
-    missing.append("*.dist-info/licenses/LICENSE")
-if not entry_files:
-    missing.append("*.dist-info/entry_points.txt")
-for line in ("shellscripts = shell_scripts.core:main", "s = shell_scripts.core:main"):
-    if line not in entry_lines:
-        missing.append(line)
-if missing:
-    print("Missing wheel members: " + ", ".join(missing), file=sys.stderr)
-if rejected:
-    print("Forbidden wheel members: " + ", ".join(rejected), file=sys.stderr)
-if missing or rejected:
-    sys.exit(1)
+LICENSE_SUFFIX = ".dist-info/licenses/LICENSE"
+ENTRY_SUFFIX = ".dist-info/entry_points.txt"
+EXPECTED_SCRIPTS = (
+    "shellscripts = shell_scripts.core:main",
+    "s = shell_scripts.core:main",
+)
+
+
+def main(path):
+    """Exit with status 1 when required or forbidden members violate rules.
+
+    Args:
+        path: Wheel archive path.
+    """
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        entry_files = [n for n in names if n.endswith(ENTRY_SUFFIX)]
+        license_files = [n for n in names if n.endswith(LICENSE_SUFFIX)]
+        entry_lines = set()
+        for name in entry_files:
+            text = archive.read(name).decode("utf-8")
+            entry_lines.update(line.strip() for line in text.splitlines())
+    rejected = [
+        n
+        for n in names
+        if not (n.startswith("shell_scripts/")
+                or n.split("/", 1)[0].endswith(".dist-info"))
+    ]
+    missing = []
+    if not license_files:
+        missing.append("*.dist-info/licenses/LICENSE")
+    if not entry_files:
+        missing.append("*.dist-info/entry_points.txt")
+    missing.extend(
+        line for line in EXPECTED_SCRIPTS if line not in entry_lines)
+    if missing:
+        print("Missing wheel members: " + ", ".join(missing),
+              file=sys.stderr)
+    if rejected:
+        print("Forbidden wheel members: " + ", ".join(rejected),
+              file=sys.stderr)
+    if missing or rejected:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1])
 '
     if ! "${PYTHON_BIN}" -c "${code}" "${artifact}"; then
         log_error "Wheel member validation failed: ${artifact}"
@@ -409,9 +663,10 @@ verify_artifacts() {
 # @brief Print the final deliverable summary.
 # @details Iterates every file currently present in `dist/`, including
 #   preserved non-generated entries, and prints its path and human-readable
-#   size. Time complexity O(n) over `dist/` file count.
+#   size, followed by the final success line. Time complexity O(n) over
+#   `dist/` file count.
 # @return {None} Writes summary lines to stdout.
-# @satisfies DES-046, REQ-135
+# @satisfies DES-046, DES-047, REQ-135
 print_summary() {
     local artifact
     local size
@@ -429,33 +684,54 @@ print_summary() {
     printf 'Build PASSED: distribution artifacts are available in %s/.\n' "${DIST_DIR}"
 }
 
-log_phase "Phase 1: Repository root and toolchain"
+# @brief Register termination traps before the pipeline starts.
+# @details EXIT runs `on_exit` on every termination path; INT and TERM are
+#   converted into conventional failure statuses (130 and 143) so the EXIT
+#   trap preserves the non-zero result. Time complexity O(1).
+# @return {None} Installs shell trap handlers.
+# @satisfies DES-045
+register_traps() {
+    trap on_exit EXIT
+    trap 'on_signal INT 130' INT
+    trap 'on_signal TERM 143' TERM
+}
+
+register_traps
+
+begin_phase "Phase 1: Repository root, toolchain, and build timestamp"
 if ! resolve_project_root; then
-    log_error "Unable to determine project root from build script path."
-    exit 1
+    fail_phase "Unable to determine project root from build script path."
 fi
+PROJECT_ROOT_READY=1
 resolve_python_interpreter
 if ! resolve_build_tool; then
-    exit 1
+    fail_phase "Toolchain validation failed."
 fi
+if ! resolve_source_date_epoch; then
+    fail_phase "SOURCE_DATE_EPOCH could not be resolved."
+fi
+pass_phase
 
-log_phase "Phase 2: Stale artifact cleanup"
+begin_phase "Phase 2: Stale artifact cleanup"
 if ! clean_stale_artifacts; then
-    exit 1
+    fail_phase "Stale artifact cleanup refused or failed."
 fi
+pass_phase
 
-log_phase "Phase 3: Distribution build"
+begin_phase "Phase 3: Distribution build"
 if ! run_distribution_build; then
-    log_error "Distribution build failed."
-    exit 1
+    fail_phase "Distribution build failed."
 fi
+pass_phase
 
-log_phase "Phase 4: Artifact validation"
+begin_phase "Phase 4: Artifact validation"
 if ! verify_artifacts; then
-    exit 1
+    fail_phase "Artifact validation failed."
 fi
+pass_phase
 
-log_phase "Phase 5: Deliverable summary"
+begin_phase "Phase 5: Deliverable summary"
+pass_phase
 print_summary
 
 exit 0

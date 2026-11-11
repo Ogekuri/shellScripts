@@ -12,7 +12,7 @@
 - ID: `PROC:build`
   - type: `process`
   - parent_process: `null`
-  - role: `Local shell pipeline that cleans stale generated archives and builds validated sdist and wheel deliverables in dist/`
+  - role: `Local shell pipeline that cleans stale generated archives and builds validated, reproducible sdist and wheel deliverables in dist/ with termination-path cleanup and per-phase PASS/FAIL evidence`
   - entrypoint_symbols:
     - `scripts/build.sh (top-level script entrypoint)`
   - defining_files:
@@ -71,20 +71,26 @@
   - `scripts/build.sh (top-level script entrypoint)` [`scripts/build.sh`]
 - Lifecycle/trigger:
   - Trigger: developer, automation, or `scripts/pre-release-check.sh` invokes the build script.
-  - Startup: resolves canonical script and base directories, resolves the Git repository root, selects `.venv/bin/python3` when present or `python3` otherwise, validates Python 3.11 or newer, and selects `uv build` or `<python> -m build`.
-  - Runtime mode: sequential fail-fast pipeline; stale generated archives and intermediate build trees are removed before the build tool executes; after packaging, the sdist is rewritten without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members, build-tool metadata and intermediate build trees are removed, then generated archives are validated (readability plus required and forbidden members) and summarized.
-  - Shutdown: exits `1` on the first mandatory failure and `0` after a successful build, validation, and summary; final deliverables remain in `dist/`.
+  - Startup: registers EXIT, INT, and TERM traps before phase 1; resolves canonical script and base directories, resolves the Git repository root, selects `.venv/bin/python3` when present or `python3` otherwise, validates Python 3.11 or newer, selects `uv build` or `<python> -m build`, and resolves and exports `SOURCE_DATE_EPOCH` (validated environment value or `HEAD` committer timestamp). Trap cleanup runs only after the project root is resolved.
+  - Runtime mode: sequential fail-fast pipeline; stale generated archives and intermediate build trees are removed before the build tool executes; after packaging, the sdist is rewritten without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members, build-tool metadata and intermediate build trees are removed, then generated archives are validated (readability plus required and forbidden members) and summarized. Each phase emits `PASS:` or `FAIL:` evidence; the sdist rewrite pins the gzip header and member mtimes to `SOURCE_DATE_EPOCH`.
+  - Shutdown: exits `1` on the first mandatory failure and `0` after a successful build, validation, and summary; final deliverables remain in `dist/`. The EXIT trap removes `build/` and `src/shellscripts.egg-info/` on every termination path, preserves a non-zero status, and prints `BUILD FAILED during: <phase>`; INT and TERM terminate with statuses 130 and 143.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
+  - `register_traps(...)`: Install EXIT, INT, and TERM handlers before phase 1 [`scripts/build.sh`]
+    - `on_exit(...)`: EXIT handler that removes `build/` and `src/shellscripts.egg-info/` once the project root is resolved, preserves the exit status, and prints `BUILD FAILED during: <phase>` on failure [`scripts/build.sh`]
+      - `remove_intermediate_build_trees(...)`: Tracked-guarded removal of intermediate build trees [`scripts/build.sh`]
+    - `on_signal(...)`: Convert INT and TERM into exit statuses 130 and 143 [`scripts/build.sh`]
+  - `begin_phase(...)`, `pass_phase(...)`, `fail_phase(...)`: Phase header and `PASS:`/`FAIL:` evidence emission; `fail_phase` exits with status 1 [`scripts/build.sh`]
   - `resolve_project_root(...)`: Resolve the Git repository root from the script location and change into it [`scripts/build.sh`]
   - `resolve_python_interpreter(...)`: Select `.venv/bin/python3` when executable, otherwise `python3` [`scripts/build.sh`]
   - `resolve_build_tool(...)`: Validate Python 3.11 or newer and select `uv build` or `<python> -m build` [`scripts/build.sh`]
+  - `resolve_source_date_epoch(...)`: Validate the supplied `SOURCE_DATE_EPOCH` or derive it from the `HEAD` commit timestamp, then export it [`scripts/build.sh`]
   - `clean_stale_artifacts(...)`: Remove stale untracked generated archives and intermediate build trees while preserving tracked and non-generated entries [`scripts/build.sh`]
     - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
     - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata that would hide non-generated files [`scripts/build.sh`]
   - `run_distribution_build(...)`: Execute packaging, rewrite generated sdist members, and normalize generated dist and source-tree metadata [`scripts/build.sh`]
     - `build_distributions(...)`: Execute the resolved build command vector from the repository root [`scripts/build.sh`]
-    - `strip_sdist_generated_members(...)`: Rewrite each sdist without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members through an atomic same-directory replacement [`scripts/build.sh`]
+    - `strip_sdist_generated_members(...)`: Rewrite each sdist without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members through an atomic same-directory replacement, pinning member mtimes and the gzip header timestamp to `SOURCE_DATE_EPOCH` [`scripts/build.sh`]
     - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata after a successful build [`scripts/build.sh`]
     - `remove_intermediate_build_trees(...)`: Remove `build` and `src/shellscripts.egg-info` after packaging, refusing tracked entries [`scripts/build.sh`]
       - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
@@ -95,7 +101,8 @@
 - External Boundaries:
   - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `python3`/`.venv/bin/python3`, `uv build` or `python3 -m build`, `rm`, `mkdir`, `du`, `cut`).
   - File-system boundary: creates `dist/`, removes untracked generated archives and intermediate build trees, rewrites the sdist archive in place, and writes sdist and wheel deliverables into `dist/`.
-  - Terminal boundary: `PASS`-style phase progress, build-tool output, artifact validation evidence, and the `BUILD SUMMARY` deliverable list on stdout/stderr.
+  - Terminal boundary: `PASS:`/`FAIL:` phase evidence lines, build-tool output, artifact validation evidence, and the `BUILD SUMMARY` deliverable list on stdout; diagnostics and signal notices on stderr.
+  - Environment boundary: reads the `SOURCE_DATE_EPOCH` variable, exports the resolved value to the build backend, and reads the `HEAD` committer timestamp through `git log` when the variable is unset.
 
 ### `PROC:pre-release-check`
 
