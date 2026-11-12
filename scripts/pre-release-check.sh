@@ -262,15 +262,16 @@ preflight() {
 }
 
 # @brief Validate the presence of mandatory project files.
-# @details Checks the packaging manifest, Python package entrypoints, test
-#   directory, release scripts, launcher script, and release workflow. Time
-#   complexity O(n) over required path count.
+# @details Checks the packaging manifest, the build epoch file, Python package
+#   entrypoints, test directory, release scripts, launcher script, and release
+#   workflow. Time complexity O(n) over required path count.
 # @return {int} 0 when every required path exists; 1 otherwise.
-# @satisfies REQ-136
+# @satisfies REQ-136, DES-063
 check_project_structure() {
     local required_path
     local -a required_paths=(
         "pyproject.toml"
+        ".build-epoch"
         "src/shell_scripts/__init__.py"
         "src/shell_scripts/core.py"
         "scripts/build.sh"

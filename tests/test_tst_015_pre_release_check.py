@@ -3,15 +3,17 @@
 @details Parses `scripts/pre-release-check.sh` and `scripts/build.sh`, asserts
   repository-root resolution, delegated build invocation, pytest execution with
   `PYTHONPATH=src`, artifact validation, previous-build cleanup, post-build
-  repository hygiene, cleanup safety and trap registration,
-  repository-integrity verification, fail-fast semantics, evidence lines, and
-  executable permissions. Validates Bash syntax via `bash -n` and probes the
-  real `.gitignore` behavior with `git check-ignore --no-index`.
+  repository hygiene, epoch resolution from the tracked `.build-epoch` file,
+  cleanup safety and trap registration, repository-integrity verification,
+  fail-fast semantics, evidence lines, and executable permissions. Validates
+  Bash syntax via `bash -n` and probes the real `.gitignore` behavior with
+  `git check-ignore --no-index`.
 @satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, DES-026,
   DES-027, DES-040, DES-041, DES-042, DES-043, DES-044, DES-045, DES-046,
-  DES-047, DES-054, DES-060, DES-061, REQ-079, REQ-080, REQ-081, REQ-082,
-  REQ-134, REQ-135, REQ-136, REQ-137, REQ-138, REQ-139, REQ-140, REQ-141,
-  REQ-142, REQ-143, REQ-144, REQ-148
+  DES-047, DES-054, DES-060, DES-061, DES-063, DES-064, REQ-079, REQ-080,
+  REQ-081, REQ-082, REQ-134, REQ-135, REQ-136, REQ-137, REQ-138, REQ-139,
+  REQ-140, REQ-141, REQ-142, REQ-143, REQ-144, REQ-148, REQ-149, REQ-150,
+  REQ-151
 @return {None} Pytest module scope.
 """
 
@@ -21,6 +23,7 @@ import subprocess
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PRECHECK_PATH = PROJECT_ROOT / "scripts" / "pre-release-check.sh"
 BUILD_PATH = PROJECT_ROOT / "scripts" / "build.sh"
+EPOCH_PATH = PROJECT_ROOT / ".build-epoch"
 
 
 def _read(path: pathlib.Path) -> str:
@@ -150,6 +153,48 @@ def test_build_script_cleans_every_previous_build_and_residue():
         "clean_build_residue() {", 1)[1]
 
 
+def test_build_epoch_file_is_tracked_non_negative_integer():
+    """
+    @brief Validate the version-controlled archive timestamp epoch file.
+    @details Asserts `.build-epoch` exists at the repository root, contains
+      exactly one non-negative decimal integer line, and is re-included by the
+      `.gitignore` inverse rules so it stays version-controlled.
+      Time complexity O(1) over file size.
+    @return {None} Assertions only.
+    @satisfies TST-015, DES-063, DES-064
+    """
+
+    assert EPOCH_PATH.is_file()
+    epoch_text = _read(EPOCH_PATH)
+    assert epoch_text.strip().isdigit(), f"non-decimal build epoch: {epoch_text!r}"
+    assert epoch_text == f"{int(epoch_text)}\n"
+
+    epoch_result = _check_ignore(".build-epoch")
+    assert epoch_result.returncode == 0, epoch_result.stdout
+    assert _matched_rule(epoch_result).startswith("!"), epoch_result.stdout
+
+
+def test_build_script_resolves_epoch_from_tracked_file():
+    """
+    @brief Validate epoch resolution rules in the build pipeline.
+    @details Asserts `scripts/build.sh` reads `SOURCE_DATE_EPOCH` from the
+      tracked `.build-epoch` file when the variable is unset, still honors an
+      explicitly supplied value, never derives the epoch from Git commit
+      metadata, and prints the resolved value with its source token.
+    @return {None} Assertions only.
+    @satisfies TST-015, DES-063, REQ-149, REQ-150, REQ-151
+    """
+
+    content = _read(BUILD_PATH)
+    assert 'EPOCH_FILE=".build-epoch"' in content
+    assert 'EPOCH_SOURCE="environment"' in content
+    assert 'head -n 1 -- "${EPOCH_FILE}"' in content
+    assert 'log_error "Missing build epoch file: ${EPOCH_FILE}"' in content
+    assert "SOURCE_DATE_EPOCH: %s (%s)" in content
+    assert "git log -1 --format=%ct" not in content
+    assert "format=%ct" not in content
+
+
 def test_pre_release_script_enforces_fail_fast_and_evidence_lines():
     """
     @brief Validate fail-fast semantics and evidence-line format.
@@ -225,6 +270,7 @@ def test_pre_release_script_records_artifact_checks():
     assert 'dist"/*.tar.gz' in content
     assert 'dist"/*.whl' in content
     assert '"scripts/pre-release-check.sh" "scripts/build.sh"' in content
+    assert '".build-epoch"' in content
     assert "scripts/clean.sh" not in content
 
 

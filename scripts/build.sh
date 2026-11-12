@@ -7,7 +7,8 @@
 # @brief Build every distribution deliverable and keep it available in dist/.
 # @details Resolves the Git repository root from the script location, validates
 #   Python 3.11 or newer plus one supported build tool (`uv build` preferred,
-#   `python3 -m build` fallback), resolves a deterministic SOURCE_DATE_EPOCH,
+#   `python3 -m build` fallback), resolves a deterministic SOURCE_DATE_EPOCH
+#   from the tracked `.build-epoch` file,
 #   removes every previous `dist/` archive of any version together with the
 #   intermediate build trees while preserving non-generated `dist/` entries,
 #   builds sdist and wheel packages into `dist/`, removes every intermediate
@@ -18,12 +19,15 @@
 #   project root is resolved. Emits one PASS or FAIL evidence line per phase
 #   and terminates with a non-zero status on any mandatory failure.
 # @satisfies DES-040, DES-041, DES-045, DES-046, DES-047, DES-052, DES-053,
-#   DES-060, DES-061, REQ-134, REQ-135, REQ-141, REQ-145, REQ-146, REQ-148
+#   DES-060, DES-061, DES-063, REQ-134, REQ-135, REQ-141, REQ-145, REQ-146,
+#   REQ-148, REQ-149, REQ-150, REQ-151
 
 set -Eeuo pipefail
 shopt -s nullglob
 
 DIST_DIR="dist"
+EPOCH_FILE=".build-epoch"
+EPOCH_SOURCE=""
 PYTHON_BIN=""
 BUILD_TOOL=""
 BUILD_CMD=()
@@ -207,25 +211,32 @@ resolve_build_tool() {
 # @brief Resolve the deterministic SOURCE_DATE_EPOCH for packaging.
 # @details Honors an externally supplied SOURCE_DATE_EPOCH after validating it
 #   as a non-negative decimal integer. When the variable is unset or empty,
-#   derives it from the committer timestamp of `HEAD` (`git log -1 --format=%ct`)
-#   so rebuilds of the same commit receive the same archive timestamps. The
-#   value is exported so the build backend and the sdist rewrite share one
-#   timestamp. Time complexity O(1) excluding Git startup latency.
-# @pre `PROJECT_ROOT_READY` equals 1 when HEAD derivation is required.
-# @post `SOURCE_DATE_EPOCH` is exported and matches `^[0-9]+$`.
-# @return {int} 0 on success; 1 when the supplied value is malformed or HEAD
-#   has no commit timestamp.
-# @satisfies DES-040, REQ-134
+#   reads the epoch from the version-controlled `.build-epoch` file so archive
+#   timestamps depend on repository content instead of Git commit metadata, and
+#   a clean tree rebuilt at the commit that contains the tracked `dist/`
+#   archives yields byte-identical archives. Records the source token used by
+#   `build_distributions` evidence output and exports the value so the build
+#   backend and the sdist rewrite share one timestamp. Time complexity O(1)
+#   excluding one file read.
+# @pre Current directory equals the repository root.
+# @post `SOURCE_DATE_EPOCH` is exported, matches `^[0-9]+$`, and `EPOCH_SOURCE`
+#   is either `environment` or `.build-epoch`.
+# @return {int} 0 on success; 1 when the supplied value or `.build-epoch`
+#   content is missing or malformed.
+# @satisfies DES-040, DES-063, REQ-134, REQ-149, REQ-150
 resolve_source_date_epoch() {
-    case "${SOURCE_DATE_EPOCH:-}" in
-        '')
-            SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) || {
-                log_error "Unable to derive SOURCE_DATE_EPOCH from HEAD; set SOURCE_DATE_EPOCH explicitly."
-                return 1
-            }
-            ;;
-        *[!0-9]*)
-            log_error "SOURCE_DATE_EPOCH must be a non-negative integer: ${SOURCE_DATE_EPOCH}"
+    EPOCH_SOURCE="environment"
+    if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+        EPOCH_SOURCE="${EPOCH_FILE}"
+        if [ ! -f "${EPOCH_FILE}" ]; then
+            log_error "Missing build epoch file: ${EPOCH_FILE}"
+            return 1
+        fi
+        SOURCE_DATE_EPOCH=$(head -n 1 -- "${EPOCH_FILE}") || return 1
+    fi
+    case "${SOURCE_DATE_EPOCH}" in
+        ''|*[!0-9]*)
+            log_error "SOURCE_DATE_EPOCH must be a non-negative integer: ${SOURCE_DATE_EPOCH:-empty}"
             return 1
             ;;
     esac
@@ -487,15 +498,18 @@ if __name__ == "__main__":
 
 # @brief Execute the selected distribution build tool.
 # @details Runs the resolved build command vector from the repository root so
-#   sdist and wheel packages are written into `dist/`. The exported
-#   SOURCE_DATE_EPOCH is inherited by the build process. Time complexity O(n)
-#   over project size plus toolchain latency.
+#   sdist and wheel packages are written into `dist/`. Prints the resolved
+#   epoch together with its source token, so the archive timestamp provenance
+#   is visible in the build log. The exported SOURCE_DATE_EPOCH is inherited by
+#   the build process. Time complexity O(n) over project size plus toolchain
+#   latency.
 # @pre `BUILD_CMD` is a non-empty command vector set by `resolve_build_tool`.
+# @pre `EPOCH_SOURCE` records the resolved epoch origin.
 # @return {int} 0 on success; 1 when the build tool exits non-zero.
-# @satisfies DES-040, REQ-134
+# @satisfies DES-040, REQ-134, REQ-151
 build_distributions() {
     printf 'Build tool: %s\n' "${BUILD_TOOL}"
-    printf 'SOURCE_DATE_EPOCH: %s\n' "${SOURCE_DATE_EPOCH}"
+    printf 'SOURCE_DATE_EPOCH: %s (%s)\n' "${SOURCE_DATE_EPOCH}" "${EPOCH_SOURCE}"
     "${BUILD_CMD[@]}" || return 1
     return 0
 }
