@@ -1,7 +1,8 @@
 """
 @brief Validate release build and pre-release script contracts plus ignore rules.
 @details Parses `scripts/pre-release-check.sh` and `scripts/build.sh`, asserts
-  repository-root resolution, delegated build invocation, pytest execution with
+  repository-root resolution, delegated build invocation into a temporary build
+  directory, independence from the `dist/` content, pytest execution with
   `PYTHONPATH=src`, artifact validation, previous-build cleanup, post-build
   repository hygiene, epoch resolution from the tracked `.build-epoch` file,
   cleanup safety and trap registration, repository-integrity verification,
@@ -10,10 +11,10 @@
   `git check-ignore --no-index`.
 @satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, DES-026,
   DES-027, DES-040, DES-041, DES-042, DES-043, DES-044, DES-045, DES-046,
-  DES-047, DES-060, DES-061, DES-063, DES-064, REQ-079, REQ-080,
-  REQ-081, REQ-082, REQ-134, REQ-135, REQ-136, REQ-137, REQ-138, REQ-139,
-  REQ-140, REQ-141, REQ-142, REQ-143, REQ-144, REQ-148, REQ-149, REQ-150,
-  REQ-151
+  DES-047, DES-060, DES-061, DES-063, DES-064, DES-065, DES-066, DES-067,
+  DES-068, REQ-079, REQ-080, REQ-081, REQ-082, REQ-134, REQ-135, REQ-136,
+  REQ-137, REQ-138, REQ-139, REQ-140, REQ-141, REQ-142, REQ-143, REQ-144,
+  REQ-148, REQ-149, REQ-150, REQ-151, REQ-152, REQ-153, REQ-154
 @return {None} Pytest module scope.
 """
 
@@ -113,6 +114,9 @@ def test_build_script_selects_tool_and_validates_dist():
     assert "-m build" in content
     assert "python3" in content
     assert 'DIST_DIR="dist"' in content
+    assert 'if [ -n "${BUILD_DIST_DIR:-}" ]' in content
+    assert "--out-dir" in content
+    assert "--outdir" in content
     assert "tarfile" in content
     assert "zipfile" in content
     assert "git ls-files --error-unmatch" in content
@@ -222,13 +226,12 @@ def test_pre_release_script_cleans_and_verifies_repository_integrity():
     @brief Validate cleanup traps, safety guard, and integrity verification.
     @details Asserts `cleanup_artifacts` is registered through the `EXIT` trap
       and signal traps, removes `build`, `.pytest_cache`,
-      `src/shellscripts.egg-info`, `__pycache__` directories, and untracked
-      `dist` archives, refuses to
-      remove tracked files, and compares post-cleanup repository state with the
-      pre-run baseline.
+      `src/shellscripts.egg-info`, `__pycache__` directories, and the temporary
+      build directory, refuses to remove tracked files, and compares
+      post-cleanup repository state with the pre-run baseline.
     @return {None} Assertions only.
     @satisfies TST-015, DES-026, DES-027, DES-043, DES-044, DES-045, REQ-081,
-      REQ-082, REQ-137, REQ-138, REQ-139
+      REQ-082, REQ-137, REQ-138, REQ-139, REQ-153
     """
 
     content = _read(PRECHECK_PATH)
@@ -240,15 +243,42 @@ def test_pre_release_script_cleans_and_verifies_repository_integrity():
     assert "find src tests -type d -name __pycache__" in content
     assert (
         "clean: build .pytest_cache src/shellscripts.egg-info __pycache__ "
-        "dist:untracked-archives"
+        "temporary-build-dir"
     ) in content
+    assert "rm -rf -- \"${TEMP_BUILD_DIR}\"" in content
     assert "git ls-files --" in content
     assert "git status --porcelain=v1 --untracked-files=no" in content
     assert "BASELINE_TRACKED" in content
     assert "BASELINE_UNTRACKED" in content
     assert "assert_safe_cleanup_targets" in content
-    assert "list_untracked_dist_archives" in content
+    assert "create_temp_build_dir" in content
     assert "collect_tracked_nonmanaged" in content
+
+
+def test_pre_release_script_builds_in_temporary_directory_and_ignores_dist():
+    """
+    @brief Validate temporary build directory usage and `dist/` independence.
+    @details Asserts the pre-release script creates a `mktemp -d` build output
+      directory outside the working tree, forwards it to `scripts/build.sh`
+      through `BUILD_DIST_DIR`, validates the generated archives inside it,
+      removes it on every termination path, and contains no executable
+      operation addressing `dist/` entries.
+    @return {None} Assertions only.
+    @satisfies TST-015, DES-024, DES-025, DES-065, DES-066, DES-067, DES-068,
+      REQ-152, REQ-153, REQ-154
+    """
+
+    content = _read(PRECHECK_PATH)
+    assert "mktemp -d" in content
+    assert "TEMP_BUILD_DIR" in content
+    assert 'env BUILD_DIST_DIR="${TEMP_BUILD_DIR}" bash scripts/build.sh' in content
+    assert '"${TEMP_BUILD_DIR}"/*.tar.gz' in content
+    assert '"${TEMP_BUILD_DIR}"/*.whl' in content
+    assert '"temporary-build-directory"' in content
+    code_lines = [
+        line for line in content.splitlines() if not line.lstrip().startswith("#")
+    ]
+    assert not any('"dist"' in line or "dist/" in line for line in code_lines)
 
 
 def test_pre_release_script_records_artifact_checks():
@@ -267,8 +297,8 @@ def test_pre_release_script_records_artifact_checks():
     assert 'run_check "artifacts"' in content
     assert 'run_check "cleanup"' in content
     assert 'run_check "repository-integrity"' in content
-    assert 'dist"/*.tar.gz' in content
-    assert 'dist"/*.whl' in content
+    assert '"${TEMP_BUILD_DIR}"/*.tar.gz' in content
+    assert '"${TEMP_BUILD_DIR}"/*.whl' in content
     assert '"scripts/pre-release-check.sh" "scripts/build.sh"' in content
     assert '".build-epoch"' in content
     assert "scripts/clean.sh" not in content

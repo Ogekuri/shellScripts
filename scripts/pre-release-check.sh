@@ -5,21 +5,26 @@
 
 # @file scripts/pre-release-check.sh
 # @brief Run every mandatory readiness check required before a release.
-# @details Resolves the Git repository root from the script location, captures
-#   the pre-run tracked and non-managed untracked repository state, validates
-#   cleanup safety, project structure, executable bits, toolchain, Bash and
-#   Python syntax, optional configured static-quality tools, the pytest suite,
-#   the distribution build delegated to `scripts/build.sh`, and the generated
-#   release archives. Generated artifacts are removed through an EXIT/INT/TERM
-#   trap on every termination path, then the repository state, excluding the
-#   `dist/` archive set owned by the build pipeline, is compared with the
-#   pre-run baseline. The script prints phase headers plus `PASS`/`FAIL`/
-#   `SKIP` evidence lines and a final summary, exits `1` on the first failed
-#   mandatory check, and exits `0` only when every check passes, cleanup
-#   succeeds, and no repository drift is detected.
+# @details Resolves the Git repository root from the script location, creates the
+#   distribution build output inside a `mktemp -d` temporary directory outside
+#   the working tree, captures the pre-run tracked and non-managed untracked
+#   repository state, validates cleanup safety, project structure, executable
+#   bits, toolchain, Bash and Python syntax, optional configured static-quality
+#   tools, the pytest suite, the distribution build delegated to
+#   `scripts/build.sh` with `BUILD_DIST_DIR` bound to that temporary directory,
+#   and the generated release archives located inside it. Generated artifacts
+#   and the temporary build directory are removed through an EXIT/INT/TERM trap
+#   on every termination path, then the repository state is compared with the
+#   pre-run baseline. The script performs no read, verification, cleanup, or
+#   deletion operation on `dist/` entries and stays independent from `dist/`
+#   content. It prints phase headers plus `PASS`/`FAIL`/`SKIP` evidence lines
+#   and a final summary, exits `1` on the first failed mandatory check, and
+#   exits `0` only when every check passes, cleanup succeeds, and no repository
+#   drift is detected.
 # @satisfies DES-021, DES-022, DES-023, DES-024, DES-025, DES-026, DES-027,
-#   DES-043, DES-044, DES-045, DES-047, REQ-079, REQ-080, REQ-081, REQ-082,
-#   REQ-136, REQ-137, REQ-138, REQ-139, REQ-142, REQ-143, REQ-144
+#   DES-043, DES-044, DES-045, DES-047, DES-065, DES-066, DES-067, DES-068,
+#   REQ-079, REQ-080, REQ-081, REQ-082, REQ-136, REQ-137, REQ-138, REQ-139,
+#   REQ-142, REQ-143, REQ-144, REQ-152, REQ-153, REQ-154
 
 set -Eeuo pipefail
 shopt -s nullglob
@@ -27,6 +32,7 @@ shopt -s nullglob
 MANAGED_PATHS=(build .pytest_cache src/shellscripts.egg-info)
 PYTHON_BIN=""
 PROJECT_ROOT=""
+TEMP_BUILD_DIR=""
 FAILED_CHECK=""
 SUMMARY_PRINTED=0
 CLEANUP_ALLOWED=0
@@ -142,31 +148,29 @@ fail_fast() {
 
 # @brief Collect untracked files outside the managed artifact paths.
 # @details Lists Git-visible untracked files and filters out the managed
-#   build/test/release paths plus `__pycache__` trees so preexisting generated
-#   output cannot be mistaken for repository drift. Time complexity O(n) over
-#   untracked file count.
+#   build/test paths plus `__pycache__` trees so preexisting generated output
+#   cannot be mistaken for repository drift. Every `dist/` entry is reported
+#   unchanged because this script never owns or modifies `dist/` content. Time
+#   complexity O(n) over untracked file count.
 # @return {str} Newline-separated filtered path list.
-# @satisfies DES-044, REQ-138
+# @satisfies DES-044, REQ-138, REQ-152
 collect_untracked_nonmanaged() {
     git ls-files --others --exclude-standard | awk '
-        /^(dist|build|\.pytest_cache|src\/shellscripts\.egg-info)\// { next }
+        /^(build|\.pytest_cache|src\/shellscripts\.egg-info)\// { next }
         /(^|\/)__pycache__\// { next }
         { print }
     '
 }
 
-# @brief Collect tracked-file modifications outside the managed `dist` tree.
-# @details Lists the porcelain tracked status and drops every `dist/` entry,
-#   because the delegated build pipeline owns the `dist/` archive set and may
-#   delete or replace tracked deliverables while producing the current build.
-#   Time complexity O(n) over tracked status lines.
-# @return {str} Newline-separated filtered tracked-status lines.
-# @satisfies DES-044, REQ-138
+# @brief Collect tracked-file modifications over the complete repository.
+# @details Lists the porcelain tracked status without any path exclusion, so a
+#   modification of any tracked file, including a `dist/` deliverable, is
+#   detected as repository drift. Time complexity O(n) over tracked status
+#   lines.
+# @return {str} Newline-separated tracked-status lines.
+# @satisfies DES-044, REQ-138, REQ-152
 collect_tracked_nonmanaged() {
-    git status --porcelain=v1 --untracked-files=no | awk '
-        index($0, " dist/") == 3 { next }
-        { print }
-    '
+    git status --porcelain=v1 --untracked-files=no
 }
 
 # @brief Capture the pre-run tracked and non-managed untracked state.
@@ -183,16 +187,14 @@ capture_baseline() {
 
 # @brief Verify that destructive cleanup cannot remove user or tracked data.
 # @details Fails when any tracked file lives under a managed artifact path or
-#   inside a `__pycache__` tree, and fails when `dist` contains an untracked
-#   entry that is not a generated distribution archive. Tracked `dist` entries
-#   are preserved and never block cleanup. Runs before any write or delete
-#   operation so unsafe repositories are reported instead of modified. Time
+#   inside a `__pycache__` tree. Runs before any write or delete operation so
+#   unsafe repositories are reported instead of modified. `dist/` entries are
+#   never inspected because the pre-release pipeline does not own them. Time
 #   complexity O(n) over managed path entries.
 # @return {int} 0 when cleanup is safe; 1 otherwise.
-# @satisfies DES-043, REQ-139
+# @satisfies DES-043, REQ-139, REQ-152
 assert_safe_cleanup_targets() {
     local tracked
-    local entry
 
     tracked=$(git ls-files -- "${MANAGED_PATHS[@]}" ':(glob)**/__pycache__/**') || return 1
     if [ -n "${tracked}" ]; then
@@ -200,51 +202,33 @@ assert_safe_cleanup_targets() {
         printf '%s\n' "${tracked}" >&2
         return 1
     fi
-
-    if [ -d "dist" ]; then
-        for entry in dist/* dist/.[!.]* dist/..?*; do
-            if [ ! -e "${entry}" ] && [ ! -L "${entry}" ]; then
-                continue
-            fi
-            if [ -n "$(git ls-files -- "${entry}")" ]; then
-                continue
-            fi
-            case "${entry}" in
-                dist/.gitignore)
-                    ;;
-                dist/*.tar.gz|dist/*.whl|dist/*.zip|dist/*.egg)
-                    ;;
-                *)
-                    log_error "dist contains an untracked non-generated entry: ${entry}"
-                    return 1
-                    ;;
-            esac
-        done
-    elif [ -e "dist" ]; then
-        log_error "dist exists but is not a directory."
-        return 1
-    fi
     return 0
 }
 
-# @brief List untracked generated release archives in `dist`.
-# @details Enumerates top-level `dist` sdist, wheel, zip, and egg archives and
-#   prints every path that Git does not track, so tracked release deliverables
-#   are never selected for removal. Time complexity O(n) over `dist` entry
-#   count.
-# @return {str} Newline-separated untracked archive paths; empty when none.
-# @satisfies DES-026, REQ-081, REQ-082
-list_untracked_dist_archives() {
-    local entry
+# @brief Create the temporary distribution build output directory.
+# @details Creates one unique directory with `mktemp -d` under `TMPDIR` (or
+#   `/tmp`), resolves its canonical path, and rejects any location inside the
+#   repository working tree so the delegated build never writes into the
+#   checkout. Stores the path in the global `TEMP_BUILD_DIR` reused by the
+#   build invocation, the artifact check, and every cleanup path. Time
+#   complexity O(1) excluding filesystem latency.
+# @return {int} 0 when a directory outside the working tree was created; 1
+#   otherwise.
+# @satisfies DES-066, REQ-153
+create_temp_build_dir() {
+    local candidate
 
-    if [ ! -d "dist" ]; then
-        return 0
-    fi
-    for entry in dist/*.tar.gz dist/*.whl dist/*.zip dist/*.egg; do
-        if [ -z "$(git ls-files -- "${entry}")" ]; then
-            printf '%s\n' "${entry}"
-        fi
-    done
+    candidate=$(mktemp -d "${TMPDIR:-/tmp}/shellscripts-pre-release-build.XXXXXXXX") || return 1
+    candidate=$(cd -- "${candidate}" 2>/dev/null && pwd -P) || return 1
+    case "${candidate}/" in
+        "${PROJECT_ROOT}/"*)
+            rm -rf -- "${candidate}" || true
+            log_error "Temporary build directory resolves inside the repository: ${candidate}"
+            return 1
+            ;;
+    esac
+    TEMP_BUILD_DIR="${candidate}"
+    printf 'Temporary build directory: %s\n' "${TEMP_BUILD_DIR}"
     return 0
 }
 
@@ -478,23 +462,30 @@ check_e2e_tests() {
 }
 
 # @brief Validate generated sdist and wheel release artifacts.
-# @details Requires at least one non-empty sdist and one non-empty wheel in
-#   `dist`, then verifies archive readability with the Python standard library
-#   (`tarfile` listing and `zipfile` CRC test) independently from the build
-#   script. Time complexity O(n) over archive contents.
+# @details Requires an existing temporary build directory holding at least one
+#   non-empty sdist and one non-empty wheel, then verifies archive readability
+#   with the Python standard library (`tarfile` listing and `zipfile` CRC test)
+#   independently from the build script. No `dist/` entry is inspected. Time
+#   complexity O(n) over archive contents.
 # @return {int} 0 when the release artifacts are valid; 1 otherwise.
-# @satisfies DES-025, REQ-136
+# @satisfies DES-025, REQ-136, REQ-152, REQ-154
 check_artifacts() {
-    local -a sdists=("dist"/*.tar.gz)
-    local -a wheels=("dist"/*.whl)
     local artifact
+    local -a sdists
+    local -a wheels
 
+    if [ -z "${TEMP_BUILD_DIR}" ] || [ ! -d "${TEMP_BUILD_DIR}" ]; then
+        log_error "Missing temporary build directory; artifact validation cannot run."
+        return 1
+    fi
+    sdists=("${TEMP_BUILD_DIR}"/*.tar.gz)
+    wheels=("${TEMP_BUILD_DIR}"/*.whl)
     if [ "${#sdists[@]}" -eq 0 ]; then
-        log_error "Missing sdist artifact (.tar.gz) in dist/."
+        log_error "Missing sdist artifact (.tar.gz) in ${TEMP_BUILD_DIR}."
         return 1
     fi
     if [ "${#wheels[@]}" -eq 0 ]; then
-        log_error "Missing wheel artifact (.whl) in dist/."
+        log_error "Missing wheel artifact (.whl) in ${TEMP_BUILD_DIR}."
         return 1
     fi
 
@@ -527,18 +518,18 @@ check_artifacts() {
 # @brief Remove every filesystem artifact generated by the pipeline.
 # @details Refuses to delete any tracked entry under the managed artifact paths,
 #   then removes the `build`, `.pytest_cache`, and `src/shellscripts.egg-info`
-#   paths, every untracked generated `dist` archive, and every `__pycache__`
-#   directory under `src` and `tests`, and prints one parser-stable `clean`
-#   evidence line. Tracked `dist` deliverables are preserved. Time complexity
-#   O(n) over removed artifact-tree entries.
+#   paths, every `__pycache__` directory under `src` and `tests`, and the
+#   temporary build output directory, and prints one parser-stable `clean`
+#   evidence line. No `dist/` entry is touched. Time complexity O(n) over
+#   removed artifact-tree entries.
 # @return {int} 0 when cleanup succeeds; 1 when a tracked entry blocks removal
 #   or a filesystem deletion fails.
-# @satisfies DES-026, DES-027, REQ-081, REQ-082, REQ-137
+# @satisfies DES-026, DES-027, DES-068, REQ-081, REQ-082, REQ-137, REQ-152,
+#   REQ-153
 cleanup_artifacts() {
     local tracked
     local path
     local pycache_dirs
-    local archives
 
     printf '==> Cleaning generated artifacts\n'
     tracked=$(git ls-files -- "${MANAGED_PATHS[@]}" ':(glob)**/__pycache__/**') || return 1
@@ -554,12 +545,9 @@ cleanup_artifacts() {
         fi
     done
 
-    archives=$(list_untracked_dist_archives) || return 1
-    while IFS= read -r path; do
-        if [ -n "${path}" ]; then
-            rm -f -- "${path}" || return 1
-        fi
-    done <<< "${archives}"
+    if [ -n "${TEMP_BUILD_DIR}" ] && [ -d "${TEMP_BUILD_DIR}" ]; then
+        rm -rf -- "${TEMP_BUILD_DIR}" || return 1
+    fi
 
     pycache_dirs=$(find src tests -type d -name __pycache__ -print) || return 1
     if [ -n "${pycache_dirs}" ]; then
@@ -568,24 +556,22 @@ cleanup_artifacts() {
         done <<< "${pycache_dirs}"
     fi
 
-    printf 'clean: build .pytest_cache src/shellscripts.egg-info __pycache__ dist:untracked-archives\n'
+    printf 'clean: build .pytest_cache src/shellscripts.egg-info __pycache__ temporary-build-dir\n'
     return 0
 }
 
 # @brief Verify repository integrity against the pre-run snapshot.
-# @details Compares non-managed tracked modifications and non-managed untracked
-#   files with the baseline captured before any write, treating the `dist/`
-#   archive set as managed output of the delegated build, and explicitly asserts
-#   that every managed artifact path and every `__pycache__` directory has been
-#   removed, including Git-ignored build output, and that no untracked generated
-#   `dist` archive remains. Time complexity O(n) over repository
-#   entry count.
+# @details Compares tracked modifications and non-managed untracked files with
+#   the baseline captured before any write, and explicitly asserts that every
+#   managed artifact path, the temporary build directory, and every
+#   `__pycache__` directory have been removed. No `dist/` entry participates in
+#   the comparison beyond its ordinary tracked or untracked classification.
+#   Time complexity O(n) over repository entry count.
 # @return {int} 0 when the repository matches the safe baseline; 1 otherwise.
-# @satisfies DES-044, REQ-081, REQ-082, REQ-138
+# @satisfies DES-044, REQ-081, REQ-082, REQ-138, REQ-152
 check_repository_integrity() {
     local tracked_now
     local untracked_now
-    local archives_now
     local path
     local pycache_dir
 
@@ -612,10 +598,8 @@ check_repository_integrity() {
         fi
     done
 
-    archives_now=$(list_untracked_dist_archives) || return 1
-    if [ -n "${archives_now}" ]; then
-        log_error "Untracked generated dist archive remains after cleanup:"
-        printf '%s\n' "${archives_now}" >&2
+    if [ -n "${TEMP_BUILD_DIR}" ] && [ -e "${TEMP_BUILD_DIR}" ]; then
+        log_error "Temporary build directory remains after cleanup: ${TEMP_BUILD_DIR}"
         return 1
     fi
 
@@ -700,8 +684,9 @@ run_check "unit-tests" env PYTHONPATH="${PWD}/src" "${PYTHON_BIN}" -m pytest tes
 check_integration_tests || fail_fast
 check_e2e_tests || fail_fast
 
-log_phase "Phase 5: Distribution build and artifact validation"
-run_check "build" bash scripts/build.sh || fail_fast
+log_phase "Phase 5: Temporary build and artifact validation"
+run_check "temporary-build-directory" create_temp_build_dir || fail_fast
+run_check "build" env BUILD_DIST_DIR="${TEMP_BUILD_DIR}" bash scripts/build.sh || fail_fast
 run_check "artifacts" check_artifacts || fail_fast
 
 log_phase "Phase 6: Cleanup and repository integrity"

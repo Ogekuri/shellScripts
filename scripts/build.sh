@@ -4,28 +4,39 @@
 # Distribution package build pipeline for shellScripts.
 
 # @file scripts/build.sh
-# @brief Build every distribution deliverable and keep it available in dist/.
+# @brief Build every distribution deliverable into the resolved output directory.
 # @details Resolves the Git repository root from the script location, validates
 #   Python 3.11 or newer plus one supported build tool (`uv build` preferred,
-#   `python3 -m build` fallback), resolves a deterministic SOURCE_DATE_EPOCH
-#   from the tracked `.build-epoch` file,
-#   removes every previous `dist/` archive of any version together with the
-#   intermediate build trees while preserving non-generated `dist/` entries,
-#   builds sdist and wheel packages into `dist/`, removes every intermediate
-#   artifact produced by the build process, validates that both archive classes
-#   are non-empty, readable, and member-compliant, and prints one summary
-#   listing every deliverable left in `dist/`. Registers EXIT, INT, and TERM
-#   traps so generated residue is removed on every termination path after the
-#   project root is resolved. Emits one PASS or FAIL evidence line per phase
-#   and terminates with a non-zero status on any mandatory failure.
+#   `python3 -m build` fallback), resolves the output directory from the
+#   `BUILD_DIST_DIR` environment variable (default `dist`), resolves a
+#   deterministic SOURCE_DATE_EPOCH from the tracked `.build-epoch` file,
+#   removes every previous archive of any version together with the
+#   intermediate build trees while preserving non-generated output-directory
+#   entries, builds sdist and wheel packages into the output directory, removes
+#   every intermediate artifact produced by the build process, validates that
+#   both archive classes are non-empty, readable, and member-compliant, and
+#   prints one summary listing every deliverable left in the output directory.
+#   Registers EXIT, INT, and TERM traps so generated residue is removed on
+#   every termination path after the project root is resolved. Emits one PASS
+#   or FAIL evidence line per phase and terminates with a non-zero status on any
+#   mandatory failure.
 # @satisfies DES-040, DES-041, DES-045, DES-046, DES-047, DES-052, DES-053,
-#   DES-060, DES-061, DES-063, REQ-134, REQ-135, REQ-141, REQ-145, REQ-146,
-#   REQ-148, REQ-149, REQ-150, REQ-151
+#   DES-060, DES-061, DES-063, DES-065, REQ-134, REQ-135, REQ-141, REQ-145,
+#   REQ-146, REQ-148, REQ-149, REQ-150, REQ-151
 
 set -Eeuo pipefail
 shopt -s nullglob
 
 DIST_DIR="dist"
+# @brief Resolve the distribution output directory from the environment.
+# @details `BUILD_DIST_DIR` overrides the default `dist` output directory so a
+#   caller can redirect packaging, archive normalization, and validation into a
+#   temporary location; an unset or empty variable preserves the canonical
+#   `dist` location used by the release workflow.
+# @satisfies DES-065, REQ-134
+if [ -n "${BUILD_DIST_DIR:-}" ]; then
+    DIST_DIR="${BUILD_DIST_DIR}"
+fi
 EPOCH_FILE=".build-epoch"
 EPOCH_SOURCE=""
 PYTHON_BIN=""
@@ -175,7 +186,9 @@ resolve_python_interpreter() {
 # @brief Validate the Python runtime and select one build tool.
 # @details Requires Python 3.11 or newer, then selects `uv build` when `uv`
 #   is executable or `<python> -m build` when the `build` module is
-#   importable. Time complexity O(1) excluding interpreter startup.
+#   importable. The resolved command vector carries the output-directory flag
+#   of the selected tool so packaging always targets the resolved output
+#   directory. Time complexity O(1) excluding interpreter startup.
 # @note Build-backend constraints: `pyproject.toml` `[build-system].requires`
 #   declares lower bounds only (`setuptools>=77.0.0`, `wheel>=0.41.0`,
 #   `build>=1.0.0`). The backend version is therefore resolved at build time
@@ -194,13 +207,13 @@ resolve_build_tool() {
 
     if command -v uv >/dev/null 2>&1; then
         BUILD_TOOL="uv build"
-        BUILD_CMD=(uv build)
+        BUILD_CMD=(uv build --out-dir "${DIST_DIR}")
         return 0
     fi
 
     if "${PYTHON_BIN}" -c 'import build' >/dev/null 2>&1; then
         BUILD_TOOL="${PYTHON_BIN} -m build"
-        BUILD_CMD=("${PYTHON_BIN}" -m build)
+        BUILD_CMD=("${PYTHON_BIN}" -m build --outdir "${DIST_DIR}")
         return 0
     fi
 
@@ -264,13 +277,13 @@ assert_no_tracked_intermediates() {
 }
 
 # @brief Remove every previous build archive and intermediate build tree.
-# @details Creates `dist/` when absent, deletes every top-level sdist, wheel,
-#   zip, and egg archive regardless of its version number and regardless of Git
-#   tracking status, then removes the build-tool `dist/.gitignore` metadata and
-#   the `build` and `src/shellscripts.egg-info` intermediate trees. Non-generated
-#   `dist/` entries are preserved. Executed as the first data-mutating build
-#   phase so a build always starts from an empty archive set. Time complexity
-#   O(n) over removed entries.
+# @details Creates the output directory when absent, deletes every top-level
+#   sdist, wheel, zip, and egg archive regardless of its version number and
+#   regardless of Git tracking status, then removes the build-tool `.gitignore`
+#   metadata and the `build` and `src/shellscripts.egg-info` intermediate trees.
+#   Non-generated output-directory entries are preserved. Executed as the first
+#   data-mutating build phase so a build always starts from an empty archive
+#   set. Time complexity O(n) over removed entries.
 # @return {int} 0 on success; 1 when the intermediate-tree guard or a removal blocks.
 # @satisfies DES-041, DES-060, REQ-141
 clean_previous_builds() {
@@ -289,12 +302,12 @@ clean_previous_builds() {
     return 0
 }
 
-# @brief Remove build-tool metadata that would hide non-generated dist files.
-# @details `uv build` writes `dist/.gitignore` containing a blanket `*` rule,
-#   which would hide every non-generated file placed in `dist/`. The metadata
-#   file is generated output, so it is removed to keep the repository root
-#   `.gitignore` inverse rules authoritative; a tracked metadata file is never
-#   deleted. Time complexity O(1).
+# @brief Remove build-tool metadata that would hide non-generated output files.
+# @details `uv build` writes a `.gitignore` containing a blanket `*` rule into
+#   the output directory, which would hide every non-generated file placed
+#   there. The metadata file is generated output, so it is removed to keep the
+#   repository root `.gitignore` inverse rules authoritative; a tracked metadata
+#   file is never deleted. Time complexity O(1).
 # @return {int} 0 on success; 1 when a tracked metadata file blocks removal.
 # @satisfies DES-041, REQ-141
 remove_generated_dist_metadata() {
@@ -333,11 +346,11 @@ remove_intermediate_build_trees() {
     return 0
 }
 
-# @brief Remove temporary packaging files left in `dist`.
+# @brief Remove temporary packaging files left in the output directory.
 # @details Deletes same-directory `.tmp` rewrite artifacts that an interrupted
 #   sdist rewrite may leave behind, so no temporary build file survives in the
 #   working tree. Idempotent: absent entries are skipped. Time complexity O(n)
-#   over `dist` entry count.
+#   over output-directory entry count.
 # @return {int} 0 on success; 1 when a removal fails.
 # @satisfies DES-061, REQ-148
 remove_generated_temp_files() {
@@ -377,12 +390,13 @@ remove_pycache_trees() {
 
 # @brief Remove every intermediate artifact produced by the build process.
 # @details Consolidates post-build repository hygiene: intermediate `build/` and
-#   `src/shellscripts.egg-info/` trees, build-tool `dist/.gitignore` metadata,
-#   leftover `dist` temporary rewrite files, and `src` bytecode caches. Invoked
-#   after packaging and from the EXIT trap, so every termination path leaves
-#   the working tree free of generated residue while validated deliverables
-#   stay in `dist/`. Prints one parser-stable `clean` evidence line. Idempotent.
-#   Time complexity O(n) over removed entries.
+#   `src/shellscripts.egg-info/` trees, build-tool `.gitignore` metadata in the
+#   resolved output directory, leftover temporary rewrite files in that
+#   directory, and `src` bytecode caches. Invoked after packaging and from the
+#   EXIT trap, so every termination path leaves the working tree free of
+#   generated residue while validated deliverables stay in the output directory.
+#   Prints one parser-stable `clean` evidence line. Idempotent. Time complexity
+#   O(n) over removed entries.
 # @pre Current directory equals the repository root.
 # @post No intermediate build artifact remains in the working tree.
 # @return {int} 0 on success; 1 when a tracked entry or a removal blocks.
@@ -392,7 +406,7 @@ clean_build_residue() {
     remove_generated_dist_metadata || return 1
     remove_generated_temp_files || return 1
     remove_pycache_trees || return 1
-    printf 'clean: build src/shellscripts.egg-info dist:.gitignore dist:*.tmp src:__pycache__\n'
+    printf 'clean: build src/shellscripts.egg-info output:.gitignore output:*.tmp src:__pycache__\n'
     return 0
 }
 
@@ -498,11 +512,11 @@ if __name__ == "__main__":
 
 # @brief Execute the selected distribution build tool.
 # @details Runs the resolved build command vector from the repository root so
-#   sdist and wheel packages are written into `dist/`. Prints the resolved
-#   epoch together with its source token, so the archive timestamp provenance
-#   is visible in the build log. The exported SOURCE_DATE_EPOCH is inherited by
-#   the build process. Time complexity O(n) over project size plus toolchain
-#   latency.
+#   sdist and wheel packages are written into the resolved output directory.
+#   Prints the resolved epoch together with its source token, so the archive
+#   timestamp provenance is visible in the build log. The exported
+#   SOURCE_DATE_EPOCH is inherited by the build process. Time complexity O(n)
+#   over project size plus toolchain latency.
 # @pre `BUILD_CMD` is a non-empty command vector set by `resolve_build_tool`.
 # @pre `EPOCH_SOURCE` records the resolved epoch origin.
 # @return {int} 0 on success; 1 when the build tool exits non-zero.
@@ -734,10 +748,10 @@ verify_artifacts() {
 }
 
 # @brief Print the final deliverable summary.
-# @details Iterates every file currently present in `dist/`, including
-#   preserved non-generated entries, and prints its path and human-readable
-#   size, followed by the final success line. Time complexity O(n) over
-#   `dist/` file count.
+# @details Iterates every file currently present in the resolved output
+#   directory, including preserved non-generated entries, and prints its path
+#   and human-readable size, followed by the final success line. Time
+#   complexity O(n) over output-directory file count.
 # @return {None} Writes summary lines to stdout.
 # @satisfies DES-046, DES-047, REQ-135
 print_summary() {
@@ -745,7 +759,7 @@ print_summary() {
     local size
 
     printf '\n========================================\n'
-    printf 'BUILD SUMMARY: deliverables in %s/\n' "${DIST_DIR}"
+    printf 'BUILD SUMMARY: deliverables in %s\n' "${DIST_DIR}"
     printf '========================================\n'
     for artifact in "${DIST_DIR}"/*; do
         if [ -f "${artifact}" ]; then
@@ -754,7 +768,7 @@ print_summary() {
         fi
     done
     printf '========================================\n'
-    printf 'Build PASSED: distribution artifacts are available in %s/.\n' "${DIST_DIR}"
+    printf 'Build PASSED: distribution artifacts are available in %s.\n' "${DIST_DIR}"
 }
 
 # @brief Register termination traps before the pipeline starts.

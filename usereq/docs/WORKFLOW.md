@@ -12,7 +12,7 @@
 - ID: `PROC:build`
   - type: `process`
   - parent_process: `null`
-  - role: `Local shell pipeline that removes every previous dist archive, builds validated reproducible sdist and wheel deliverables, and removes all build residue with termination-path cleanup and per-phase PASS/FAIL evidence`
+  - role: `Local shell pipeline that removes every previous output-directory archive, builds validated reproducible sdist and wheel deliverables in the resolved output directory, and removes all build residue with termination-path cleanup and per-phase PASS/FAIL evidence`
   - entrypoint_symbols:
     - `scripts/build.sh (top-level script entrypoint)`
   - defining_files:
@@ -21,7 +21,7 @@
 - ID: `PROC:pre-release-check`
   - type: `process`
   - parent_process: `null`
-  - role: `Local shell pipeline that executes mandatory pre-release verification checks (structure, toolchain, syntax, optional quality, tests, delegated build, artifacts, cleanup, repository integrity)`
+  - role: `Local shell pipeline that executes mandatory pre-release verification checks (structure, toolchain, syntax, optional quality, tests, temporary-directory build, artifacts, cleanup, repository integrity) and never reads, verifies, or modifies dist/ entries`
   - entrypoint_symbols:
     - `scripts/pre-release-check.sh (top-level script entrypoint)`
   - defining_files:
@@ -71,9 +71,9 @@
   - `scripts/build.sh (top-level script entrypoint)` [`scripts/build.sh`]
 - Lifecycle/trigger:
   - Trigger: developer or the standalone `scripts/pre-release-check.sh` invokes the build script.
-  - Startup: registers EXIT, INT, and TERM traps before phase 1; resolves canonical script and base directories, resolves the Git repository root, selects `.venv/bin/python3` when present or `python3` otherwise, validates Python 3.11 or newer, selects `uv build` or `<python> -m build`, and resolves and exports `SOURCE_DATE_EPOCH` (validated environment value or the tracked `.build-epoch` file). Trap cleanup runs only after the project root is resolved.
-  - Runtime mode: sequential fail-fast pipeline; every `dist` sdist, wheel, zip, and egg archive of any version plus the intermediate build trees are removed in the first data-mutating phase; after packaging, the sdist is rewritten without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members, a post-build repository-hygiene phase removes build trees, generated metadata, temporary rewrite files, and `src` bytecode caches, then generated archives are validated (readability plus required and forbidden members) and summarized. Each phase emits `PASS:` or `FAIL:` evidence; the sdist rewrite pins the gzip header and member mtimes to `SOURCE_DATE_EPOCH`.
-  - Shutdown: exits `1` on the first mandatory failure and `0` after a successful build, hygiene, validation, and summary; final deliverables remain in `dist/`. The EXIT trap removes every intermediate build artifact through `clean_build_residue` on every termination path, preserves a non-zero status, and prints `BUILD FAILED during: <phase>`; INT and TERM terminate with statuses 130 and 143.
+  - Startup: registers EXIT, INT, and TERM traps before phase 1; resolves canonical script and base directories, resolves the Git repository root, selects `.venv/bin/python3` when present or `python3` otherwise, validates Python 3.11 or newer, resolves the output directory from `BUILD_DIST_DIR` with `dist` as default, selects `uv build --out-dir <output>` or `<python> -m build --outdir <output>`, and resolves and exports `SOURCE_DATE_EPOCH` (validated environment value or the tracked `.build-epoch` file). Trap cleanup runs only after the project root is resolved.
+  - Runtime mode: sequential fail-fast pipeline; every output-directory sdist, wheel, zip, and egg archive of any version plus the intermediate build trees are removed in the first data-mutating phase; after packaging, the sdist is rewritten without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members, a post-build repository-hygiene phase removes build trees, generated metadata, temporary rewrite files, and `src` bytecode caches, then generated archives are validated (readability plus required and forbidden members) and summarized. Each phase emits `PASS:` or `FAIL:` evidence; the sdist rewrite pins the gzip header and member mtimes to `SOURCE_DATE_EPOCH`.
+  - Shutdown: exits `1` on the first mandatory failure and `0` after a successful build, hygiene, validation, and summary; final deliverables remain in the resolved output directory. The EXIT trap removes every intermediate build artifact through `clean_build_residue` on every termination path, preserves a non-zero status, and prints `BUILD FAILED during: <phase>`; INT and TERM terminate with statuses 130 and 143.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - `register_traps(...)`: Install EXIT, INT, and TERM handlers before phase 1 [`scripts/build.sh`]
@@ -83,34 +83,34 @@
   - `begin_phase(...)`, `pass_phase(...)`, `fail_phase(...)`: Phase header and `PASS:`/`FAIL:` evidence emission; `fail_phase` exits with status 1 [`scripts/build.sh`]
   - `resolve_project_root(...)`: Resolve the Git repository root from the script location and change into it [`scripts/build.sh`]
   - `resolve_python_interpreter(...)`: Select `.venv/bin/python3` when executable, otherwise `python3` [`scripts/build.sh`]
-  - `resolve_build_tool(...)`: Validate Python 3.11 or newer and select `uv build` or `<python> -m build` [`scripts/build.sh`]
+  - `resolve_build_tool(...)`: Validate Python 3.11 or newer and select the `uv build --out-dir <output>` or `<python> -m build --outdir <output>` command vector [`scripts/build.sh`]
   - `resolve_source_date_epoch(...)`: Validate the supplied `SOURCE_DATE_EPOCH` or read it from the tracked `.build-epoch` file, record the epoch source token, then export it [`scripts/build.sh`]
-  - `clean_previous_builds(...)`: Delete every `dist` sdist, wheel, zip, and egg archive regardless of version number and Git tracking status, then remove generated `dist` metadata and intermediate build trees while preserving non-generated entries [`scripts/build.sh`]
+  - `clean_previous_builds(...)`: Delete every output-directory sdist, wheel, zip, and egg archive regardless of version number and Git tracking status, then remove generated output-directory metadata and intermediate build trees while preserving non-generated entries [`scripts/build.sh`]
     - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
-    - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata that would hide non-generated files [`scripts/build.sh`]
+    - `remove_generated_dist_metadata(...)`: Remove the build-tool `.gitignore` metadata in the resolved output directory so it cannot hide non-generated files [`scripts/build.sh`]
     - `remove_intermediate_build_trees(...)`: Remove `build` and `src/shellscripts.egg-info` before packaging, refusing tracked entries [`scripts/build.sh`]
       - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
   - `run_distribution_build(...)`: Execute packaging, rewrite generated sdist members, and normalize generated dist and source-tree metadata [`scripts/build.sh`]
-    - `build_distributions(...)`: Execute the resolved build command vector from the repository root and print the resolved epoch with its source token [`scripts/build.sh`]
+    - `build_distributions(...)`: Execute the resolved build command vector from the repository root so packages are written into the resolved output directory, and print the resolved epoch with its source token [`scripts/build.sh`]
     - `strip_sdist_generated_members(...)`: Rewrite each sdist without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members through an atomic same-directory replacement, pinning member mtimes and the gzip header timestamp to `SOURCE_DATE_EPOCH` [`scripts/build.sh`]
-    - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata after a successful build [`scripts/build.sh`]
+    - `remove_generated_dist_metadata(...)`: Remove the build-tool `.gitignore` metadata from the resolved output directory after a successful build [`scripts/build.sh`]
     - `remove_intermediate_build_trees(...)`: Remove `build` and `src/shellscripts.egg-info` after packaging, refusing tracked entries [`scripts/build.sh`]
       - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
   - `clean_build_residue(...)`: Post-build repository hygiene removing intermediate trees, generated metadata, temporary rewrite files, and source bytecode caches, then print one `clean` evidence line [`scripts/build.sh`]
     - `remove_intermediate_build_trees(...)`: Remove `build` and `src/shellscripts.egg-info` after packaging, refusing tracked entries [`scripts/build.sh`]
       - `assert_no_tracked_intermediates(...)`: Refuse removal when tracked files exist under `build` or `src/shellscripts.egg-info` [`scripts/build.sh`]
-    - `remove_generated_dist_metadata(...)`: Remove the build-tool `dist/.gitignore` metadata [`scripts/build.sh`]
-    - `remove_generated_temp_files(...)`: Remove leftover `dist` temporary rewrite artifacts [`scripts/build.sh`]
+    - `remove_generated_dist_metadata(...)`: Remove the build-tool `.gitignore` metadata from the resolved output directory [`scripts/build.sh`]
+    - `remove_generated_temp_files(...)`: Remove leftover output-directory temporary rewrite artifacts [`scripts/build.sh`]
     - `remove_pycache_trees(...)`: Remove every `__pycache__` directory under `src` [`scripts/build.sh`]
   - `verify_artifacts(...)`: Require non-empty sdist and wheel deliverables, validate archive readability with `tarfile` and `zipfile`, and validate archive members [`scripts/build.sh`]
     - `verify_sdist_members(...)`: Require `pyproject.toml` and `src/shell_scripts/__init__.py`; reject `tests/`, `src/shellscripts.egg-info/`, `setup.cfg`, and `MANIFEST.in` members [`scripts/build.sh`]
     - `verify_wheel_members(...)`: Require `*.dist-info/licenses/LICENSE` and an `entry_points.txt` declaring `shellscripts` and `s`; reject members outside `shell_scripts/` and `*.dist-info/` [`scripts/build.sh`]
-  - `print_summary(...)`: List every deliverable file in `dist/` with its size [`scripts/build.sh`]
+  - `print_summary(...)`: List every deliverable file in the resolved output directory with its size [`scripts/build.sh`]
 - External Boundaries:
   - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `python3`/`.venv/bin/python3`, `uv build` or `python3 -m build`, `rm`, `mkdir`, `du`, `cut`).
-  - File-system boundary: reads the tracked `.build-epoch` file, creates `dist/`, deletes every `dist` archive of any version, removes intermediate build trees, generated metadata, temporary rewrite files, and `src` bytecode caches, rewrites the sdist archive in place, and writes sdist and wheel deliverables into `dist/`.
+  - File-system boundary: reads the tracked `.build-epoch` file, creates the resolved output directory, deletes every output-directory archive of any version, removes intermediate build trees, generated metadata, temporary rewrite files, and `src` bytecode caches, rewrites the sdist archive in place, and writes sdist and wheel deliverables into the resolved output directory.
   - Terminal boundary: `PASS:`/`FAIL:` phase evidence lines, `clean` hygiene evidence, build-tool output, resolved epoch and epoch-source evidence, artifact validation evidence, and the `BUILD SUMMARY` deliverable list on stdout; diagnostics and signal notices on stderr.
-  - Environment boundary: reads the `SOURCE_DATE_EPOCH` variable, exports the resolved value to the build backend, and falls back to the tracked `.build-epoch` file when the variable is unset.
+  - Environment boundary: reads `BUILD_DIST_DIR` to select the output directory, reads the `SOURCE_DATE_EPOCH` variable, exports the resolved value to the build backend, and falls back to the tracked `.build-epoch` file when the variable is unset.
 
 ### `PROC:pre-release-check`
 
@@ -119,21 +119,21 @@
 - Lifecycle/trigger:
   - Trigger: developer invokes the standalone script before an official release.
   - Startup: resolves canonical script and base directories, resolves the Git repository root via `git rev-parse --show-toplevel`, and changes the working directory to the repository root.
-  - Safety preflight: validates that managed artifact paths contain no tracked files and that untracked `dist` entries are generated archives, then captures the pre-run non-managed tracked and untracked baseline, excluding the `dist` archive set owned by the delegated build, before enabling cleanup.
-  - Runtime mode: sequential fail-fast pipeline with phase headers; structure, permissions, toolchain, Bash/Python syntax, optional configured quality tools, pytest, delegated `scripts/build.sh`, artifact validation, cleanup, and repository-integrity checks run in order.
-  - Shutdown: `EXIT`, `INT`, and `TERM` traps remove generated artifacts on every termination path without overriding a failed check; a cleanup failure after passing checks forces exit `1`; the final summary names the failed check or confirms success.
+  - Safety preflight: validates that managed artifact paths contain no tracked files, then captures the pre-run non-managed tracked and untracked baseline over the complete repository state before enabling cleanup.
+  - Runtime mode: sequential fail-fast pipeline with phase headers; structure, permissions, toolchain, Bash/Python syntax, optional configured quality tools, pytest, temporary build-directory creation, delegated `scripts/build.sh` bound to `BUILD_DIST_DIR`, artifact validation inside that directory, cleanup, and repository-integrity checks run in order; no check reads, verifies, or modifies `dist/` entries.
+  - Shutdown: `EXIT`, `INT`, and `TERM` traps remove generated artifacts plus the temporary build directory on every termination path without overriding a failed check; a cleanup failure after passing checks forces exit `1`; the final summary names the failed check or confirms success.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - `resolve_project_root(...)`: Resolve the Git repository root from the script location and change into it [`scripts/pre-release-check.sh`]
   - `preflight(...)`: Validate cleanup safety and capture the pre-run repository baseline [`scripts/pre-release-check.sh`]
-    - `assert_safe_cleanup_targets(...)`: Refuse cleanup when tracked files exist under `build`, `.pytest_cache`, `src/shellscripts.egg-info`, or `__pycache__`, or when untracked non-generated `dist` entries exist [`scripts/pre-release-check.sh`]
+    - `assert_safe_cleanup_targets(...)`: Refuse cleanup when tracked files exist under `build`, `.pytest_cache`, `src/shellscripts.egg-info`, or `__pycache__` [`scripts/pre-release-check.sh`]
     - `capture_baseline(...)`: Store non-managed tracked and filtered untracked repository state [`scripts/pre-release-check.sh`]
-      - `collect_tracked_nonmanaged(...)`: Filter `dist/` entries from the tracked modification status [`scripts/pre-release-check.sh`]
+      - `collect_tracked_nonmanaged(...)`: Collect the tracked modification status over the complete repository [`scripts/pre-release-check.sh`]
       - `collect_untracked_nonmanaged(...)`: Filter managed artifact paths from the untracked file list [`scripts/pre-release-check.sh`]
   - `run_check(...)`: Execute one mandatory check and print `PASS`/`FAIL` evidence [`scripts/pre-release-check.sh`]
   - `skip_check(...)`: Record one non-applicable check as `SKIP` without counting it as passed [`scripts/pre-release-check.sh`]
   - `fail_fast(...)`: Clean generated artifacts, print the failed-check summary, and exit `1` [`scripts/pre-release-check.sh`]
-    - `cleanup_artifacts(...)`: Remove managed artifact paths, untracked generated `dist` archives, and `__pycache__` trees without touching tracked files [`scripts/pre-release-check.sh`]
+    - `cleanup_artifacts(...)`: Remove managed artifact paths, the temporary build directory, and `__pycache__` trees without touching tracked files [`scripts/pre-release-check.sh`]
   - `check_project_structure(...)`: Validate mandatory project files and directories, including the tracked `.build-epoch` file [`scripts/pre-release-check.sh`]
   - `check_script_permissions(...)`: Validate executable bits on `scripts/pre-release-check.sh` and `scripts/build.sh` [`scripts/pre-release-check.sh`]
   - `resolve_python_interpreter(...)`: Select `.venv/bin/python3` when executable, otherwise `python3` [`scripts/pre-release-check.sh`]
@@ -146,18 +146,18 @@
   - `check_security(...)`: Run the configured security checker or `SKIP` when none is configured [`scripts/pre-release-check.sh`]
   - `check_integration_tests(...)`: Run `tests/integration` or `SKIP` when absent [`scripts/pre-release-check.sh`]
   - `check_e2e_tests(...)`: Run `tests/e2e` or `SKIP` when absent [`scripts/pre-release-check.sh`]
-  - `check_artifacts(...)`: Validate non-empty readable sdist and wheel deliverables in `dist/` [`scripts/pre-release-check.sh`]
-  - `cleanup_artifacts(...)`: Remove build and test artifact groups plus untracked generated `dist` archives, and print one `clean` evidence line [`scripts/pre-release-check.sh`]
-    - `list_untracked_dist_archives(...)`: Enumerate untracked generated `dist` archives; tracked `dist` deliverables are excluded [`scripts/pre-release-check.sh`]
-  - `check_repository_integrity(...)`: Compare post-cleanup non-managed tracked and untracked state, excluding `dist/` paths, with the baseline, assert managed paths and untracked generated `dist` archives are absent [`scripts/pre-release-check.sh`]
+  - `create_temp_build_dir(...)`: Create the `mktemp -d` build output directory outside the working tree and record it in `TEMP_BUILD_DIR` [`scripts/pre-release-check.sh`]
+  - `check_artifacts(...)`: Validate non-empty readable sdist and wheel deliverables in the temporary build directory [`scripts/pre-release-check.sh`]
+  - `cleanup_artifacts(...)`: Remove build and test artifact groups plus the temporary build directory, and print one `clean` evidence line [`scripts/pre-release-check.sh`]
+  - `check_repository_integrity(...)`: Compare post-cleanup non-managed tracked and untracked state with the baseline and assert managed artifact paths and the temporary build directory are absent [`scripts/pre-release-check.sh`]
     - `collect_tracked_nonmanaged(...)`: Recompute the filtered tracked modification status for comparison [`scripts/pre-release-check.sh`]
     - `collect_untracked_nonmanaged(...)`: Recompute the filtered untracked file list for comparison [`scripts/pre-release-check.sh`]
   - `on_exit(...)`: Run cleanup for unexpected exits while preserving the original result [`scripts/pre-release-check.sh`]
     - `cleanup_artifacts(...)`: Remove managed artifact paths when preflight allowed cleanup [`scripts/pre-release-check.sh`]
   - `handle_signal(...)`: Convert `INT`/`TERM` into a cleanup-eligible failure exit status [`scripts/pre-release-check.sh`]
 - External Boundaries:
-  - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `env`, `python3`/`.venv/bin/python3` running pytest/compileall/tarfile/zipfile, `bash -n`, `bash scripts/build.sh`, `rm`, `find`).
-  - File-system boundary: reads and writes only managed generated-artifact paths, removes `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` trees plus untracked generated `dist` archives, and never deletes tracked files (including tracked `dist/` deliverables).
+  - OS/process boundary: shell built-ins and external commands (`git`, `cd`, `pwd`, `mktemp`, `env`, `python3`/`.venv/bin/python3` running pytest/compileall/tarfile/zipfile, `bash -n`, `bash scripts/build.sh`, `rm`, `find`).
+  - File-system boundary: reads and writes only managed generated-artifact paths, removes `build`, `.pytest_cache`, `src/shellscripts.egg-info`, and `__pycache__` trees plus the temporary build directory, never deletes tracked files, and never reads, verifies, or modifies `dist/` entries.
   - Terminal boundary: phase headers, parser-stable `PASS:`/`FAIL:`/`SKIP:`/`clean` evidence lines, and final `Pre-release check PASSED`/`FAILED` summary lines on stdout/stderr.
 
 ### `PROC:main`
@@ -532,7 +532,7 @@
   - direction: `PROC:pre-release-check -> PROC:build`
   - mechanism: `OS child process spawn`
   - endpoint_channel: `bash scripts/build.sh`
-  - payload_data_shape_reference: `repository working tree; child exit code gates the pre-release build check; the child removes every previous dist archive and writes the freshly built sdist and wheel archives to dist/`
+  - payload_data_shape_reference: `repository working tree plus the temporary output directory named by BUILD_DIST_DIR; child exit code gates the pre-release build check; the child removes every previous archive in that output directory and writes the freshly built sdist and wheel archives into it, where the parent validates and then removes them`
   - declaration_file_paths:
     - `scripts/pre-release-check.sh`
     - `scripts/build.sh`
