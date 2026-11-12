@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.26.1](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.1) - 2026-11-12
+## [0.26.2](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.2) - 2026-11-12
 ### ⛰️  Features
 - Update gitalias config.
 - add scripts/clean.sh build-artifact cleanup pipeline [useReq] *(clean)*
@@ -10,6 +10,8 @@
 - Remove files in dist/ dir.
 
 ### 🚜  Changes
+- clean stale dist archives before packaging [useReq] *(build)*
+  require removal of every dist archive of any version before the build tool runs; print one clean evidence line with the removed archive count; preserve non-generated dist entries; refine REQ-141 and add REQ-155 traceability; update WORKFLOW build unit evidence
 - build in temporary directory independent of dist [useReq] *(pre-release-check)*
   REQUIREMENTS.md: DES-024/025/026/043/044, DES-065..068, REQ-081/138/139, REQ-152..154; pre-release-check.sh builds via mktemp -d and BUILD_DIST_DIR, validates artifacts there, removes the temporary directory on every termination path; pre-release-check.sh no longer reads, verifies, cleans, or modifies dist/ entries; build.sh resolves the output directory from BUILD_DIST_DIR (default dist) and passes --out-dir/--outdir; update TST-015 static parsing assertions, WORKFLOW.md runtime model
 - remove and verify pre-existing dist artifacts [useReq] *(pre-release-check)*
@@ -830,7 +832,7 @@
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
 - \[0.26.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.0
-- \[0.26.1\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.1
+- \[0.26.2\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.2
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -858,4 +860,4 @@
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
 [0.26.0]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0
-[0.26.1]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.1
+[0.26.2]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.2

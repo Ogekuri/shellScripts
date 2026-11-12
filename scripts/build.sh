@@ -1,5 +1,5 @@
 #!/bin/bash
-# VERSION: 0.26.1
+# VERSION: 0.26.2
 # AUTHORS: Ogekuri
 # Distribution package build pipeline for shellScripts.
 
