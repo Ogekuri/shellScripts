@@ -59,7 +59,6 @@ INVALID_TOPIC_CLASSIFIER = "Topic :: Software Development :: Configuration Manag
 # @var RETAINED_ACTION_REFS {tuple[str, ...]} Preexisting release-step action references that MUST be retained by the PyPI migration (user-requested logic preservation).
 RETAINED_ACTION_REFS = (
     "uses: actions/checkout@v7",
-    "uses: actions/setup-python@v7",
     "uses: actions/attest-build-provenance@v4",
     "uses: mikepenz/release-changelog-builder-action@v6",
     "uses: softprops/action-gh-release@v3",

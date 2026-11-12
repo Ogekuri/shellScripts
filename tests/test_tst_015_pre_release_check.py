@@ -10,7 +10,7 @@
   `git check-ignore --no-index`.
 @satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, DES-026,
   DES-027, DES-040, DES-041, DES-042, DES-043, DES-044, DES-045, DES-046,
-  DES-047, DES-054, DES-060, DES-061, DES-063, DES-064, REQ-079, REQ-080,
+  DES-047, DES-060, DES-061, DES-063, DES-064, REQ-079, REQ-080,
   REQ-081, REQ-082, REQ-134, REQ-135, REQ-136, REQ-137, REQ-138, REQ-139,
   REQ-140, REQ-141, REQ-142, REQ-143, REQ-144, REQ-148, REQ-149, REQ-150,
   REQ-151
@@ -344,7 +344,7 @@ def test_gitignore_has_no_dist_targeting_exclusion_rules():
       `!dist/` and `!dist/**/*` re-include rules are present. Time complexity
       O(n) over rule count.
     @return {None} Assertions only.
-    @satisfies TST-015, DES-042, DES-054, REQ-140
+    @satisfies TST-015, DES-042, REQ-140
     """
 
     gitignore_text = (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8")

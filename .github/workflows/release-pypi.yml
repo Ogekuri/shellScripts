@@ -36,11 +36,11 @@ jobs:
             echo "is_master=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # 1b. No build-preparatory job runs here: distribution archives are pre-built
-  # by the local build pipeline and committed in the tagged release commit
-  # (DES-057, DES-062). The workflow consumes only those committed archives.
+  # 1b. No build-preparatory job runs here: distribution archives are produced
+  # by the local build pipeline (DES-057, DES-062). The workflow consumes only
+  # the archives present in dist/.
 
-  # 2. Publish distributions tracked at the tagged commit.
+  # 2. Publish the distribution archives.
   build-release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: check-branch
@@ -52,49 +52,6 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-
-      - name: Verify committed distribution artifacts
-        run: |
-          python - <<'PY'
-          """
-          @brief Validate non-empty distribution archives tracked by Git.
-          @details Reads the repository index under `dist/`, then requires at
-          least one existing non-empty sdist and wheel before release actions.
-          @return {None} Exits with status 1 when either archive class is absent.
-          """
-          import pathlib
-          import subprocess
-          import sys
-
-          tracked_paths = subprocess.run(
-              ["git", "ls-files", "-z", "--", "dist"],
-              check=True,
-              capture_output=True,
-          ).stdout.split(bytes([0]))
-          artifacts = [
-              pathlib.Path(path.decode("utf-8"))
-              for path in tracked_paths
-              if path
-          ]
-          for suffix, label in ((".tar.gz", "sdist"), (".whl", "wheel")):
-              matching = [
-                  path for path in artifacts if path.name.endswith(suffix)
-              ]
-              if not any(
-                  path.is_file() and path.stat().st_size > 0
-                  for path in matching
-              ):
-                  print(
-                      f"Missing non-empty tracked {label} archive in dist/.",
-                      file=sys.stderr,
-                  )
-                  raise SystemExit(1)
-          PY
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4

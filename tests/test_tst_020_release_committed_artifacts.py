@@ -1,17 +1,17 @@
 """
-@brief Validate release publication from tag-committed distributions.
+@brief Validate release publication from tag distributions.
 @details Parses `.github/workflows/release-pypi.yml` as read-only text and
-  checks tag-only release execution, exact `github.sha` checkout, the tracked
-  sdist/wheel preflight, absence of distribution builds in every workflow job,
-  and `dist/` inputs to attestation, GitHub Releases, and PyPI.
-  Unit-under-test set: release job configuration and committed-artifact
-  validation step. Call graph: each test -> `_read_workflow_text` -> workflow
-  file; workflow block tests additionally call `_extract_job_block` and
-  `_extract_step_block`. Level 0: `_extract_job_block`, `_extract_step_block`
-  (pure parsers). Level 1: `_read_workflow_text` (filesystem read). Level 2:
-  test functions (static workflow assertions). External dependency: repository
-  workflow file only; no network, writes, clock, randomness, or shared state.
-@satisfies TST-020, DES-056, DES-057, DES-058, DES-059, DES-062
+  checks tag-only release execution, exact `github.sha` checkout, absence of
+  distribution builds in every workflow job, and `dist/` inputs to attestation,
+  GitHub Releases, and PyPI.
+  Unit-under-test set: release job configuration. Call graph: each test ->
+  `_read_workflow_text` -> workflow file; workflow block tests additionally
+  call `_extract_job_block` and `_extract_step_block`. Level 0:
+  `_extract_job_block`, `_extract_step_block` (pure parsers). Level 1:
+  `_read_workflow_text` (filesystem read). Level 2: test functions (static
+  workflow assertions). External dependency: repository workflow file only;
+  no network, writes, clock, randomness, or shared state.
+@satisfies TST-020, DES-057, DES-058, DES-062
 @return {None} Pytest module scope.
 """
 
@@ -21,9 +21,6 @@ from pathlib import Path
 WORKFLOW_PATH = (
     Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release-pypi.yml"
 )
-
-# @var ARTIFACT_VALIDATION_STEP {str} Workflow step name that validates tagged-commit distribution inputs.
-ARTIFACT_VALIDATION_STEP = "Verify committed distribution artifacts"
 
 
 def _read_workflow_text() -> str:
@@ -193,49 +190,15 @@ def test_release_workflow_consumes_only_prebuilt_artifacts():
     assert "needs: check-branch" in release_job
 
 
-def test_release_job_requires_tracked_nonempty_sdist_and_wheel():
-    """
-    @brief Verify tagged repository archives pass a tracked-file preflight.
-    @details Requires the workflow validation step to enumerate Git-index paths
-      under `dist/`, distinguish `.tar.gz` and `.whl`, require regular files
-      with positive sizes, and run before provenance or publication actions.
-      Expected output: both artifact classes are checked before release.
-    @return {None} Assertion-only test result.
-    @satisfies TST-020, DES-059
-    """
-    workflow_text = _read_workflow_text()
-    release_job = _extract_job_block(workflow_text, "build-release")
-    validation_step = _extract_step_block(
-        release_job,
-        ARTIFACT_VALIDATION_STEP,
-    )
-    attestation_step = _extract_step_block(
-        release_job,
-        "Attest build provenance",
-    )
-
-    for required_token in (
-        '"git", "ls-files", "-z", "--", "dist"',
-        '".tar.gz"',
-        '".whl"',
-        "path.is_file()",
-        "path.stat().st_size > 0",
-    ):
-        assert required_token in validation_step, (
-            f"committed-artifact validation is missing: {required_token}"
-        )
-    assert release_job.index(validation_step) < release_job.index(attestation_step)
-
-
 def test_attestation_and_both_publication_channels_consume_dist():
     """
-    @brief Verify every release channel uses the committed dist directory.
+    @brief Verify every release channel uses the dist directory.
     @details Requires provenance attestation, GitHub Release asset creation,
       and PyPI publication to consume `dist/` without transferring or building
       alternate artifacts. Expected output: all three action inputs reference
       the checked-out distribution directory.
     @return {None} Assertion-only test result.
-    @satisfies TST-020, DES-056
+    @satisfies TST-020, DES-062
     """
     workflow_text = _read_workflow_text()
     release_job = _extract_job_block(workflow_text, "build-release")

@@ -24,7 +24,6 @@ WORKFLOW_PATH = (
 # @var NODE24_NATIVE_ACTION_RUNTIMES {dict[str, str]} Approved mapping of allowed action slugs to their required Node24-native runtime ref (CTN-006, DES-015).
 NODE24_NATIVE_ACTION_RUNTIMES = {
     "actions/checkout": "v7",
-    "actions/setup-python": "v7",
     "actions/attest-build-provenance": "v4",
     "mikepenz/release-changelog-builder-action": "v6",
     "softprops/action-gh-release": "v3",

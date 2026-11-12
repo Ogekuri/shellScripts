@@ -18,7 +18,7 @@
 #   mandatory check, and exits `0` only when every check passes, cleanup
 #   succeeds, and no repository drift is detected.
 # @satisfies DES-021, DES-022, DES-023, DES-024, DES-025, DES-026, DES-027,
-#   DES-043, DES-044, DES-045, DES-047, DES-054, REQ-079, REQ-080, REQ-081, REQ-082,
+#   DES-043, DES-044, DES-045, DES-047, REQ-079, REQ-080, REQ-081, REQ-082,
 #   REQ-136, REQ-137, REQ-138, REQ-139, REQ-142, REQ-143, REQ-144
 
 set -Eeuo pipefail
@@ -233,7 +233,7 @@ assert_safe_cleanup_targets() {
 #   are never selected for removal. Time complexity O(n) over `dist` entry
 #   count.
 # @return {str} Newline-separated untracked archive paths; empty when none.
-# @satisfies DES-026, DES-054, REQ-081, REQ-082
+# @satisfies DES-026, REQ-081, REQ-082
 list_untracked_dist_archives() {
     local entry
 
@@ -533,7 +533,7 @@ check_artifacts() {
 #   O(n) over removed artifact-tree entries.
 # @return {int} 0 when cleanup succeeds; 1 when a tracked entry blocks removal
 #   or a filesystem deletion fails.
-# @satisfies DES-026, DES-027, DES-054, REQ-081, REQ-082, REQ-137
+# @satisfies DES-026, DES-027, REQ-081, REQ-082, REQ-137
 cleanup_artifacts() {
     local tracked
     local path

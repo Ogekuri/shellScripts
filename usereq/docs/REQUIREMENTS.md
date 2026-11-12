@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.20.0"
-date: "2026-11-12T10:50:00Z"
+version: "0.21.0"
+date: "2026-11-12T11:05:00Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -161,14 +161,11 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-051**: MUST declare `setuptools>=77.0.0` as the lower bound in `[build-system].requires`, the minimum version supporting the PEP 639 `license` and `license-files` fields.
 - **DES-052**: MUST remove `src/shellscripts.egg-info/` and intermediate `build/` trees in `scripts/build.sh` after packaging, leaving no generated metadata residue in the working tree.
 - **DES-053**: MUST remove the `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members from each sdist archive in `scripts/build.sh` after packaging.
-- **DES-054**: MUST track the `dist/` sdist and wheel deliverables as version-controlled Git repository content.
-- **DES-056**: MUST use non-empty sdist and wheel archives tracked under `dist/` at the tagged commit as inputs to GitHub Release asset creation and PyPI publication.
 - **DES-057**: MUST NOT execute a distribution build command, `scripts/build.sh`, or `scripts/pre-release-check.sh` anywhere in `.github/workflows/release-pypi.yml`.
 - **DES-058**: MUST execute the release job only for tag refs and check out the exact commit identified by `github.sha`.
-- **DES-059**: MUST fail before publication when tracked `dist/` files in the tagged commit lack a non-empty sdist or wheel.
 - **DES-060**: MUST consolidate previous-build cleanup and distribution building into the single executable pipeline `scripts/build.sh`.
 - **DES-061**: MUST execute a post-build repository-hygiene phase in `scripts/build.sh` that removes every intermediate artifact produced by the build before the deliverable summary.
-- **DES-062**: MUST restrict every `.github/workflows/release-pypi.yml` job to consuming distribution archives pre-built by `scripts/build.sh` and committed in the tagged release commit.
+- **DES-062**: MUST restrict every `.github/workflows/release-pypi.yml` job to consuming distribution archives produced by `scripts/build.sh`.
 - **DES-063**: MUST read the archive timestamp epoch from the version-controlled repository file `.build-epoch`.
 - **DES-064**: MUST track `.build-epoch` and re-include it in `.gitignore` while preserving the default-exclusion strategy.
 
@@ -311,7 +308,7 @@ Unit test source files exist under `tests/` and provide coverage for core CLI fl
 Implemented verification support exists via the `tests` command (`tests_cmd.py`), which executes pytest in `.venv` with `PYTHONPATH` set to `src`.
 High-risk areas without exhaustive unit-test evidence are FFmpeg runtime integration and command-launch paths that depend on external binaries.
 The configuration CLI management flags introduced by DES-032 are covered by `tests/test_tst_018_config_cli.py` covering bootstrap, atomic persistence, path-token array/map manipulation, and rendering contracts.
-The release workflow consumes only the `dist/` archives pre-built by `scripts/build.sh` and committed in the tagged release commit, runs no distribution build and no build-preparatory verification job, and gates PyPI publication on `master` tag membership; static parsing tests cover these contracts.
+The release workflow consumes only the `dist/` archives produced by `scripts/build.sh`, runs no distribution build and no build-preparatory verification job, and gates PyPI publication on `master` tag membership; static parsing tests cover these contracts.
 The `scripts/build.sh` pipeline consolidates previous-build cleanup and packaging: its first data-mutating phase removes every `dist/` archive of any version plus the `build/` and `src/shellscripts.egg-info/` intermediate trees while preserving non-generated entries, and its post-build hygiene phase removes generated metadata, temporary files, and `src` bytecode caches; the archive timestamp epoch `.build-epoch` is read from the tracked repository file, so tracked `dist/` archives are byte-identical to a rebuild of the commit that contains them; structure, epoch rules, tracked-guard behavior, Bash syntax, executable bit, and `.gitignore` re-inclusion are covered by static parsing tests.
 
 ### 4.2 Verification Requirements
@@ -328,10 +325,10 @@ The `scripts/build.sh` pipeline consolidates previous-build cleanup and packagin
 - **TST-012**: MUST verify CTN-006 and DES-015 by parsing `.github/workflows/release-pypi.yml`, passing only if every referenced action runtime matches the approved Node24-native mapping and no Node20 compatibility override environment variables are present.
 - **TST-013**: MUST verify PRJ-007, DES-016, and DES-017 by parsing `.github/workflows/release-pypi.yml`, passing only if PyPI publication is master-gated, uses OIDC without embedded credentials, and non-build release steps remain present.
 - **TST-014**: MUST verify REQ-003, REQ-075 through REQ-078, REQ-084, REQ-087 through REQ-091, DES-018, and DES-019 via monkeypatched HTTP and subprocess boundaries, passing only if PyPI update checks, three-line version output, default upgrade, forced-reinstall upgrade, and develop upgrade behaviors match specifications.
-- **TST-015**: MUST verify DES-021 through DES-027, DES-040 through DES-047, DES-054, DES-060, DES-061, DES-063, DES-064, and REQ-079 through REQ-082 plus REQ-134 through REQ-151 by parsing both scripts and probing `.gitignore` plus `.build-epoch`, passing only if mandatory commands, artifact gates, epoch rules, cleanup registration, integrity checks, failure semantics, and evidence lines are present.
+- **TST-015**: MUST verify DES-021 through DES-027, DES-040 through DES-047, DES-060, DES-061, DES-063, DES-064, and REQ-079 through REQ-082 plus REQ-134 through REQ-151 by parsing both scripts and probing `.gitignore` plus `.build-epoch`, passing only if mandatory commands, artifact gates, epoch rules, cleanup registration, integrity checks, failure semantics, and evidence lines are present.
 - **TST-017**: MUST verify REQ-085, REQ-086, REQ-092, and REQ-093 by monkeypatching `subprocess.run` and capturing YOLO CLI help outputs, passing only if each YOLO argv vector, stdio inheritance, registry exposure, alphabetical YOLO CLI help listing, per-CLI option documentation, and the Copilot `--allow-all` alternative note match specifications.
 - **TST-018**: MUST verify REQ-114 and REQ-116 through REQ-133, DES-037, DES-038, and DES-039 on isolated HOME directories, passing only if bootstrap, atomic persistence, path-token manipulation, rendering contracts, and error semantics match specifications.
-- **TST-020**: MUST verify DES-056 through DES-059 and DES-062 by parsing the release workflow and asserting tag-only execution, exact-commit checkout, tracked-dist validation, absence of build and build-preparatory jobs, and `dist/` inputs to both publication actions.
+- **TST-020**: MUST verify DES-057, DES-058, and DES-062 by parsing the release workflow and asserting tag-only execution, exact-commit checkout, absence of build and build-preparatory jobs, and `dist/` inputs to both publication actions.
 
 ## 5. Evidence
 
@@ -340,7 +337,7 @@ The `scripts/build.sh` pipeline consolidates previous-build cleanup and packagin
 | PRJ-001, PRJ-002, REQ-001, REQ-002, REQ-003, REQ-047, REQ-064, REQ-065, REQ-066 | `src/shell_scripts/core.py`; `src/shell_scripts/utils.py` | `main`, `capture_terminal_state`, `reset_terminal_state`, `print_help` | Startup detects runtime OS before dispatch; empty args print grouped help and return `0`; unknown command path returns `1`; `--version`/`--ver` print the aligned `Current Installed` line; wrapper exit restores saved TTY attributes and writes full mouse-off escape sequence including `?9l` through `?1016l`. |
 | PRJ-003, DES-001, DES-008 | `src/shell_scripts/commands/__init__.py` | `_COMMAND_MODULES`, `get_command`, `get_all_commands` | Static mapping, lazy `importlib.import_module`, descriptions sourced from module `DESCRIPTION`. |
 | PRJ-004, DES-002..DES-006, DES-018, DES-019, DES-020, REQ-003, REQ-075, REQ-084, REQ-091, REQ-059, REQ-060, REQ-061 | `src/shell_scripts/version_check.py`; `src/shell_scripts/core.py` | `check_for_updates`, `fetch_pypi_latest_version`, `fetch_github_latest_release`, `print_remote_latest_versions`, `_write_idle_config`, `_should_check` | Startup update check queries the PyPI JSON API; `--version` prints aligned `Current Installed`, `Latest @ PyPI`, and `Latest @ GitHub` lines; forces HTTP checks for `--version`/`--ver`, skips active cooldown otherwise, updates cache JSON for every outcome, applies 3600s success and 86400s error cooldowns, prints colored update/error lines, and renders failed source lines as aligned `Latest @ <source>` labels with `unknown (<reason>)` values. |
-| PRJ-005, PRJ-007, DES-016, DES-017, DES-056..DES-059, DES-062, TST-013, TST-020 | `.github/workflows/release-pypi.yml`; `tests/test_tst_013_release_pypi_gating.py`; `tests/test_tst_020_release_committed_artifacts.py` | `jobs.check-branch`, `jobs.build-release`, `Verify committed distribution artifacts` | Workflow is present; tag-gates release on `github.sha`, validates tracked `dist/` sdist/wheel inputs, runs no build and no build-preparatory job, retains attestation/changelog/release actions, and publishes the same `dist/` archives to GitHub Release and OIDC PyPI gated on `origin/master`. |
+| PRJ-005, PRJ-007, DES-016, DES-017, DES-057, DES-058, DES-062, TST-013, TST-020 | `.github/workflows/release-pypi.yml`; `tests/test_tst_013_release_pypi_gating.py`; `tests/test_tst_020_release_committed_artifacts.py` | `jobs.check-branch`, `jobs.build-release` | Workflow is present; tag-gates release on `github.sha`, runs no build and no build-preparatory job, retains attestation/changelog/release actions, and publishes the `dist/` archives to GitHub Release and OIDC PyPI gated on `origin/master`. |
 | CTN-006, DES-015 | `.github/workflows/release-pypi.yml`; `tests/test_tst_012_workflow_runtime.py` | `jobs.check-branch.steps`, `jobs.build-release.steps`, `NODE24_NATIVE_ACTION_RUNTIMES` | Every `uses` reference pins a Node24-native runtime (`checkout@v7`, `setup-python@v7`, `attest-build-provenance@v4`, `release-changelog-builder-action@v6`, `action-gh-release@v3`, `gh-action-pypi-publish@release/v1`); static test asserts full mapping coverage and absence of Node20 compatibility override variables. |
 | REQ-004, REQ-076, REQ-077, REQ-078, REQ-087, REQ-088, REQ-089, REQ-090, CTN-004 | `src/shell_scripts/core.py`; `src/shell_scripts/config.py`; `tests/test_tst_014_pypi_version_source.py` | `do_upgrade`, `_build_develop_upgrade_command`, `main`, `DEFAULT_RUNTIME_CONFIG` | Default upgrade resolves `management.upgrade` to `uv tool install shellscripts` (PyPI); `--upgrade --develop`/`--dev` resolves the latest GitHub release tag and upgrades from `git+...@<tag>`; `--force` appends ` --force --reinstall --refresh` to both upgrade modes; bare `--develop`/`--dev` and bare `--force` are rejected with code `1`; tag-resolution failure emits a bright-red error and code `1`. |
 | PRJ-006, REQ-057, REQ-058, REQ-064 | `src/shell_scripts/commands/video2h264.py`; `src/shell_scripts/commands/video2h265.py`; `src/shell_scripts/commands/__init__.py` | `run`, `_COMMAND_MODULES` | Command registry exposes `video2h264`/`video2h265`; runners launch fixed FFmpeg argv vectors via `subprocess.run` and output `<input>.mp4` in the input directory. |
