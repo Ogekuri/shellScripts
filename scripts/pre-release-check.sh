@@ -10,7 +10,10 @@
 #   cleanup safety, project structure, executable bits, toolchain, Bash and
 #   Python syntax, optional configured static-quality tools, the pytest suite,
 #   the distribution build delegated to `scripts/build.sh`, and the generated
-#   release archives. Generated artifacts are removed through an EXIT/INT/TERM
+#   release archives. Before delegating the build, every pre-existing `dist`
+#   release archive is removed with the `scripts/build.sh` bootstrap archive
+#   set and the effective removal is re-verified with a dedicated evidence
+#   check. Generated artifacts are removed through an EXIT/INT/TERM
 #   trap on every termination path, then the repository state, excluding the
 #   `dist/` archive set owned by the build pipeline, is compared with the
 #   pre-run baseline. The script prints phase headers plus `PASS`/`FAIL`/
@@ -18,8 +21,9 @@
 #   mandatory check, and exits `0` only when every check passes, cleanup
 #   succeeds, and no repository drift is detected.
 # @satisfies DES-021, DES-022, DES-023, DES-024, DES-025, DES-026, DES-027,
-#   DES-043, DES-044, DES-045, DES-047, REQ-079, REQ-080, REQ-081, REQ-082,
-#   REQ-136, REQ-137, REQ-138, REQ-139, REQ-142, REQ-143, REQ-144
+#   DES-043, DES-044, DES-045, DES-047, DES-065, REQ-079, REQ-080, REQ-081,
+#   REQ-082, REQ-136, REQ-137, REQ-138, REQ-139, REQ-142, REQ-143, REQ-144,
+#   REQ-152, REQ-153
 
 set -Eeuo pipefail
 shopt -s nullglob
@@ -245,6 +249,52 @@ list_untracked_dist_archives() {
             printf '%s\n' "${entry}"
         fi
     done
+    return 0
+}
+
+# @brief Remove every release archive already stored in `dist`.
+# @details Mirrors the `scripts/build.sh` bootstrap removal: deletes every
+#   top-level `dist` sdist, wheel, zip, and egg archive regardless of version
+#   number and Git tracking status, while non-generated `dist` entries are
+#   preserved. Idempotent: absent archives and an absent `dist` directory are
+#   skipped. Time complexity O(n) over `dist` archive count.
+# @pre `dist` is either absent or a directory owned by the build pipeline.
+# @post No top-level `dist` sdist, wheel, zip, or egg archive remains.
+# @return {int} 0 on success; 1 when a removal fails.
+# @satisfies DES-041, DES-065, REQ-141, REQ-152
+remove_preexisting_release_artifacts() {
+    local artifact
+
+    if [ ! -d "dist" ]; then
+        return 0
+    fi
+    for artifact in dist/*.tar.gz dist/*.whl dist/*.zip dist/*.egg; do
+        rm -f -- "${artifact}" || return 1
+    done
+    return 0
+}
+
+# @brief Verify that no release archive remains in `dist`.
+# @details Enumerates the same `dist` archive glob set removed by
+#   `remove_preexisting_release_artifacts` and fails listing every remaining
+#   path, so a stale or intervening release artifact is reported before the
+#   delegated build runs. Time complexity O(n) over `dist` archive count.
+# @return {int} 0 when no release archive remains; 1 otherwise.
+# @satisfies DES-065, REQ-153
+check_preexisting_release_artifacts() {
+    local artifact
+    local -a remaining=()
+
+    if [ -d "dist" ]; then
+        for artifact in dist/*.tar.gz dist/*.whl dist/*.zip dist/*.egg; do
+            remaining+=("${artifact}")
+        done
+    fi
+    if [ "${#remaining[@]}" -ne 0 ]; then
+        log_error "Pre-existing release artifacts remain in dist/:"
+        printf '%s\n' "${remaining[@]}" >&2
+        return 1
+    fi
     return 0
 }
 
@@ -700,11 +750,15 @@ run_check "unit-tests" env PYTHONPATH="${PWD}/src" "${PYTHON_BIN}" -m pytest tes
 check_integration_tests || fail_fast
 check_e2e_tests || fail_fast
 
-log_phase "Phase 5: Distribution build and artifact validation"
+log_phase "Phase 5: Pre-existing release artifact removal"
+run_check "previous-release-artifacts-removal" remove_preexisting_release_artifacts || fail_fast
+run_check "pre-existing-release-artifacts" check_preexisting_release_artifacts || fail_fast
+
+log_phase "Phase 6: Distribution build and artifact validation"
 run_check "build" bash scripts/build.sh || fail_fast
 run_check "artifacts" check_artifacts || fail_fast
 
-log_phase "Phase 6: Cleanup and repository integrity"
+log_phase "Phase 7: Cleanup and repository integrity"
 if ! run_check "cleanup" cleanup_artifacts; then
     CLEANUP_DONE=1
     CLEANUP_FAILED=1
@@ -713,7 +767,7 @@ fi
 CLEANUP_DONE=1
 run_check "repository-integrity" check_repository_integrity || fail_fast
 
-log_phase "Phase 7: Final summary"
+log_phase "Phase 8: Final summary"
 printf 'Pre-release check PASSED: all mandatory checks succeeded.\n'
 printf 'Mandatory checks passed: %d\n' "${CHECKS_PASSED}"
 printf 'Non-applicable checks skipped: %d\n' "${CHECKS_SKIPPED}"

@@ -8,12 +8,12 @@
   fail-fast semantics, evidence lines, and executable permissions. Validates
   Bash syntax via `bash -n` and probes the real `.gitignore` behavior with
   `git check-ignore --no-index`.
-@satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, DES-026,
-  DES-027, DES-040, DES-041, DES-042, DES-043, DES-044, DES-045, DES-046,
-  DES-047, DES-060, DES-061, DES-063, DES-064, REQ-079, REQ-080,
-  REQ-081, REQ-082, REQ-134, REQ-135, REQ-136, REQ-137, REQ-138, REQ-139,
-  REQ-140, REQ-141, REQ-142, REQ-143, REQ-144, REQ-148, REQ-149, REQ-150,
-  REQ-151
+@satisfies TST-015, TST-021, DES-021, DES-022, DES-023, DES-024, DES-025,
+  DES-026, DES-027, DES-040, DES-041, DES-042, DES-043, DES-044, DES-045,
+  DES-046, DES-047, DES-060, DES-061, DES-063, DES-064, DES-065, REQ-079,
+  REQ-080, REQ-081, REQ-082, REQ-134, REQ-135, REQ-136, REQ-137, REQ-138,
+  REQ-139, REQ-140, REQ-141, REQ-142, REQ-143, REQ-144, REQ-148, REQ-149,
+  REQ-150, REQ-151, REQ-152, REQ-153
 @return {None} Pytest module scope.
 """
 
@@ -272,6 +272,59 @@ def test_pre_release_script_records_artifact_checks():
     assert '"scripts/pre-release-check.sh" "scripts/build.sh"' in content
     assert '".build-epoch"' in content
     assert "scripts/clean.sh" not in content
+
+
+def test_pre_release_script_removes_and_verifies_preexisting_artifacts():
+    """
+    @brief Validate pre-build removal and verification of stale dist archives.
+    @details Asserts the pre-release pipeline removes every top-level `dist`
+      sdist, wheel, zip, and egg archive with the same archive set used by the
+      `scripts/build.sh` bootstrap removal without a Git-tracking filter,
+      verifies that no release archive remains, prints `PASS`/`FAIL` evidence
+      for both steps, and executes both steps before the delegated build.
+      Time complexity O(1) over parsed script content.
+    @return {None} Assertions only.
+    @satisfies TST-021, DES-065, REQ-152, REQ-153
+    """
+
+    content = _read(PRECHECK_PATH)
+    build_content = _read(BUILD_PATH)
+    archive_patterns = ("*.tar.gz", "*.whl", "*.zip", "*.egg")
+
+    removal_body = content.split(
+        "remove_preexisting_release_artifacts() {", 1
+    )[1]
+    removal_body = removal_body.split("\n}\n", 1)[0]
+    verification_body = content.split(
+        "check_preexisting_release_artifacts() {", 1
+    )[1]
+    verification_body = verification_body.split("\n}\n", 1)[0]
+    build_cleanup_body = build_content.split("clean_previous_builds() {", 1)[1]
+    build_cleanup_body = build_cleanup_body.split("\n}\n", 1)[0]
+
+    for pattern in archive_patterns:
+        assert pattern in removal_body
+        assert pattern in verification_body
+        assert pattern in build_cleanup_body
+    assert "git ls-files" not in removal_body
+    assert "rm -f --" in removal_body
+    assert "Pre-existing release artifacts remain in dist/" in verification_body
+
+    assert "Phase 5: Pre-existing release artifact removal" in content
+    assert (
+        'run_check "previous-release-artifacts-removal" '
+        "remove_preexisting_release_artifacts"
+    ) in content
+    assert (
+        'run_check "pre-existing-release-artifacts" '
+        "check_preexisting_release_artifacts"
+    ) in content
+    removal_index = content.index('"previous-release-artifacts-removal"')
+    verification_index = content.index(
+        '"pre-existing-release-artifacts"', removal_index
+    )
+    build_index = content.index('run_check "build" bash scripts/build.sh')
+    assert removal_index < verification_index < build_index
 
 
 def _check_ignore(relative_path: str) -> subprocess.CompletedProcess:
