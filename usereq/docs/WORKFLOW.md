@@ -41,7 +41,7 @@
 - ID: `PROC:release-pypi`
   - type: `process`
   - parent_process: `null`
-  - role: `GitHub Actions tag-release workflow that gates publication on pytest, validates tracked dist/ archives from the tagged commit, and publishes them without building distributions`
+  - role: `GitHub Actions tag-release workflow that validates tracked dist/ archives from the tagged commit and publishes them without building distributions or running build-preparatory jobs`
   - entrypoint_symbols:
     - `.github/workflows/release-pypi.yml::jobs.build-release`
   - defining_files:
@@ -491,14 +491,14 @@
   - `.github/workflows/release-pypi.yml::jobs.build-release` [`.github/workflows/release-pypi.yml`]
 - Lifecycle/trigger:
   - Trigger: GitHub push event on tags matching `v[0-9]+.[0-9]+.[0-9]+` or `workflow_dispatch`; `build-release` executes only for tag refs.
-  - Runtime: `check-branch` and `pre-release-check` jobs run before release; the `pre-release-check` job runs `uv sync --frozen --no-install-project` and executes `PYTHONPATH=src .venv/bin/python -m pytest tests/` without installing the project or invoking either build script; `build-release` runs only for tag refs, declares `needs: [check-branch, pre-release-check]`, checks out `github.sha`, verifies non-empty tracked sdist and wheel archives under `dist/`, and passes those committed files to attestation, GitHub Release assets, and PyPI publication (DES-028, DES-029, DES-056 through DES-059, REQ-083); the PyPI action remains OIDC-authenticated and master-tag-gated (DES-016, DES-017).
+  - Runtime: the `check-branch` job resolves the `is_master` output before release; `build-release` runs only for tag refs, declares `needs: check-branch`, checks out `github.sha`, verifies non-empty tracked sdist and wheel archives under `dist/`, and passes those committed files to attestation, GitHub Release assets, and PyPI publication (DES-056 through DES-059, DES-062); no distribution build, build-preparatory verification job, dependency synchronization step, or pre-release check script runs anywhere in the workflow (DES-057); the PyPI action remains OIDC-authenticated and master-tag-gated (DES-016, DES-017).
   - Shutdown: job ends after release or publication step completion or earlier on step failure.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
   - No internal function declarations detected in workflow YAML.
 - External Boundaries:
-  - GitHub Actions boundaries: reusable actions executing on Node24 runtime (CTN-006: `actions/checkout`, `actions/setup-python`, `astral-sh/setup-uv`, `actions/attest-build-provenance`, `mikepenz/release-changelog-builder-action`, `softprops/action-gh-release`, `pypa/gh-action-pypi-publish`).
-  - Tooling boundaries: external commands (`git`, `uv sync --frozen --no-install-project`, `.venv/bin/python -m pytest tests/`, `git ls-files`).
+  - GitHub Actions boundaries: reusable actions executing on Node24 runtime (CTN-006: `actions/checkout`, `actions/setup-python`, `actions/attest-build-provenance`, `mikepenz/release-changelog-builder-action`, `softprops/action-gh-release`, `pypa/gh-action-pypi-publish`).
+  - Tooling boundaries: external commands (`git`, `git ls-files`, inline `python` archive validation of tracked `dist/` files).
   - Network/API boundary: GitHub Releases publication with committed `dist/` artifacts and conditional PyPI upload via OIDC Trusted Publishing (`pypi.org`) for master tags.
 
 ## Communication Edges

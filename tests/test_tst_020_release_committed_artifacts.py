@@ -11,7 +11,7 @@
   (pure parsers). Level 1: `_read_workflow_text` (filesystem read). Level 2:
   test functions (static workflow assertions). External dependency: repository
   workflow file only; no network, writes, clock, randomness, or shared state.
-@satisfies TST-020, DES-056, DES-057, DES-058, DES-059
+@satisfies TST-020, DES-056, DES-057, DES-058, DES-059, DES-062
 @return {None} Pytest module scope.
 """
 
@@ -65,6 +65,27 @@ def _extract_job_block(workflow_text: str, job_name: str) -> str:
             end_index = index
             break
     return "\n".join(lines[start_index:end_index])
+
+
+def _extract_job_names(workflow_text: str) -> list[str]:
+    """
+    @brief Extract every job key declared under the `jobs` section.
+    @details Slices at the top-level `jobs:` header, then selects
+      two-space-indented lines ending with `:` and strips the trailing colon,
+      so the returned list exposes the complete job set. Time complexity O(n)
+      over workflow lines.
+    @param workflow_text {str} Complete workflow YAML text.
+    @return {list[str]} Ordered job key list; empty when no job is declared.
+    @satisfies TST-020, DES-062
+    """
+    _, _, jobs_text = workflow_text.partition("\njobs:\n")
+    return [
+        line.strip()[:-1]
+        for line in jobs_text.splitlines()
+        if line.startswith("  ")
+        and not line.startswith("   ")
+        and line.endswith(":")
+    ]
 
 
 def _extract_step_block(job_block: str, step_name: str) -> str:
@@ -140,6 +161,36 @@ def test_release_workflow_has_no_distribution_build_execution():
         assert token not in workflow_text, (
             f"distribution build invocation remains in workflow: {token}"
         )
+
+
+def test_release_workflow_consumes_only_prebuilt_artifacts():
+    """
+    @brief Verify the workflow declares only artifact-consuming jobs.
+    @details Contract guard for DES-062: the job set is exactly the branch gate
+      and the release job, so no dependency synchronization, unit-test gate, or
+      other build-preparatory job can run. Expected output: exact job-name set
+      and absence of every preparatory command token.
+    @return {None} Assertion-only test result.
+    @satisfies TST-020, DES-057, DES-062
+    """
+    workflow_text = _read_workflow_text()
+    job_names = _extract_job_names(workflow_text)
+
+    assert job_names == ["check-branch", "build-release"], (
+        f"unexpected workflow job set: {job_names}"
+    )
+    for forbidden_token in (
+        "uv sync",
+        "-m pytest",
+        "astral-sh/setup-uv",
+        "setup-python-uv",
+        "pre-release-check",
+    ):
+        assert forbidden_token not in workflow_text, (
+            f"build-preparatory workflow token remains: {forbidden_token}"
+        )
+    release_job = _extract_job_block(workflow_text, "build-release")
+    assert "needs: check-branch" in release_job
 
 
 def test_release_job_requires_tracked_nonempty_sdist_and_wheel():

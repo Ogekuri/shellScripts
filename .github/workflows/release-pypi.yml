@@ -36,38 +36,14 @@ jobs:
             echo "is_master=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # 1b. Runs the unit-test gate before committed artifacts are validated or
-  # published (DES-028); build-release declares needs on this job so test
-  # failures block every release-side effect (DES-029, REQ-083).
-  pre-release-check:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Install test dependencies without the project
-        run: uv sync --frozen --no-install-project
-
-      - name: Run pre-release unit tests
-        run: .venv/bin/python -m pytest tests/
-        env:
-          PYTHONPATH: src
+  # 1b. No build-preparatory job runs here: distribution archives are pre-built
+  # by the local build pipeline and committed in the tagged release commit
+  # (DES-057, DES-062). The workflow consumes only those committed archives.
 
   # 2. Publish distributions tracked at the tagged commit.
   build-release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [check-branch, pre-release-check]
+    needs: check-branch
     runs-on: ubuntu-latest
 
     steps:

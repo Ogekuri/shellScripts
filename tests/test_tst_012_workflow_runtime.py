@@ -25,7 +25,6 @@ WORKFLOW_PATH = (
 NODE24_NATIVE_ACTION_RUNTIMES = {
     "actions/checkout": "v7",
     "actions/setup-python": "v7",
-    "astral-sh/setup-uv": "v10.3.3",
     "actions/attest-build-provenance": "v4",
     "mikepenz/release-changelog-builder-action": "v6",
     "softprops/action-gh-release": "v3",
