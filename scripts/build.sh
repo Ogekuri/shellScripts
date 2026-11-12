@@ -19,8 +19,8 @@
 #   project root is resolved. Emits one PASS or FAIL evidence line per phase
 #   and terminates with a non-zero status on any mandatory failure.
 # @satisfies DES-040, DES-041, DES-045, DES-046, DES-047, DES-052, DES-053,
-#   DES-060, DES-061, DES-063, DES-065, REQ-134, REQ-135, REQ-141, REQ-145,
-#   REQ-146, REQ-148, REQ-149, REQ-150, REQ-151, REQ-152
+#   DES-060, DES-061, DES-063, REQ-134, REQ-135, REQ-141, REQ-145, REQ-146,
+#   REQ-148, REQ-149, REQ-150, REQ-151
 
 set -Eeuo pipefail
 shopt -s nullglob
@@ -269,11 +269,10 @@ assert_no_tracked_intermediates() {
 #   tracking status, then removes the build-tool `dist/.gitignore` metadata and
 #   the `build` and `src/shellscripts.egg-info` intermediate trees. Non-generated
 #   `dist/` entries are preserved. Executed as the first data-mutating build
-#   phase so a build always starts from an empty archive set; the same archive
-#   set is removed by `scripts/pre-release-check.sh` before it delegates to this
-#   script. Time complexity O(n) over removed entries.
+#   phase so a build always starts from an empty archive set. Time complexity
+#   O(n) over removed entries.
 # @return {int} 0 on success; 1 when the intermediate-tree guard or a removal blocks.
-# @satisfies DES-041, DES-060, DES-065, REQ-141, REQ-152
+# @satisfies DES-041, DES-060, REQ-141
 clean_previous_builds() {
     local artifact
 

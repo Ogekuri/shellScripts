@@ -21,7 +21,7 @@
 - ID: `PROC:pre-release-check`
   - type: `process`
   - parent_process: `null`
-  - role: `Local shell pipeline that executes mandatory pre-release verification checks (structure, toolchain, syntax, optional quality, tests, pre-existing release artifact removal and verification, delegated build, artifacts, cleanup, repository integrity)`
+  - role: `Local shell pipeline that executes mandatory pre-release verification checks (structure, toolchain, syntax, optional quality, tests, delegated build, artifacts, cleanup, repository integrity)`
   - entrypoint_symbols:
     - `scripts/pre-release-check.sh (top-level script entrypoint)`
   - defining_files:
@@ -72,7 +72,7 @@
 - Lifecycle/trigger:
   - Trigger: developer or the standalone `scripts/pre-release-check.sh` invokes the build script.
   - Startup: registers EXIT, INT, and TERM traps before phase 1; resolves canonical script and base directories, resolves the Git repository root, selects `.venv/bin/python3` when present or `python3` otherwise, validates Python 3.11 or newer, selects `uv build` or `<python> -m build`, and resolves and exports `SOURCE_DATE_EPOCH` (validated environment value or the tracked `.build-epoch` file). Trap cleanup runs only after the project root is resolved.
-  - Runtime mode: sequential fail-fast pipeline; every `dist` sdist, wheel, zip, and egg archive of any version plus the intermediate build trees are removed in the first data-mutating phase with the same archive set that `scripts/pre-release-check.sh` removes before delegating to this script; after packaging, the sdist is rewritten without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members, a post-build repository-hygiene phase removes build trees, generated metadata, temporary rewrite files, and `src` bytecode caches, then generated archives are validated (readability plus required and forbidden members) and summarized. Each phase emits `PASS:` or `FAIL:` evidence; the sdist rewrite pins the gzip header and member mtimes to `SOURCE_DATE_EPOCH`.
+  - Runtime mode: sequential fail-fast pipeline; every `dist` sdist, wheel, zip, and egg archive of any version plus the intermediate build trees are removed in the first data-mutating phase; after packaging, the sdist is rewritten without `setup.cfg`, `MANIFEST.in`, and `src/shellscripts.egg-info/` members, a post-build repository-hygiene phase removes build trees, generated metadata, temporary rewrite files, and `src` bytecode caches, then generated archives are validated (readability plus required and forbidden members) and summarized. Each phase emits `PASS:` or `FAIL:` evidence; the sdist rewrite pins the gzip header and member mtimes to `SOURCE_DATE_EPOCH`.
   - Shutdown: exits `1` on the first mandatory failure and `0` after a successful build, hygiene, validation, and summary; final deliverables remain in `dist/`. The EXIT trap removes every intermediate build artifact through `clean_build_residue` on every termination path, preserves a non-zero status, and prints `BUILD FAILED during: <phase>`; INT and TERM terminate with statuses 130 and 143.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
@@ -120,7 +120,7 @@
   - Trigger: developer invokes the standalone script before an official release.
   - Startup: resolves canonical script and base directories, resolves the Git repository root via `git rev-parse --show-toplevel`, and changes the working directory to the repository root.
   - Safety preflight: validates that managed artifact paths contain no tracked files and that untracked `dist` entries are generated archives, then captures the pre-run non-managed tracked and untracked baseline, excluding the `dist` archive set owned by the delegated build, before enabling cleanup.
-  - Runtime mode: sequential fail-fast pipeline with phase headers; structure, permissions, toolchain, Bash/Python syntax, optional configured quality tools, pytest, removal and verification of every pre-existing `dist` release archive, delegated `scripts/build.sh`, artifact validation, cleanup, and repository-integrity checks run in order. Pre-build removal uses the same `dist` archive set as the `scripts/build.sh` bootstrap cleanup.
+  - Runtime mode: sequential fail-fast pipeline with phase headers; structure, permissions, toolchain, Bash/Python syntax, optional configured quality tools, pytest, delegated `scripts/build.sh`, artifact validation, cleanup, and repository-integrity checks run in order.
   - Shutdown: `EXIT`, `INT`, and `TERM` traps remove generated artifacts on every termination path without overriding a failed check; a cleanup failure after passing checks forces exit `1`; the final summary names the failed check or confirms success.
   - Thread model: `no explicit threads detected`.
 - Internal Call-Trace Tree:
@@ -146,8 +146,6 @@
   - `check_security(...)`: Run the configured security checker or `SKIP` when none is configured [`scripts/pre-release-check.sh`]
   - `check_integration_tests(...)`: Run `tests/integration` or `SKIP` when absent [`scripts/pre-release-check.sh`]
   - `check_e2e_tests(...)`: Run `tests/e2e` or `SKIP` when absent [`scripts/pre-release-check.sh`]
-  - `remove_preexisting_release_artifacts(...)`: Delete every top-level `dist` sdist, wheel, zip, and egg archive with the `scripts/build.sh` bootstrap archive set before the delegated build [`scripts/pre-release-check.sh`]
-  - `check_preexisting_release_artifacts(...)`: Verify that no `dist` release archive remains after pre-build removal and list every residual path on failure [`scripts/pre-release-check.sh`]
   - `check_artifacts(...)`: Validate non-empty readable sdist and wheel deliverables in `dist/` [`scripts/pre-release-check.sh`]
   - `cleanup_artifacts(...)`: Remove build and test artifact groups plus untracked generated `dist` archives, and print one `clean` evidence line [`scripts/pre-release-check.sh`]
     - `list_untracked_dist_archives(...)`: Enumerate untracked generated `dist` archives; tracked `dist` deliverables are excluded [`scripts/pre-release-check.sh`]
@@ -534,7 +532,7 @@
   - direction: `PROC:pre-release-check -> PROC:build`
   - mechanism: `OS child process spawn`
   - endpoint_channel: `bash scripts/build.sh`
-  - payload_data_shape_reference: `repository working tree; parent removes every pre-existing dist archive before delegation; child exit code gates the pre-release build check; the child removes every previous dist archive and writes the freshly built sdist and wheel archives to dist/`
+  - payload_data_shape_reference: `repository working tree; child exit code gates the pre-release build check; the child removes every previous dist archive and writes the freshly built sdist and wheel archives to dist/`
   - declaration_file_paths:
     - `scripts/pre-release-check.sh`
     - `scripts/build.sh`
