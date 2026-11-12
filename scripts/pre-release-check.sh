@@ -11,8 +11,9 @@
 #   Python syntax, optional configured static-quality tools, the pytest suite,
 #   the distribution build delegated to `scripts/build.sh`, and the generated
 #   release archives. Generated artifacts are removed through an EXIT/INT/TERM
-#   trap on every termination path, then the repository state is compared with
-#   the pre-run baseline. The script prints phase headers plus `PASS`/`FAIL`/
+#   trap on every termination path, then the repository state, excluding the
+#   `dist/` archive set owned by the build pipeline, is compared with the
+#   pre-run baseline. The script prints phase headers plus `PASS`/`FAIL`/
 #   `SKIP` evidence lines and a final summary, exits `1` on the first failed
 #   mandatory check, and exits `0` only when every check passes, cleanup
 #   succeeds, and no repository drift is detected.
@@ -154,14 +155,28 @@ collect_untracked_nonmanaged() {
     '
 }
 
+# @brief Collect tracked-file modifications outside the managed `dist` tree.
+# @details Lists the porcelain tracked status and drops every `dist/` entry,
+#   because the delegated build pipeline owns the `dist/` archive set and may
+#   delete or replace tracked deliverables while producing the current build.
+#   Time complexity O(n) over tracked status lines.
+# @return {str} Newline-separated filtered tracked-status lines.
+# @satisfies DES-044, REQ-138
+collect_tracked_nonmanaged() {
+    git status --porcelain=v1 --untracked-files=no | awk '
+        index($0, " dist/") == 3 { next }
+        { print }
+    '
+}
+
 # @brief Capture the pre-run tracked and non-managed untracked state.
-# @details Stores the tracked modification status plus the filtered untracked
-#   file list in global baseline variables used by the final integrity check.
-#   Time complexity O(n) over repository entry count.
+# @details Stores the filtered tracked modification status plus the filtered
+#   untracked file list in global baseline variables used by the final
+#   integrity check. Time complexity O(n) over repository entry count.
 # @return {int} 0 on success; non-zero when Git queries fail.
 # @satisfies DES-044, REQ-138
 capture_baseline() {
-    BASELINE_TRACKED=$(git status --porcelain=v1 --untracked-files=no) || return 1
+    BASELINE_TRACKED=$(collect_tracked_nonmanaged) || return 1
     BASELINE_UNTRACKED=$(collect_untracked_nonmanaged) || return 1
     return 0
 }
@@ -275,14 +290,14 @@ check_project_structure() {
 }
 
 # @brief Validate that repository release scripts are executable.
-# @details Verifies the executable bit on `scripts/pre-release-check.sh`,
-#   `scripts/build.sh`, and `scripts/clean.sh` so the documented invocation
-#   contract works. Time complexity O(1).
-# @return {int} 0 when all release scripts are executable; 1 otherwise.
+# @details Verifies the executable bit on `scripts/pre-release-check.sh` and
+#   `scripts/build.sh` so the documented invocation contract works. Time
+#   complexity O(1).
+# @return {int} 0 when both release scripts are executable; 1 otherwise.
 # @satisfies REQ-144
 check_script_permissions() {
     local script
-    local -a scripts=("scripts/pre-release-check.sh" "scripts/build.sh" "scripts/clean.sh")
+    local -a scripts=("scripts/pre-release-check.sh" "scripts/build.sh")
 
     for script in "${scripts[@]}"; do
         if [ ! -x "${script}" ]; then
@@ -557,11 +572,12 @@ cleanup_artifacts() {
 }
 
 # @brief Verify repository integrity against the pre-run snapshot.
-# @details Compares tracked modifications and non-managed untracked files with
-#   the baseline captured before any write, and explicitly asserts that every
-#   managed artifact path and every `__pycache__` directory has been removed,
-#   including Git-ignored build output, and that no untracked generated `dist`
-#   archive remains. Time complexity O(n) over repository
+# @details Compares non-managed tracked modifications and non-managed untracked
+#   files with the baseline captured before any write, treating the `dist/`
+#   archive set as managed output of the delegated build, and explicitly asserts
+#   that every managed artifact path and every `__pycache__` directory has been
+#   removed, including Git-ignored build output, and that no untracked generated
+#   `dist` archive remains. Time complexity O(n) over repository
 #   entry count.
 # @return {int} 0 when the repository matches the safe baseline; 1 otherwise.
 # @satisfies DES-044, REQ-081, REQ-082, REQ-138
@@ -572,7 +588,7 @@ check_repository_integrity() {
     local path
     local pycache_dir
 
-    tracked_now=$(git status --porcelain=v1 --untracked-files=no) || return 1
+    tracked_now=$(collect_tracked_nonmanaged) || return 1
     untracked_now=$(collect_untracked_nonmanaged) || return 1
 
     if [ "${tracked_now}" != "${BASELINE_TRACKED}" ]; then

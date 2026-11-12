@@ -8,16 +8,17 @@
 # @details Resolves the Git repository root from the script location, validates
 #   Python 3.11 or newer plus one supported build tool (`uv build` preferred,
 #   `python3 -m build` fallback), resolves a deterministic SOURCE_DATE_EPOCH,
-#   removes stale generated archives and intermediate build trees without
-#   touching tracked or non-generated `dist/` entries, builds sdist and wheel
-#   packages into `dist/`, validates that both archive classes are non-empty
-#   and readable, and prints one summary listing every deliverable left in
-#   `dist/`. Registers EXIT, INT, and TERM traps so generated `build/` and
-#   `src/shellscripts.egg-info/` trees are removed on every termination path
-#   after the project root is resolved. Emits one PASS or FAIL evidence line
-#   per phase and terminates with a non-zero status on any mandatory failure.
+#   removes every previous `dist/` archive of any version together with the
+#   intermediate build trees while preserving non-generated `dist/` entries,
+#   builds sdist and wheel packages into `dist/`, removes every intermediate
+#   artifact produced by the build process, validates that both archive classes
+#   are non-empty, readable, and member-compliant, and prints one summary
+#   listing every deliverable left in `dist/`. Registers EXIT, INT, and TERM
+#   traps so generated residue is removed on every termination path after the
+#   project root is resolved. Emits one PASS or FAIL evidence line per phase
+#   and terminates with a non-zero status on any mandatory failure.
 # @satisfies DES-040, DES-041, DES-045, DES-046, DES-047, DES-052, DES-053,
-#   REQ-134, REQ-135, REQ-141, REQ-145, REQ-146
+#   DES-060, DES-061, REQ-134, REQ-135, REQ-141, REQ-145, REQ-146, REQ-148
 
 set -Eeuo pipefail
 shopt -s nullglob
@@ -99,26 +100,23 @@ on_signal() {
     exit "$2"
 }
 
-# @brief EXIT trap: remove generated build trees on every termination path.
-# @details Captures the process status on entry, removes `build/` and
-#   `src/shellscripts.egg-info/` through `remove_intermediate_build_trees`
-#   once the project root is resolved (`PROJECT_ROOT_READY=1`), so relative
-#   paths never resolve against the invocation directory. The tracked-file
-#   guard inside `remove_intermediate_build_trees` refuses removal when
-#   tracked entries exist. A cleanup failure forces status 1 only when the
-#   status was 0; a non-zero status is never overridden. Prints one
-#   `BUILD FAILED` summary line naming the active phase when the status is
-#   non-zero. Idempotent through `CLEANUP_DONE`. Time complexity O(n) over
-#   removed entries.
+# @brief EXIT trap: remove generated build residue on every termination path.
+# @details Captures the process status on entry and, once the project root is
+#   resolved (`PROJECT_ROOT_READY=1`), removes every intermediate build artifact
+#   through `clean_build_residue` so relative paths never resolve against the
+#   invocation directory. A cleanup failure forces status 1 only when the status
+#   was 0; a non-zero status is never overridden. Prints one `BUILD FAILED`
+#   summary line naming the active phase when the status is non-zero. Idempotent
+#   through `CLEANUP_DONE`. Time complexity O(n) over removed entries.
 # @return Does not return; exits the process with the resolved status.
-# @satisfies DES-045, DES-052, REQ-141
+# @satisfies DES-045, DES-052, DES-061, REQ-141, REQ-148
 on_exit() {
     local exit_code=$?
     trap - EXIT INT TERM
 
     if [ "${PROJECT_ROOT_READY}" -eq 1 ] && [ "${CLEANUP_DONE}" -eq 0 ]; then
         CLEANUP_DONE=1
-        if ! remove_intermediate_build_trees; then
+        if ! clean_build_residue; then
             log_error "Generated build-tree cleanup failed."
             if [ "${exit_code}" -eq 0 ]; then
                 exit_code=1
@@ -254,24 +252,23 @@ assert_no_tracked_intermediates() {
     return 0
 }
 
-# @brief Remove stale generated archives and intermediate build trees.
-# @details Creates `dist/` when absent, iterates every top-level generated
-#   archive pattern, leaves every tracked archive untouched, removes the
-#   untracked generated archives, and deletes the `build` and
-#   `src/shellscripts.egg-info` intermediate trees. Non-generated or tracked
-#   `dist/` entries are preserved. Time complexity O(n) over removed entries.
+# @brief Remove every previous build archive and intermediate build tree.
+# @details Creates `dist/` when absent, deletes every top-level sdist, wheel,
+#   zip, and egg archive regardless of its version number and regardless of Git
+#   tracking status, then removes the build-tool `dist/.gitignore` metadata and
+#   the `build` and `src/shellscripts.egg-info` intermediate trees. Non-generated
+#   `dist/` entries are preserved. Executed as the first data-mutating build
+#   phase so a build always starts from an empty archive set. Time complexity
+#   O(n) over removed entries.
 # @return {int} 0 on success; 1 when the intermediate-tree guard or a removal blocks.
-# @satisfies DES-041, REQ-141
-clean_stale_artifacts() {
+# @satisfies DES-041, DES-060, REQ-141
+clean_previous_builds() {
     local artifact
 
     assert_no_tracked_intermediates || return 1
     mkdir -p -- "${DIST_DIR}" || return 1
 
     for artifact in "${DIST_DIR}"/*.tar.gz "${DIST_DIR}"/*.whl "${DIST_DIR}"/*.zip "${DIST_DIR}"/*.egg; do
-        if git ls-files --error-unmatch -- "${artifact}" >/dev/null 2>&1; then
-            continue
-        fi
         rm -f -- "${artifact}" || return 1
     done
 
@@ -322,6 +319,69 @@ remove_intermediate_build_trees() {
     if [ -d "src/shellscripts.egg-info" ]; then
         rm -rf -- "src/shellscripts.egg-info" || return 1
     fi
+    return 0
+}
+
+# @brief Remove temporary packaging files left in `dist`.
+# @details Deletes same-directory `.tmp` rewrite artifacts that an interrupted
+#   sdist rewrite may leave behind, so no temporary build file survives in the
+#   working tree. Idempotent: absent entries are skipped. Time complexity O(n)
+#   over `dist` entry count.
+# @return {int} 0 on success; 1 when a removal fails.
+# @satisfies DES-061, REQ-148
+remove_generated_temp_files() {
+    local artifact
+
+    if [ ! -d "${DIST_DIR}" ]; then
+        return 0
+    fi
+    for artifact in "${DIST_DIR}"/*.tmp; do
+        rm -f -- "${artifact}" || return 1
+    done
+    return 0
+}
+
+# @brief Remove bytecode caches created under the source tree.
+# @details Deletes every `__pycache__` directory under `src` that interpreter
+#   startup or the packaging toolchain may create, so no generated bytecode
+#   survives in the working tree. Idempotent. Time complexity O(n) over removed
+#   directory-tree entries.
+# @return {int} 0 on success; 1 when a removal fails.
+# @satisfies DES-061, REQ-148
+remove_pycache_trees() {
+    local cache_dir
+    local cache_dirs
+
+    if [ ! -d "src" ]; then
+        return 0
+    fi
+    cache_dirs=$(find src -type d -name __pycache__ -print) || return 1
+    if [ -n "${cache_dirs}" ]; then
+        while IFS= read -r cache_dir; do
+            rm -rf -- "${cache_dir}" || return 1
+        done <<< "${cache_dirs}"
+    fi
+    return 0
+}
+
+# @brief Remove every intermediate artifact produced by the build process.
+# @details Consolidates post-build repository hygiene: intermediate `build/` and
+#   `src/shellscripts.egg-info/` trees, build-tool `dist/.gitignore` metadata,
+#   leftover `dist` temporary rewrite files, and `src` bytecode caches. Invoked
+#   after packaging and from the EXIT trap, so every termination path leaves
+#   the working tree free of generated residue while validated deliverables
+#   stay in `dist/`. Prints one parser-stable `clean` evidence line. Idempotent.
+#   Time complexity O(n) over removed entries.
+# @pre Current directory equals the repository root.
+# @post No intermediate build artifact remains in the working tree.
+# @return {int} 0 on success; 1 when a tracked entry or a removal blocks.
+# @satisfies DES-045, DES-052, DES-061, REQ-141, REQ-148
+clean_build_residue() {
+    remove_intermediate_build_trees || return 1
+    remove_generated_dist_metadata || return 1
+    remove_generated_temp_files || return 1
+    remove_pycache_trees || return 1
+    printf 'clean: build src/shellscripts.egg-info dist:.gitignore dist:*.tmp src:__pycache__\n'
     return 0
 }
 
@@ -711,9 +771,9 @@ if ! resolve_source_date_epoch; then
 fi
 pass_phase
 
-begin_phase "Phase 2: Stale artifact cleanup"
-if ! clean_stale_artifacts; then
-    fail_phase "Stale artifact cleanup refused or failed."
+begin_phase "Phase 2: Previous build cleanup"
+if ! clean_previous_builds; then
+    fail_phase "Previous build cleanup refused or failed."
 fi
 pass_phase
 
@@ -723,13 +783,20 @@ if ! run_distribution_build; then
 fi
 pass_phase
 
-begin_phase "Phase 4: Artifact validation"
+begin_phase "Phase 4: Post-build repository hygiene"
+if ! clean_build_residue; then
+    fail_phase "Post-build repository hygiene failed."
+fi
+CLEANUP_DONE=1
+pass_phase
+
+begin_phase "Phase 5: Artifact validation"
 if ! verify_artifacts; then
     fail_phase "Artifact validation failed."
 fi
 pass_phase
 
-begin_phase "Phase 5: Deliverable summary"
+begin_phase "Phase 6: Deliverable summary"
 pass_phase
 print_summary
 

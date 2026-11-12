@@ -2,17 +2,16 @@
 @brief Validate release build and pre-release script contracts plus ignore rules.
 @details Parses `scripts/pre-release-check.sh` and `scripts/build.sh`, asserts
   repository-root resolution, delegated build invocation, pytest execution with
-  `PYTHONPATH=src`, artifact validation, cleanup safety and trap registration,
+  `PYTHONPATH=src`, artifact validation, previous-build cleanup, post-build
+  repository hygiene, cleanup safety and trap registration,
   repository-integrity verification, fail-fast semantics, evidence lines, and
-  executable permissions. Parses `scripts/clean.sh` for root resolution,
-  tracked preservation, and untracked `dist` archive removal. Validates Bash
-  syntax via `bash -n` and probes the real `.gitignore` behavior with
-  `git check-ignore --no-index`.
+  executable permissions. Validates Bash syntax via `bash -n` and probes the
+  real `.gitignore` behavior with `git check-ignore --no-index`.
 @satisfies TST-015, DES-021, DES-022, DES-023, DES-024, DES-025, DES-026,
   DES-027, DES-040, DES-041, DES-042, DES-043, DES-044, DES-045, DES-046,
-  DES-047, DES-054, REQ-079, REQ-080, REQ-081, REQ-082, REQ-134, REQ-135,
-  REQ-136,
-  REQ-137, REQ-138, REQ-139, REQ-140, REQ-141, REQ-142, REQ-143, REQ-144
+  DES-047, DES-054, DES-060, DES-061, REQ-079, REQ-080, REQ-081, REQ-082,
+  REQ-134, REQ-135, REQ-136, REQ-137, REQ-138, REQ-139, REQ-140, REQ-141,
+  REQ-142, REQ-143, REQ-144, REQ-148
 @return {None} Pytest module scope.
 """
 
@@ -22,7 +21,6 @@ import subprocess
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PRECHECK_PATH = PROJECT_ROOT / "scripts" / "pre-release-check.sh"
 BUILD_PATH = PROJECT_ROOT / "scripts" / "build.sh"
-CLEAN_PATH = PROJECT_ROOT / "scripts" / "clean.sh"
 
 
 def _read(path: pathlib.Path) -> str:
@@ -50,13 +48,10 @@ def test_release_scripts_exist_and_are_executable():
 
     assert PRECHECK_PATH.is_file()
     assert BUILD_PATH.is_file()
-    assert CLEAN_PATH.is_file()
     assert _read(PRECHECK_PATH).strip()
     assert _read(BUILD_PATH).strip()
-    assert _read(CLEAN_PATH).strip()
     assert PRECHECK_PATH.stat().st_mode & 0o111
     assert BUILD_PATH.stat().st_mode & 0o111
-    assert CLEAN_PATH.stat().st_mode & 0o111
 
 
 def test_release_scripts_pass_bash_syntax_check():
@@ -68,7 +63,7 @@ def test_release_scripts_pass_bash_syntax_check():
     @satisfies TST-015, DES-021, DES-040
     """
 
-    for script_path in (PRECHECK_PATH, BUILD_PATH, CLEAN_PATH):
+    for script_path in (PRECHECK_PATH, BUILD_PATH):
         result = subprocess.run(
             ["bash", "-n", str(script_path)],
             capture_output=True,
@@ -104,7 +99,7 @@ def test_build_script_selects_tool_and_validates_dist():
     @brief Validate build toolchain selection and artifact validation.
     @details Asserts `scripts/build.sh` prefers `uv build`, falls back to the
       Python `build` module, validates sdist and wheel readability with the
-      standard library, preserves non-generated entries, and summarizes
+      standard library, preserves non-generated `dist` entries, and summarizes
       deliverables in `dist/`.
     @return {None} Assertions only.
     @satisfies TST-015, DES-040, DES-041, DES-046, REQ-134, REQ-135, REQ-141
@@ -121,6 +116,38 @@ def test_build_script_selects_tool_and_validates_dist():
     assert "Refusing to delete tracked release artifact" not in content
     assert "non-generated" in content or "preserved" in content
     assert "BUILD SUMMARY" in content
+
+
+def test_build_script_cleans_every_previous_build_and_residue():
+    """
+    @brief Validate previous-build cleanup and post-build hygiene phases.
+    @details Asserts `scripts/build.sh` consolidates the previous-build cleanup
+      as its first data-mutating phase, deletes every `dist` archive pattern of
+      any version without a tracked-entry filter, executes a post-build
+      repository-hygiene phase removing intermediate trees, generated metadata,
+      temporary rewrite files, and `src` bytecode caches, and registers that
+      hygiene through the EXIT trap.
+    @return {None} Assertions only.
+    @satisfies TST-015, DES-041, DES-044, DES-060, DES-061, REQ-141, REQ-148
+    """
+
+    content = _read(BUILD_PATH)
+    assert "clean_previous_builds" in content
+    assert "clean_build_residue" in content
+    assert "remove_generated_temp_files" in content
+    assert "remove_pycache_trees" in content
+    assert "Phase 2: Previous build cleanup" in content
+    assert "Phase 4: Post-build repository hygiene" in content
+    cleanup_loop = content.split("clean_previous_builds() {", 1)[1]
+    cleanup_loop = cleanup_loop.split("\n}\n", 1)[0]
+    assert '"${DIST_DIR}"/*.tar.gz' in cleanup_loop
+    assert '"${DIST_DIR}"/*.whl' in cleanup_loop
+    assert '"${DIST_DIR}"/*.zip' in cleanup_loop
+    assert '"${DIST_DIR}"/*.egg' in cleanup_loop
+    assert "git ls-files" not in cleanup_loop
+    assert "clean_build_residue; then" in content
+    assert "remove_intermediate_build_trees || return 1" in content.split(
+        "clean_build_residue() {", 1)[1]
 
 
 def test_pre_release_script_enforces_fail_fast_and_evidence_lines():
@@ -176,6 +203,7 @@ def test_pre_release_script_cleans_and_verifies_repository_integrity():
     assert "BASELINE_UNTRACKED" in content
     assert "assert_safe_cleanup_targets" in content
     assert "list_untracked_dist_archives" in content
+    assert "collect_tracked_nonmanaged" in content
 
 
 def test_pre_release_script_records_artifact_checks():
@@ -196,8 +224,8 @@ def test_pre_release_script_records_artifact_checks():
     assert 'run_check "repository-integrity"' in content
     assert 'dist"/*.tar.gz' in content
     assert 'dist"/*.whl' in content
-    assert "scripts/clean.sh" in content
-    assert '"scripts/pre-release-check.sh" "scripts/build.sh" "scripts/clean.sh"' in content
+    assert '"scripts/pre-release-check.sh" "scripts/build.sh"' in content
+    assert "scripts/clean.sh" not in content
 
 
 def _check_ignore(relative_path: str) -> subprocess.CompletedProcess:
