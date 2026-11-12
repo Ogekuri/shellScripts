@@ -22,7 +22,7 @@
 #   mandatory failure.
 # @satisfies DES-040, DES-041, DES-045, DES-046, DES-047, DES-052, DES-053,
 #   DES-060, DES-061, DES-063, DES-065, REQ-134, REQ-135, REQ-141, REQ-145,
-#   REQ-146, REQ-148, REQ-149, REQ-150, REQ-151
+#   REQ-146, REQ-148, REQ-149, REQ-150, REQ-151, REQ-155
 
 set -Eeuo pipefail
 shopt -s nullglob
@@ -281,20 +281,25 @@ assert_no_tracked_intermediates() {
 #   sdist, wheel, zip, and egg archive regardless of its version number and
 #   regardless of Git tracking status, then removes the build-tool `.gitignore`
 #   metadata and the `build` and `src/shellscripts.egg-info` intermediate trees.
-#   Non-generated output-directory entries are preserved. Executed as the first
-#   data-mutating build phase so a build always starts from an empty archive
-#   set. Time complexity O(n) over removed entries.
+#   Non-generated output-directory entries are preserved. Counts every removed
+#   archive and prints one parser-stable `clean` evidence line reporting that
+#   count. Executed as the first data-mutating build phase so a build always
+#   starts from an empty archive set. Time complexity O(n) over removed entries.
 # @return {int} 0 on success; 1 when the intermediate-tree guard or a removal blocks.
-# @satisfies DES-041, DES-060, REQ-141
+# @satisfies DES-041, DES-060, REQ-141, REQ-155
 clean_previous_builds() {
     local artifact
+    local removed=0
 
     assert_no_tracked_intermediates || return 1
     mkdir -p -- "${DIST_DIR}" || return 1
 
     for artifact in "${DIST_DIR}"/*.tar.gz "${DIST_DIR}"/*.whl "${DIST_DIR}"/*.zip "${DIST_DIR}"/*.egg; do
         rm -f -- "${artifact}" || return 1
+        removed=$((removed + 1))
     done
+
+    printf 'clean: dist-archives=%d\n' "${removed}"
 
     remove_generated_dist_metadata || return 1
 
