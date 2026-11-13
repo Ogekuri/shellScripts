@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.26.2](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.2) - 2026-11-12
+## [0.26.3](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.3) - 2026-11-13
 ### ⛰️  Features
 - Update gitalias config.
 - add scripts/clean.sh build-artifact cleanup pipeline [useReq] *(clean)*
@@ -832,7 +832,7 @@
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
 - \[0.26.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.0
-- \[0.26.2\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.2
+- \[0.26.3\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.3
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -860,4 +860,4 @@
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
 [0.26.0]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0
-[0.26.2]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.2
+[0.26.3]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.3

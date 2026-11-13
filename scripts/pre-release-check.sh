@@ -1,5 +1,5 @@
 #!/bin/bash
-# VERSION: 0.26.2
+# VERSION: 0.26.3
 # AUTHORS: Ogekuri
 # Pre-release verification pipeline for shellScripts.
 
