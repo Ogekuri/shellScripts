@@ -44,7 +44,7 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 
 ## Feature Highlights
 - Single CLI entrypoint with command dispatch and grouped built-in help (`shellscripts` and alias `s`).
-- Project-context launchers for AI CLIs (`agy`, `claude`, `codex`, `copilot`, `opencode`) and IDEs (`vscode`, `vsinsider`).
+- YOLO-mode launchers for AI CLIs (`agy`, `claude`, `codex`, `copilot`, `opencode`) and project-root IDE launchers (`vscode`, `vsinsider`).
 - PDF workflow commands for crop, merge, split, TOC cleanup, and tiling.
 - DICOM helpers (`dicom2jpg`, `dicomviewer`) and video transcoders (`video2h264`, `video2h265`).
 - Project maintenance and automation commands (`req`, `clean`, `venv`, `tests`, `doxygen`, `ubuntu-dark-theme`).
@@ -54,8 +54,9 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 ## Requirements
 
 - Python `>=3.11`.
-- Astral `uv` is required for install and runtime flows (`uv tool install`, `uvx`, `uv run`).
-- Git is required for commands that enforce repository-root execution (`agy`, `claude`, `codex`, `copilot`, `opencode`, `clean`, `venv`, `tests`, `doxygen`, `vscode`, `vsinsider`).
+- Astral `uv` is the supported install and launcher tool (`uv tool install`, `uvx`, `uv run`); the package also runs as `python -m shell_scripts`.
+- Git is required for project-root commands (`clean`, `venv`, `tests`, `doxygen`, `vscode`, `vsinsider`).
+- AI CLI launchers (`agy`, `claude`, `codex`, `copilot`, `opencode`) execute in the current directory without Git root validation; `req` skips targets that are not Git repository roots in its current-directory and `--dirs` modes.
 - Command-specific external tools are required only for related commands:
   - `req` for the `req` command.
   - `doxygen` (plus optional `make` and `pdflatex`) for `doxygen`.
@@ -149,13 +150,19 @@ s [command] [options]
 
 Built-in management flags:
 
-- `--help` : show full help or command help (`shellscripts --help <command>`).
+- `--help` : print the full help screen, or one command help with `s --help <command>` / `s <command> --help`.
 - `--version` / `--ver` : print the installed version plus the latest versions available on PyPI and GitHub.
 - `--upgrade` : run the configured upgrade command automatically on Linux (installs the latest PyPI release by default), otherwise print the manual command.
 - `--upgrade --force` : force download and complete reinstallation by appending `--force --reinstall --refresh` to the `--upgrade` or `--upgrade --dev`/`--upgrade --develop` command.
 - `--upgrade --dev` / `--upgrade --develop` : upgrade from the latest tagged GitHub release instead of PyPI, regardless of its source branch.
 - `--uninstall` : run configured uninstall command automatically on Linux, otherwise print the manual command.
 - `--write-config` : write the default runtime configuration file.
+- `--print-raw` : print the on-disk configuration file content verbatim.
+- `--print [Sub:Path]` : print the effective configuration, or the addressed subtree, as an options tree.
+- `--info [Sub:Path]` : print the configurable parameters, or the addressed subtree, with types, descriptions, and copy-paste command lines.
+- `--get <Path>` : read one configuration value.
+- `--set <Path> <Value>` : set one configuration value or collection element.
+- `--unset <Path>` : remove one configuration override and reactivate the default.
 
 ### Runtime Configuration
 
@@ -182,6 +189,37 @@ Top-level configuration keys:
 - `req`
   - `providers`: provider list forwarded to external `req`.
   - `static_checks`: static-check entries forwarded to external `req`.
+
+### Configuration CLI
+
+The configuration management flags operate on the effective configuration (hardcoded defaults merged with the file) and write only overrides:
+
+- Paths use `:` as hierarchical separator (for example `management:upgrade`).
+- `--get`, `--set`, and `--unset` support collection tokens:
+  - `<Path>:<Idx>` : 0-based array row.
+  - `<Path>:<Idx>:<Field>` : one field of an object row.
+  - `<Path>:<Key>` : dynamic map key.
+  - `--set` only: `<Path>:append` / `<Path>:+` (append), `<Path>:insert:<Idx>` (insert), JSON arrays/maps/objects (full overwrite).
+- `--set` accepts `$NAME` value tokens and acquires the value from environment variable `NAME`.
+- Array values are validated against the schema; row deletion re-indexes the array contiguously.
+- Every configuration command bootstraps a missing `~/.config/shellScripts/config.json` with system defaults before running.
+- Persistence is atomic (same-directory temporary file followed by rename) and keeps unrelated keys.
+- Values are always displayed in plain text, including credentials and API keys.
+
+Examples:
+
+```bash
+s --get management:upgrade
+s --set management:upgrade "uv tool install shellscripts"
+s --set req:providers:+ "codex:skills"
+s --set req:providers:insert:0 "claude:prompts"
+s --set req:providers "$REQ_PROVIDERS"
+s --unset management:upgrade
+s --print dispatch:diff
+s --info req
+```
+
+`--print` renders default/custom indicators, selection tables, and collection tables with `[Path: ...]` badges; `--info` renders each option type plus full-path `--set`/`--unset` command templates.
 
 
 ## Shell Scripts
@@ -232,6 +270,8 @@ Run useReq bootstrap on first-level child directories:
 s req --dirs
 ```
 
+`req` skips every target that is not a Git repository root in current-directory and `--dirs` modes, emitting one skip evidence line per directory.
+
 Clean caches without interactive confirmation:
 
 ```bash
@@ -274,6 +314,34 @@ Open current git project in VS Code / Insiders:
 s vscode
 s vsinsider
 ```
+
+
+## Local Build and Release
+
+Build validated sdist and wheel archives (requires Python `>=3.11` and `uv` or `build`):
+
+```bash
+./scripts/build.sh
+```
+
+- Removes every existing archive in the output directory (`*.tar.gz`, `*.whl`, `*.zip`, `*.egg`) of any version before building and preserves non-generated entries.
+- Writes to `dist/` by default; set `BUILD_DIST_DIR` to use another output directory.
+- Resolves the reproducible timestamp from a valid `SOURCE_DATE_EPOCH` environment value or from the tracked `.build-epoch` file; a missing or malformed epoch aborts the build.
+- Validates archive readability and members: the sdist contains `pyproject.toml` and `src/shell_scripts/__init__.py` and excludes `tests/`, `src/shellscripts.egg-info/`, `setup.cfg`, and `MANIFEST.in`; the wheel contains the license and the `shellscripts`/`s` entry points.
+- Removes intermediate build trees, generated metadata, temporary files, and `src` bytecode caches before printing `PASS`/`FAIL` phase evidence and a `BUILD SUMMARY` listing every deliverable.
+
+Run the full pre-release verification before an official release:
+
+```bash
+./scripts/pre-release-check.sh
+```
+
+- Runs project-structure, executable-bit, toolchain, Bash/Python syntax, optional quality (`SKIP` when not configured), pytest, delegated build, artifact-validation, and repository-integrity checks in order.
+- Builds inside a `mktemp -d` directory outside the working tree through `BUILD_DIST_DIR` and never reads, verifies, cleans, or modifies `dist/` entries.
+- Removes generated artifacts and the temporary build directory on success, failure, and signal termination, then compares the repository state with the pre-run baseline.
+- Stops at the first failed mandatory check with exit code `1` and prints `PASS`/`FAIL`/`SKIP` evidence plus a final summary.
+
+Publishing: pushing a `vX.Y.Z` tag triggers `.github/workflows/release-pypi.yml`, which publishes the `dist/` archives present in the tagged commit to the GitHub Release and, only for tags reachable from `master`, to PyPI through OIDC Trusted Publishing. The workflow never builds distributions.
 
 
 ## Acknowledgments
