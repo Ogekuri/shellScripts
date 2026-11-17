@@ -47,7 +47,7 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 - YOLO-mode launchers for AI CLIs (`agy`, `claude`, `codex`, `copilot`, `opencode`) and project-root IDE launchers (`vscode`, `vsinsider`).
 - PDF workflow commands for crop, merge, split, TOC cleanup, and tiling.
 - DICOM helpers (`dicom2jpg`, `dicomviewer`) and video transcoders (`video2h264`, `video2h265`).
-- Project maintenance and automation commands (`req`, `clean`, `venv`, `tests`, `doxygen`, `ubuntu-dark-theme`).
+- Project maintenance and automation commands (`clean`, `venv`, `tests`, `doxygen`, `ubuntu-dark-theme`).
 - Startup update notification with rate-limited checks against the PyPI registry.
 
 
@@ -56,9 +56,8 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 - Python `>=3.11`.
 - Astral `uv` is the supported install and launcher tool (`uv tool install`, `uvx`, `uv run`); the package also runs as `python -m shell_scripts`.
 - Git is required for project-root commands (`clean`, `venv`, `tests`, `doxygen`, `vscode`, `vsinsider`).
-- AI CLI launchers (`agy`, `claude`, `codex`, `copilot`, `opencode`) execute in the current directory without Git root validation; `req` skips targets that are not Git repository roots in its current-directory and `--dirs` modes.
+- AI CLI launchers (`agy`, `claude`, `codex`, `copilot`, `opencode`) execute in the current directory without Git root validation.
 - Command-specific external tools are required only for related commands:
-  - `req` for the `req` command.
   - `doxygen` (plus optional `make` and `pdflatex`) for `doxygen`.
   - `gs`, `pdfinfo`, `qpdf`, `pdftk`, `plakativ` for PDF commands.
   - `ffmpeg` for `video2h264` and `video2h265`.
@@ -186,9 +185,6 @@ Top-level configuration keys:
   - `uninstall`: command string executed by `--uninstall`.
 - `dispatch`
   - `diff`, `edit`, `view`: each command supports `categories` and `fallback` command vectors.
-- `req`
-  - `providers`: provider list forwarded to external `req`.
-  - `static_checks`: static-check entries forwarded to external `req`.
 
 ### Configuration CLI
 
@@ -211,12 +207,12 @@ Examples:
 ```bash
 s --get management:upgrade
 s --set management:upgrade "uv tool install shellscripts"
-s --set req:providers:+ "codex:skills"
-s --set req:providers:insert:0 "claude:prompts"
-s --set req:providers "$REQ_PROVIDERS"
+s --set dispatch:diff:fallback:+ "meld"
+s --set dispatch:diff:fallback:insert:0 "meld"
+s --set dispatch:diff:fallback "$DIFF_FALLBACK"
 s --unset management:upgrade
 s --print dispatch:diff
-s --info req
+s --info dispatch
 ```
 
 `--print` renders default/custom indicators, selection tables, and collection tables with `[Path: ...]` badges; `--info` renders each option type plus full-path `--set`/`--unset` command templates.
@@ -234,7 +230,6 @@ s --info req
 | `copilot` | Launch Copilot CLI in YOLO mode (`copilot --yolo`; alternative `--allow-all` documented in help). |
 | `opencode` | Launch OpenCode CLI in auto-approval mode (`opencode --auto`). |
 | `clean` | Find and delete cache directories under the project root (or a passed directory). |
-| `req` | Run useReq bootstrap on current directory, first-level dirs, or recursively. |
 | `venv` | Recreate `.venv` and install `requirements.txt` if present. |
 | `tests` | Ensure/create `.venv` and run pytest (arguments passed through). |
 | `doxygen` | Generate HTML/XML/Markdown docs and optional PDF output. |
@@ -263,14 +258,6 @@ Launch Antigravity CLI in YOLO mode (each YOLO command help documents every regi
 ```bash
 s agy
 ```
-
-Run useReq bootstrap on first-level child directories:
-
-```bash
-s req --dirs
-```
-
-`req` skips every target that is not a Git repository root in current-directory and `--dirs` modes, emitting one skip evidence line per directory.
 
 Clean caches without interactive confirmation:
 

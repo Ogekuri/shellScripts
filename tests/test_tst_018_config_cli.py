@@ -289,7 +289,7 @@ def test_do_print_renders_badges_indicators_and_tables(
     assert return_code == 0
     assert "[Path: management]" in captured.out
     assert "[Path: dispatch:diff:categories]" not in captured.out
-    assert "[Path: req]" in captured.out
+    assert "[Path: dispatch]" in captured.out
     assert "(default)" in captured.out
     assert "(6 entries | key target: dispatch:diff:categories:<Key>)" in captured.out
     assert "(1 items | row target: dispatch:diff:fallback:<Idx> | add: :+)" in captured.out
@@ -328,11 +328,11 @@ def test_do_print_renders_only_requested_subtree(
 ) -> None:
     """@brief Verify `--print <Sub:Path>` restricts the rendered tree.
 
-    @details Invokes `do_print` with the `req` sub-path; only the `req`
-    subtree lines MUST be rendered and sibling sections MUST be absent
-    (REQ-095).
-    expected_output: return code `0`; `req` subtree present; `dispatch`
-    absent.
+    @details Invokes `do_print` with the `management` sub-path; only the
+    `management` subtree lines MUST be rendered and sibling sections MUST be
+    absent (REQ-095).
+    expected_output: return code `0`; `management` subtree present;
+    `dispatch` absent.
     @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
     @param tmp_path {pathlib.Path} Test-owned temporary directory.
     @param capsys {pytest.CaptureFixture} Output capture fixture.
@@ -341,12 +341,12 @@ def test_do_print_renders_only_requested_subtree(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    return_code = config_cli.do_print("req")
+    return_code = config_cli.do_print("management")
     captured = capsys.readouterr()
     assert return_code == 0
-    assert "[Path: req]" in captured.out
+    assert "[Path: management]" in captured.out
     assert "[Path: dispatch]" not in captured.out
-    assert "providers" in captured.out
+    assert "upgrade" in captured.out
 
 
 def test_do_print_fails_on_unknown_sub_path(
@@ -605,7 +605,7 @@ def test_do_info_renders_array_command_templates(
     option MUST render add, insert, update, delete, full-overwrite, and
     clear command lines using complete canonical paths (REQ-113, REQ-133).
     expected_output: return code `0`; the six operation lines for
-    `req:providers`.
+    `dispatch:diff:fallback`.
     @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
     @param tmp_path {pathlib.Path} Test-owned temporary directory.
     @param capsys {pytest.CaptureFixture} Output capture fixture.
@@ -617,12 +617,12 @@ def test_do_info_renders_array_command_templates(
     return_code = config_cli.do_info()
     captured = capsys.readouterr()
     assert return_code == 0
-    assert ': --set req:providers:+ "claude:prompts" (or :append)' in captured.out
-    assert ': --set req:providers:insert:0 "claude:prompts"' in captured.out
-    assert ': --set req:providers:0 "claude:prompts"' in captured.out
-    assert ": --unset req:providers:0 (auto re-indexes list)" in captured.out
-    assert ": --set req:providers '[\"codex:skills\", \"pi:prompts\"]'" in captured.out
-    assert ": --unset req:providers" in captured.out
+    assert ': --set dispatch:diff:fallback:+ "bcompare" (or :append)' in captured.out
+    assert ': --set dispatch:diff:fallback:insert:0 "bcompare"' in captured.out
+    assert ': --set dispatch:diff:fallback:0 "bcompare"' in captured.out
+    assert ": --unset dispatch:diff:fallback:0 (auto re-indexes list)" in captured.out
+    assert ": --set dispatch:diff:fallback '[\"bcompare\"]'" in captured.out
+    assert ": --unset dispatch:diff:fallback" in captured.out
 
 
 def test_do_info_renders_map_command_templates(
@@ -662,7 +662,7 @@ def test_do_info_renders_only_requested_subtree(
     sub-path; only that option block MUST be documented and sibling options
     MUST be absent (REQ-107).
     expected_output: return code `0`; `categories` documentation present;
-    `providers` absent.
+    `fallback` absent.
     @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
     @param tmp_path {pathlib.Path} Test-owned temporary directory.
     @param capsys {pytest.CaptureFixture} Output capture fixture.
@@ -675,7 +675,7 @@ def test_do_info_renders_only_requested_subtree(
     captured = capsys.readouterr()
     assert return_code == 0
     assert "Category-to-command mapping for diff." in captured.out
-    assert "providers" not in captured.out
+    assert "fallback" not in captured.out
 
 
 def test_do_get_reads_scalars_rows_and_map_keys(
@@ -697,8 +697,8 @@ def test_do_get_reads_scalars_rows_and_map_keys(
     _isolate_home(monkeypatch, tmp_path)
     assert config_cli.do_get("management:upgrade") == 0
     assert '"uv tool install shellscripts"' in capsys.readouterr().out
-    assert config_cli.do_get("req:providers:1") == 0
-    assert '"github:skills"' in capsys.readouterr().out
+    assert config_cli.do_get("dispatch:diff:fallback:0") == 0
+    assert '"bcompare"' in capsys.readouterr().out
     assert config_cli.do_get("dispatch:diff:categories:code") == 0
     assert '[\n  "bcompare"\n]' in capsys.readouterr().out
 
@@ -723,10 +723,10 @@ def test_do_get_errors_are_reported_on_stderr(
     _isolate_home(monkeypatch, tmp_path)
     assert config_cli.do_get("nope:missing") == 1
     assert "Unknown configuration path" in capsys.readouterr().err
-    assert config_cli.do_get("req:providers:99") == 1
+    assert config_cli.do_get("dispatch:diff:fallback:99") == 1
     captured = capsys.readouterr()
     assert "Index 99 out of bounds" in captured.err
-    assert "0..6" in captured.err
+    assert "0..0" in captured.err
     assert "':append'" in captured.err
     assert config_cli.do_get("dispatch:diff:categories:absent") == 1
     assert "Map key 'absent' not found" in capsys.readouterr().err
@@ -742,7 +742,7 @@ def test_do_set_appends_inserts_and_updates_rows(
     MUST report the assigned indices, and the insert MUST shift existing
     rows (REQ-124, REQ-125, REQ-126).
     expected_output: return code `0` for each operation; persisted array
-    `["inserted", "claude:prompts", ..., "appended"]`.
+    `["inserted", "updated", "appended"]`.
     @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
     @param tmp_path {pathlib.Path} Test-owned temporary directory.
     @param capsys {pytest.CaptureFixture} Output capture fixture.
@@ -751,17 +751,17 @@ def test_do_set_appends_inserts_and_updates_rows(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    assert config_cli.do_set("req:providers:+", "appended") == 0
-    assert "appended to providers at index 7" in capsys.readouterr().out
-    assert config_cli.do_set("req:providers:insert:0", "inserted") == 0
+    assert config_cli.do_set("dispatch:diff:fallback:+", "appended") == 0
+    assert "appended to fallback at index 1" in capsys.readouterr().out
+    assert config_cli.do_set("dispatch:diff:fallback:insert:0", "inserted") == 0
     assert "inserted at index 0. Subsequent items shifted." in capsys.readouterr().out
-    assert config_cli.do_set("req:providers:1", "updated") == 0
+    assert config_cli.do_set("dispatch:diff:fallback:1", "updated") == 0
     assert "Row at index 1 updated successfully." in capsys.readouterr().out
     stored = _read_config_file(tmp_path)
-    assert stored["req"]["providers"][0] == "inserted"
-    assert stored["req"]["providers"][1] == "updated"
-    assert stored["req"]["providers"][-1] == "appended"
-    assert len(stored["req"]["providers"]) == 9
+    assert stored["dispatch"]["diff"]["fallback"][0] == "inserted"
+    assert stored["dispatch"]["diff"]["fallback"][1] == "updated"
+    assert stored["dispatch"]["diff"]["fallback"][-1] == "appended"
+    assert len(stored["dispatch"]["diff"]["fallback"]) == 3
 
 
 def test_do_set_rejects_out_of_bounds_rows(
@@ -769,7 +769,7 @@ def test_do_set_rejects_out_of_bounds_rows(
 ) -> None:
     """@brief Verify out-of-bounds row updates fail without writing.
 
-    @details Invokes `do_set` with index 99 and index -1 on a seven-element
+    @details Invokes `do_set` with index 99 and index -1 on a one-element
     array; each MUST return `1`, print the valid index range with the
     `:append` hint to stderr, and leave the file untouched
     (REQ-126, REQ-131).
@@ -783,15 +783,15 @@ def test_do_set_rejects_out_of_bounds_rows(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    assert config_cli.do_get("req:providers:0") == 0
+    assert config_cli.do_get("dispatch:diff:fallback:0") == 0
     capsys.readouterr()
     before = config_cli.get_config_path().read_text(encoding="utf-8")
-    assert config_cli.do_set("req:providers:99", '"x"') == 1
+    assert config_cli.do_set("dispatch:diff:fallback:99", '"x"') == 1
     captured = capsys.readouterr()
-    assert "Valid indices for providers are 0..6" in captured.err
+    assert "Valid indices for fallback are 0..0" in captured.err
     assert "':append'" in captured.err
-    assert config_cli.do_set("req:providers:-1", '"x"') == 1
-    assert "Valid indices for providers are 0..6" in capsys.readouterr().err
+    assert config_cli.do_set("dispatch:diff:fallback:-1", '"x"') == 1
+    assert "Valid indices for fallback are 0..0" in capsys.readouterr().err
     assert (
         config_cli.get_config_path().read_text(encoding="utf-8") == before
     )
@@ -802,9 +802,9 @@ def test_do_set_rejects_out_of_range_insert_positions(
 ) -> None:
     """@brief Verify insert positions beyond the array length fail.
 
-    @details Invokes `do_set` with `insert:8` on a seven-element array; the
+    @details Invokes `do_set` with `insert:2` on a one-element array; the
     command MUST return `1` and state the valid insert-position range
-    `0..7` (REQ-125, REQ-131).
+    `0..1` (REQ-125, REQ-131).
     expected_output: return code `1`; insert-range message on stderr.
     @param monkeypatch {pytest.MonkeyPatch} Environment isolation fixture.
     @param tmp_path {pathlib.Path} Test-owned temporary directory.
@@ -814,9 +814,9 @@ def test_do_set_rejects_out_of_range_insert_positions(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    assert config_cli.do_set("req:providers:insert:8", '"x"') == 1
+    assert config_cli.do_set("dispatch:diff:fallback:insert:2", '"x"') == 1
     captured = capsys.readouterr()
-    assert "Valid insert positions for providers are 0..7" in captured.err
+    assert "Valid insert positions for fallback are 0..1" in captured.err
 
 
 def test_do_set_manages_map_keys_and_overwrites_collections(
@@ -840,14 +840,14 @@ def test_do_set_manages_map_keys_and_overwrites_collections(
     _isolate_home(monkeypatch, tmp_path)
     assert config_cli.do_set("dispatch:diff:categories:code", '["xx"]') == 0
     assert "Key 'code' saved under dispatch:diff:categories:code." in capsys.readouterr().out
-    assert config_cli.do_set("req:providers", '["one", "two"]') == 0
-    assert "Array providers overwritten with 2 items (indices 0..1)." in capsys.readouterr().out
+    assert config_cli.do_set("dispatch:diff:fallback", '["one", "two"]') == 0
+    assert "Array fallback overwritten with 2 items (indices 0..1)." in capsys.readouterr().out
     assert (
         config_cli.do_set("dispatch:diff:categories", '{"k": ["v"]}') == 0
     )
     assert "Map categories overwritten with 1 entries." in capsys.readouterr().out
     stored = _read_config_file(tmp_path)
-    assert stored["req"]["providers"] == ["one", "two"]
+    assert stored["dispatch"]["diff"]["fallback"] == ["one", "two"]
     assert stored["dispatch"]["diff"]["categories"] == {"k": ["v"]}
 
 
@@ -869,10 +869,10 @@ def test_do_set_rejects_invalid_values_without_writing(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    assert config_cli.do_get("req:providers:0") == 0
+    assert config_cli.do_get("dispatch:diff:fallback:0") == 0
     capsys.readouterr()
     before = config_cli.get_config_path().read_text(encoding="utf-8")
-    assert config_cli.do_set("req:providers", "not-json") == 1
+    assert config_cli.do_set("dispatch:diff:fallback", "not-json") == 1
     assert "expected a valid JSON value" in capsys.readouterr().err
     assert config_cli.do_set("dispatch:diff:categories:code", '"scalar"') == 1
     assert "expected a JSON array" in capsys.readouterr().err
@@ -972,21 +972,13 @@ def test_do_unset_deletes_rows_and_reindexes(
     """
 
     _isolate_home(monkeypatch, tmp_path)
-    assert config_cli.do_set("req:providers:+", "extra") == 0
+    assert config_cli.do_set("dispatch:diff:fallback:+", "extra") == 0
     capsys.readouterr()
-    assert config_cli.do_unset("req:providers:0") == 0
+    assert config_cli.do_unset("dispatch:diff:fallback:0") == 0
     captured = capsys.readouterr()
-    assert "Item at index 0 removed. Array re-indexed (7 items remaining, indices 0..6)." in captured.out
+    assert "Item at index 0 removed. Array re-indexed (1 items remaining, indices 0..0)." in captured.out
     stored = _read_config_file(tmp_path)
-    assert stored["req"]["providers"] == [
-        "github:skills",
-        "codex:skills",
-        "opencode:prompts",
-        "gemini:prompts",
-        "kiro:agents",
-        "pi:prompts",
-        "extra",
-    ]
+    assert stored["dispatch"]["diff"]["fallback"] == ["extra"]
 
 
 def test_do_unset_removes_map_keys(
@@ -1139,7 +1131,7 @@ def test_bootstrap_uses_atomic_defaults_write(
     _isolate_home(monkeypatch, tmp_path)
     target = config_cli.get_config_path()
     assert not target.parent.exists()
-    assert config_cli.do_get("req:static_checks:0") == 0
+    assert config_cli.do_get("dispatch:diff:fallback:0") == 0
     assert target.exists()
     assert json.loads(target.read_text(encoding="utf-8")) == DEFAULT_RUNTIME_CONFIG
 

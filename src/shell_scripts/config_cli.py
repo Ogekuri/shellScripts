@@ -319,33 +319,6 @@ CONFIG_SCHEMA: tuple[tuple[str, "OptionSpec | GroupSpec"], ...] = (
             ),
         ),
     ),
-    (
-        "req",
-        GroupSpec(
-            "Parameters of the req command.",
-            (
-                (
-                    "providers",
-                    OptionSpec(
-                        "list",
-                        "Repeated providers passed to req with --provider.",
-                        item_kind="string",
-                        example='["codex:skills", "pi:prompts"]',
-                    ),
-                ),
-                (
-                    "static_checks",
-                    OptionSpec(
-                        "list",
-                        "Repeated static checks passed to req with "
-                        "--enable-static-check.",
-                        item_kind="string",
-                        example='["Python=Ruff"]',
-                    ),
-                ),
-            ),
-        ),
-    ),
 )
 
 
@@ -1725,10 +1698,10 @@ def print_config_cli_help(command: str) -> None:
             f'  {PROGRAM} --set management:upgrade '
             '"uv tool install shellscripts"'
         )
-        print(f'  {PROGRAM} --set req:providers:+ "codex:skills"')
-        print(f"  {PROGRAM} --set req:providers:insert:0 'claude:prompts'")
+        print(f'  {PROGRAM} --set dispatch:diff:fallback:+ "meld"')
+        print(f'  {PROGRAM} --set dispatch:diff:fallback:insert:0 "meld"')
         print(f'  {PROGRAM} --set dispatch:diff:categories:code \'["bcompare"]\'')
-        print(f"  {PROGRAM} --set req:providers $REQ_PROVIDERS")
+        print(f"  {PROGRAM} --set dispatch:diff:fallback $DIFF_FALLBACK")
         return
     if command == "--unset":
         print(f"Usage: {PROGRAM} --unset <path>")
@@ -1744,7 +1717,7 @@ def print_config_cli_help(command: str) -> None:
         print("  <path>                reset the whole option, array, or branch")
         print("Examples:")
         print(f"  {PROGRAM} --unset management:upgrade")
-        print(f"  {PROGRAM} --unset req:providers:0")
+        print(f"  {PROGRAM} --unset dispatch:diff:fallback:0")
         print(f"  {PROGRAM} --unset dispatch:diff:categories:code")
         print(f"  {PROGRAM} --unset dispatch:diff")
         return
@@ -1757,7 +1730,7 @@ def print_config_cli_help(command: str) -> None:
     print("  <path>:<Key>          read one dynamic map key")
     print("Examples:")
     print(f"  {PROGRAM} --get management:upgrade")
-    print(f"  {PROGRAM} --get req:providers:0")
+    print(f"  {PROGRAM} --get dispatch:diff:fallback:0")
     print(f"  {PROGRAM} --get dispatch:diff:categories:code")
     print(f"  {PROGRAM} --get dispatch:diff:categories")
 
@@ -1879,7 +1852,7 @@ def do_info(path: str | None = None) -> int:
     `:`-separated sub-path restricts rendering to that subtree or leaf.
     Time complexity O(n) over schema node count.
     @param path {str|None} Optional sub-path restricting the rendered
-      documentation subtree, for example `req`.
+      documentation subtree, for example `management`.
     @return {int} `0` on success; `1` on schema divergence or unknown paths.
     @satisfies DES-034, DES-036, REQ-107, REQ-108, REQ-110, REQ-111,
       REQ-112, REQ-113, REQ-116, REQ-117, REQ-132, REQ-133
@@ -1915,7 +1888,7 @@ def do_get(path: str | None) -> int:
     indexes, and missing keys or fields. Time complexity O(n) over subtree
     size.
     @param path {str|None} Hierarchical path token, for example
-      `management:upgrade` or `req:providers:0`.
+      `management:upgrade` or `dispatch:diff:fallback:0`.
     @return {int} `0` on success; `1` for missing arguments, unknown paths,
       out-of-bounds indexes, or absent values, keys, or fields.
     @satisfies DES-034, DES-038, REQ-098, REQ-099, REQ-100, REQ-109,

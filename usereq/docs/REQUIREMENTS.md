@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.23.0"
-date: "2026-11-17T09:59:43Z"
+version: "0.24.0"
+date: "2026-11-17T10:15:02Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -93,7 +93,7 @@ Repository structure (evidence-oriented view, depth-limited):
 ### 2.1 Project Functions
 - **PRJ-001**: MUST parse CLI arguments and route execution to management flags (`--version`, `--ver`, `--upgrade`, `--uninstall`, `--write-config`, `--print-raw`, `--print`, `--info`, `--get`, `--set`, `--unset`) or registered subcommands with explicit process return codes.
 - **PRJ-002**: MUST provide global help and command-specific help outputs through text-based terminal UI.
-- **PRJ-003**: MUST expose subcommands for AI CLI launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, `req` bootstrap orchestration, environment/test management, editor launchers, theme application, and cache cleanup.
+- **PRJ-003**: MUST expose subcommands for AI CLI launch, PDF utilities, DICOM utilities, generic file diff/edit/view dispatching, environment/test management, editor launchers, theme application, and cache cleanup.
 - **PRJ-004**: MUST perform startup version-update checks against the PyPI registry with cooldown caching.
 - **PRJ-005**: MUST include a GitHub automation workflow script at `.github/workflows/release-pypi.yml`.
 - **PRJ-007**: MUST publish built distributions to PyPI via OIDC Trusted Publishing when a tagged version is committed on branch `master`.
@@ -121,7 +121,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-008**: MUST expose command modules with `DESCRIPTION`, `print_help(version)`, and `run(args)` call patterns.
 - **DES-009**: MUST recreate `.venv` whenever `.venv` already exists in `venv` command execution and `--force` MUST NOT change this behavior.
 - **DES-010**: MUST request deletion confirmation in `clean` unless `--yes` is provided.
-- **DES-011**: MUST implement centralized runtime configuration loading from `~/.config/shellScripts/config.json` with recursive merge semantics where missing keys preserve hardcoded defaults, including `req` providers and static checks.
+- **DES-011**: MUST implement centralized runtime configuration loading from `~/.config/shellScripts/config.json` with recursive merge semantics where missing keys preserve hardcoded defaults.
 - **DES-012**: MUST provide a management operation that writes default runtime configuration JSON to `~/.config/shellScripts/config.json`, creating parent directories when absent.
 - **DES-014**: MUST generate global help command listing from a fixed section-to-command mapping preserving section order and per-section command order.
 - **DES-015**: MUST pin every action referenced by `.github/workflows/release-pypi.yml` to a major version whose declared runtime is Node24 or newer.
@@ -195,8 +195,6 @@ No explicit performance optimizations identified.
 - **REQ-015**: MUST execute `copilot --yolo` in `copilot` through the shared YOLO CLI launcher via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-017**: MUST execute the PATH-resolved `claude --dangerously-skip-permissions` in `claude` through the shared YOLO CLI launcher with inherited stdio and blocking wait.
 - **REQ-018**: MUST execute `opencode --auto` in `opencode` through the shared YOLO CLI launcher via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-070**: MUST make `req` skip cleanup and installation when current directory is not a Git repository root and MUST print one skip evidence line for that directory.
-- **REQ-071**: MUST make `req --dirs` skip cleanup and installation per non-root child directory, print one skip evidence line per skipped directory, and continue remaining child-directory processing.
 - **REQ-020**: MUST open the project root in VS Code and VS Code Insiders commands, append the project path as final argument, and execute each launcher via `subprocess.run` with inherited stdio and blocking wait.
 - **REQ-022**: MUST attempt GNOME GTK dark theme configuration via `gsettings` and MAY launch `gtk-chtheme`, `qt5ct`, and `qt6ct` when available.
 - **REQ-023**: MUST print help using `diff`/`edit`/`view` command names and return code `2` when the required file argument is missing.
@@ -218,13 +216,6 @@ No explicit performance optimizations identified.
 - **REQ-045**: MUST load runtime configuration from `~/.config/shellScripts/config.json` during CLI startup, and MUST keep hardcoded defaults for missing file, missing keys, or invalid value types.
 - **REQ-046**: MUST write the default runtime configuration JSON to `~/.config/shellScripts/config.json` and return code `0` when invoked with `--write-config`.
 - **REQ-047**: MUST determine and cache the runtime operating system at CLI startup before command dispatch.
-- **REQ-048**: MUST implement `req` command that removes predefined AI-integration cleanup paths and creates `guidelines`, `docs`, `tests`, `src`, `scripts`, and `.github/workflows` for each selected target directory.
-- **REQ-049**: MUST invoke external `req` once per target directory using hardcoded arguments `--base`, `--docs-dir`, `--guidelines-dir`, three `--src-dir`, `--tests-dir`, and `--upgrade-guidelines`.
-- **REQ-050**: MUST source repeated `--provider` and `--enable-static-check` arguments for `req` from runtime config and MUST use hardcoded defaults containing providers `codex:skills` and `pi:prompts` when config keys are missing or invalid.
-- **REQ-051**: MUST target current directory when `req` is invoked without selector options.
-- **REQ-052**: MUST make `req --dirs` target only first-level child directories and MUST exclude the current directory.
-- **REQ-053**: MUST make `req --recursive` target all descendant directories and MUST exclude the current directory.
-- **REQ-054**: MUST reject simultaneous `--dirs` and `--recursive` options in `req` with return code `1`.
 - **REQ-055**: MUST provide a shared OS-aware executable-check function that returns `true` only when a command token or executable path is runnable on the current runtime platform and `false` otherwise.
 - **REQ-056**: MUST make each command runner validate all external executables required by the actually activated option path before execution, print `Command not executable: <command>` on failure, and terminate with non-zero status.
 - **REQ-057**: MUST implement `video2h264` using `subprocess.run` with inherited stdio and blocking wait for `ffmpeg -i <input> -c:v libx264 -profile:v high -level 4.1 -crf 20 -pix_fmt yuv420p -c:a aac -b:a 192k <input>.mp4`.
@@ -232,8 +223,6 @@ No explicit performance optimizations identified.
 - **REQ-059**: MUST skip the version-check HTTP request when the cooldown file exists, the persisted idle delay is active, and neither `--version` nor `--ver` is passed.
 - **REQ-060**: MUST print a bright-green line containing `Update Available` and `Installed Version` when the latest release version differs from the installed version.
 - **REQ-061**: MUST print a bright-red error line and apply an 86400-second cooldown when the version-check request returns an HTTP error response or raises a non-HTTP exception.
-- **REQ-062**: MUST print one cleanup evidence line per predefined cleanup path using status `deleted` for removed filesystem entries and status `skip` for absent paths.
-- **REQ-063**: MUST label each `deleted` cleanup evidence line with entry kind `file` or `dir` based on the removed filesystem entry type.
 - **REQ-064**: MUST execute delegated external system commands through `subprocess.run` with inherited stdin/stdout/stderr and MUST wait for child termination.
 - **REQ-065**: MUST disable raw mouse capture before wrapper exit by writing `\x1b[?9l\x1b[?1000l\x1b[?1001l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1007l\x1b[?1015l\x1b[?1016l` to TTY stdout.
 - **REQ-066**: MUST render global help command sections in this order: Edit/View, PDF, AI, Develop, Image, Video, OS, and list command descriptions exactly as registered command `DESCRIPTION` values.
@@ -326,7 +315,6 @@ The pre-release pipeline builds into a `mktemp -d` temporary directory outside t
 - **TST-005**: MUST verify REQ-014, REQ-015, REQ-017, REQ-018, and REQ-020 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, absence of Codex auth synchronization, and propagated return codes match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
 - **TST-009**: MUST verify REQ-045 and REQ-046 by monkeypatching config I/O boundaries and asserting startup load invocation plus `--write-config` success behavior.
-- **TST-010**: MUST verify REQ-048 through REQ-054, REQ-062 through REQ-063, and REQ-070 through REQ-071 by monkeypatching filesystem and subprocess boundaries, passing only if target selection, git-root skip behavior, cleanup evidence output, and generated `req` argument vectors match required behavior.
 - **TST-007**: MUST verify REQ-030 through REQ-035 by monkeypatching subprocess calls, passing only if expected qpdf/pdftk/gs invocation sequences and page-range validation outcomes are observed.
 - **TST-008**: MUST verify REQ-036 through REQ-038 using isolated project roots, passing only if `.venv` lifecycle and conditional `requirements.txt` installation behavior match specified logic.
 - **TST-011**: MUST verify REQ-057 and REQ-058 by monkeypatching executable checks and `subprocess.run`, passing only if FFmpeg argv vectors, `<input>.mp4` output naming, and propagated return codes are exact.
@@ -374,7 +362,6 @@ The pre-release pipeline builds into a `mktemp -d` temporary directory outside t
 | REQ-033 | `src/shell_scripts/commands/pdf_toc_clean.py` | `run`, `_filter_bookmarks` | Outputs `_toc-clean.pdf` with bookmark entries filtered to valid page range. |
 | REQ-034, REQ-035 | `src/shell_scripts/commands/pdf_crop.py` | `run`, `_parse_page_range`, `_compute_auto_bbox` | Supports bbox/margins/analyze-pages/pages options and validates range syntax `N`, `N-`, `-N`, `N-M`. |
 | REQ-036, REQ-037 | `src/shell_scripts/commands/tests_cmd.py` | `run` | Creates `.venv` if missing, conditionally installs `requirements.txt`, runs pytest with `PYTHONPATH` prefixed by `src`. |
-| REQ-048, REQ-049, REQ-050, REQ-051, REQ-052, REQ-053, REQ-054, REQ-062, REQ-063 | `src/shell_scripts/commands/req_cmd.py`; `src/shell_scripts/config.py` | `run`, `_prepare_target_directory`, `_build_req_args`, `get_req_profile` | `req` command resolves targets by selector mode, removes predefined cleanup paths, emits `deleted`/`skip` cleanup evidence with file-or-dir labels for removals, and executes external `req` with hardcoded base args plus runtime-configured providers/static checks. |
 | TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
 | DES-021..DES-027, DES-040..DES-047, DES-060, DES-061, DES-063..DES-068, REQ-079..REQ-082, REQ-134..REQ-155, TST-015 | `scripts/pre-release-check.sh`; `scripts/build.sh`; `.build-epoch`; `.gitignore`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `skip_check`, `create_temp_build_dir`, `check_artifacts`, `check_repository_integrity`, `collect_tracked_nonmanaged`, `cleanup_artifacts`, `fail_fast`, `on_exit`, `clean_previous_builds`, `clean_build_residue`, `resolve_source_date_epoch`, `resolve_build_tool`, `verify_artifacts`, `print_summary` | Pre-release resolves the repository root, validates project structure, toolchain and executable bits, runs Bash/Python syntax checks, pytest with `PYTHONPATH=src`, creates a `mktemp -d` temporary build output directory outside the working tree, delegates distribution building to `scripts/build.sh` through `BUILD_DIST_DIR`, validates the sdist and wheel archives inside that directory, never reads, verifies, or modifies `dist/` entries, runs cleanup and full-state baseline repository-integrity checks, and reports `PASS`/`FAIL`/`SKIP` plus a final summary; cleanup is registered on `EXIT`/`INT`/`TERM`, removes the temporary build directory, and preserves the original failure result. Build script deletes every `dist` archive of any version in its first data-mutating phase, resolves the archive epoch from the tracked `.build-epoch` file (honoring an explicit `SOURCE_DATE_EPOCH`), builds via `uv build` or `python3 -m build`, then runs a post-build hygiene phase removing intermediate trees, generated metadata, temporary files, and `src` bytecode caches before validating readability and summarizing deliverables. `.gitignore` re-includes `dist/`, `dist/**/*`, and `.build-epoch` without dist-targeting ignore rules. Tests assert both script structures, epoch rules, Bash syntax, executable bits, and real `git check-ignore` behavior. |
 | REQ-094 through REQ-133, DES-032 through DES-039 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `_ensure_bootstrap`, `_resolve_target`, `_write_overrides`, `do_print_raw`, `do_print`, `do_info`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags bootstrap the missing config file, print the raw file verbatim, render trees with `[Path: ...]` badges, default/custom indicators, `Sel`/`Value` and collection tables with box-drawing characters, resolve `:`-separated paths including `:append`/`:+`/`:insert:<Idx>`/`:<Idx>`/`:<Idx>:<Field>`/`:<Key>` tokens, coerce strict JSON types, validate, and persist atomically via same-directory temporary-file rename with environment acquisition. |

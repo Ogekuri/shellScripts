@@ -438,20 +438,6 @@
           - `pdf_toc_clean._get_num_pages(...)`: Parse total page count from dump content [`src/shell_scripts/commands/pdf_toc_clean.py`]
           - `pdf_toc_clean._filter_bookmarks(...)`: Keep only bookmark entries in `[1, max_pages]` [`src/shell_scripts/commands/pdf_toc_clean.py`]
           - `pdf_toc_clean._has_out_of_range(...)`: Verify resulting bookmark set does not exceed valid page interval [`src/shell_scripts/commands/pdf_toc_clean.py`]
-      - `req_cmd.run(...)`: Resolve selector-driven targets, skip non-git-root targets for current/`--dirs` modes with explicit skip evidence, apply cleanup/scaffold on eligible targets, execute external `req`, and propagate external non-zero exit codes [`src/shell_scripts/commands/req_cmd.py`]
-        - `require_commands(...)`: Validate `req` executable before target loop execution [`src/shell_scripts/utils.py`]
-        - `req_cmd._iter_first_level_dirs(...)`: Resolve first-level non-hidden child targets for `--dirs` mode [`src/shell_scripts/commands/req_cmd.py`]
-          - `req_cmd._is_hidden_path(...)`: Filter hidden-path segments relative to current base directory [`src/shell_scripts/commands/req_cmd.py`]
-        - `req_cmd._iter_descendant_dirs(...)`: Resolve non-hidden descendant targets for `--recursive` mode [`src/shell_scripts/commands/req_cmd.py`]
-          - `req_cmd._is_hidden_path(...)`: Filter hidden-path segments relative to current base directory [`src/shell_scripts/commands/req_cmd.py`]
-        - `req_cmd._is_git_repository_root(...)`: Check whether each current/first-level target is the exact git repository root [`src/shell_scripts/commands/req_cmd.py`]
-        - `req_cmd._print_install_skipped(...)`: Emit one deterministic skip evidence line for each non-git-root skipped target [`src/shell_scripts/commands/req_cmd.py`]
-        - `req_cmd._prepare_target_directory(...)`: Evaluate predefined cleanup paths, collect cleanup evidence tuples, remove existing entries, and ensure required scaffold directories exist [`src/shell_scripts/commands/req_cmd.py`]
-          - `req_cmd._delete_cleanup_path(...)`: Classify one cleanup path as deleted directory, deleted file, or skipped missing entry before filesystem mutation [`src/shell_scripts/commands/req_cmd.py`]
-        - `req_cmd._print_cleanup_evidence(...)`: Emit deterministic `clean | status | kind | path` lines for each cleanup path [`src/shell_scripts/commands/req_cmd.py`]
-        - `req_cmd._build_req_args(...)`: Build external `req` argv with hardcoded base flags plus runtime-configured provider/static-check vectors [`src/shell_scripts/commands/req_cmd.py`]
-          - `get_req_profile(...)`: Resolve `req.providers` and `req.static_checks` runtime profile values with fallback to hardcoded defaults including providers `codex:skills` and `pi:prompts` [`src/shell_scripts/config.py`]
-            - `_normalize_string_list(...)`: Validate provider/static-check vectors as non-empty string lists [`src/shell_scripts/config.py`]
       - `tests_cmd.run(...)`: Ensure `.venv`, optional dependency install, and execute pytest with project PYTHONPATH [`src/shell_scripts/commands/tests_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
@@ -479,7 +465,7 @@
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
 - External Boundaries:
   - Network boundary: PyPI JSON API request for startup update check and `--version` report (`urllib.request.urlopen`), GitHub Releases API request for develop upgrade tags and GitHub latest display (`urllib.request.urlopen`).
-  - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `req`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands).
+  - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands).
   - Terminal boundary: ANSI control-sequence writes for legacy+xterm mouse-mode disable (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) and best-effort `termios`/`stty sane` restoration.
   - Process-replacement boundary: none; launcher-style commands now execute external tools via `subprocess.run`.
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.

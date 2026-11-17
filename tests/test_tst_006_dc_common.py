@@ -11,7 +11,6 @@ import shell_scripts.commands._dc_common as dc_common
 import shell_scripts.commands.diff_cmd as diff_cmd
 import shell_scripts.commands.edit_cmd as edit_cmd
 import shell_scripts.commands.view_cmd as view_cmd
-import shell_scripts.config as config
 import shell_scripts.utils as utils
 
 
@@ -185,64 +184,6 @@ def test_view_help_mentions_generic_command_name(capsys):
     out = capsys.readouterr().out
     assert "view options:" in out
     assert "double-commander" not in out
-
-
-def test_get_req_profile_uses_runtime_override_and_default_fallback(monkeypatch):
-    """
-    @brief Validate req profile resolution behavior.
-    @details Injects runtime config with valid/invalid payloads and asserts
-      `get_req_profile` returns runtime values when valid and hardcoded defaults
-      when invalid.
-    @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
-    @return {None} Assertions only.
-    @satisfies TST-010, REQ-050
-    """
-
-    defaults = config.get_default_runtime_config()["req"]
-    monkeypatch.setattr(
-        config,
-        "_runtime_config",
-        {
-            "req": {
-                "providers": ["x:y"],
-                "static_checks": ["Python=Ruff"],
-            }
-        },
-    )
-
-    providers, static_checks = config.get_req_profile()
-    assert providers == ["x:y"]
-    assert static_checks == ["Python=Ruff"]
-
-    monkeypatch.setattr(
-        config,
-        "_runtime_config",
-        {
-            "req": {
-                "providers": ["ok:value"],
-                "static_checks": "invalid-type",
-            }
-        },
-    )
-
-    providers, static_checks = config.get_req_profile()
-    assert providers == ["ok:value"]
-    assert static_checks == defaults["static_checks"]
-
-
-def test_get_default_req_profile_uses_codex_skills_provider():
-    """
-    @brief Validate default req provider contract for Codex.
-    @details Asserts default runtime req providers include `codex:skills`
-      and exclude legacy `codex:prompts` token.
-    @return {None} Assertions only.
-    @satisfies TST-010, REQ-050
-    """
-
-    defaults = config.get_default_runtime_config()["req"]
-
-    assert "codex:skills" in defaults["providers"]
-    assert "codex:prompts" not in defaults["providers"]
 
 
 def test_is_executable_command_checks_name_and_path(monkeypatch, tmp_path):
