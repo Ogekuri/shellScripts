@@ -10,7 +10,7 @@
 > * **No Support or Feature Requests:** Please **do not** open issues, bug reports, or feature requests. They will not be addressed or accepted at this stage of development.
 > * **No Warranty:** This software is provided **"AS IS"**, without warranty of any kind, express or implied. You may use it strictly for **testing and evaluation purposes** at your own sole risk.
 
-# s/shellScripts (0.26.3)
+# shellScripts / s (0.26.3)
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11+">
@@ -28,10 +28,11 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> |
   <a href="#feature-highlights">Feature Highlights</a> |
-  <a href="#management-commands">Upgrading or Removing</a> |
-  <a href="#shell-scripts">Shell Scripts</a>
+  <a href="#quick-start">Quick Start</a> |
+  <a href="#requirements">Requirements</a> |
+  <a href="#users-guide">User's Guide</a> |
+  <a href="#acknowledgments">Acknowledgments</a>
 </p>
 
 <p align="center">
@@ -42,7 +43,8 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 </p>
 
 
-## Feature Highlights
+# Feature Highlights
+
 - Single CLI entrypoint with command dispatch and grouped built-in help (`shellscripts` and alias `s`).
 - YOLO-mode launchers for AI CLIs (`agy`, `claude`, `codex`, `copilot`, `opencode`) and project-root IDE launchers (`vscode`, `vsinsider`).
 - PDF workflow commands for crop, merge, split, TOC cleanup, and tiling.
@@ -52,7 +54,42 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 - Startup update notification with rate-limited checks against the PyPI registry.
 
 
-## Requirements
+# Quick Start
+
+Bring the CLI up in three steps: install, configure (optional), execute.
+
+### Install
+
+Install from PyPI (primary distribution channel) with [Astral `uv`](https://docs.astral.sh/uv/getting-started/installation/):
+
+```bash
+uv tool install shellscripts
+```
+
+Later upgrades are managed by the CLI itself with `s --upgrade` (see the User's Guide).
+
+### Configure (Optional)
+
+The CLI works out of the box with built-in defaults. To generate the default configuration file:
+
+```bash
+s --write-config
+```
+
+The configuration is stored in `~/.config/shellScripts/config.json`.
+
+### Execute
+
+```bash
+s <command> [args...]
+```
+
+- Run `s` without arguments to print the grouped global help.
+- Run without installing: `uvx shellscripts <command> [args...]`
+- Run from a local clone: `./scripts/s.sh <command> [args...]`
+
+
+# Requirements
 
 - Python `>=3.11`.
 - Astral `uv` is the supported install and launcher tool (`uv tool install`, `uvx`, `uv run`); the package also runs as `python -m shell_scripts`.
@@ -68,53 +105,36 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
   - Java runtime + PixelMed jars (+ `java-wrappers`) for DICOM commands.
 
 
-## Quick Start
+# User's Guide
 
-### Prerequisites
-
-- Install `uv`: [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
-
-
-### Install / Upgrade
-
-Install from PyPI (primary distribution channel):
+## Global Syntax
 
 ```bash
-uv tool install shellscripts
+shellscripts [command] [options]
+# or
+s [command] [options]
 ```
 
-Upgrade to the latest published PyPI release:
+- Invoking the CLI without arguments prints the grouped global help and exits with code `0`.
+- An unknown command prints an error plus the global help and exits with code `1`.
 
-```bash
-s --upgrade
-```
+## Management Flags
 
-Force a complete re-download and reinstallation by appending the forced-reinstall options (`--force --reinstall --refresh`) to the configured upgrade command:
+Built-in management flags:
 
-```bash
-s --upgrade --force
-```
-
-
-### Run Without Installing (uvx)
-
-```bash
-uvx shellscripts <command> [args...]
-```
-
-
-### Run From a Local Clone
-
-```bash
-./scripts/s.sh <command> [args...]
-```
-
-or
-
-```bash
-uv run --project . python -m shell_scripts <command> [args...]
-```
-
+- `--help` : print the full help screen, or one command help with `s --help <command>` / `s <command> --help`.
+- `--version` / `--ver` : print the installed version plus the latest versions available on PyPI and GitHub.
+- `--upgrade` : run the configured upgrade command automatically on Linux (installs the latest PyPI release by default), otherwise print the manual command.
+- `--upgrade --force` : force download and complete reinstallation by appending `--force --reinstall --refresh` to the `--upgrade` or `--upgrade --dev`/`--upgrade --develop` command.
+- `--upgrade --dev` / `--upgrade --develop` : upgrade from the latest tagged GitHub release instead of PyPI, regardless of its source branch.
+- `--uninstall` : run configured uninstall command automatically on Linux, otherwise print the manual command.
+- `--write-config` : write the default runtime configuration file.
+- `--print-raw` : print the on-disk configuration file content verbatim.
+- `--print [Sub:Path]` : print the effective configuration, or the addressed subtree, as an options tree.
+- `--info [Sub:Path]` : print the configurable parameters, or the addressed subtree, with types, descriptions, and copy-paste command lines.
+- `--get <Path>` : read one configuration value.
+- `--set <Path> <Value>` : set one configuration value or collection element.
+- `--unset <Path>` : remove one configuration override and reactivate the default.
 
 ## Install from GitHub (Alternative)
 
@@ -140,34 +160,25 @@ Add `--force` to force a complete re-download and reinstallation of the tagged r
 s --upgrade --develop --force
 ```
 
-
-## Management Commands
-
-Global syntax:
+## Run Without Installing (uvx)
 
 ```bash
-shellscripts [command] [options]
-# or
-s [command] [options]
+uvx shellscripts <command> [args...]
 ```
 
-Built-in management flags:
+## Run From a Local Clone
 
-- `--help` : print the full help screen, or one command help with `s --help <command>` / `s <command> --help`.
-- `--version` / `--ver` : print the installed version plus the latest versions available on PyPI and GitHub.
-- `--upgrade` : run the configured upgrade command automatically on Linux (installs the latest PyPI release by default), otherwise print the manual command.
-- `--upgrade --force` : force download and complete reinstallation by appending `--force --reinstall --refresh` to the `--upgrade` or `--upgrade --dev`/`--upgrade --develop` command.
-- `--upgrade --dev` / `--upgrade --develop` : upgrade from the latest tagged GitHub release instead of PyPI, regardless of its source branch.
-- `--uninstall` : run configured uninstall command automatically on Linux, otherwise print the manual command.
-- `--write-config` : write the default runtime configuration file.
-- `--print-raw` : print the on-disk configuration file content verbatim.
-- `--print [Sub:Path]` : print the effective configuration, or the addressed subtree, as an options tree.
-- `--info [Sub:Path]` : print the configurable parameters, or the addressed subtree, with types, descriptions, and copy-paste command lines.
-- `--get <Path>` : read one configuration value.
-- `--set <Path> <Value>` : set one configuration value or collection element.
-- `--unset <Path>` : remove one configuration override and reactivate the default.
+```bash
+./scripts/s.sh <command> [args...]
+```
 
-### Runtime Configuration
+or
+
+```bash
+uv run --project . python -m shell_scripts <command> [args...]
+```
+
+## Runtime Configuration
 
 Generate a default config file:
 
@@ -190,7 +201,7 @@ Top-level configuration keys:
 - `dispatch`
   - `diff`, `edit`, `view`: each command supports `categories` and `fallback` command vectors.
 
-### Configuration CLI
+## Configuration CLI
 
 The configuration management flags operate on the effective configuration (hardcoded defaults merged with the file) and write only overrides:
 
@@ -221,10 +232,7 @@ s --info dispatch
 
 `--print` renders default/custom indicators, selection tables, and collection tables with `[Path: ...]` badges; `--info` renders each option type plus full-path `--set`/`--unset` command templates.
 
-
-## Shell Scripts
-
-### Command List
+## Command List
 
 | Command | Purpose |
 |---|---|
@@ -259,7 +267,7 @@ s --info dispatch
 | `net` | Print network status (`status`) and activate/deactivate VLANs (`vlan <id> up\|down`). |
 | `npm-bootstrap-trust` | Publish a 0.0.0 placeholder with dist-tag `bootstrap` and register the GitHub Trusted Publisher. |
 
-### Selected Usage Examples
+## Selected Usage Examples
 
 Launch Antigravity CLI in YOLO mode (each YOLO command help documents every registered YOLO CLI option in alphabetical order):
 
@@ -311,6 +319,20 @@ s vsinsider
 ```
 
 
+# Documentation
+
+## Update Checks and Cooldown
+
+- At startup the CLI checks PyPI for a newer release and prints a bright-green `Update Available` notice when one exists.
+- Checks are rate-limited: one hour of cooldown after a successful check, 24 hours after a failed request; the cooldown state persists in `~/.cache/shellscripts/check_version_idle-time.json`.
+- `--version` / `--ver` always force a fresh check and print the installed version plus the `Latest @ PyPI` and `Latest @ GitHub` lines.
+- A failed remote lookup is reported per source as `Latest @ <source>: unknown (<reason>)` without interrupting the remaining sources or the command.
+
+## MIME-Based File Dispatch (diff / edit / view)
+
+- `diff`, `edit`, and `view` classify the input file by MIME type and extension (code, text, markdown, html, image, pdf) and launch the configured external command; a missing file argument prints the command-specific help and exits with code `2`.
+- Categories and fallback commands are configurable through the `dispatch.diff`, `dispatch.edit`, and `dispatch.view` runtime keys (see the Configuration CLI).
+
 ## Local Build and Release
 
 Build validated sdist and wheel archives (requires Python `>=3.11` and `uv` or `build`):
@@ -338,5 +360,20 @@ Run the full pre-release verification before an official release:
 
 Publishing: pushing a `vX.Y.Z` tag triggers `.github/workflows/release-pypi.yml`, which publishes the `dist/` archives present in the tagged commit to the GitHub Release and, only for tags reachable from `master`, to PyPI through OIDC Trusted Publishing. The workflow never builds distributions.
 
+## Changelog
 
-## Acknowledgments
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
+
+# License
+
+This project is licensed under the **GNU General Public License v3.0 only** (`GPL-3.0-only`).
+See the [LICENSE](LICENSE) file for the full license text.
+
+
+# Acknowledgments
+
+- [Astral `uv`](https://docs.astral.sh/uv/) — the toolchain behind the install, upgrade, and launcher workflow.
+- [PixelMed](http://www.dclunie.com/pixelmed/content.html) — the DICOM toolkit powering `dicomviewer` and `dicom2jpg`.
+- [Meld](https://meldmerge.org/) and GTK/GtkSourceView — the style-scheme model reused by `meld-highlight-theme`.
+- The external command-line tools wrapped by the commands: [qpdf](https://qpdf.github.io), [pdftk](https://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/), [Ghostscript](https://www.ghostscript.com), [Poppler](https://poppler.freedesktop.org), `plakativ`, [Doxygen](https://www.doxygen.nl), [FFmpeg](https://www.ffmpeg.org).
