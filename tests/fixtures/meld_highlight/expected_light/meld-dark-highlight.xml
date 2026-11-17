@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<style-scheme id="meld-dark-highlight" _name="Meld dark scheme Highlight" parent-scheme="meld-dark" version="1.0">
+  <author>Custom Script</author>
+  <_description>Meld dark scheme con evidenziazione inline rossa</_description>
+  <style name="meld:inline" background="#cc0000" foreground="#ffffff" />
+</style-scheme>

@@ -319,6 +319,8 @@
       - `clean.run(...)`: Find and optionally delete cache directories under project root [`src/shell_scripts/commands/clean.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
+      - `chrome_debug.run(...)`: Spawn the detached Google Chrome remote-debugging instance on port 9222 with suppressed stdio [`src/shell_scripts/commands/chrome_debug.py`]
+        - `require_commands(...)`: Validate the `google-chrome` executable before spawn [`src/shell_scripts/utils.py`]
       - `claude.run(...)`: Launch Claude CLI in YOLO mode via the PATH-resolved shared launcher command token `claude --dangerously-skip-permissions` [`src/shell_scripts/commands/claude.py`]
         - `_yolo_common.run_yolo_cli(...)`: Shared registry-based launcher resolving the declarative record, validating executable availability, and executing the fixed YOLO command vector via blocking subprocess run with no Git repository root validation [`src/shell_scripts/commands/_yolo_common.py`]
           - `require_commands(...)`: Resolve and validate command executable path before subprocess invocation [`src/shell_scripts/utils.py`]
@@ -445,6 +447,26 @@
       - `ubuntu_dark_theme.run(...)`: Apply GTK and Qt dark-theme command sequence [`src/shell_scripts/commands/ubuntu_dark_theme.py`]
         - `command_exists(...)`: Probe optional desktop utility availability before invocation [`src/shell_scripts/utils.py`]
         - `require_commands(...)`: Validate each optional executable immediately before invocation [`src/shell_scripts/utils.py`]
+      - `meld_highlight_theme.run(...)`: Generate Meld/GtkSourceView `<id>-highlight` schemes with palette selection, timestamped backup, and atomic same-directory replace [`src/shell_scripts/commands/meld_highlight_theme.py`]
+        - `meld_highlight_theme.all_schemes(...)`: Discover and parse `style-scheme` candidates across source directories [`src/shell_scripts/commands/meld_highlight_theme.py`]
+        - `meld_highlight_theme.using_dark_theme(...)`: Auto-detect desktop dark palette via gsettings and GTK display probes [`src/shell_scripts/commands/meld_highlight_theme.py`]
+          - `meld_highlight_theme.setting(...)`: Read one gsettings value with captured output and 4-second timeout [`src/shell_scripts/commands/meld_highlight_theme.py`]
+        - `meld_highlight_theme.build_xml(...)`: Serialize one `<id>-highlight` XML payload with dark-palette inheritance and integrity validation [`src/shell_scripts/commands/meld_highlight_theme.py`]
+      - `net_cmd.run(...)`: Route `status` and `vlan` subcommands with English usage-error gating [`src/shell_scripts/commands/net_cmd.py`]
+        - `net_cmd.cmd_status(...)`: Print boxed English sections and execute the nmcli/resolvectl/ip/journalctl status pipeline with 15-line journal tail [`src/shell_scripts/commands/net_cmd.py`]
+          - `net_cmd.print_box(...)`: Render one centered-title ASCII box header [`src/shell_scripts/commands/net_cmd.py`]
+          - `require_commands(...)`: Validate each section executable immediately before invocation [`src/shell_scripts/utils.py`]
+        - `net_cmd.cmd_vlan(...)`: Activate or deactivate `vlan<id>` via `sudo nmcli` with return-code propagation [`src/shell_scripts/commands/net_cmd.py`]
+          - `net_cmd._print_vlan_addresses(...)`: Print current VLAN address blocks with two context lines [`src/shell_scripts/commands/net_cmd.py`]
+        - `net_cmd.print_usage(...)`: Print the English command usage block [`src/shell_scripts/commands/net_cmd.py`]
+      - `npm_bootstrap_trust.run(...)`: Execute the five-phase npm bootstrap and GitHub trusted-publisher pipeline with fail-fast gates and temporary-directory cleanup [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
+        - `npm_bootstrap_trust._validate_inputs(...)`: Validate npm package name, GitHub owner/repo token, and bare workflow filename [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
+          - `npm_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
+        - `npm_bootstrap_trust._require_toolchain(...)`: Validate node/npm executables and enforce minimum Node 22.14.0 and npm 11.15.0 versions [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
+          - `require_commands(...)`: Validate `node` and `npm` executables before version probes [`src/shell_scripts/utils.py`]
+          - `npm_bootstrap_trust._parse_version(...)`: Parse one strict `X.Y.Z` version token [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
+        - `npm_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
+        - `npm_bootstrap_trust._write_placeholder_package(...)`: Write the 0.0.0 placeholder `package.json` and `index.js` into the temporary directory [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
       - `venv_cmd.run(...)`: Recreate `.venv` and optionally install requirements [`src/shell_scripts/commands/venv_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
@@ -465,7 +487,7 @@
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
 - External Boundaries:
   - Network boundary: PyPI JSON API request for startup update check and `--version` report (`urllib.request.urlopen`), GitHub Releases API request for develop upgrade tags and GitHub latest display (`urllib.request.urlopen`).
-  - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands).
+  - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands, `gsettings`, `nmcli`, `resolvectl`, `ip`, `journalctl`, `sudo`, `node`, `npm`) plus one detached `subprocess.Popen` spawn with `start_new_session=True` and `DEVNULL` stdio for the Chrome remote-debugging launcher.
   - Terminal boundary: ANSI control-sequence writes for legacy+xterm mouse-mode disable (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) and best-effort `termios`/`stty sane` restoration.
   - Process-replacement boundary: none; launcher-style commands now execute external tools via `subprocess.run`.
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.

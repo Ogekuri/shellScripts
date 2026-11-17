@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<style-scheme id="sample-dark" _name="Sample Dark" version="1.0">
+  <author>shellScripts Fixtures</author>
+  <_description>Dark scheme used by shellScripts meld-highlight-theme fixtures</_description>
+  <color name="ink" value="#1a1a1a"/>
+  <color name="paper" value="#202020"/>
+  <style name="text" foreground="#eeeeee" background="paper"/>
+  <style name="def:string" foreground="#66ff99"/>
+</style-scheme>

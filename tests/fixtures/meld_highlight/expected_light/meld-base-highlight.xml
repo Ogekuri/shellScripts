@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<style-scheme id="meld-base-highlight" _name="Classic (Meld) Highlight" parent-scheme="meld-base" version="1.0">
+  <author>Custom Script</author>
+  <_description>Classic (Meld) con evidenziazione inline rossa</_description>
+  <style name="meld:inline" background="#cc0000" foreground="#ffffff" />
+</style-scheme>

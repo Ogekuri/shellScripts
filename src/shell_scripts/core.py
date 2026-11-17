@@ -99,6 +99,7 @@ HELP_SECTION_COMMANDS = (
             "tests",
             "vscode",
             "vsinsider",
+            "npm-bootstrap-trust",
         ),
     ),
     (
@@ -117,7 +118,12 @@ HELP_SECTION_COMMANDS = (
     ),
     (
         "OS Commands",
-        ("ubuntu-dark-theme",),
+        (
+            "ubuntu-dark-theme",
+            "chrome-debug",
+            "meld-highlight-theme",
+            "net",
+        ),
     ),
 )
 

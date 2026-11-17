@@ -48,6 +48,7 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
 - PDF workflow commands for crop, merge, split, TOC cleanup, and tiling.
 - DICOM helpers (`dicom2jpg`, `dicomviewer`) and video transcoders (`video2h264`, `video2h265`).
 - Project maintenance and automation commands (`clean`, `venv`, `tests`, `doxygen`, `ubuntu-dark-theme`).
+- Desktop and network helpers (`meld-highlight-theme`, `chrome-debug`, `net`) and npm bootstrap automation (`npm-bootstrap-trust`).
 - Startup update notification with rate-limited checks against the PyPI registry.
 
 
@@ -61,6 +62,9 @@ PDF/DICOM utilities, development helpers, and editor integrations, exposed throu
   - `doxygen` (plus optional `make` and `pdflatex`) for `doxygen`.
   - `gs`, `pdfinfo`, `qpdf`, `pdftk`, `plakativ` for PDF commands.
   - `ffmpeg` for `video2h264` and `video2h265`.
+  - `google-chrome` for `chrome-debug`.
+  - `nmcli`, `resolvectl`, `ip`, and `journalctl` for `net`.
+  - `node` (>= 22.14.0) and `npm` (>= 11.15.0) for `npm-bootstrap-trust`.
   - Java runtime + PixelMed jars (+ `java-wrappers`) for DICOM commands.
 
 
@@ -250,6 +254,10 @@ s --info dispatch
 | `video2h264` | Convert one video to H.264 MP4 via ffmpeg. |
 | `video2h265` | Convert one video to H.265 MP4 via ffmpeg. |
 | `ubuntu-dark-theme` | Apply GNOME and Qt dark-theme settings. |
+| `meld-highlight-theme` | Create `<id>-highlight` Meld/GtkSourceView color schemes with red inline highlighting. |
+| `chrome-debug` | Launch Google Chrome detached with remote debugging on port 9222. |
+| `net` | Print network status (`status`) and activate/deactivate VLANs (`vlan <id> up\|down`). |
+| `npm-bootstrap-trust` | Publish a 0.0.0 placeholder with dist-tag `bootstrap` and register the GitHub Trusted Publisher. |
 
 ### Selected Usage Examples
 

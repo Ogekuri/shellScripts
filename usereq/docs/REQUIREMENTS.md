@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.24.0"
-date: "2026-11-17T10:15:02Z"
+version: "0.25.0"
+date: "2026-11-17T10:43:04Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -98,6 +98,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **PRJ-005**: MUST include a GitHub automation workflow script at `.github/workflows/release-pypi.yml`.
 - **PRJ-007**: MUST publish built distributions to PyPI via OIDC Trusted Publishing when a tagged version is committed on branch `master`.
 - **PRJ-006**: MUST expose video conversion subcommands that transcode one input video into H.264 or H.265 MP4 outputs using FFmpeg.
+- **PRJ-008**: MUST expose subcommands `meld-highlight-theme`, `chrome-debug`, `net`, and `npm-bootstrap-trust` as Python ports of the legacy bash scripts with equivalent generations and behavior.
 
 ### 2.2 Project Constraints
 - **CTN-001**: MUST target Python runtime version 3.11 or newer.
@@ -172,6 +173,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-066**: MUST create the pre-release build output inside a `mktemp -d` temporary directory located outside the repository working tree.
 - **DES-067**: MUST pass the temporary build output directory to `scripts/build.sh` through `BUILD_DIST_DIR` and MUST validate generated archives inside it.
 - **DES-068**: MUST remove the temporary build output directory on success, failure, and signal termination paths.
+- **DES-069**: MUST register command tokens `meld-highlight-theme`, `chrome-debug`, `net`, and `npm-bootstrap-trust` in the static command registry mapping to modules `meld_highlight_theme`, `chrome_debug`, `net_cmd`, and `npm_bootstrap_trust` with lazy imports.
 
 No explicit performance optimizations identified.
 
@@ -296,6 +298,32 @@ No explicit performance optimizations identified.
 - **REQ-153**: MUST make `scripts/pre-release-check.sh` remove its temporary build output directory on success, failure, and signal termination paths.
 - **REQ-154**: MUST make `scripts/pre-release-check.sh` validate generated sdist and wheel archives inside the temporary build output directory.
 - **REQ-155**: MUST make `scripts/build.sh` print one `clean` evidence line reporting the number of removed `dist/` archives and preserve every non-generated `dist` entry.
+- **REQ-156**: MUST expose `meld-highlight-theme` with mutually exclusive `--dark` and `--light` palette flags plus `--only-meld-base`, rejecting their combination and unsupported arguments.
+- **REQ-157**: MUST discover candidate schemes from `*.xml` files in meld and gtksourceview style directories under `/usr/share`, `$HOME/.local/share`, and `$HOME/.var/app/org.gnome.meld/data`, keeping only parseable `style-scheme` roots with valid ids.
+- **REQ-158**: MUST exclude schemes whose id ends with `-highlight`, whose name ends with ` Highlight`, or whose id starts with `texthighlight`.
+- **REQ-159**: MUST generate for every selected scheme an `<id>-highlight` XML root declaring parent-scheme `<id>`, version `1.0`, author `Custom Script`, and display name `<name> Highlight`.
+- **REQ-160**: MUST add to every generated scheme a `<_description>` element `<name> con evidenziazione inline rossa` and a `meld:inline` style with background `#cc0000` and foreground `#ffffff`.
+- **REQ-161**: MUST inherit for `meld-base` under the dark palette the `meld:*` and `map-overlay` styles except `meld:inline` from `meld-dark` and copy every referenced `meld-dark` color.
+- **REQ-162**: MUST fail generation when the dark palette lacks `meld:insert`, `meld:replace`, `meld:conflict`, `meld:current-line-highlight`, or `meld:current-chunk-highlight`.
+- **REQ-163**: MUST select the dark palette when `--dark` is set, the light palette when `--light` is set, and otherwise detect darkness from meld preference, display-server GTK lookup, desktop color-scheme, and GTK theme names.
+- **REQ-164**: MUST fail fast when `--only-meld-base` finds no `meld-base` scheme or when the dark palette applies while `meld-dark` is missing.
+- **REQ-165**: MUST reject generated XML that loses `parent-scheme` inheritance or contains a `text` style.
+- **REQ-166**: MUST write each scheme as `<id>-highlight.xml` into every target style directory and skip destinations whose bytes already equal the generated content.
+- **REQ-167**: MUST back up each overwritten highlight file as `<file>.bak-<timestamp>` and replace it atomically through a same-directory temporary file.
+- **REQ-168**: MUST print an English summary reporting processed variant count, written file count, and backup count, plus a Meld restart hint.
+- **REQ-169**: MUST launch `google-chrome --remote-debugging-port=9222 --user-data-dir=<HOME>/.config/google-chrome` detached from the terminal session with both output streams suppressed.
+- **REQ-170**: MUST validate the `google-chrome` executable before launch, print English progress messages, and return code `0` after spawning the detached browser.
+- **REQ-171**: MUST dispatch `net status` printing boxed English headers followed by `nmcli device status`, `nmcli -f NAME,TYPE,AUTOCONNECT,DEVICE connection show`, `resolvectl status`, `ip route`, and the last 15 `journalctl -b -u networking.service --no-pager` lines.
+- **REQ-172**: MUST dispatch `net vlan <id> up|down` to `sudo nmcli connection up|down vlan<id>` and print current VLAN addresses after successful activation.
+- **REQ-173**: MUST fail `net` with return code `1`, printing English usage, on missing `vlan` arguments, invalid actions, or unknown subcommands.
+- **REQ-174**: MUST accept required `-p <package>`, `-r <owner/repo>`, and `-f <workflow>` options plus `-h` help, failing with return code `1` on missing values, unknown arguments, or missing options.
+- **REQ-175**: MUST validate the npm name against unscoped or scoped conservative lowercase syntax with a 214-character limit, `owner/repo` syntax with owner length at most 39 and no trailing `-`, and a bare workflow filename ending `.yml` or `.yaml`.
+- **REQ-176**: MUST fail fast when `node` or `npm` is not executable or reports versions older than Node 22.14.0 or npm 11.15.0.
+- **REQ-177**: MUST verify npmjs authentication via `npm whoami --registry=https://registry.npmjs.org/` before any mutating step and abort with a login hint on failure.
+- **REQ-178**: MUST abort when `npm view <package>@*` reports existing versions and when the availability check fails without an `E404` marker.
+- **REQ-179**: MUST publish a temporary placeholder package at version `0.0.0` with dist-tag `bootstrap`, public access, and the configured repository URL, removing the temporary directory on every exit path.
+- **REQ-180**: MUST create the GitHub trusted publisher via `npm trust github <package> --repo <repo> --file <workflow> --allow-publish`, print the resulting trust list, and report publication-without-trust as a distinct failure.
+- **REQ-181**: MUST complete by warning that the trust validates only after a successful OIDC publish from the workflow within two days.
 
 ## 4. Test Requirements
 
@@ -307,6 +335,7 @@ The configuration CLI management flags introduced by DES-032 are covered by `tes
 The release workflow consumes only the `dist/` archives produced by `scripts/build.sh`, runs no distribution build and no build-preparatory verification job, and gates PyPI publication on `master` tag membership; static parsing tests cover these contracts.
 The `scripts/build.sh` pipeline consolidates previous-build cleanup and packaging: its first data-mutating phase removes every `dist/` archive of any version plus the `build/` and `src/shellscripts.egg-info/` intermediate trees while preserving non-generated entries and printing one `clean` evidence line with the removed archive count, and its post-build hygiene phase removes generated metadata, temporary files, and `src` bytecode caches; the archive timestamp epoch `.build-epoch` is read from the tracked repository file, so tracked `dist/` archives are byte-identical to a rebuild of the commit that contains them; structure, epoch rules, tracked-guard behavior, Bash syntax, executable bit, and `.gitignore` re-inclusion are covered by static parsing tests.
 The pre-release pipeline builds into a `mktemp -d` temporary directory outside the repository working tree, delegates that directory to `scripts/build.sh` through `BUILD_DIST_DIR`, validates the generated archives there, and remains independent from the `dist/` content: it never reads, verifies, cleans, or modifies `dist/` entries, so tracked and untracked `dist/` content cannot influence its result.
+The four ported commands introduced by PRJ-008 are covered by `tests/test_tst_021_meld_highlight_theme.py`, which executes the `meld-highlight-theme` pipeline against fixture style directories and compares generated XML byte-for-byte with reference fixtures generated by `bin/Meld_Create_TextHighlight.sh`, and by `tests/test_tst_022_ported_commands.py`, which verifies `chrome-debug`, `net`, and `npm-bootstrap-trust` through monkeypatched subprocess and filesystem boundaries.
 
 ### 4.2 Verification Requirements
 - **TST-001**: MUST verify REQ-001, REQ-002, REQ-047, and REQ-066 by invoking `shell_scripts.core.main`, passing only if return codes, grouped help/error outputs, and startup OS-detection invocation match specified behavior.
@@ -325,6 +354,8 @@ The pre-release pipeline builds into a `mktemp -d` temporary directory outside t
 - **TST-017**: MUST verify REQ-085, REQ-086, REQ-092, and REQ-093 by monkeypatching `subprocess.run` and capturing YOLO CLI help outputs, passing only if each YOLO argv vector, stdio inheritance, registry exposure, alphabetical YOLO CLI help listing, per-CLI option documentation, and the Copilot `--allow-all` alternative note match specifications.
 - **TST-018**: MUST verify REQ-114 and REQ-116 through REQ-133, DES-037, DES-038, and DES-039 on isolated HOME directories, passing only if bootstrap, atomic persistence, path-token manipulation, rendering contracts, and error semantics match specifications.
 - **TST-020**: MUST verify DES-057, DES-058, and DES-062 by parsing the release workflow and asserting tag-only execution, exact-commit checkout, absence of build and build-preparatory jobs, and `dist/` inputs to both publication actions.
+- **TST-021**: MUST verify REQ-156 through REQ-168 by executing the `meld-highlight-theme` pipeline against fixture style directories and comparing generated XML byte-for-byte with `bin/Meld_Create_TextHighlight.sh`-generated reference fixtures.
+- **TST-022**: MUST verify REQ-169 through REQ-181 and DES-069 by monkeypatching subprocess and filesystem boundaries, passing only if argv vectors, validation gates, file operations, and return codes match specifications.
 
 ## 5. Evidence
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<style-scheme id="sample-light" _name="Sample Light" version="1.0">
+  <author>shellScripts Fixtures</author>
+  <_description>Light scheme used by shellScripts meld-highlight-theme fixtures</_description>
+  <color name="black" value="#000000"/>
+  <color name="white" value="#ffffff"/>
+  <style name="text" foreground="black" background="white"/>
+  <style name="def:string" foreground="#006600"/>
+</style-scheme>

@@ -10,6 +10,7 @@
         │   ├── _dc_common.py
         │   ├── _yolo_common.py
         │   ├── agy.py
+        │   ├── chrome_debug.py
         │   ├── claude.py
         │   ├── clean.py
         │   ├── codex.py
@@ -19,6 +20,9 @@
         │   ├── diff_cmd.py
         │   ├── doxygen_cmd.py
         │   ├── edit_cmd.py
+        │   ├── meld_highlight_theme.py
+        │   ├── net_cmd.py
+        │   ├── npm_bootstrap_trust.py
         │   ├── opencode.py
         │   ├── pdf_crop.py
         │   ├── pdf_merge.py
@@ -65,7 +69,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 77L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 81L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -76,7 +80,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L47-62)
+### fn `def get_command(name: str) -> ModuleType | None` (L51-66)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -86,20 +90,20 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @return {ModuleType|None} Imported command module for known token; `None` otherwise.
 - @throws {ImportError} If module path exists in map but import fails.
 - @satisfies PRJ-003, DES-001
-- @satisfies PRJ-001, DES-001, DES-008, REQ-057, REQ-058
+- @satisfies PRJ-001, DES-001, DES-008, DES-069, REQ-057, REQ-058
 
-### fn `def get_all_commands() -> dict[str, str]` (L63-78)
+### fn `def get_all_commands() -> dict[str, str]` (L67-82)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
 - @throws {ImportError} If any mapped command module import fails.
-- @satisfies PRJ-002, DES-001, DES-008, REQ-057, REQ-058
+- @satisfies PRJ-002, DES-001, DES-008, DES-069, REQ-057, REQ-058
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|47-62|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|63-78|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|51-66|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|67-82|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -263,6 +267,58 @@ from shell_scripts.commands._yolo_common import (
 |`SPEC`|var|pub|23||
 |`print_help`|fn|pub|26-38|def print_help(version: str) -> None|
 |`run`|fn|pub|39-51|def run(args: list[str]) -> int|
+
+
+---
+
+# chrome_debug.py | Python | 87L | 6 symbols | 3 imports | 14 comments
+> Path: `src/shell_scripts/commands/chrome_debug.py`
+
+## Imports
+```
+from pathlib import Path
+import subprocess
+from shell_scripts.utils import print_info, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L16)
+- var `DESCRIPTION = "Launch Google Chrome with remote debugging enabled."` (L17)
+- var `DEBUG_PORT = 9222` (L24)
+- @brief Fixed Chrome remote-debugging TCP port.
+- @details Passed to Chrome as `--remote-debugging-port` and rendered in the
+final attach URL.
+- @satisfies REQ-169
+- var `USER_DATA_SUBDIR = Path(".config") / "google-chrome"` (L31)
+- @brief Home-relative Chrome user-data directory path.
+- @details Resolved against `Path.home()` at launch time, matching the
+legacy script `$HOME/.config/google-chrome` value.
+- @satisfies REQ-169
+### fn `def print_help(version)` (L34-52)
+- @brief Print command-specific help text.
+- @details Renders usage line, option list, and behavioral summary in English, following the shared command help layout.
+- @param version {str} Current CLI version token rendered in the usage line.
+- @return {None} Writes to stdout.
+- @satisfies PRJ-002, REQ-169
+
+### fn `def run(args)` (L53-88)
+- @brief Spawn the detached Chrome remote-debugging instance.
+- @details Validates the `google-chrome` executable, resolves the user-data directory from `Path.home()`, prints English progress messages, spawns `google-chrome --remote-debugging-port=<port> --user-data-dir=<dir>` via `subprocess.Popen` with all stdio streams set to `DEVNULL` and `start_new_session=True` (equivalent to `nohup ... &`), and returns without waiting so the browser outlives the CLI process.
+- @param args {list[str]} Unused command arguments.
+- @return {int} `0` after spawning the detached browser process.
+- @throws {SystemExit} Exit code `1` via `require_commands` when `google-chrome` is not executable.
+- @satisfies REQ-169, REQ-170, CTN-003, REQ-056
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|16||
+|`DESCRIPTION`|var|pub|17||
+|`DEBUG_PORT`|var|pub|24||
+|`USER_DATA_SUBDIR`|var|pub|31||
+|`print_help`|fn|pub|34-52|def print_help(version)|
+|`run`|fn|pub|53-88|def run(args)|
 
 
 ---
@@ -625,6 +681,431 @@ from shell_scripts.commands._dc_common import dispatch
 |`DESCRIPTION`|var|pub|15||
 |`print_help`|fn|pub|18-34|def print_help(version)|
 |`run`|fn|pub|35-51|def run(args)|
+
+
+---
+
+# meld_highlight_theme.py | Python | 389L | 15 symbols | 11 imports | 48 comments
+> Path: `src/shell_scripts/commands/meld_highlight_theme.py`
+
+## Imports
+```
+import argparse
+import copy
+from datetime import datetime
+import importlib
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+import xml.etree.ElementTree as ET
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L25)
+- var `DESCRIPTION = "Create Meld Highlight color schemes for Meld and GtkSourceView."` (L26)
+- var `TARGET_SUBDIRS = (` (L33)
+- @brief Home-relative style-directory suffixes receiving generated schemes.
+- @details Ordered user-directory list covering Meld, GtkSourceView 3/4/5,
+and the Flatpak Meld data tree; every entry receives each generated file.
+- @satisfies REQ-166
+- var `SOURCE_SYSTEM_SUBDIRS = (` (L49)
+- @brief Absolute system style directories scanned for candidate schemes.
+- @details Read-only discovery roots resolved before the user directories so
+that same-id user schemes override system schemes during discovery.
+- @satisfies REQ-157
+- var `TARGET_DIRS = [Path.home() / part for part in TARGET_SUBDIRS]` (L62)
+- @brief Resolved writable style directories under the user home.
+- @details Computed at import from `TARGET_SUBDIRS` and `Path.home()` exactly
+like the legacy script; tests MAY monkeypatch this module attribute to
+redirect generation into fixture directories.
+- @satisfies REQ-166
+- var `SOURCE_DIRS = [Path(part) for part in SOURCE_SYSTEM_SUBDIRS] + TARGET_DIRS` (L70)
+- @brief Resolved scheme discovery directories (system first, user last).
+- @details System directories precede user directories so later user entries
+overwrite same-id schemes in the discovery map, mirroring the legacy
+script; tests MAY monkeypatch this module attribute.
+- @satisfies REQ-157
+- var `RED_BG = "#cc0000"` (L76)
+- @brief Background color applied to the injected `meld:inline` style.
+- @details Fixed red highlight palette token shared by every generated scheme.
+- @satisfies REQ-160
+- var `WHITE_FG = "#ffffff"` (L82)
+- @brief Foreground color applied to the injected `meld:inline` style.
+- @details Fixed white highlight palette token shared by every generated scheme.
+- @satisfies REQ-160
+### fn `def _build_parser()` `priv` (L104-131)
+- @brief ASCII scheme-id validation pattern `[\w.-]+` with full match semantics.
+- @brief Build the `meld-highlight-theme` argument parser.
+- @details Rejects scheme files whose `id` attribute contains whitespace,
+separators, or non-ASCII characters.
+- @details Registers the mutually exclusive `--dark`/`--light` palette selectors plus `--only-meld-base`; `parse_args` errors terminate with exit code `2`, matching the legacy script `argparse` behavior.
+- @return {argparse.ArgumentParser} Configured parser instance.
+- @satisfies REQ-157
+- @satisfies REQ-156
+
+### fn `def all_schemes()` (L132-162)
+- @brief Discover candidate style schemes across all source directories.
+- @details Iterates `SOURCE_DIRS` in order, parses each `*.xml` file sorted by name, silently skips unreadable or non-`style-scheme` roots, validates the `id` attribute against `_SCHEME_ID_PATTERN`, resolves the display name from `_name`, `name`, or the id, and lets later directories override earlier same-id entries. Time complexity O(N log N) per directory over the XML file inventory.
+- @return {dict[str, tuple[str, xml.etree.ElementTree.Element]]} Mapping scheme id to `(display_name, scheme_root_element)`.
+- @satisfies REQ-157
+
+### fn `def setting(schema, key)` (L163-183)
+- @brief Read one GNOME `gsettings` value.
+- @details Runs `gsettings get <schema> <key>` with captured output and a 4-second timeout, returning the stripped stdout on success and `None` on failure, timeout, or missing executable.
+- @param schema {str} GSettings schema identifier (e.g. `org.gnome.meld`).
+- @param key {str} GSettings key name inside the schema.
+- @return {str|None} Stripped value text on success; `None` otherwise.
+- @satisfies REQ-163
+
+### fn `def using_dark_theme()` (L184-222)
+- @brief Auto-detect whether the desktop currently uses a dark theme.
+- @details Reproduces the legacy detection chain: first reads the Meld `prefer-dark-theme` preference and, when a display server is attached, queries the GTK 3 default settings and looks up `theme_bg_color` on a probe `Gtk.TextView`, returning darkness when the summed RGB is below `1.0`; otherwise falls back to the GNOME `color-scheme` (`prefer-dark` substring) and case-insensitive `dark` substrings in the GTK theme name or `GTK_THEME` environment variable. All failures degrade to the fallback path.
+- @return {bool} `True` when the detected desktop palette is dark.
+- @satisfies REQ-163
+
+### fn `def build_xml(sid, name, dark_palette=None)` (L223-286)
+- @brief Build the serialized `<id>-highlight` XML payload for one scheme.
+- @details Creates a `style-scheme` root with `id="<sid>-highlight"`, `_name="<name> Highlight"`, `parent-scheme="<sid>"`, `version="1.0"`, an `author` element `Custom Script`, and a `_description` element `<name> con evidenziazione inline rossa`. When `dark_palette` is supplied, deep-copies every direct `meld:*` and `map-overlay` style except `meld:inline`, aborts on any missing required Meld style, and inserts deep copies of every palette `<color>` whose name is referenced by an inherited style attribute at child index `2`. Finally appends the fixed `meld:inline` style, indents the tree with two spaces, serializes with the UTF-8 XML declaration, and validates that inheritance is preserved and no `text` style leaked into the output.
+- @param sid {str} Source scheme identifier; MUST match `_SCHEME_ID_PATTERN`.
+- @param name {str} Source scheme display name.
+- @param dark_palette {Element|None} `meld-dark` root element whose styles are inherited; `None` produces the plain light payload.
+- @return {bytes} Complete XML document bytes terminated by a newline.
+- @throws {ValueError} When the dark palette lacks a required Meld style or the serialized payload loses `parent-scheme` inheritance or contains a `text` style.
+- @satisfies REQ-159, REQ-160, REQ-161, REQ-162, REQ-165
+
+### fn `def print_help(version)` (L287-309)
+- @brief Print command-specific help text.
+- @details Renders usage line, option list, and a behavioral summary in English, following the shared command help layout.
+- @param version {str} Current CLI version token rendered in the usage line.
+- @return {None} Writes to stdout.
+- @satisfies PRJ-002, REQ-156
+
+### fn `def run(args)` (L310-390)
+- @brief Execute the highlight-theme generation pipeline.
+- @details Parses palette arguments, discovers schemes, resolves the dark flag from explicit selectors or desktop auto-detection, validates the `meld-base`/`meld-dark` preconditions, builds and plans one payload per selected scheme, prints the English report block, then writes every planned destination with timestamped backup and same-directory atomic replace before printing the English summary. Exit code `2` is raised via `parser.error` on invalid arguments or missing precondition schemes.
+- @param args {list[str]} Command arguments (without the command token).
+- @return {int} `0` after a completed generation run.
+- @throws {SystemExit} Exit code `2` via `parser.error` when `--dark` and `--light` are combined, `--only-meld-base` finds no `meld-base` scheme, or the dark palette applies while `meld-dark` is missing.
+- @throws {ValueError} Propagated from `build_xml` on payload integrity failure.
+- @satisfies REQ-156, REQ-157, REQ-158, REQ-159, REQ-160, REQ-161, REQ-162, REQ-163, REQ-164, REQ-165, REQ-166, REQ-167, REQ-168
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|25||
+|`DESCRIPTION`|var|pub|26||
+|`TARGET_SUBDIRS`|var|pub|33||
+|`SOURCE_SYSTEM_SUBDIRS`|var|pub|49||
+|`TARGET_DIRS`|var|pub|62||
+|`SOURCE_DIRS`|var|pub|70||
+|`RED_BG`|var|pub|76||
+|`WHITE_FG`|var|pub|82||
+|`_build_parser`|fn|priv|104-131|def _build_parser()|
+|`all_schemes`|fn|pub|132-162|def all_schemes()|
+|`setting`|fn|pub|163-183|def setting(schema, key)|
+|`using_dark_theme`|fn|pub|184-222|def using_dark_theme()|
+|`build_xml`|fn|pub|223-286|def build_xml(sid, name, dark_palette=None)|
+|`print_help`|fn|pub|287-309|def print_help(version)|
+|`run`|fn|pub|310-390|def run(args)|
+
+
+---
+
+# net_cmd.py | Python | 278L | 20 symbols | 3 imports | 54 comments
+> Path: `src/shell_scripts/commands/net_cmd.py`
+
+## Imports
+```
+import re
+import subprocess
+from shell_scripts.utils import print_error, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L16)
+- var `DESCRIPTION = "Print network status and manage VLAN connections."` (L17)
+- var `GREEN = "\x1b[1;32m"` (L23)
+- @brief ANSI bright-green SGR prefix for status box borders.
+- @details Replicates the legacy script color `\e[1;32m`.
+- @satisfies REQ-171
+- var `BLUE = "\x1b[1;34m"` (L29)
+- @brief ANSI bright-blue SGR prefix for the DNS section box.
+- @details Replicates the legacy script color `\e[1;34m`.
+- @satisfies REQ-171
+- var `MAGENTA = "\x1b[1;35m"` (L35)
+- @brief ANSI bright-magenta SGR prefix for the routing section box.
+- @details Replicates the legacy script color `\e[1;35m`.
+- @satisfies REQ-171
+- var `LIGHT_GRAY = "\x1b[0;37m"` (L41)
+- @brief ANSI light-gray SGR prefix for the journal section box.
+- @details Replicates the legacy script color `\e[0;37m`.
+- @satisfies REQ-171
+- var `WHITE = "\x1b[1;37m"` (L47)
+- @brief ANSI bright-white SGR prefix for box titles and usage header.
+- @details Replicates the legacy script color `\e[1;37m`.
+- @satisfies REQ-171
+- var `RESET = "\x1b[0m"` (L53)
+- @brief ANSI SGR reset suffix restoring default attributes.
+- @details Replicates the legacy script color `\e[0m`.
+- @satisfies REQ-171
+- var `RED = "\x1b[1;31m"` (L59)
+- @brief ANSI bright-red SGR prefix for error lines.
+- @details Replicates the legacy script color `\e[1;31m`.
+- @satisfies REQ-173
+- var `YELLOW = "\x1b[1;33m"` (L65)
+- @brief ANSI bright-yellow SGR prefix for deactivation notice lines.
+- @details Replicates the legacy script color `\e[1;33m`.
+- @satisfies REQ-172
+- var `BOX_WIDTH = 70` (L72)
+- @brief Fixed inner width in dash glyphs for every section box.
+- @details Replicates the legacy script width `70`; title centering is
+computed against this value.
+- @satisfies REQ-171
+- var `JOURNAL_TAIL_LINES = 15` (L78)
+- @brief Number of trailing journal lines printed by the status report.
+- @details Replicates the legacy `journalctl ... | tail -n 15` behavior.
+- @satisfies REQ-171
+- var `VLAN_ADDRESS_AFTER_LINES = 2` (L84)
+- @brief Context lines printed after each matching VLAN address line.
+- @details Replicates the legacy `grep -E ... -A 2` behavior.
+- @satisfies REQ-172
+### fn `def print_box(title, color)` (L87-111)
+- @brief Print one centered-title ASCII box header.
+- @details Replicates the legacy `print_box` layout: a leading blank line, `┌` plus 70 `─` glyphs plus `┐` borders in `color`, a title row with the title wrapped in `WHITE` and padded to `BOX_WIDTH` using the split `padding = (BOX_WIDTH - len(title) - 2) // 2` left and the remainder right, and a closing `└...┘` border row.
+- @param title {str} ASCII section title rendered inside the box.
+- @param color {str} ANSI SGR prefix applied to the border glyphs.
+- @return {None} Writes to stdout.
+- @satisfies REQ-171
+
+### fn `def cmd_status()` (L112-153)
+- @brief Print the full network status report.
+- @details Emits boxed English section headers followed by, in order: `nmcli device status`, `nmcli -f NAME,TYPE,AUTOCONNECT,DEVICE connection show`, `resolvectl status`, `ip route`, and the last `JOURNAL_TAIL_LINES` lines of `journalctl -b -u networking.service no-pager` captured output. Each external tool is validated immediately before its section and a missing tool terminates with exit code `1`.
+- @return {int} `0` after printing every section; `1` when a required executable is unavailable.
+- @throws {SystemExit} Exit code `1` via `require_commands` when a required executable is not executable.
+- @satisfies REQ-171, REQ-056
+
+### fn `def _print_vlan_addresses(vlan_id)` `priv` (L154-175)
+- @brief Print current addresses of one VLAN, mirroring `grep -A 2`.
+- @details Runs `ip addr show` with captured stdout, selects every line matching `vlan<vlan_id>` or `enp.*\.<vlan_id>`, and prints each match plus the following `VLAN_ADDRESS_AFTER_LINES` context lines without duplicating overlapping context windows.
+- @param vlan_id {str} Numeric VLAN identifier used in match patterns.
+- @return {None} Writes matching address blocks to stdout.
+- @satisfies REQ-172
+
+### fn `def cmd_vlan(vlan_id, action)` (L176-217)
+- @brief Activate or deactivate one VLAN connection.
+- @details Rejects missing parameters and unknown actions with the English usage text and exit code `1`; otherwise runs `sudo nmcli connection up|down vlan<vlan_id>` with inherited stdio and blocking wait, and after a successful activation prints the current VLAN address blocks. The return code propagates the `sudo nmcli` result.
+- @param vlan_id {str|None} VLAN identifier token (e.g. `50`).
+- @param action {str|None} Requested action; only `up` and `down` are valid.
+- @return {int} `0` on success; the `sudo nmcli` return code on activation or deactivation failure; `1` on parameter or action validation failure.
+- @satisfies REQ-172, REQ-173
+
+### fn `def print_usage()` (L218-232)
+- @brief Print the English command usage block.
+- @details Renders the bright-white script title, the available-command list, and no return value; callers combine it with return code `1`.
+- @return {None} Writes to stdout.
+- @satisfies REQ-173
+
+### fn `def print_help(version)` (L233-252)
+- @brief Print command-specific help text.
+- @details Renders usage line, option list, and subcommand summary in English, following the shared command help layout.
+- @param version {str} Current CLI version token rendered in the usage line.
+- @return {None} Writes to stdout.
+- @satisfies PRJ-002, REQ-171
+
+### fn `def run(args)` (L253-279)
+- @brief Route `net` subcommands.
+- @details Dispatches `status` to `cmd_status` and `vlan` with two positional arguments to `cmd_vlan`; any missing, unknown, or malformed subcommand prints the English usage block and returns exit code `1`.
+- @param args {list[str]} Command arguments (without the command token).
+- @return {int} `0` on successful subcommand completion; `1` on usage errors or propagated VLAN command failure.
+- @satisfies REQ-171, REQ-172, REQ-173
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|16||
+|`DESCRIPTION`|var|pub|17||
+|`GREEN`|var|pub|23||
+|`BLUE`|var|pub|29||
+|`MAGENTA`|var|pub|35||
+|`LIGHT_GRAY`|var|pub|41||
+|`WHITE`|var|pub|47||
+|`RESET`|var|pub|53||
+|`RED`|var|pub|59||
+|`YELLOW`|var|pub|65||
+|`BOX_WIDTH`|var|pub|72||
+|`JOURNAL_TAIL_LINES`|var|pub|78||
+|`VLAN_ADDRESS_AFTER_LINES`|var|pub|84||
+|`print_box`|fn|pub|87-111|def print_box(title, color)|
+|`cmd_status`|fn|pub|112-153|def cmd_status()|
+|`_print_vlan_addresses`|fn|priv|154-175|def _print_vlan_addresses(vlan_id)|
+|`cmd_vlan`|fn|pub|176-217|def cmd_vlan(vlan_id, action)|
+|`print_usage`|fn|pub|218-232|def print_usage()|
+|`print_help`|fn|pub|233-252|def print_help(version)|
+|`run`|fn|pub|253-279|def run(args)|
+
+
+---
+
+# npm_bootstrap_trust.py | Python | 378L | 19 symbols | 8 imports | 46 comments
+> Path: `src/shell_scripts/commands/npm_bootstrap_trust.py`
+
+## Imports
+```
+import argparse
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from shell_scripts.utils import print_error, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L23)
+- var `DESCRIPTION = "Bootstrap a new npm package and register its GitHub trusted publisher."` (L24)
+- var `REGISTRY = "https://registry.npmjs.org/"` (L31)
+- @brief Canonical npm registry URL used by every npm invocation.
+- @details Passed as `--registry=<value>` so operations never depend on the
+ambient npm registry configuration.
+- @satisfies REQ-177
+- var `MIN_NODE_VERSION = (22, 14, 0)` (L37)
+- @brief Minimum supported Node.js version tuple `(22, 14, 0)`.
+- @details Versions comparing lower abort the command.
+- @satisfies REQ-176
+- var `MIN_NPM_VERSION = (11, 15, 0)` (L43)
+- @brief Minimum supported npm version tuple `(11, 15, 0)`.
+- @details Versions comparing lower abort the command.
+- @satisfies REQ-176
+- var `NPM_NAME_PATTERN = (` (L51)
+- @brief Conservative npm-name validation patterns.
+- @details Tuple of two anchored regexes: unscoped `^[a-z0-9][a-z0-9._~-]*$`
+and scoped `^@[a-z0-9][a-z0-9._~-]*/[a-z0-9][a-z0-9._~-]*$`; the first
+full match accepts the name.
+- @satisfies REQ-175
+- var `GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$")` (L61)
+- @brief Anchored `owner/repo` validation regex
+`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$`.
+- @details Repository tokens MUST NOT be URLs or carry extra slashes.
+- @satisfies REQ-175
+- var `WORKFLOW_FILE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$")` (L68)
+- @brief Anchored bare workflow-filename regex
+`^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$`.
+- @details Rejects paths, directory components, and unsupported extensions.
+- @satisfies REQ-175
+- var `VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")` (L75)
+- @brief Anchored strict `X.Y.Z` semantic-version regex.
+- @details Used to parse both `node --version` and `npm --version` output;
+malformed values abort the version gate.
+- @satisfies REQ-176
+### class `class _UsageParser(argparse.ArgumentParser)` : argparse.ArgumentParser `priv` (L78-101)
+- @brief `argparse` parser variant preserving the legacy exit code.
+- @details Overrides `error` so usage errors print the message plus usage text to stderr and terminate with exit code `1`, matching the legacy script `usage(1)`/`die` semantics instead of the argparse default `2`.
+- @satisfies REQ-174
+- fn `def error(self, message)` (L87-101)
+  - @brief `argparse` parser variant preserving the legacy exit code.
+  - @brief Terminate argument parsing with the legacy failure contract.
+  - @details Overrides `error` so usage errors print the message plus usage
+text to stderr and terminate with exit code `1`, matching the legacy
+script `usage(1)`/`die` semantics instead of the argparse default `2`.
+  - @details Prints the bare message to stderr, then the usage text, then raises `SystemExit(1)`.
+  - @param message {str} Parsing error description.
+  - @return {None} Never returns; raises `SystemExit`.
+  - @throws {SystemExit} Always exit code `1`.
+  - @satisfies REQ-174
+  - @satisfies REQ-174
+
+### fn `def _build_parser()` `priv` (L102-128)
+- @brief Build the `npm-bootstrap-trust` argument parser.
+- @details Registers required `-p/--package`, `-r/--repo`, and `-f/--workflow` options plus the default `-h/--help` action on the `_UsageParser` variant.
+- @return {_UsageParser} Configured parser instance.
+- @satisfies REQ-174
+
+### fn `def _die(message)` `priv` (L129-143)
+- @brief Print an error line and terminate with exit code `1`.
+- @details Mirrors the legacy `die` helper using the shared `[ERROR]` stderr renderer.
+- @param message {str} Failure description rendered after the `[ERROR]` prefix.
+- @return {None} Never returns; raises `SystemExit`.
+- @throws {SystemExit} Always exit code `1`.
+- @satisfies REQ-174, REQ-175, REQ-176, REQ-177, REQ-178, REQ-179, REQ-180
+
+### fn `def _validate_inputs(package_name, github_repo, workflow_file)` `priv` (L144-172)
+- @brief Validate the conservative package, repository, and workflow tokens.
+- @details Applies `NPM_NAME_PATTERN` plus the 214-character limit, the `GITHUB_REPO_PATTERN` plus owner length at most 39 and owner not ending with `-`, and `WORKFLOW_FILE_PATTERN`, aborting with the legacy English diagnostics on the first failure.
+- @param package_name {str} npm package name token.
+- @param github_repo {str} GitHub `owner/repo` token.
+- @param workflow_file {str} Bare workflow filename token.
+- @return {None} Returns on full validation.
+- @throws {SystemExit} Exit code `1` via `_die` on the first invalid token.
+- @satisfies REQ-175
+
+### fn `def _parse_version(text)` `priv` (L173-188)
+- @brief Parse one strict `X.Y.Z` version string.
+- @details Applies `VERSION_PATTERN` after stripping an optional leading `v` and surrounding whitespace.
+- @param text {str} Raw version output token.
+- @return {tuple[int, int, int]|None} Numeric version tuple, or `None` when the token does not match the strict format.
+- @satisfies REQ-176
+
+### fn `def _require_toolchain()` `priv` (L189-220)
+- @brief Validate Node.js and npm presence plus minimum versions.
+- @details Checks `node` and `npm` executables via `require_commands`, captures `node --version` and `npm --version`, parses both with `_parse_version`, and aborts when either executable reports a version lower than `MIN_NODE_VERSION` or `MIN_NPM_VERSION` respectively or an unparseable value.
+- @return {None} Returns when the toolchain satisfies the version gate.
+- @throws {SystemExit} Exit code `1` via `require_commands` on missing executables or via `_die` on incompatible versions.
+- @satisfies REQ-176, CTN-003, REQ-056
+
+### fn `def _write_placeholder_package(temp_dir, package_name, github_repo)` `priv` (L221-255)
+- @brief Write the placeholder `package.json` and `index.js` files.
+- @details Creates a version `0.0.0` package declaring the placeholder description, the GitHub repository URL `git+https://github.com/<repo>.git`, the `index.js` file list, and public publishConfig pinned to `REGISTRY`; writes `module.exports = {};` into `index.js`.
+- @param temp_dir {str|Path} Existing temporary package directory.
+- @param package_name {str} Validated npm package name.
+- @param github_repo {str} Validated GitHub `owner/repo` token.
+- @return {None} Writes two files into `temp_dir`.
+- @throws {OSError} Propagated on filesystem write failure.
+- @satisfies REQ-179
+
+### fn `def print_help(version)` (L256-276)
+- @brief Print command-specific help text.
+- @details Renders usage line, option list, and behavioral summary in English, following the shared command help layout.
+- @param version {str} Current CLI version token rendered in the usage line.
+- @return {None} Writes to stdout.
+- @satisfies PRJ-002, REQ-174
+
+### fn `def run(args)` (L277-379)
+- @brief Execute the five-phase npm bootstrap and trust pipeline.
+- @details Phase order: `[1/5]` npmjs authentication via `npm whoami`; `[2/5]` package availability via `npm view <package>@* versions --json`, aborting on existing versions or a failure without an `E404` marker; `[3/5]` placeholder package creation in a fresh temporary directory; `[4/5]` publication with dist-tag `bootstrap` and public access; `[5/5]` GitHub trusted-publisher creation via `npm trust github` plus trust-list verification. The temporary directory is removed on every exit path; every failure aborts with exit code `1` and the exact legacy diagnostic semantics.
+- @param args {list[str]} Command arguments (without the command token).
+- @return {int} `0` after successful publication and trust verification.
+- @throws {SystemExit} Exit code `1` on usage errors, invalid inputs, missing or incompatible toolchain, failed authentication, taken or unverifiable package name, failed publication, or failed trust creation/verification.
+- @satisfies REQ-174, REQ-175, REQ-176, REQ-177, REQ-178, REQ-179, REQ-180, REQ-181
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|23||
+|`DESCRIPTION`|var|pub|24||
+|`REGISTRY`|var|pub|31||
+|`MIN_NODE_VERSION`|var|pub|37||
+|`MIN_NPM_VERSION`|var|pub|43||
+|`NPM_NAME_PATTERN`|var|pub|51||
+|`GITHUB_REPO_PATTERN`|var|pub|61||
+|`WORKFLOW_FILE_PATTERN`|var|pub|68||
+|`VERSION_PATTERN`|var|pub|75||
+|`_UsageParser`|class|priv|78-101|class _UsageParser(argparse.ArgumentParser)|
+|`_UsageParser.error`|fn|pub|87-101|def error(self, message)|
+|`_build_parser`|fn|priv|102-128|def _build_parser()|
+|`_die`|fn|priv|129-143|def _die(message)|
+|`_validate_inputs`|fn|priv|144-172|def _validate_inputs(package_name, github_repo, workflow_...|
+|`_parse_version`|fn|priv|173-188|def _parse_version(text)|
+|`_require_toolchain`|fn|priv|189-220|def _require_toolchain()|
+|`_write_placeholder_package`|fn|priv|221-255|def _write_placeholder_package(temp_dir, package_name, gi...|
+|`print_help`|fn|pub|256-276|def print_help(version)|
+|`run`|fn|pub|277-379|def run(args)|
 
 
 ---
@@ -2013,7 +2494,7 @@ one-entry render tuple, or `(None, error_message)` on failure.
 
 ---
 
-# core.py | Python | 386L | 10 symbols | 8 imports | 25 comments
+# core.py | Python | 392L | 10 symbols | 8 imports | 25 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -2048,7 +2529,7 @@ metadata so the upgrade performs a full re-download and reinstallation.
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L125-189)
+### fn `def print_help(command_name=None)` (L131-195)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -2056,14 +2537,14 @@ maps directly to REQ-066 output expectations.
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L190-205)
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L196-211)
 - @brief Compose the develop upgrade command for one GitHub release tag.
 - @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
 - @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
 - @return {str} Fully substituted shell upgrade command.
 - @satisfies REQ-076, DES-019
 
-### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L206-245)
+### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L212-251)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; appends ` --force --reinstall --refresh` to the resolved command when `force` is set; executes the composed command on Linux via shell invocation and prints the manual fallback command on non-Linux systems. Complexity O(n) over the composed command string length.
 - @param develop {bool} Select upgrade from the latest GitHub release tag.
@@ -2071,20 +2552,20 @@ maps directly to REQ-066 output expectations.
 - @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-076, REQ-078, REQ-087, REQ-088, REQ-089, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L246-268)
+### fn `def do_uninstall()` (L252-274)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L269-284)
+### fn `def do_write_config()` (L275-290)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L285-387)
+### fn `def main()` (L291-393)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints the aligned three-line report with installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected; `--print` and `--info` accept an optional ':'-separated sub-path restricting the rendered subtree) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
@@ -2097,12 +2578,12 @@ maps directly to REQ-066 output expectations.
 |`HELP_COMMAND_COLUMN_WIDTH`|var|pub|46||
 |`FORCED_REINSTALL_OPTIONS`|var|pub|54||
 |`HELP_SECTION_COMMANDS`|var|pub|62||
-|`print_help`|fn|pub|125-189|def print_help(command_name=None)|
-|`_build_develop_upgrade_command`|fn|priv|190-205|def _build_develop_upgrade_command(latest_tag: str) -> str|
-|`do_upgrade`|fn|pub|206-245|def do_upgrade(develop: bool = False, force: bool = False...|
-|`do_uninstall`|fn|pub|246-268|def do_uninstall()|
-|`do_write_config`|fn|pub|269-284|def do_write_config()|
-|`main`|fn|pub|285-387|def main()|
+|`print_help`|fn|pub|131-195|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|196-211|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|212-251|def do_upgrade(develop: bool = False, force: bool = False...|
+|`do_uninstall`|fn|pub|252-274|def do_uninstall()|
+|`do_write_config`|fn|pub|275-290|def do_write_config()|
+|`main`|fn|pub|291-393|def main()|
 
 
 ---

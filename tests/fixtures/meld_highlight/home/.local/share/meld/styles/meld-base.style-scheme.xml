@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<style-scheme id="meld-base" name="Classic (Meld)" version="1.0" parent-scheme="classic">
+  <author>Kai Willadsen</author>
+  <description>Base color scheme for Meld highlighting</description>
+  <description xml:lang="zh-Hant-TW">&#x7528;&#x65BC; Meld &#x6A19;&#x793A;&#x7684;&#x57FA;&#x790E;&#x914D;&#x8272;&#x65B9;&#x6848;</description>
+  <description xml:lang="zh-Hans-CN">&#x7528;&#x4E8E; Meld &#x9AD8;&#x4EAE;&#x7684;&#x57FA;&#x672C;&#x914D;&#x8272;&#x65B9;&#x6848;</description>
+  <description xml:lang="uk">&#x411;&#x430;&#x437;&#x43E;&#x432;&#x430; &#x441;&#x445;&#x435;&#x43C;&#x430; &#x43A;&#x43E;&#x43B;&#x44C;&#x43E;&#x440;&#x456;&#x432; &#x434;&#x43B;&#x44F; &#x43F;&#x456;&#x434;&#x441;&#x432;&#x456;&#x447;&#x443;&#x432;&#x430;&#x43D;&#x43D;&#x44F; &#x443; Meld</description>
+  <description xml:lang="tr">Meld vurgulamas&#x131; i&#xE7;in temel renk &#x15F;emas&#x131;</description>
+  <description xml:lang="sv">Basf&#xE4;rgschema att anv&#xE4;nda f&#xF6;r syntaxmarkering</description>
+  <description xml:lang="sr-Latn">Osnovna &#x161;ema boje za Meldovo isticanje</description>
+  <description xml:lang="sr-Cyrl">&#x41E;&#x441;&#x43D;&#x43E;&#x432;&#x43D;&#x430; &#x448;&#x435;&#x43C;&#x430; &#x431;&#x43E;&#x458;&#x435; &#x437;&#x430; &#x41C;&#x435;&#x43B;&#x434;&#x43E;&#x432;&#x43E; &#x438;&#x441;&#x442;&#x438;&#x446;&#x430;&#x45A;&#x435;</description>
+  <description xml:lang="sl">Osnovna barvna shema za poudarjanje skladnje</description>
+  <description xml:lang="ru">&#x411;&#x430;&#x437;&#x43E;&#x432;&#x430;&#x44F; &#x446;&#x432;&#x435;&#x442;&#x43E;&#x432;&#x430;&#x44F; &#x441;&#x445;&#x435;&#x43C;&#x430; &#x434;&#x43B;&#x44F; &#x43F;&#x43E;&#x434;&#x441;&#x432;&#x435;&#x442;&#x43A;&#x438; &#x438;&#x437;&#x43C;&#x435;&#x43D;&#x435;&#x43D;&#x438;&#x439;</description>
+  <description xml:lang="ro">Culoarea de baz&#x103; a schemei pentru eviden&#x21B;ierea Meld</description>
+  <description xml:lang="pt-BR">Esquema de cores base para realce no Meld</description>
+  <description xml:lang="pt">Esquema base de cores a usar para o realce do Meld</description>
+  <description xml:lang="pl">Podstawowy schemat kolor&#xF3;w u&#x17C;ywany do wyr&#xF3;&#x17C;niania element&#xF3;w sk&#x142;adni w&#xA0;programie Meld</description>
+  <description xml:lang="nb">Grunnleggende fargeskjema for Melds uthevinger</description>
+  <description xml:lang="ja">Meld &#x304C;&#x30CF;&#x30A4;&#x30E9;&#x30A4;&#x30C8;&#x306B;&#x7528;&#x3044;&#x308B;&#x6A19;&#x6E96;&#x30AB;&#x30E9;&#x30FC;&#x30B9;&#x30AD;&#x30FC;&#x30DE;</description>
+  <description xml:lang="it">Schema di colori base di Meld per l'evidenziazione della sintassi</description>
+  <description xml:lang="id">Skema warna basis untuk penyorotan Meld</description>
+  <description xml:lang="hu">Alap sz&#xED;ns&#xE9;ma a Meld kiemel&#xE9;shez</description>
+  <description xml:lang="gl">Esquema de cor base para o realzado de Meld</description>
+  <description xml:lang="fr">Jeu de couleurs de base pour la coloration dans Meld</description>
+  <description xml:lang="fi">Oletusv&#xE4;riteema Meldin korostukseen</description>
+  <description xml:lang="eu">Oinarrizko kolore-eskema Meld-en nabarmentzerako</description>
+  <description xml:lang="es">Esquema de color para el resaltado de Meld</description>
+  <description xml:lang="de">Basis-Farbschema f&#xFC;r Syntaxhervorhebung in Meld</description>
+  <description xml:lang="da">Basisfarveskema for fremh&#xE6;vning i Meld</description>
+  <description xml:lang="cs">Z&#xE1;kladn&#xED; sch&#xE9;ma barev ke zv&#xFD;razn&#x11B;n&#xED; syntaxe v aplikaci Meld</description>
+  <description xml:lang="ca">Esquema de color base per al ressaltat del Meld</description>
+  <!-- Meld -->
+  <style name="meld:insert" background="#d0ffa3" foreground="#008800" line-background="#a5ff4c"/>
+  <style name="meld:replace" background="#bdddff" foreground="#0044dd" line-background="#65b2ff"/>
+  <style name="meld:conflict" background="#ffa5a3" foreground="#ff0000" line-background="#ff4f4c"/>
+  <style name="meld:delete" background="#ffffff" foreground="#880000" line-background="#cccccc"/>
+  <style name="meld:error" background="#fce94f" foreground="#faad3d" line-background="#fade0a"/>
+  <style name="meld:inline" background="#8ac2ff"/>
+  <style name="meld:current-line-highlight" foreground="#333333" background="#rgba(255, 255, 0, 0.25)"/>
+  <style name="meld:unknown-text" foreground="#888888"/>
+  <style name="meld:syncpoint-outline" foreground="#555555"/>
+  <style name="meld:current-chunk-highlight" background="#rgba(255, 255, 255, 0.5)"/>
+  <style name="meld:overscroll" background="#rgba(50, 50, 50, 0.1)"/>
+  <style name="meld:dimmed" foreground="#999999"/>
+  <style name="map-overlay" background="#rgba(100, 100, 100, 0.4)"/>
+</style-scheme>
