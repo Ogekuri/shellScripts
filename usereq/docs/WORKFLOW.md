@@ -322,7 +322,7 @@
       - `claude.run(...)`: Launch Claude CLI in YOLO mode via the PATH-resolved shared launcher command token `claude --dangerously-skip-permissions` [`src/shell_scripts/commands/claude.py`]
         - `_yolo_common.run_yolo_cli(...)`: Shared registry-based launcher resolving the declarative record, validating executable availability, and executing the fixed YOLO command vector via blocking subprocess run with no Git repository root validation [`src/shell_scripts/commands/_yolo_common.py`]
           - `require_commands(...)`: Resolve and validate command executable path before subprocess invocation [`src/shell_scripts/utils.py`]
-      - `codex.run(...)`: Launch Codex CLI in YOLO mode via the shared launcher command token `codex --yolo` with no auth-file synchronization and no `CODEX_HOME` mutation [`src/shell_scripts/commands/codex.py`]
+      - `codex.run(...)`: Launch Codex CLI in YOLO mode via the shared launcher command token `codex --yolo` with no auth-file synchronization and no process-environment mutation [`src/shell_scripts/commands/codex.py`]
         - `_yolo_common.run_yolo_cli(...)`: Shared registry-based launcher resolving the declarative record, validating executable availability, and executing the fixed YOLO command vector via blocking subprocess run with no Git repository root validation [`src/shell_scripts/commands/_yolo_common.py`]
           - `require_commands(...)`: Resolve and validate command executable path before subprocess invocation [`src/shell_scripts/utils.py`]
       - `copilot.run(...)`: Launch Copilot CLI in YOLO mode via the shared launcher command token `copilot --yolo` and document the accepted `--allow-all` alternative option in its inline help [`src/shell_scripts/commands/copilot.py`]
@@ -467,11 +467,11 @@
         - `require_commands(...)`: Validate `ffmpeg` executable before subprocess invocation [`src/shell_scripts/utils.py`]
       - `video2h265.run(...)`: Transcode one input video to H.265/AAC MP4 via FFmpeg with fixed encoder profile/options [`src/shell_scripts/commands/video2h265.py`]
         - `require_commands(...)`: Validate `ffmpeg` executable before subprocess invocation [`src/shell_scripts/utils.py`]
-      - `vscode_cmd.run(...)`: Launch VS Code in project root with CODEX_HOME set [`src/shell_scripts/commands/vscode_cmd.py`]
+      - `vscode_cmd.run(...)`: Launch VS Code in project root [`src/shell_scripts/commands/vscode_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
         - `require_commands(...)`: Validate VS Code executable before subprocess invocation [`src/shell_scripts/utils.py`]
-      - `vsinsider_cmd.run(...)`: Launch VS Code Insiders in project root with CODEX_HOME set [`src/shell_scripts/commands/vsinsider_cmd.py`]
+      - `vsinsider_cmd.run(...)`: Launch VS Code Insiders in project root [`src/shell_scripts/commands/vsinsider_cmd.py`]
         - `require_project_root(...)`: Enforce git-root context or terminate process [`src/shell_scripts/utils.py`]
           - `get_project_root(...)`: Resolve git top-level directory by invoking git command [`src/shell_scripts/utils.py`]
         - `require_commands(...)`: Validate VS Code Insiders executable before subprocess invocation [`src/shell_scripts/utils.py`]
@@ -483,7 +483,7 @@
   - Terminal boundary: ANSI control-sequence writes for legacy+xterm mouse-mode disable (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) and best-effort `termios`/`stty sane` restoration.
   - Process-replacement boundary: none; launcher-style commands now execute external tools via `subprocess.run`.
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.
-  - Environment boundary: modifies/selects env keys including `CODEX_HOME`, `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`; reads environment variables for `--set` `$NAME` value acquisition.
+  - Environment boundary: modifies/selects env keys including `QT_QPA_PLATFORMTHEME`, `PYTHONPATH`; reads environment variables for `--set` `$NAME` value acquisition.
 
 ### `PROC:release-pypi`
 

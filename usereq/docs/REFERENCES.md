@@ -1387,70 +1387,68 @@ from shell_scripts.commands._dc_common import dispatch
 
 ---
 
-# vscode_cmd.py | Python | 42L | 4 symbols | 3 imports | 3 comments
+# vscode_cmd.py | Python | 39L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/vscode_cmd.py`
 
 ## Imports
 ```
-import os
 import subprocess
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L14)
-- var `DESCRIPTION = "Open VS Code in the project root with Codex integration."` (L15)
-### fn `def print_help(version)` (L18-25)
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "Open VS Code in the project root."` (L14)
+### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L26-43)
+### fn `def run(args)` (L25-40)
 - @brief Launch VS Code after executable validation.
-- @details Sets `CODEX_HOME`, validates executable availability for VS Code binary, and executes the command with project-root working directory.
+- @details Validates executable availability for VS Code binary and executes the command with project-root working directory.
 - @param args {list[str]} Additional CLI args forwarded to VS Code.
 - @return {int} Child process return code.
-- @satisfies REQ-020, REQ-021, REQ-055, REQ-056, REQ-064
+- @satisfies REQ-020, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|14||
-|`DESCRIPTION`|var|pub|15||
-|`print_help`|fn|pub|18-25|def print_help(version)|
-|`run`|fn|pub|26-43|def run(args)|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`print_help`|fn|pub|17-24|def print_help(version)|
+|`run`|fn|pub|25-40|def run(args)|
 
 
 ---
 
-# vsinsider_cmd.py | Python | 42L | 4 symbols | 3 imports | 3 comments
+# vsinsider_cmd.py | Python | 39L | 4 symbols | 2 imports | 3 comments
 > Path: `src/shell_scripts/commands/vsinsider_cmd.py`
 
 ## Imports
 ```
-import os
 import subprocess
 from shell_scripts.utils import require_project_root, require_commands
 ```
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L14)
-- var `DESCRIPTION = "Open VS Code Insiders in the project root with Codex integration."` (L15)
-### fn `def print_help(version)` (L18-25)
+- var `PROGRAM = "shellscripts"` (L13)
+- var `DESCRIPTION = "Open VS Code Insiders in the project root."` (L14)
+### fn `def print_help(version)` (L17-24)
 
-### fn `def run(args)` (L26-43)
+### fn `def run(args)` (L25-40)
 - @brief Launch VS Code Insiders after executable validation.
-- @details Sets `CODEX_HOME`, validates executable availability for VS Code Insiders binary, and executes the command with project-root working directory.
+- @details Validates executable availability for VS Code Insiders binary and executes the command with project-root working directory.
 - @param args {list[str]} Additional CLI args forwarded to VS Code Insiders.
 - @return {int} Child process return code.
-- @satisfies REQ-020, REQ-021, REQ-055, REQ-056, REQ-064
+- @satisfies REQ-020, REQ-055, REQ-056, REQ-064
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|14||
-|`DESCRIPTION`|var|pub|15||
-|`print_help`|fn|pub|18-25|def print_help(version)|
-|`run`|fn|pub|26-43|def run(args)|
+|`PROGRAM`|var|pub|13||
+|`DESCRIPTION`|var|pub|14||
+|`print_help`|fn|pub|17-24|def print_help(version)|
+|`run`|fn|pub|25-40|def run(args)|
 
 
 ---

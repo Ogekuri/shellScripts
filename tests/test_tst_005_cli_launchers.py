@@ -1,11 +1,10 @@
 """
 @brief Validate CLI launcher command wrappers.
 @details Verifies subprocess command vectors, project-path handling, absence
-  of Codex auth synchronization and `CODEX_HOME` mutation in `codex`,
-  `CODEX_HOME` setup for VS Code commands, and argument pass-through contracts
-  across YOLO-mode launcher commands and VS Code editor commands.
-@satisfies TST-005, REQ-014, REQ-015, REQ-017, REQ-018, REQ-020, REQ-021,
-  REQ-064
+  of Codex auth synchronization and process-environment mutation in `codex`,
+  and argument pass-through contracts across YOLO-mode launcher commands and
+  VS Code editor commands.
+@satisfies TST-005, REQ-014, REQ-015, REQ-017, REQ-018, REQ-020, REQ-064
 @return {None} Pytest module scope.
 """
 
@@ -119,14 +118,14 @@ def test_yolo_launchers_use_resolved_executable_path(
     assert observed["kwargs"] == {}
 
 
-def test_vscode_appends_project_path_and_sets_codex_home(monkeypatch):
+def test_vscode_appends_project_path(monkeypatch):
     """
     @brief Validate vscode launcher behavior.
     @details Stubs project-root resolution and subprocess boundary to assert
-      CODEX_HOME assignment, final project-path argument placement, and `cwd`.
+      final project-path argument placement and `cwd`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-020, REQ-021, REQ-064
+    @satisfies TST-005, REQ-020, REQ-064
     """
 
     project_root = Path("/tmp/project-vscode")
@@ -144,7 +143,6 @@ def test_vscode_appends_project_path_and_sets_codex_home(monkeypatch):
     result = vscode_cmd.run(["--reuse-window"])
 
     assert result == 21
-    assert vscode_cmd.os.environ["CODEX_HOME"] == str(project_root / ".codex")
     assert observed["command"] == [
         "/usr/share/code/bin/code",
         "--reuse-window",
@@ -153,14 +151,14 @@ def test_vscode_appends_project_path_and_sets_codex_home(monkeypatch):
     assert observed["kwargs"] == {"cwd": project_root}
 
 
-def test_vsinsider_appends_project_path_and_sets_codex_home(monkeypatch):
+def test_vsinsider_appends_project_path(monkeypatch):
     """
     @brief Validate VS Code Insiders launcher behavior.
     @details Stubs project-root resolution and subprocess boundary to assert
-      CODEX_HOME assignment, final project-path argument placement, and `cwd`.
+      final project-path argument placement and `cwd`.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @return {None} Assertions only.
-    @satisfies TST-005, REQ-020, REQ-021, REQ-064
+    @satisfies TST-005, REQ-020, REQ-064
     """
 
     project_root = Path("/tmp/project-vsinsider")
@@ -178,7 +176,6 @@ def test_vsinsider_appends_project_path_and_sets_codex_home(monkeypatch):
     result = vsinsider_cmd.run(["--new-window"])
 
     assert result == 22
-    assert vsinsider_cmd.os.environ["CODEX_HOME"] == str(project_root / ".codex")
     assert observed["command"] == [
         "/usr/share/code-insiders/bin/code-insiders",
         "--new-window",

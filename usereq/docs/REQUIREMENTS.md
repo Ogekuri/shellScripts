@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.22.1"
-date: "2026-11-12T13:54:56Z"
+version: "0.23.0"
+date: "2026-11-17T09:59:43Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -198,7 +198,6 @@ No explicit performance optimizations identified.
 - **REQ-070**: MUST make `req` skip cleanup and installation when current directory is not a Git repository root and MUST print one skip evidence line for that directory.
 - **REQ-071**: MUST make `req --dirs` skip cleanup and installation per non-root child directory, print one skip evidence line per skipped directory, and continue remaining child-directory processing.
 - **REQ-020**: MUST open the project root in VS Code and VS Code Insiders commands, append the project path as final argument, and execute each launcher via `subprocess.run` with inherited stdio and blocking wait.
-- **REQ-021**: MUST set `CODEX_HOME` to `<project-root>/.codex` before VS Code and VS Code Insiders command execution.
 - **REQ-022**: MUST attempt GNOME GTK dark theme configuration via `gsettings` and MAY launch `gtk-chtheme`, `qt5ct`, and `qt6ct` when available.
 - **REQ-023**: MUST print help using `diff`/`edit`/`view` command names and return code `2` when the required file argument is missing.
 - **REQ-024**: MUST classify files by MIME and extension in `_dc_common.categorize` and dispatch execution via `subprocess.run` using runtime-configured `diff`/`edit`/`view` mappings with hardcoded defaults, inherited stdio, and blocking wait.
@@ -324,7 +323,7 @@ The pre-release pipeline builds into a `mktemp -d` temporary directory outside t
 - **TST-001**: MUST verify REQ-001, REQ-002, REQ-047, and REQ-066 by invoking `shell_scripts.core.main`, passing only if return codes, grouped help/error outputs, and startup OS-detection invocation match specified behavior.
 - **TST-002**: MUST verify REQ-004 and REQ-005 on Linux by monkeypatching `subprocess.run` and asserting command values resolved from runtime config with default command fallback and propagated return codes.
 - **TST-004**: MUST verify REQ-013 using temporary directories, passing only if cache-deletion confirmation gates behave exactly as specified.
-- **TST-005**: MUST verify REQ-014, REQ-015, REQ-017, REQ-018, REQ-020, and REQ-021 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, absence of Codex auth synchronization, `CODEX_HOME` for VS Code commands, and propagated return codes match requirements.
+- **TST-005**: MUST verify REQ-014, REQ-015, REQ-017, REQ-018, and REQ-020 by monkeypatching `subprocess.run` and filesystem/environment state, passing only if executable args, absence of Codex auth synchronization, and propagated return codes match requirements.
 - **TST-006**: MUST verify REQ-023 and REQ-024, passing only if help output uses `diff`/`edit`/`view`, missing-file-argument status is `2`, and runtime-configured category dispatch selects mapped commands.
 - **TST-009**: MUST verify REQ-045 and REQ-046 by monkeypatching config I/O boundaries and asserting startup load invocation plus `--write-config` success behavior.
 - **TST-010**: MUST verify REQ-048 through REQ-054, REQ-062 through REQ-063, and REQ-070 through REQ-071 by monkeypatching filesystem and subprocess boundaries, passing only if target selection, git-root skip behavior, cleanup evidence output, and generated `req` argument vectors match required behavior.
@@ -358,12 +357,12 @@ The pre-release pipeline builds into a `mktemp -d` temporary directory outside t
 | DES-007, REQ-023, REQ-024, REQ-064 | `src/shell_scripts/commands/diff_cmd.py`; `src/shell_scripts/commands/edit_cmd.py`; `src/shell_scripts/commands/view_cmd.py`; `src/shell_scripts/commands/_dc_common.py` | `run`, `dispatch`, `categorize` | `diff`/`edit`/`view` wrappers call shared dispatch; missing file argument returns `2`; selected external command is launched via `subprocess.run` with inherited stdio and blocking wait. |
 | DES-009, REQ-038 | `src/shell_scripts/commands/venv_cmd.py` | `run` | `.venv` is removed in both `if force` and `else` branches; `--force` currently does not alter behavior. |
 | DES-010, REQ-013 | `src/shell_scripts/commands/clean.py` | `run` | Prompts user before deletion unless `--yes`; deletes only confirmed directories. |
-| REQ-014, REQ-064 | `src/shell_scripts/commands/codex.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | `codex` delegates to the shared YOLO CLI launcher and executes `codex --yolo` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait; no auth-file synchronization, no `CODEX_HOME` assignment, and no copy evidence output. |
+| REQ-014, REQ-064 | `src/shell_scripts/commands/codex.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | `codex` delegates to the shared YOLO CLI launcher and executes `codex --yolo` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait; no auth-file synchronization and no copy evidence output. |
 | REQ-015, REQ-064 | `src/shell_scripts/commands/copilot.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | Executes `copilot --yolo` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait; inline help documents the accepted alternative `--allow-all` option. |
 | REQ-017, REQ-064 | `src/shell_scripts/commands/claude.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | Executes the PATH-resolved `claude --dangerously-skip-permissions` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-018, REQ-064 | `src/shell_scripts/commands/opencode.py`; `src/shell_scripts/commands/_yolo_common.py` | `run`, `run_yolo_cli` | Executes `opencode --auto` plus pass-through args via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-085, REQ-086, REQ-092, REQ-093, DES-030, DES-031, TST-017 | `src/shell_scripts/commands/_yolo_common.py`; `src/shell_scripts/commands/{agy,claude,codex,copilot,opencode}.py`; `tests/test_tst_017_agy_command.py` | `YOLO_CLI_REGISTRY`, `run_yolo_cli`, `print_yolo_help`, `run`, `print_help` | Shared declarative registry defines command token, executable, executed option, and behavioral note per YOLO CLI; thin command modules delegate to the shared launcher, which executes each CLI with its YOLO option via `subprocess.run` with inherited stdio and blocking wait; every YOLO inline help prints the alphabetical registry with executed options plus the Copilot `--allow-all` alternative note. |
-| REQ-020, REQ-021, REQ-064 | `src/shell_scripts/commands/vscode_cmd.py`; `src/shell_scripts/commands/vsinsider_cmd.py` | `run` | Commands set `CODEX_HOME`, append project path, and execute Code binaries via `subprocess.run` with inherited stdio and blocking wait. |
+| REQ-020, REQ-064 | `src/shell_scripts/commands/vscode_cmd.py`; `src/shell_scripts/commands/vsinsider_cmd.py` | `run` | Commands append project path and execute Code binaries via `subprocess.run` with inherited stdio and blocking wait. |
 | REQ-022 | `src/shell_scripts/commands/ubuntu_dark_theme.py` | `run` | Applies `gsettings ... gtk-theme Adwaita-dark` and conditionally launches `gtk-chtheme`, `qt5ct`, `qt6ct`. |
 | REQ-025 | `src/shell_scripts/commands/dicomviewer.py` | `run`, `_find_jars` | Requires `java-wrappers` and Java runtime; executes `com.pixelmed.display.DicomImageViewer`. |
 | REQ-026 | `src/shell_scripts/commands/dicom2jpg.py` | `run`, `_find_jars` | Requires two args, `java-wrappers`, Java runtime; executes `ConsumerFormatImageMaker` with input/output files. |

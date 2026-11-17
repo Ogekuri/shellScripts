@@ -4,7 +4,7 @@
 @details Thin YOLO command module binding the `codex` registry record and
 delegating project-root enforcement, executable validation, inline help
 rendering, and blocking subprocess invocation to `_yolo_common`. Performs no
-auth-file synchronization and no `CODEX_HOME` environment mutation.
+auth-file synchronization and no process-environment mutation.
 @satisfies REQ-014, DES-030, DES-031, DES-008
 """
 

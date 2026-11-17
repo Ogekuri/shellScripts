@@ -238,8 +238,8 @@ s --info req
 | `venv` | Recreate `.venv` and install `requirements.txt` if present. |
 | `tests` | Ensure/create `.venv` and run pytest (arguments passed through). |
 | `doxygen` | Generate HTML/XML/Markdown docs and optional PDF output. |
-| `vscode` | Open project in VS Code with `CODEX_HOME` set. |
-| `vsinsider` | Open project in VS Code Insiders with `CODEX_HOME` set. |
+| `vscode` | Open project in VS Code. |
+| `vsinsider` | Open project in VS Code Insiders. |
 | `diff` | Dispatch file differ by MIME/category. |
 | `edit` | Dispatch file editor by MIME/category. |
 | `view` | Dispatch file viewer by MIME/category. |
