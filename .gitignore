@@ -15,6 +15,7 @@
 !/.github/workflows/
 !/.github/workflows/**/*.yaml
 !/.gitignore
+!/.galias.conf
 !/.build-epoch
 !README.md
 !CHANGELOG.md
@@ -26,7 +27,6 @@
 !pyproject.toml
 !MANIFEST.in
 !uv.lock
-!.galias.conf
 !src/
 !src/**/*
 !docs/
