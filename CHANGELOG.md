@@ -1,7 +1,16 @@
 # Changelog
 
-## [0.26.4](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.4) - 2026-11-17
+## [0.26.5](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.5) - 2026-11-26
 ### ⛰️  Features
+- add cargo-bootstrap-trust command with crates.io trusted publishing [useReq] *(cargo-bootstrap-trust)*
+  Adds PRJ-009, DES-070, and REQ-182 through REQ-192 to the SRS and implements
+  the five-phase cargo-bootstrap-trust pipeline: crates.io auth via the /me
+  endpoint, crate availability gate accepting only HTTP 404, 0.0.0 placeholder
+  crate via cargo init, cargo publish from a temporary directory removed on
+  every exit path, and GitHub trusted-publisher registration via the crates.io
+  API with the two-day OIDC validation warning. Registers the command token in
+  the static registry (DES-070) and the Develop help section, and updates the
+  WORKFLOW.md call traces and external boundaries.
 - port meld-highlight-theme, chrome-debug, net, npm-bootstrap-trust to Python [useReq] *(commands)*
   Add four new CLI subcommands as Python ports of legacy bash scripts:
   meld-highlight-theme: byte-identical Meld/GtkSourceView highlight-scheme
@@ -17,6 +26,7 @@
   REQUIREMENTS.md v0.16.0: DES-055, REQ-147, TST-019 added; REQ-144, REQ-136 updated; structure diagram and Section 4.1/5 evidence extended; scripts/clean.sh: resolve repo root, remove build/ and src/shellscripts.egg-info/, remove untracked dist archives, preserve tracked and non-generated dist entries; scripts/pre-release-check.sh: verify scripts/clean.sh executable bit and project structure; tests/test_tst_015_pre_release_check.py: cover clean.sh presence, syntax, executable bit, and structure; tests/test_tst_019_clean_script.py: new behavioral probes for cleanup and tracked-refusal; WORKFLOW.md: add PROC:clean execution unit and EDGE:005
 
 ### 🐛  Bug Fixes
+- Update .gitignore file.
 - Remove files in dist/ dir.
 
 ### 🚜  Changes
@@ -848,7 +858,7 @@
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
 - \[0.26.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.0
-- \[0.26.4\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.4
+- \[0.26.5\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.5
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -876,4 +886,4 @@
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
 [0.26.0]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0
-[0.26.4]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.4
+[0.26.5]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.5
