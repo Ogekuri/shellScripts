@@ -10,6 +10,7 @@
         │   ├── _dc_common.py
         │   ├── _yolo_common.py
         │   ├── agy.py
+        │   ├── cargo_bootstrap_trust.py
         │   ├── chrome_debug.py
         │   ├── claude.py
         │   ├── clean.py
@@ -69,7 +70,7 @@ import sys
 
 ---
 
-# __init__.py | Python | 81L | 2 symbols | 2 imports | 8 comments
+# __init__.py | Python | 83L | 2 symbols | 2 imports | 8 comments
 > Path: `src/shell_scripts/commands/__init__.py`
 
 ## Imports
@@ -80,7 +81,7 @@ from types import ModuleType
 
 ## Definitions
 
-### fn `def get_command(name: str) -> ModuleType | None` (L51-66)
+### fn `def get_command(name: str) -> ModuleType | None` (L53-68)
 - @brief Static map from CLI command names to importable module paths.
 - @brief Resolve one CLI command token to its command module.
 - @details Enables lazy command loading and deterministic command exposure.
@@ -92,7 +93,7 @@ Removing an entry removes command discoverability and dispatch reachability.
 - @satisfies PRJ-003, DES-001
 - @satisfies PRJ-001, DES-001, DES-008, DES-069, REQ-057, REQ-058
 
-### fn `def get_all_commands() -> dict[str, str]` (L67-82)
+### fn `def get_all_commands() -> dict[str, str]` (L69-84)
 - @brief Build command-description index for help rendering.
 - @details Iterates sorted command keys for stable output ordering; imports each module via `get_command`; extracts `DESCRIPTION` or empty string. Time complexity O(N log N) for N commands due to key sorting.
 - @return {dict[str, str]} Mapping `command_name -> description`.
@@ -102,8 +103,8 @@ Removing an entry removes command discoverability and dispatch reachability.
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`get_command`|fn|pub|51-66|def get_command(name: str) -> ModuleType | None|
-|`get_all_commands`|fn|pub|67-82|def get_all_commands() -> dict[str, str]|
+|`get_command`|fn|pub|53-68|def get_command(name: str) -> ModuleType | None|
+|`get_all_commands`|fn|pub|69-84|def get_all_commands() -> dict[str, str]|
 
 
 ---
@@ -267,6 +268,244 @@ from shell_scripts.commands._yolo_common import (
 |`SPEC`|var|pub|23||
 |`print_help`|fn|pub|26-38|def print_help(version: str) -> None|
 |`run`|fn|pub|39-51|def run(args: list[str]) -> int|
+
+
+---
+
+# cargo_bootstrap_trust.py | Python | 535L | 29 symbols | 13 imports | 68 comments
+> Path: `src/shell_scripts/commands/cargo_bootstrap_trust.py`
+
+## Imports
+```
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+from typing import NoReturn
+from shell_scripts.utils import print_error, require_commands
+```
+
+## Definitions
+
+- var `PROGRAM = "shellscripts"` (L32)
+- var `DESCRIPTION = "Bootstrap a new crates.io crate and register its GitHub trusted publisher."` (L33)
+- var `CRATES_API = "https://crates.io/api/v1"` (L40)
+- @brief Canonical crates.io API base URL used by every registry request.
+- @details Authentication, availability, and trusted-publishing calls all
+target this base so operations never depend on ambient registry mirrors.
+- @satisfies REQ-187, REQ-188, REQ-191
+- var `USER_AGENT = f"{PROGRAM} cargo-bootstrap-trust"` (L45)
+- @brief HTTP User-Agent header value sent with every crates.io request.
+- @details crates.io rejects requests that omit a descriptive User-Agent.
+- var `HTTP_TIMEOUT = 10` (L49)
+- @brief Timeout in seconds applied to every crates.io HTTP request.
+- var `TOKEN_ENV_VARIABLE = "CARGO_REGISTRIES_CRATES_IO_TOKEN"` (L55)
+- @brief Environment variable holding the crates.io token override.
+- @details First token-resolution source; wins over the credentials file.
+- @satisfies REQ-186
+- var `TOKEN_CREDENTIALS_KEY = "registry.crates.io-token"` (L62)
+- @brief JSON key of the crates.io token inside the cargo credentials file.
+- @details Second token-resolution source, read from
+`$CARGO_HOME/credentials` with `CARGO_HOME` defaulting to `~/.cargo`.
+- @satisfies REQ-186
+- var `MIN_RUSTC_VERSION = (1, 89, 0)` (L68)
+- @brief Minimum supported rustc version tuple `(1, 89, 0)`.
+- @details Versions comparing lower abort the command.
+- @satisfies REQ-185
+- var `MIN_CARGO_VERSION = (1, 89, 0)` (L75)
+- @brief Minimum supported cargo version tuple `(1, 89, 0)`.
+- @details cargo 1.89 ships the crates.io Trusted Publishing support required
+by the OIDC publish executed from the configured GitHub workflow.
+- @satisfies REQ-185
+- var `CRATE_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")` (L82)
+- @brief Anchored conservative crate-name regex `^[a-z0-9][a-z0-9_-]*$`.
+- @details Accepts only lowercase ASCII letters, digits, `-`, and `_` with a
+non-leading separator; uppercase letters and dots are rejected.
+- @satisfies REQ-183
+- var `MAX_CRATE_NAME_LENGTH = 64` (L87)
+- @brief Maximum accepted crate-name length matching the crates.io limit.
+- @satisfies REQ-183
+- var `GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$")` (L94)
+- @brief Anchored `owner/repo` validation regex
+`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$`.
+- @details Repository tokens MUST NOT be URLs or carry extra slashes.
+- @satisfies REQ-184
+- var `WORKFLOW_FILE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$")` (L101)
+- @brief Anchored bare workflow-filename regex
+`^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$`.
+- @details Rejects paths, directory components, and unsupported extensions.
+- @satisfies REQ-184
+- var `VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")` (L108)
+- @brief Anchored strict `X.Y.Z` semantic-version regex.
+- @details Used to locate the version token inside `rustc --version` and
+`cargo --version` output; malformed values abort the version gate.
+- @satisfies REQ-185
+### class `class _UsageParser(argparse.ArgumentParser)` : argparse.ArgumentParser `priv` (L111-135)
+- @brief `argparse` parser variant preserving the legacy exit code.
+- @details Overrides `error` so usage errors print the message plus usage text to stderr and terminate with exit code `1`, matching the `npm-bootstrap-trust` `usage(1)`/`die` semantics instead of the argparse default `2`.
+- @satisfies REQ-182
+- fn `def error(self, message)` (L121-135)
+  - @brief `argparse` parser variant preserving the legacy exit code.
+  - @brief Terminate argument parsing with the legacy failure contract.
+  - @details Overrides `error` so usage errors print the message plus usage
+text to stderr and terminate with exit code `1`, matching the
+`npm-bootstrap-trust` `usage(1)`/`die` semantics instead of the argparse
+default `2`.
+  - @details Prints the bare message to stderr, then the usage text, then raises `SystemExit(1)`.
+  - @param message {str} Parsing error description.
+  - @return {None} Never returns; raises `SystemExit`.
+  - @throws {SystemExit} Always exit code `1`.
+  - @satisfies REQ-182
+  - @satisfies REQ-182
+
+### fn `def _build_parser()` `priv` (L136-164)
+- @brief Build the `cargo-bootstrap-trust` argument parser.
+- @details Registers required `-p/--package`, `-r/--repo`, and `-f/--workflow` options plus the default `-h/--help` action on the `_UsageParser` variant.
+- @return {_UsageParser} Configured parser instance.
+- @satisfies REQ-182
+
+### fn `def _die(message) -> NoReturn` `priv` (L165-180)
+- @brief Print an error line and terminate with exit code `1`.
+- @details Mirrors the `npm-bootstrap-trust` `die` helper using the shared `[ERROR]` stderr renderer.
+- @param message {str} Failure description rendered after the `[ERROR]` prefix.
+- @return {None} Never returns; raises `SystemExit`.
+- @throws {SystemExit} Always exit code `1`.
+- @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-187, REQ-188, REQ-190, REQ-191
+
+### fn `def _validate_inputs(package_name, github_repo, workflow_file)` `priv` (L181-209)
+- @brief Validate the conservative crate, repository, and workflow tokens.
+- @details Applies `CRATE_NAME_PATTERN` plus `MAX_CRATE_NAME_LENGTH`, the `GITHUB_REPO_PATTERN` plus owner length at most 39 and owner not ending with `-`, and `WORKFLOW_FILE_PATTERN`, aborting with the shared English diagnostics on the first failure.
+- @param package_name {str} crates.io crate name token.
+- @param github_repo {str} GitHub `owner/repo` token.
+- @param workflow_file {str} Bare workflow filename token.
+- @return {None} Returns on full validation.
+- @throws {SystemExit} Exit code `1` via `_die` on the first invalid token.
+- @satisfies REQ-183, REQ-184
+
+### fn `def _parse_version(text)` `priv` (L210-228)
+- @brief Extract one strict `X.Y.Z` version tuple from tool output.
+- @details Scans whitespace-separated tokens of `rustc --version` or `cargo --version` output and returns the first token matching `VERSION_PATTERN`; tool banners prefix the version with the binary name, so no positional assumption is made.
+- @param text {str} Raw version output token.
+- @return {tuple[int, int, int]|None} Numeric version tuple, or `None` when no token matches the strict format.
+- @satisfies REQ-185
+
+### fn `def _require_toolchain()` `priv` (L229-261)
+- @brief Validate rustc and cargo presence plus minimum versions.
+- @details Checks `rustc` and `cargo` executables via `require_commands`, captures `rustc --version` and `cargo --version`, parses both with `_parse_version`, and aborts when either executable reports a version lower than `MIN_RUSTC_VERSION` or `MIN_CARGO_VERSION` respectively or an unparseable value.
+- @return {None} Returns when the toolchain satisfies the version gate.
+- @throws {SystemExit} Exit code `1` via `require_commands` on missing executables or via `_die` on incompatible versions.
+- @satisfies REQ-185, CTN-003, REQ-056
+
+### fn `def _resolve_registry_token()` `priv` (L262-286)
+- @brief Resolve the crates.io authentication token.
+- @details Reads `TOKEN_ENV_VARIABLE` from the environment first; when unset or empty, reads the JSON credentials file `$CARGO_HOME/credentials` (`CARGO_HOME` defaulting to `~/.cargo`) and extracts `TOKEN_CREDENTIALS_KEY`. Time complexity O(n) over file size.
+- @return {str|None} Non-empty token string when resolvable; `None` when the environment variable is absent and the credentials file is missing, unreadable, malformed, or lacks the token key.
+- @satisfies REQ-186
+
+### fn `def _http_request(url, token=None, payload=None)` `priv` (L287-316)
+- @brief Execute one crates.io HTTP request and decode the JSON body.
+- @details Builds a GET (`payload` is `None`) or JSON PUT request carrying `USER_AGENT`, `Accept: application/json`, and an `Authorization: Bearer` header when a token is supplied. Time complexity O(n) over response size.
+- @param url {str} Absolute crates.io API endpoint URL.
+- @param token {str|None} Bearer token; the header is omitted when `None`.
+- @param payload {dict|None} JSON body serialized and sent via PUT when provided.
+- @return {Any} Parsed JSON response payload.
+- @throws {urllib.error.HTTPError} On HTTP error responses.
+- @throws {urllib.error.URLError} On connection failures.
+- @throws {json.JSONDecodeError} On malformed response bodies.
+- @satisfies REQ-187, REQ-188, REQ-191
+
+### fn `def _verify_crates_io_auth(token)` `priv` (L317-340)
+- @brief Verify crates.io authentication through the `/me` endpoint.
+- @details Sends `GET {CRATES_API}/me` with the resolved Bearer token and prints the authenticated account login; any HTTP error, connection failure, or malformed payload aborts with the `cargo login` hint.
+- @param token {str} Resolved crates.io Bearer token.
+- @return {None} Prints the account evidence line on success.
+- @throws {SystemExit} Exit code `1` via `_die` on non-200 responses, connection failures, or malformed payloads.
+- @satisfies REQ-187
+
+### fn `def _check_crate_availability(package_name)` `priv` (L341-368)
+- @brief Verify that the crate name is still available on crates.io.
+- @details Sends `GET {CRATES_API}/crates/<package>`; HTTP 404 proves availability, a 200 payload listing versions aborts as taken, and any other outcome aborts as unverifiable. Time complexity O(1) plus network.
+- @param package_name {str} Validated crate name token.
+- @return {None} Returns when the name is verified available.
+- @throws {SystemExit} Exit code `1` via `_die` on existing versions, non-404 HTTP errors, connection failures, or malformed payloads.
+- @satisfies REQ-188
+
+### fn `def _write_placeholder_crate(temp_dir, package_name, github_repo)` `priv` (L369-403)
+- @brief Create the placeholder crate skeleton in the temporary directory.
+- @details Runs `cargo init --name <package> --vcs none <temp_dir>` with captured output, aborts on failure, then overwrites the generated `Cargo.toml` with version `0.0.0`, the placeholder description, and the repository URL `https://github.com/<repo>`. The `cargo init` binary entrypoint compiles offline, keeping the later `cargo publish` verify build dependency-free.
+- @param temp_dir {str|Path} Existing temporary crate directory.
+- @param package_name {str} Validated crate name token.
+- @param github_repo {str} Validated GitHub `owner/repo` token.
+- @return {None} Writes `Cargo.toml` plus the generated `src/` skeleton.
+- @throws {SystemExit} Exit code `1` via `_die` when `cargo init` fails.
+- @throws {OSError} Propagated on filesystem write failure.
+- @satisfies REQ-189
+
+### fn `def _register_trusted_publisher(token, package_name, github_repo, workflow_file)` `priv` (L404-438)
+- @brief Register the GitHub trusted publisher through the crates.io API.
+- @details Sends `PUT {CRATES_API}/crates/<package>/trusted_publishing/github_actions_config` with JSON body `{"repository": "<owner/repo>", "workflow": "<workflow>"}` and the resolved Bearer token. Time complexity O(1) plus network.
+- @param token {str} Resolved crates.io Bearer token.
+- @param package_name {str} Validated crate name token.
+- @param github_repo {str} Validated GitHub `owner/repo` token.
+- @param workflow_file {str} Validated bare workflow filename token.
+- @return {None} Returns when the trusted publisher is created.
+- @throws {SystemExit} Exit code `1` via `_die` with the publication-without-trust diagnostic on HTTP or connection failures.
+- @satisfies REQ-191
+
+### fn `def print_help(version)` (L439-459)
+- @brief Print command-specific help text.
+- @details Renders usage line, option list, and behavioral summary in English, following the shared command help layout.
+- @param version {str} Current CLI version token rendered in the usage line.
+- @return {None} Writes to stdout.
+- @satisfies PRJ-002, REQ-182
+
+### fn `def run(args)` (L460-536)
+- @brief Execute the five-phase crates.io bootstrap and trust pipeline.
+- @details Phase order: `[1/5]` crates.io authentication via the `/me` endpoint using the token resolved by `_resolve_registry_token`; `[2/5]` crate availability via the crates.io crate endpoint, aborting on existing versions or a failure without an HTTP 404 marker; `[3/5]` placeholder crate creation in a fresh temporary directory; `[4/5]` publication via `cargo publish`; `[5/5]` GitHub trusted-publisher creation through the crates.io trusted-publishing API plus trust configuration verification. The temporary directory is removed on every exit path; every failure aborts with exit code `1`.
+- @param args {list[str]} Command arguments (without the command token).
+- @return {int} `0` after successful publication and trust verification.
+- @throws {SystemExit} Exit code `1` on usage errors, invalid inputs, missing or incompatible toolchain, failed authentication, taken or unverifiable crate name, failed publication, or failed trust creation/verification.
+- @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-186, REQ-187, REQ-188, REQ-189, REQ-190, REQ-191, REQ-192
+
+## Symbol Index
+|Symbol|Kind|Vis|Lines|Sig|
+|---|---|---|---|---|
+|`PROGRAM`|var|pub|32||
+|`DESCRIPTION`|var|pub|33||
+|`CRATES_API`|var|pub|40||
+|`USER_AGENT`|var|pub|45||
+|`HTTP_TIMEOUT`|var|pub|49||
+|`TOKEN_ENV_VARIABLE`|var|pub|55||
+|`TOKEN_CREDENTIALS_KEY`|var|pub|62||
+|`MIN_RUSTC_VERSION`|var|pub|68||
+|`MIN_CARGO_VERSION`|var|pub|75||
+|`CRATE_NAME_PATTERN`|var|pub|82||
+|`MAX_CRATE_NAME_LENGTH`|var|pub|87||
+|`GITHUB_REPO_PATTERN`|var|pub|94||
+|`WORKFLOW_FILE_PATTERN`|var|pub|101||
+|`VERSION_PATTERN`|var|pub|108||
+|`_UsageParser`|class|priv|111-135|class _UsageParser(argparse.ArgumentParser)|
+|`_UsageParser.error`|fn|pub|121-135|def error(self, message)|
+|`_build_parser`|fn|priv|136-164|def _build_parser()|
+|`_die`|fn|priv|165-180|def _die(message) -> NoReturn|
+|`_validate_inputs`|fn|priv|181-209|def _validate_inputs(package_name, github_repo, workflow_...|
+|`_parse_version`|fn|priv|210-228|def _parse_version(text)|
+|`_require_toolchain`|fn|priv|229-261|def _require_toolchain()|
+|`_resolve_registry_token`|fn|priv|262-286|def _resolve_registry_token()|
+|`_http_request`|fn|priv|287-316|def _http_request(url, token=None, payload=None)|
+|`_verify_crates_io_auth`|fn|priv|317-340|def _verify_crates_io_auth(token)|
+|`_check_crate_availability`|fn|priv|341-368|def _check_crate_availability(package_name)|
+|`_write_placeholder_crate`|fn|priv|369-403|def _write_placeholder_crate(temp_dir, package_name, gith...|
+|`_register_trusted_publisher`|fn|priv|404-438|def _register_trusted_publisher(token, package_name, gith...|
+|`print_help`|fn|pub|439-459|def print_help(version)|
+|`run`|fn|pub|460-536|def run(args)|
 
 
 ---
@@ -2494,7 +2733,7 @@ one-entry render tuple, or `(None, error_message)` on failure.
 
 ---
 
-# core.py | Python | 392L | 10 symbols | 8 imports | 25 comments
+# core.py | Python | 393L | 10 symbols | 8 imports | 25 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -2529,7 +2768,7 @@ metadata so the upgrade performs a full re-download and reinstallation.
 `print_help` when emitting grouped command help. Ordering is normative and
 maps directly to REQ-066 output expectations.
 - @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L131-195)
+### fn `def print_help(command_name=None)` (L132-196)
 - @brief Print global or command-specific help text.
 - @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
 - @param command_name {str|None} Optional command token for scoped help.
@@ -2537,14 +2776,14 @@ maps directly to REQ-066 output expectations.
 - @throws {SystemExit} Raised when unknown command name is requested.
 - @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
 
-### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L196-211)
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L197-212)
 - @brief Compose the develop upgrade command for one GitHub release tag.
 - @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
 - @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
 - @return {str} Fully substituted shell upgrade command.
 - @satisfies REQ-076, DES-019
 
-### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L212-251)
+### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L213-252)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; appends ` --force --reinstall --refresh` to the resolved command when `force` is set; executes the composed command on Linux via shell invocation and prints the manual fallback command on non-Linux systems. Complexity O(n) over the composed command string length.
 - @param develop {bool} Select upgrade from the latest GitHub release tag.
@@ -2552,20 +2791,20 @@ maps directly to REQ-066 output expectations.
 - @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-076, REQ-078, REQ-087, REQ-088, REQ-089, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L252-274)
+### fn `def do_uninstall()` (L253-275)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L275-290)
+### fn `def do_write_config()` (L276-291)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L291-393)
+### fn `def main()` (L292-394)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints the aligned three-line report with installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected; `--print` and `--info` accept an optional ':'-separated sub-path restricting the rendered subtree) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
@@ -2578,12 +2817,12 @@ maps directly to REQ-066 output expectations.
 |`HELP_COMMAND_COLUMN_WIDTH`|var|pub|46||
 |`FORCED_REINSTALL_OPTIONS`|var|pub|54||
 |`HELP_SECTION_COMMANDS`|var|pub|62||
-|`print_help`|fn|pub|131-195|def print_help(command_name=None)|
-|`_build_develop_upgrade_command`|fn|priv|196-211|def _build_develop_upgrade_command(latest_tag: str) -> str|
-|`do_upgrade`|fn|pub|212-251|def do_upgrade(develop: bool = False, force: bool = False...|
-|`do_uninstall`|fn|pub|252-274|def do_uninstall()|
-|`do_write_config`|fn|pub|275-290|def do_write_config()|
-|`main`|fn|pub|291-393|def main()|
+|`print_help`|fn|pub|132-196|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|197-212|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|213-252|def do_upgrade(develop: bool = False, force: bool = False...|
+|`do_uninstall`|fn|pub|253-275|def do_uninstall()|
+|`do_write_config`|fn|pub|276-291|def do_write_config()|
+|`main`|fn|pub|292-394|def main()|
 
 
 ---

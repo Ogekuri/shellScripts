@@ -99,6 +99,7 @@ HELP_SECTION_COMMANDS = (
             "tests",
             "vscode",
             "vsinsider",
+            "cargo-bootstrap-trust",
             "npm-bootstrap-trust",
         ),
     ),

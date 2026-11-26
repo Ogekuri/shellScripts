@@ -459,6 +459,25 @@
         - `net_cmd.cmd_vlan(...)`: Activate or deactivate `vlan<id>` via `sudo nmcli` with return-code propagation [`src/shell_scripts/commands/net_cmd.py`]
           - `net_cmd._print_vlan_addresses(...)`: Print current VLAN address blocks with two context lines [`src/shell_scripts/commands/net_cmd.py`]
         - `net_cmd.print_usage(...)`: Print the English command usage block [`src/shell_scripts/commands/net_cmd.py`]
+      - `cargo_bootstrap_trust.run(...)`: Execute the five-phase crates.io bootstrap and GitHub trusted-publisher pipeline with fail-fast gates and temporary-directory cleanup [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._validate_inputs(...)`: Validate crate name, GitHub owner/repo token, and bare workflow filename [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `cargo_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._require_toolchain(...)`: Validate rustc/cargo executables and enforce minimum rustc 1.89.0 and cargo 1.89.0 versions [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `require_commands(...)`: Validate `rustc` and `cargo` executables before version probes [`src/shell_scripts/utils.py`]
+          - `cargo_bootstrap_trust._parse_version(...)`: Extract one strict `X.Y.Z` version token from tool banner output [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._resolve_registry_token(...)`: Resolve the crates.io token from the environment override or the cargo credentials file [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._verify_crates_io_auth(...)`: Verify crates.io authentication via the `/me` endpoint and print the account login [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `cargo_bootstrap_trust._http_request(...)`: Execute one crates.io HTTP request and decode the JSON body [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `cargo_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._check_crate_availability(...)`: Verify crate-name availability via the crates.io crate endpoint accepting only HTTP 404 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `cargo_bootstrap_trust._http_request(...)`: Execute one crates.io HTTP request and decode the JSON body [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `cargo_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._write_placeholder_crate(...)`: Create the 0.0.0 placeholder crate via `cargo init` and rewrite `Cargo.toml` with repository metadata [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `cargo_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._register_trusted_publisher(...)`: Register the GitHub trusted publisher via the crates.io trusted-publishing PUT endpoint [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `cargo_bootstrap_trust._http_request(...)`: Execute one crates.io HTTP request and decode the JSON body [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+          - `cargo_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._http_request(...)`: Read the registered trust configuration for verification printing [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
       - `npm_bootstrap_trust.run(...)`: Execute the five-phase npm bootstrap and GitHub trusted-publisher pipeline with fail-fast gates and temporary-directory cleanup [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
         - `npm_bootstrap_trust._validate_inputs(...)`: Validate npm package name, GitHub owner/repo token, and bare workflow filename [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
           - `npm_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/npm_bootstrap_trust.py`]
@@ -486,8 +505,8 @@
     - `reset_terminal_state(...)`: Restore captured stdin TTY attributes, disable legacy+xterm mouse modes (`?9l` through `?1016l`), and execute `stty sane` fallback on TTY stdin [`src/shell_scripts/utils.py`]
       - `_is_tty_stream(...)`: Validate stream TTY capability and attachment state [`src/shell_scripts/utils.py`]
 - External Boundaries:
-  - Network boundary: PyPI JSON API request for startup update check and `--version` report (`urllib.request.urlopen`), GitHub Releases API request for develop upgrade tags and GitHub latest display (`urllib.request.urlopen`).
-  - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands, `gsettings`, `nmcli`, `resolvectl`, `ip`, `journalctl`, `sudo`, `node`, `npm`) plus one detached `subprocess.Popen` spawn with `start_new_session=True` and `DEVNULL` stdio for the Chrome remote-debugging launcher.
+  - Network boundary: PyPI JSON API request for startup update check and `--version` report (`urllib.request.urlopen`), GitHub Releases API request for develop upgrade tags and GitHub latest display (`urllib.request.urlopen`), and crates.io API requests (`/me` authentication, crate availability, trusted-publishing configuration create/read) for the cargo-bootstrap-trust pipeline (`urllib.request.urlopen`).
+  - Process boundary: `subprocess.run` for tooling commands (`uv`, `git`, `doxygen`, `make`, `pdflatex`, `gs`, `pdfinfo`, `qpdf`, `pdftk`, Java invocations, desktop utilities, launcher commands, `gsettings`, `nmcli`, `resolvectl`, `ip`, `journalctl`, `sudo`, `node`, `npm`, `rustc`, `cargo`) plus one detached `subprocess.Popen` spawn with `start_new_session=True` and `DEVNULL` stdio for the Chrome remote-debugging launcher.
   - Terminal boundary: ANSI control-sequence writes for legacy+xterm mouse-mode disable (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) and best-effort `termios`/`stty sane` restoration.
   - Process-replacement boundary: none; launcher-style commands now execute external tools via `subprocess.run`.
   - File-system boundary: local cache/config writes including `~/.config/shellScripts/config.json`, temporary files/directories, PDF intermediate artifacts, and venv creation/removal.

@@ -1,8 +1,8 @@
 ---
 title: "shellScripts Requirements"
 description: Software requirements specification
-version: "0.25.0"
-date: "2026-11-17T10:43:04Z"
+version: "0.26.0"
+date: "2026-11-26T17:11:04Z"
 author: "Auto-generated from repository evidence"
 scope:
   paths:
@@ -99,6 +99,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **PRJ-007**: MUST publish built distributions to PyPI via OIDC Trusted Publishing when a tagged version is committed on branch `master`.
 - **PRJ-006**: MUST expose video conversion subcommands that transcode one input video into H.264 or H.265 MP4 outputs using FFmpeg.
 - **PRJ-008**: MUST expose subcommands `meld-highlight-theme`, `chrome-debug`, `net`, and `npm-bootstrap-trust` as Python ports of the legacy bash scripts with equivalent generations and behavior.
+- **PRJ-009**: MUST expose subcommand `cargo-bootstrap-trust` that bootstraps a placeholder crates.io crate and registers its GitHub trusted publisher through the same five-phase fail-fast pipeline philosophy as `npm-bootstrap-trust`.
 
 ### 2.2 Project Constraints
 - **CTN-001**: MUST target Python runtime version 3.11 or newer.
@@ -174,6 +175,7 @@ Repository structure (evidence-oriented view, depth-limited):
 - **DES-067**: MUST pass the temporary build output directory to `scripts/build.sh` through `BUILD_DIST_DIR` and MUST validate generated archives inside it.
 - **DES-068**: MUST remove the temporary build output directory on success, failure, and signal termination paths.
 - **DES-069**: MUST register command tokens `meld-highlight-theme`, `chrome-debug`, `net`, and `npm-bootstrap-trust` in the static command registry mapping to modules `meld_highlight_theme`, `chrome_debug`, `net_cmd`, and `npm_bootstrap_trust` with lazy imports.
+- **DES-070**: MUST register command token `cargo-bootstrap-trust` in the static command registry mapping to module `cargo_bootstrap_trust` with lazy import.
 
 No explicit performance optimizations identified.
 
@@ -324,6 +326,17 @@ No explicit performance optimizations identified.
 - **REQ-179**: MUST publish a temporary placeholder package at version `0.0.0` with dist-tag `bootstrap`, public access, and the configured repository URL, removing the temporary directory on every exit path.
 - **REQ-180**: MUST create the GitHub trusted publisher via `npm trust github <package> --repo <repo> --file <workflow> --allow-publish`, print the resulting trust list, and report publication-without-trust as a distinct failure.
 - **REQ-181**: MUST complete by warning that the trust validates only after a successful OIDC publish from the workflow within two days.
+- **REQ-182**: MUST accept required `-p <package>`, `-r <owner/repo>`, and `-f <workflow>` options plus `-h` help, failing with return code `1` on missing values, unknown arguments, or missing options.
+- **REQ-183**: MUST validate the crate name against conservative lowercase syntax `^[a-z0-9][a-z0-9_-]*$` with a 64-character limit.
+- **REQ-184**: MUST validate the `owner/repo` token with owner length at most 39 and no trailing `-`, and the workflow filename as a bare name ending `.yml` or `.yaml`.
+- **REQ-185**: MUST fail fast when `rustc` or `cargo` is not executable or reports versions older than rustc 1.89.0 or cargo 1.89.0.
+- **REQ-186**: MUST resolve the crates.io token from environment variable `CARGO_REGISTRIES_CRATES_IO_TOKEN` or from key `registry.crates.io-token` of the cargo credentials file under `CARGO_HOME` defaulting to `~/.cargo`.
+- **REQ-187**: MUST verify crates.io authentication via `GET https://crates.io/api/v1/me` with the resolved token before any mutating step, aborting with a `cargo login` hint on missing token or non-200 response.
+- **REQ-188**: MUST abort when the crates.io crate lookup reports existing versions and when the availability check fails without an HTTP 404 response.
+- **REQ-189**: MUST create the temporary placeholder crate via `cargo init --name <package> --vcs none` and write a `Cargo.toml` declaring version `0.0.0`, a placeholder description, and repository URL `https://github.com/<repo>`.
+- **REQ-190**: MUST publish the placeholder crate via `cargo publish` from the temporary directory and MUST remove the temporary directory on every exit path.
+- **REQ-191**: MUST create the GitHub trusted publisher via `PUT https://crates.io/api/v1/crates/<package>/trusted_publishing/github_actions_config` carrying `repository` and `workflow` fields, print the resulting trust configuration, and report publication-without-trust as a distinct failure.
+- **REQ-192**: MUST complete by warning that the trust validates only after a successful OIDC publish from the workflow within two days.
 
 ## 4. Test Requirements
 
@@ -336,6 +349,7 @@ The release workflow consumes only the `dist/` archives produced by `scripts/bui
 The `scripts/build.sh` pipeline consolidates previous-build cleanup and packaging: its first data-mutating phase removes every `dist/` archive of any version plus the `build/` and `src/shellscripts.egg-info/` intermediate trees while preserving non-generated entries and printing one `clean` evidence line with the removed archive count, and its post-build hygiene phase removes generated metadata, temporary files, and `src` bytecode caches; the archive timestamp epoch `.build-epoch` is read from the tracked repository file, so tracked `dist/` archives are byte-identical to a rebuild of the commit that contains them; structure, epoch rules, tracked-guard behavior, Bash syntax, executable bit, and `.gitignore` re-inclusion are covered by static parsing tests.
 The pre-release pipeline builds into a `mktemp -d` temporary directory outside the repository working tree, delegates that directory to `scripts/build.sh` through `BUILD_DIST_DIR`, validates the generated archives there, and remains independent from the `dist/` content: it never reads, verifies, cleans, or modifies `dist/` entries, so tracked and untracked `dist/` content cannot influence its result.
 The four ported commands introduced by PRJ-008 are covered by `tests/test_tst_021_meld_highlight_theme.py`, which executes the `meld-highlight-theme` pipeline against fixture style directories and compares generated XML byte-for-byte with reference fixtures generated by `bin/Meld_Create_TextHighlight.sh`, and by `tests/test_tst_022_ported_commands.py`, which verifies `chrome-debug`, `net`, and `npm-bootstrap-trust` through monkeypatched subprocess and filesystem boundaries.
+The `cargo-bootstrap-trust` pipeline introduced by PRJ-009 and DES-070 (REQ-182 through REQ-192) has no dedicated unit-test evidence yet: its subprocess and crates.io HTTP boundaries are not exercised by any existing suite.
 
 ### 4.2 Verification Requirements
 - **TST-001**: MUST verify REQ-001, REQ-002, REQ-047, and REQ-066 by invoking `shell_scripts.core.main`, passing only if return codes, grouped help/error outputs, and startup OS-detection invocation match specified behavior.
@@ -396,3 +410,4 @@ The four ported commands introduced by PRJ-008 are covered by `tests/test_tst_02
 | TST-001..TST-002, TST-004..TST-014 | `tests/test_tst_*.py`; `src/shell_scripts/core.py`; `src/shell_scripts/commands/*.py`; `src/shell_scripts/version_check.py` | multiple | Unit tests exist under `tests/`; `test_tst_011_video_commands.py` verifies FFmpeg argv construction, output naming, and help exposure for REQ-057/REQ-058. |
 | DES-021..DES-027, DES-040..DES-047, DES-060, DES-061, DES-063..DES-068, REQ-079..REQ-082, REQ-134..REQ-155, TST-015 | `scripts/pre-release-check.sh`; `scripts/build.sh`; `.build-epoch`; `.gitignore`; `tests/test_tst_015_pre_release_check.py` | `run_check`, `skip_check`, `create_temp_build_dir`, `check_artifacts`, `check_repository_integrity`, `collect_tracked_nonmanaged`, `cleanup_artifacts`, `fail_fast`, `on_exit`, `clean_previous_builds`, `clean_build_residue`, `resolve_source_date_epoch`, `resolve_build_tool`, `verify_artifacts`, `print_summary` | Pre-release resolves the repository root, validates project structure, toolchain and executable bits, runs Bash/Python syntax checks, pytest with `PYTHONPATH=src`, creates a `mktemp -d` temporary build output directory outside the working tree, delegates distribution building to `scripts/build.sh` through `BUILD_DIST_DIR`, validates the sdist and wheel archives inside that directory, never reads, verifies, or modifies `dist/` entries, runs cleanup and full-state baseline repository-integrity checks, and reports `PASS`/`FAIL`/`SKIP` plus a final summary; cleanup is registered on `EXIT`/`INT`/`TERM`, removes the temporary build directory, and preserves the original failure result. Build script deletes every `dist` archive of any version in its first data-mutating phase, resolves the archive epoch from the tracked `.build-epoch` file (honoring an explicit `SOURCE_DATE_EPOCH`), builds via `uv build` or `python3 -m build`, then runs a post-build hygiene phase removing intermediate trees, generated metadata, temporary files, and `src` bytecode caches before validating readability and summarizing deliverables. `.gitignore` re-includes `dist/`, `dist/**/*`, and `.build-epoch` without dist-targeting ignore rules. Tests assert both script structures, epoch rules, Bash syntax, executable bits, and real `git check-ignore` behavior. |
 | REQ-094 through REQ-133, DES-032 through DES-039 | `src/shell_scripts/config_cli.py`; `src/shell_scripts/core.py` | `CONFIG_SCHEMA`, `find_schema_mismatches`, `_ensure_bootstrap`, `_resolve_target`, `_write_overrides`, `do_print_raw`, `do_print`, `do_info`, `do_get`, `do_set`, `do_unset`, `main` | Declarative schema registry mirrors `DEFAULT_RUNTIME_CONFIG` leaves with parity enforcement that fails configuration commands on divergence; management flags bootstrap the missing config file, print the raw file verbatim, render trees with `[Path: ...]` badges, default/custom indicators, `Sel`/`Value` and collection tables with box-drawing characters, resolve `:`-separated paths including `:append`/`:+`/`:insert:<Idx>`/`:<Idx>`/`:<Idx>:<Field>`/`:<Key>` tokens, coerce strict JSON types, validate, and persist atomically via same-directory temporary-file rename with environment acquisition. |
+| PRJ-009, DES-070, REQ-182 through REQ-192 | `src/shell_scripts/commands/cargo_bootstrap_trust.py`; `src/shell_scripts/commands/__init__.py`; `src/shell_scripts/core.py` | `_COMMAND_MODULES`, `HELP_SECTION_COMMANDS`, `run`, `_validate_inputs`, `_require_toolchain`, `_resolve_registry_token`, `_verify_crates_io_auth`, `_check_crate_availability`, `_write_placeholder_crate`, `print_help` | Static registry maps `cargo-bootstrap-trust` to `cargo_bootstrap_trust` with lazy import and lists it in the Develop help section; the five-phase pipeline validates inputs and the rustc/cargo 1.89.0 toolchain, resolves the crates.io token, verifies authentication via `GET /api/v1/me`, aborts on taken names or non-404 lookup failures, creates and publishes the `0.0.0` placeholder crate from a temporary directory removed on every exit path, registers the GitHub trusted publishing config through the crates.io API, prints the trust configuration, and warns about the two-day validation window. |

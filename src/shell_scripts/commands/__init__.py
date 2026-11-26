@@ -3,7 +3,8 @@
 @details Defines a static command-to-module map consumed by the CLI dispatcher.
 Dictionary lookup enforces deterministic command availability; missing keys
 resolve to `None` to drive unknown-command error handling in the caller.
-@satisfies PRJ-001, PRJ-002, PRJ-003, PRJ-008, DES-001, DES-008, DES-069, REQ-057, REQ-058
+@satisfies PRJ-001, PRJ-002, PRJ-003, PRJ-008, PRJ-009, DES-001, DES-008, DES-069,
+DES-070, REQ-057, REQ-058
 """
 
 import importlib
@@ -16,6 +17,7 @@ from types import ModuleType
 #  @satisfies PRJ-003, DES-001
 _COMMAND_MODULES = {
     "agy": "shell_scripts.commands.agy",
+    "cargo-bootstrap-trust": "shell_scripts.commands.cargo_bootstrap_trust",
     "chrome-debug": "shell_scripts.commands.chrome_debug",
     "clean": "shell_scripts.commands.clean",
     "claude": "shell_scripts.commands.claude",
