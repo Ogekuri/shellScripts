@@ -57,8 +57,10 @@ FORCED_REINSTALL_OPTIONS = "--force --reinstall --refresh"
 #  @brief Ordered command groups for global help rendering.
 #  @details Defines deterministic section order and command-token order used by
 #  `print_help` when emitting grouped command help. Ordering is normative and
-#  maps directly to REQ-066 output expectations.
-#  @satisfies DES-014, REQ-066
+#  maps directly to REQ-066 output expectations. The
+#  `Trusted-Publisher Bootstrap Commands` section exclusively holds the
+#  `cargo-bootstrap-trust` and `npm-bootstrap-trust` command tokens.
+#  @satisfies DES-014, REQ-066, REQ-196, REQ-197
 HELP_SECTION_COMMANDS = (
     (
         "Edit/View Commands",
@@ -99,6 +101,11 @@ HELP_SECTION_COMMANDS = (
             "tests",
             "vscode",
             "vsinsider",
+        ),
+    ),
+    (
+        "Trusted-Publisher Bootstrap Commands",
+        (
             "cargo-bootstrap-trust",
             "npm-bootstrap-trust",
         ),
@@ -136,10 +143,12 @@ def print_help(command_name=None):
     with explicit unknown-command error. Global help includes management options
     and grouped command sections using deterministic section and command order,
     with descriptions sourced from each command module `DESCRIPTION` constant.
+    Each section renders command tokens left-justified to the larger of
+    `HELP_COMMAND_COLUMN_WIDTH` and the section's longest command token.
     @param command_name {str|None} Optional command token for scoped help.
     @return {None} Writes to stdout/stderr; may terminate process on invalid command.
     @throws {SystemExit} Raised when unknown command name is requested.
-    @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
+    @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069, REQ-196, REQ-197
     """
 
     if command_name:
@@ -188,10 +197,14 @@ def print_help(command_name=None):
     for section_name, command_names in HELP_SECTION_COMMANDS:
         print()
         print(section_name)
+        section_width = max(
+            [HELP_COMMAND_COLUMN_WIDTH]
+            + [len(token) for token in command_names]
+        )
         for command_name in command_names:
             command_module = get_command(command_name)
             description = getattr(command_module, "DESCRIPTION", "")
-            print(f"  {command_name:<{HELP_COMMAND_COLUMN_WIDTH}} - {description}")
+            print(f"  {command_name:<{section_width}} - {description}")
 
 
 def _build_develop_upgrade_command(latest_tag: str) -> str:

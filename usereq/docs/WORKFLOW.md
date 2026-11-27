@@ -199,7 +199,7 @@
         - `_fetch_json_payload(...)`: Fetch and decode one JSON payload over HTTP [`src/shell_scripts/version_check.py`]
       - `_format_request_error(...)`: Normalize the failed-source request error into the `unknown (<reason>)` detail text [`src/shell_scripts/version_check.py`]
       - `format_version_report_line(...)`: Render one aligned report line by left-justifying the label to 18 characters followed by `: ` and the value token [`src/shell_scripts/version_check.py`]
-    - `print_help(...)`: Print grouped global help sections or command-specific help [`src/shell_scripts/core.py`]
+    - `print_help(...)`: Print grouped global help sections or command-specific help, rendering each section from `HELP_SECTION_COMMANDS` with the dedicated `Trusted-Publisher Bootstrap Commands` section exclusively holding `cargo-bootstrap-trust` and `npm-bootstrap-trust` and each section's command tokens left-justified to the larger of the fixed minimum column width and the section's longest token [`src/shell_scripts/core.py`]
       - `get_command(...)`: Resolve command module by static mapping key [`src/shell_scripts/commands/__init__.py`]
     - `do_upgrade(...)`: Linux-only self-upgrade wrapper supporting PyPI default mode, GitHub-tagged develop mode, and appending `FORCED_REINSTALL_OPTIONS` (`--force --reinstall --refresh`) to the resolved command when the `--force` selector is active [`src/shell_scripts/core.py`]
       - `fetch_github_latest_release(...)`: Resolve latest GitHub release tag for develop upgrade mode [`src/shell_scripts/version_check.py`]

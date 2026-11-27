@@ -4,7 +4,7 @@
   startup OS detection, Linux-only upgrade/uninstall command resolution from
   runtime config, and management write-config behavior. Tests are deterministic
   and isolate subprocess and filesystem boundaries.
-@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-066
+@satisfies TST-001, TST-002, TST-009, REQ-001, REQ-002, REQ-004, REQ-005, REQ-045, REQ-046, REQ-047, REQ-066, REQ-196, REQ-197
 @return {None} Pytest module scope.
 """
 
@@ -22,11 +22,12 @@ def test_main_without_args_returns_zero_and_prints_help(
     @brief Validate empty CLI invocation behavior.
     @details Forces argv to contain only program name, suppresses update
       checks, tracks startup OS detection call, and validates global help
-      emission with return code 0.
+      emission with return code 0. Validates the dedicated Trusted-Publisher
+      Bootstrap section membership, ordering, and per-section token alignment.
     @param monkeypatch {pytest.MonkeyPatch} Runtime patch helper.
     @param capsys {pytest.CaptureFixture[str]} Stdout/stderr capture helper.
     @return {None} Assertions only.
-    @satisfies TST-001, REQ-001, REQ-047, REQ-066
+    @satisfies TST-001, REQ-001, REQ-047, REQ-066, REQ-196, REQ-197
     """
 
     observed = {"detected": 0}
@@ -73,6 +74,32 @@ def test_main_without_args_returns_zero_and_prints_help(
     assert captured.out.index("Develop Commands") < captured.out.index("Image Commands")
     assert captured.out.index("Image Commands") < captured.out.index("Video Commands")
     assert captured.out.index("Video Commands") < captured.out.index("OS Commands")
+    assert "Trusted-Publisher Bootstrap Commands" in captured.out
+    assert (
+        "  cargo-bootstrap-trust - Bootstrap a new crates.io crate"
+        " and register its GitHub trusted publisher."
+        in captured.out
+    )
+    assert (
+        "  npm-bootstrap-trust   - Bootstrap a new npm package"
+        " and register its GitHub trusted publisher."
+        in captured.out
+    )
+    assert (
+        captured.out.index("Develop Commands")
+        < captured.out.index("Trusted-Publisher Bootstrap Commands")
+    )
+    assert (
+        captured.out.index("Trusted-Publisher Bootstrap Commands")
+        < captured.out.index("Image Commands")
+    )
+    develop_section = captured.out[
+        captured.out.index("Develop Commands"):captured.out.index(
+            "Trusted-Publisher Bootstrap Commands"
+        )
+    ]
+    assert "cargo-bootstrap-trust" not in develop_section
+    assert "npm-bootstrap-trust" not in develop_section
 
 
 def test_main_unknown_command_returns_one_and_prints_error_and_help(

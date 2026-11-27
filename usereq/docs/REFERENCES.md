@@ -2811,7 +2811,7 @@ one-entry render tuple, or `(None, error_message)` on failure.
 
 ---
 
-# core.py | Python | 393L | 10 symbols | 8 imports | 25 comments
+# core.py | Python | 406L | 10 symbols | 8 imports | 27 comments
 > Path: `src/shell_scripts/core.py`
 
 ## Imports
@@ -2840,28 +2840,30 @@ global help sections.
 the installed tool entry, reinstall the package, and refresh cached remote
 metadata so the upgrade performs a full re-download and reinstallation.
 - @satisfies REQ-088, REQ-089
-- var `HELP_SECTION_COMMANDS = (` (L62)
+- var `HELP_SECTION_COMMANDS = (` (L64)
 - @brief Ordered command groups for global help rendering.
 - @details Defines deterministic section order and command-token order used by
 `print_help` when emitting grouped command help. Ordering is normative and
-maps directly to REQ-066 output expectations.
-- @satisfies DES-014, REQ-066
-### fn `def print_help(command_name=None)` (L132-196)
+maps directly to REQ-066 output expectations. The
+`Trusted-Publisher Bootstrap Commands` section exclusively holds the
+`cargo-bootstrap-trust` and `npm-bootstrap-trust` command tokens.
+- @satisfies DES-014, REQ-066, REQ-196, REQ-197
+### fn `def print_help(command_name=None)` (L139-209)
 - @brief Print global or command-specific help text.
-- @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant.
+- @details Renders command module help for known command names; otherwise exits with explicit unknown-command error. Global help includes management options and grouped command sections using deterministic section and command order, with descriptions sourced from each command module `DESCRIPTION` constant. Each section renders command tokens left-justified to the larger of `HELP_COMMAND_COLUMN_WIDTH` and the section's longest command token.
 - @param command_name {str|None} Optional command token for scoped help.
 - @return {None} Writes to stdout/stderr; may terminate process on invalid command.
 - @throws {SystemExit} Raised when unknown command name is requested.
-- @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069
+- @satisfies PRJ-002, DES-014, REQ-001, REQ-002, REQ-066, REQ-068, REQ-069, REQ-196, REQ-197
 
-### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L197-212)
+### fn `def _build_develop_upgrade_command(latest_tag: str) -> str` `priv` (L210-225)
 - @brief Compose the develop upgrade command for one GitHub release tag.
 - @details Resolves the `management.upgrade_develop` runtime-config template, substitutes the `{tag}` placeholder with the supplied tag, and returns the shell command that installs the package from the GitHub tag archive. Complexity O(n) over template length.
 - @param latest_tag {str} GitHub release tag token preserving its `v` prefix.
 - @return {str} Fully substituted shell upgrade command.
 - @satisfies REQ-076, DES-019
 
-### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L213-252)
+### fn `def do_upgrade(develop: bool = False, force: bool = False) -> int` (L226-265)
 - @brief Execute Linux-only upgrade command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.upgrade` (PyPI default) or, when `develop` is set, resolves the latest GitHub release tag and composes the tag-pinned upgrade command; appends ` --force --reinstall --refresh` to the resolved command when `force` is set; executes the composed command on Linux via shell invocation and prints the manual fallback command on non-Linux systems. Complexity O(n) over the composed command string length.
 - @param develop {bool} Select upgrade from the latest GitHub release tag.
@@ -2869,20 +2871,20 @@ maps directly to REQ-066 output expectations.
 - @return {int} `1` when develop tag resolution fails; subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-004, REQ-076, REQ-078, REQ-087, REQ-088, REQ-089, REQ-045, REQ-056
 
-### fn `def do_uninstall()` (L253-275)
+### fn `def do_uninstall()` (L266-288)
 - @brief Execute Linux-only uninstall command resolved from runtime config.
 - @details Reads management command string from runtime config key `management.uninstall`, executes it on Linux via shell invocation, and prints manual fallback command on non-Linux systems.
 - @return {int} Subprocess return code on Linux; `0` on non-Linux fallback.
 - @satisfies REQ-005, REQ-045, REQ-056
 
-### fn `def do_write_config()` (L276-291)
+### fn `def do_write_config()` (L289-304)
 - @brief Persist default runtime configuration file to disk.
 - @details Writes canonical config JSON to `$HOME/.config/shellScripts/config.json` and logs destination path.
 - @return {int} `0` on successful write.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-046
 
-### fn `def main()` (L292-394)
+### fn `def main()` (L305-407)
 - @brief Entrypoint for shellscripts argument dispatch.
 - @details Performs runtime OS detection, update check, runtime configuration load, and argument dispatch through management flags (`--version` prints the aligned three-line report with installed plus PyPI/GitHub latest versions; `--upgrade` upgrades from PyPI or, with `--develop`/`--dev`, from the latest GitHub release tag; `--force` appends forced-reinstall options to the selected upgrade command; bare `--develop`/`--dev`/`--force` selectors are rejected; `--print` and `--info` accept an optional ':'-separated sub-path restricting the rendered subtree) and subcommands, then restores terminal raw/cbreak and disables legacy+xterm mouse-tracking modes (`?9l`, `?1000l`, `?1001l`, `?1002l`, `?1003l`, `?1004l`, `?1005l`, `?1006l`, `?1007l`, `?1015l`, `?1016l`) before exit.
 - @return {int} Process-compatible return code for caller (`sys.exit`).
@@ -2894,13 +2896,13 @@ maps directly to REQ-066 output expectations.
 |`PROGRAM`|var|pub|40||
 |`HELP_COMMAND_COLUMN_WIDTH`|var|pub|46||
 |`FORCED_REINSTALL_OPTIONS`|var|pub|54||
-|`HELP_SECTION_COMMANDS`|var|pub|62||
-|`print_help`|fn|pub|132-196|def print_help(command_name=None)|
-|`_build_develop_upgrade_command`|fn|priv|197-212|def _build_develop_upgrade_command(latest_tag: str) -> str|
-|`do_upgrade`|fn|pub|213-252|def do_upgrade(develop: bool = False, force: bool = False...|
-|`do_uninstall`|fn|pub|253-275|def do_uninstall()|
-|`do_write_config`|fn|pub|276-291|def do_write_config()|
-|`main`|fn|pub|292-394|def main()|
+|`HELP_SECTION_COMMANDS`|var|pub|64||
+|`print_help`|fn|pub|139-209|def print_help(command_name=None)|
+|`_build_develop_upgrade_command`|fn|priv|210-225|def _build_develop_upgrade_command(latest_tag: str) -> str|
+|`do_upgrade`|fn|pub|226-265|def do_upgrade(develop: bool = False, force: bool = False...|
+|`do_uninstall`|fn|pub|266-288|def do_uninstall()|
+|`do_write_config`|fn|pub|289-304|def do_write_config()|
+|`main`|fn|pub|305-407|def main()|
 
 
 ---
