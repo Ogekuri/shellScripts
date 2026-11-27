@@ -150,6 +150,15 @@ WORKFLOW_FILE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$")
 #  @satisfies REQ-185
 VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
+## @var PLACEHOLDER_LICENSE
+#  @brief SPDX license expression written into the placeholder `Cargo.toml`.
+#  @details crates.io rejects every publish whose manifest lacks a non-empty
+#  `license` (or `license-file`) field with `400 Bad Request: missing or
+#  empty metadata fields: license`; the permissive `MIT` token satisfies
+#  that metadata gate for the disposable trusted-publishing placeholder.
+#  @satisfies REQ-189, REQ-190
+PLACEHOLDER_LICENSE = "MIT"
+
 
 class _UsageParser(argparse.ArgumentParser):
     """@brief `argparse` parser variant preserving the legacy exit code.
@@ -510,17 +519,20 @@ def _write_placeholder_crate(temp_dir, package_name, github_repo):
 
     @details Runs `cargo init --name <package> --vcs none <temp_dir>` with
     captured output, aborts on failure, then overwrites the generated
-    `Cargo.toml` with version `0.0.0`, the placeholder description, and the
-    repository URL `https://github.com/<repo>`. The `cargo init` binary
-    entrypoint compiles offline, keeping the later `cargo publish` verify
-    build dependency-free.
+    `Cargo.toml` with version `0.0.0`, the placeholder description, the
+    `PLACEHOLDER_LICENSE` SPDX license expression, and the repository URL
+    `https://github.com/<repo>`. The license field satisfies the crates.io
+    publish metadata gate (`400 Bad Request: missing or empty metadata
+    fields: license` otherwise). The `cargo init` binary entrypoint
+    compiles offline, keeping the later `cargo publish` verify build
+    dependency-free.
     @param temp_dir {str|Path} Existing temporary crate directory.
     @param package_name {str} Validated crate name token.
     @param github_repo {str} Validated GitHub `owner/repo` token.
     @return {None} Writes `Cargo.toml` plus the generated `src/` skeleton.
     @throws {SystemExit} Exit code `1` via `_die` when `cargo init` fails.
     @throws {OSError} Propagated on filesystem write failure.
-    @satisfies REQ-189
+    @satisfies REQ-189, REQ-190
     """
     init = subprocess.run(
         ["cargo", "init", "--name", package_name, "--vcs", "none", str(temp_dir)],
@@ -535,6 +547,7 @@ def _write_placeholder_crate(temp_dir, package_name, github_repo):
         'version = "0.0.0"\n'
         'edition = "2021"\n'
         'description = "Initial placeholder to enable crates.io Trusted Publishing"\n'
+        f'license = "{PLACEHOLDER_LICENSE}"\n'
         f'repository = "https://github.com/{github_repo}"\n'
     )
     (Path(temp_dir) / "Cargo.toml").write_text(cargo_toml, encoding="utf-8")

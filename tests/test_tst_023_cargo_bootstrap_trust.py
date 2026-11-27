@@ -19,14 +19,17 @@
   files, the all-sources-missing error case, and the phase-[1/5]
   integration flow halting before any mutating step, the `/me` response
   classification (403 website-only detail authenticates, 401 and generic
-  HTTP failures abort), and the missing-token abort hint.
-@satisfies TST-023, TST-024, REQ-186, REQ-187, REQ-193
+  HTTP failures abort), the missing-token abort hint, and the placeholder
+  `Cargo.toml` manifest contract declaring the non-empty SPDX license
+  metadata required by the crates.io publish gate.
+@satisfies TST-023, TST-024, REQ-186, REQ-187, REQ-189, REQ-190, REQ-193
 @return {None} Pytest module scope.
 """
 
 import email.message
 import io
 import json
+import types
 import urllib.error
 
 import pytest
@@ -479,6 +482,47 @@ def test_verify_auth_aborts_on_malformed_403_body(monkeypatch, capsys):
     with pytest.raises(SystemExit):
         cargo_trust._verify_crates_io_auth("valid-token")
     assert expected_output in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Level 1: _write_placeholder_crate manifest contract
+# ---------------------------------------------------------------------------
+
+def test_write_placeholder_crate_declares_license_metadata(monkeypatch, tmp_path):
+    """
+    @brief Validate that the placeholder Cargo.toml declares license metadata.
+    @details Reproducer for the crates.io publish rejection `400 Bad Request:
+      missing or empty metadata fields: license`: `_write_placeholder_crate`
+      MUST emit a non-empty SPDX `license` field in the generated `[package]`
+      manifest so the REQ-190 `cargo publish` succeeds. The `cargo init`
+      subprocess boundary is isolated with a zero-status stub, keeping the
+      test deterministic and network-free; the REQ-189 tokens (version,
+      placeholder description, repository URL) stay asserted as regression
+      guards.
+    @param monkeypatch {pytest.MonkeyPatch} Subprocess boundary patch fixture.
+    @param tmp_path {Path} Fixture placeholder crate directory.
+    @return {None} Assertions only.
+    @expected_output Manifest line `license = "<PLACEHOLDER_LICENSE>"` with a
+      non-empty SPDX token plus the REQ-189 manifest tokens.
+    @satisfies REQ-189, REQ-190
+    """
+    def _fake_run(command, **kwargs):
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(cargo_trust.subprocess, "run", _fake_run)
+    cargo_trust._write_placeholder_crate(
+        tmp_path, "githubtemplaterust", "Ogekuri/GitHub-Template-Rust"
+    )
+    manifest = (tmp_path / "Cargo.toml").read_text(encoding="utf-8")
+    assert cargo_trust.PLACEHOLDER_LICENSE
+    expected_output = f'license = "{cargo_trust.PLACEHOLDER_LICENSE}"\n'
+    assert expected_output in manifest
+    assert 'version = "0.0.0"\n' in manifest
+    assert (
+        'description = "Initial placeholder to enable crates.io Trusted Publishing"\n'
+        in manifest
+    )
+    assert 'repository = "https://github.com/Ogekuri/GitHub-Template-Rust"\n' in manifest
 
 
 # ---------------------------------------------------------------------------

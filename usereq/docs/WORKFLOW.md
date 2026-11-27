@@ -476,7 +476,7 @@
         - `cargo_bootstrap_trust._check_crate_availability(...)`: Verify crate-name availability via the crates.io crate endpoint accepting only HTTP 404 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
           - `cargo_bootstrap_trust._http_request(...)`: Execute one crates.io HTTP request and decode the JSON body [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
           - `cargo_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
-        - `cargo_bootstrap_trust._write_placeholder_crate(...)`: Create the 0.0.0 placeholder crate via `cargo init` and rewrite `Cargo.toml` with repository metadata [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
+        - `cargo_bootstrap_trust._write_placeholder_crate(...)`: Create the 0.0.0 placeholder crate via `cargo init` and rewrite `Cargo.toml` with the SPDX license and repository metadata accepted by the crates.io publish gate [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
           - `cargo_bootstrap_trust._die(...)`: Print the `[ERROR]` line and terminate with exit code 1 [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
         - `cargo_bootstrap_trust._register_trusted_publisher(...)`: Register the GitHub trusted publisher via the crates.io trusted-publishing PUT endpoint [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
           - `cargo_bootstrap_trust._http_request(...)`: Execute one crates.io HTTP request and decode the JSON body [`src/shell_scripts/commands/cargo_bootstrap_trust.py`]
