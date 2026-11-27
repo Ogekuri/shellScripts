@@ -1,4 +1,4 @@
-__version__ = "0.26.7"
+__version__ = "0.26.8"
 
 from .core import main  # noqa: F401
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.26.7](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.7) - 2026-11-27
+## [0.26.8](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.8) - 2026-11-27
 ### ⛰️  Features
 - add cargo-bootstrap-trust command with crates.io trusted publishing [useReq] *(cargo-bootstrap-trust)*
   Adds PRJ-009, DES-070, and REQ-182 through REQ-192 to the SRS and implements
@@ -26,6 +26,9 @@
   REQUIREMENTS.md v0.16.0: DES-055, REQ-147, TST-019 added; REQ-144, REQ-136 updated; structure diagram and Section 4.1/5 evidence extended; scripts/clean.sh: resolve repo root, remove build/ and src/shellscripts.egg-info/, remove untracked dist archives, preserve tracked and non-generated dist entries; scripts/pre-release-check.sh: verify scripts/clean.sh executable bit and project structure; tests/test_tst_015_pre_release_check.py: cover clean.sh presence, syntax, executable bit, and structure; tests/test_tst_019_clean_script.py: new behavioral probes for cleanup and tracked-refusal; WORKFLOW.md: add PROC:clean execution unit and EDGE:005
 
 ### 🐛  Bug Fixes
+- add license metadata to placeholder crate [useReq] *(cargo-bootstrap-trust)*
+  The placeholder Cargo.toml written by _write_placeholder_crate omitted the license field, so crates.io rejected the phase-[4/5] cargo publish with 400 Bad Request: missing or empty metadata fields: license and the bootstrap aborted before trusted-publisher creation.
+  Declare PLACEHOLDER_LICENSE (MIT SPDX expression) in the generated [package] manifest so cargo publish satisfies the crates.io metadata gate (REQ-189, REQ-190). Add reproducer test test_write_placeholder_crate_declares_license_metadata to tests/test_tst_023_cargo_bootstrap_trust.py; refresh the WORKFLOW.md placeholder-crate call-trace node and REFERENCES.md.
 - Update .gitignore file.
 - Remove files in dist/ dir.
 
@@ -864,7 +867,7 @@
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
 - \[0.26.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.0
-- \[0.26.7\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.7
+- \[0.26.8\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.8
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -892,4 +895,4 @@
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
 [0.26.0]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0
-[0.26.7]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.7
+[0.26.8]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.8
