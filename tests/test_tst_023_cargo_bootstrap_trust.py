@@ -19,10 +19,14 @@
   files, the all-sources-missing error case, and the phase-[1/5]
   integration flow halting before any mutating step, the `/me` response
   classification (403 website-only detail authenticates, 401 and generic
-  HTTP failures abort), the missing-token abort hint, and the placeholder
+  HTTP failures abort), the missing-token abort hint, the placeholder
   `Cargo.toml` manifest contract declaring the non-empty SPDX license
-  metadata required by the crates.io publish gate.
-@satisfies TST-023, TST-024, REQ-186, REQ-187, REQ-189, REQ-190, REQ-193
+  metadata required by the crates.io publish gate, and the trusted-publishing
+  API contract (create `POST` request URL, method, and wrapped
+  `github_config` payload, list-endpoint trust printing, and HTTP 404 and
+  422 aborts) through monkeypatched `urllib` boundaries.
+@satisfies TST-023, TST-024, TST-025, REQ-186, REQ-187, REQ-189, REQ-190,
+  REQ-191, REQ-193, REQ-194, REQ-195
 @return {None} Pytest module scope.
 """
 
@@ -523,6 +527,216 @@ def test_write_placeholder_crate_declares_license_metadata(monkeypatch, tmp_path
         in manifest
     )
     assert 'repository = "https://github.com/Ogekuri/GitHub-Template-Rust"\n' in manifest
+
+
+# ---------------------------------------------------------------------------
+# Level 1: _register_trusted_publisher trusted-publishing API contract
+# ---------------------------------------------------------------------------
+
+class _FakeResponse:
+    """
+    @brief Minimal context-manager HTTP response stub for urllib boundaries.
+    @details Supports the `with urlopen(...) as response:` protocol consumed
+      by `_http_request`; `read()` returns the fixed body bytes exactly once
+      per call and `status` is always 200.
+    @param body {bytes} Fixed response body returned by every `read()` call.
+    @return {None} Constructs the stub only.
+    """
+
+    def __init__(self, body):
+        self._body = body
+        self.status = 200
+
+    def read(self):
+        """
+        @brief Return the fixed response body bytes.
+        @return {bytes} The body supplied at construction time.
+        """
+        return self._body
+
+    def __enter__(self):
+        """
+        @brief Enter the context-manager protocol returning the response.
+        @return {_FakeResponse} The response instance itself.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        @brief Exit the context-manager protocol without suppressing errors.
+        @param exc_type {type|None} Exception class raised inside the block.
+        @param exc_value {Exception|None} Exception instance raised inside.
+        @param traceback {TracebackType|None} Traceback of the raised error.
+        @return {bool} Always `False` so exceptions propagate unchanged.
+        """
+        return False
+
+def _urlopen_recorder(captured, response_body):
+    """
+    @brief Build one `urllib.urlopen` stub recording the request contract.
+    @details Captures URL, HTTP method, decoded JSON body, and lowercased
+      headers of the observed `urllib.request.Request`, then returns a 200
+      response carrying `response_body` without any network access.
+    @param captured {dict} Recorder dictionary mutated with observed fields.
+    @param response_body {bytes} JSON response body returned by the stub.
+    @return {callable} Stub assignable to `urllib.request.urlopen`.
+    """
+    def _fake_urlopen(request, timeout=None):
+        captured["url"] = request.full_url
+        captured["method"] = request.get_method()
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        captured["headers"] = {
+            key.lower(): value for key, value in request.header_items()
+        }
+        return _FakeResponse(response_body)
+
+    return _fake_urlopen
+
+
+def test_register_trusted_publisher_posts_wrapped_github_config(monkeypatch):
+    """
+    @brief Validate the REQ-191 create request against the real crates.io API.
+    @details The trusted publisher MUST be created via `POST
+      {CRATES_API}/trusted_publishing/github_configs` carrying the wrapped
+      `github_config` payload with `crate`, `repository_owner`,
+      `repository_name`, and `workflow_filename`, plus the Bearer token and
+      JSON content type; the `owner/repo` token splits on its separator.
+    @param monkeypatch {pytest.MonkeyPatch} HTTP boundary patch fixture.
+    @return {None} Assertions only.
+    @expected_output Recorded POST request matching the upstream contract.
+    @satisfies TST-025, REQ-191
+    """
+    captured = {}
+    monkeypatch.setattr(
+        cargo_trust.urllib.request,
+        "urlopen",
+        _urlopen_recorder(captured, b'{"github_config": {}}'),
+    )
+    cargo_trust._register_trusted_publisher(
+        "valid-token",
+        "githubtemplaterust",
+        "Ogekuri/GitHub-Template-Rust",
+        "release-cargo.yml",
+    )
+    expected_output = {
+        "github_config": {
+            "crate": "githubtemplaterust",
+            "repository_owner": "Ogekuri",
+            "repository_name": "GitHub-Template-Rust",
+            "workflow_filename": "release-cargo.yml",
+        }
+    }
+    assert captured["method"] == "POST"
+    assert captured["url"] == (
+        cargo_trust.CRATES_API + "/trusted_publishing/github_configs"
+    )
+    assert captured["body"] == expected_output
+    assert captured["headers"]["authorization"] == "Bearer valid-token"
+    assert captured["headers"]["content-type"] == "application/json"
+
+
+@pytest.mark.parametrize("status_code", [404, 422])
+def test_register_trusted_publisher_aborts_on_http_error(
+    monkeypatch, capsys, status_code
+):
+    """
+    @brief Validate the distinct publication-without-trust failure (REQ-195).
+    @details REQ-195 boundary: every HTTP error of the create request
+      (observed upstream as 404 for the retired per-crate endpoint and 422
+      for payload rejections) aborts with the distinct English diagnostic
+      naming the HTTP status and the manual-registration hint.
+    @param monkeypatch {pytest.MonkeyPatch} HTTP boundary patch fixture.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @param status_code {int} Simulated HTTP status of the create request.
+    @return {None} Assertions only.
+    @expected_exception {SystemExit} Exit code `1` from `_die`.
+    @expected_output `Crate 'githubtemplaterust' published, but the trust was NOT created (HTTP <code>).` on stderr.
+    @satisfies TST-025, REQ-191, REQ-195
+    """
+    def _fake_urlopen(request, timeout=None):
+        raise _http_error(status_code, b'{"errors": [{"detail": "rejected"}]}')
+
+    monkeypatch.setattr(cargo_trust.urllib.request, "urlopen", _fake_urlopen)
+    expected_output = (
+        "Crate 'githubtemplaterust' published, but the trust was NOT created"
+        f" (HTTP {status_code})."
+    )
+    with pytest.raises(SystemExit):
+        cargo_trust._register_trusted_publisher(
+            "valid-token",
+            "githubtemplaterust",
+            "Ogekuri/GitHub-Template-Rust",
+            "release-cargo.yml",
+        )
+    assert expected_output in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Level N: run() phase [5/5] trust-printing integration (TST-025)
+# ---------------------------------------------------------------------------
+
+def test_run_prints_trust_configs_from_list_endpoint(monkeypatch, tmp_path, capsys):
+    """
+    @brief Validate that phase [5/5] prints the trust via the list endpoint.
+    @details REQ-194: after the create request, `run` MUST fetch `GET
+      {CRATES_API}/trusted_publishing/github_configs?crate=<package>` and
+      print the `github_configs` collection; the pipeline completes with
+      return code `0` and the REQ-192 two-day validation warning.
+    @param monkeypatch {pytest.MonkeyPatch} Environment, subprocess, and HTTP
+      boundary patch fixture.
+    @param tmp_path {Path} Fixture cargo home directory.
+    @param capsys {pytest.CaptureFixture} Output capture fixture.
+    @return {None} Assertions only.
+    @expected_output JSON body carrying `github_configs` plus the two-day
+      warning line on stdout; return code `0`.
+    @satisfies TST-025, REQ-192, REQ-194
+    """
+    _write_toml_credentials(tmp_path, '[registry]\ntoken = "list-token"\n')
+    _isolate_cargo_home(monkeypatch, tmp_path)
+    captured = {}
+
+    def _fake_urlopen(request, timeout=None):
+        captured["url"] = request.full_url
+        body = json.dumps(
+            {
+                "github_configs": [{"crate": "githubtemplaterust"}],
+                "meta": {"total": 1},
+            }
+        ).encode("utf-8")
+        return _FakeResponse(body)
+
+    monkeypatch.setattr(cargo_trust, "_require_toolchain", lambda: None)
+    monkeypatch.setattr(cargo_trust, "_verify_crates_io_auth", lambda token: None)
+    monkeypatch.setattr(cargo_trust, "_check_crate_availability", lambda name: None)
+    monkeypatch.setattr(
+        cargo_trust, "_write_placeholder_crate", lambda temp_dir, name, repo: None
+    )
+    monkeypatch.setattr(
+        cargo_trust.subprocess,
+        "run",
+        lambda command, **kwargs: types.SimpleNamespace(returncode=0),
+    )
+    monkeypatch.setattr(cargo_trust, "_register_trusted_publisher", lambda *args: None)
+    monkeypatch.setattr(cargo_trust.urllib.request, "urlopen", _fake_urlopen)
+    result = cargo_trust.run(
+        [
+            "-p", "githubtemplaterust",
+            "-r", "Ogekuri/GitHub-Template-Rust",
+            "-f", "release-cargo.yml",
+        ]
+    )
+    expected_output = "github_configs"
+    assert result == 0
+    assert captured["url"] == (
+        cargo_trust.CRATES_API
+        + "/trusted_publishing/github_configs?crate=githubtemplaterust"
+    )
+    stdout = capsys.readouterr().out
+    assert expected_output in stdout
+    assert (
+        "WARNING: the trust will be validated only after a successful OIDC publish"
+        in stdout
+    )
 
 
 # ---------------------------------------------------------------------------

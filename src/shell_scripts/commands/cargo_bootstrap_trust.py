@@ -404,12 +404,12 @@ def _read_legacy_json_token(cargo_home):
 def _http_request(url, token=None, payload=None):
     """@brief Execute one crates.io HTTP request and decode the JSON body.
 
-    @details Builds a GET (`payload` is `None`) or JSON PUT request carrying
+    @details Builds a GET (`payload` is `None`) or JSON POST request carrying
     `USER_AGENT`, `Accept: application/json`, and an `Authorization: Bearer`
     header when a token is supplied. Time complexity O(n) over response size.
     @param url {str} Absolute crates.io API endpoint URL.
     @param token {str|None} Bearer token; the header is omitted when `None`.
-    @param payload {dict|None} JSON body serialized and sent via PUT when
+    @param payload {dict|None} JSON body serialized and sent via POST when
       provided.
     @return {Any} Parsed JSON response payload.
     @throws {urllib.error.HTTPError} On HTTP error responses.
@@ -423,7 +423,7 @@ def _http_request(url, token=None, payload=None):
     data = None
     method = "GET"
     if payload is not None:
-        method = "PUT"
+        method = "POST"
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
@@ -556,9 +556,14 @@ def _write_placeholder_crate(temp_dir, package_name, github_repo):
 def _register_trusted_publisher(token, package_name, github_repo, workflow_file):
     """@brief Register the GitHub trusted publisher through the crates.io API.
 
-    @details Sends `PUT {CRATES_API}/crates/<package>/trusted_publishing/github_actions_config`
-    with JSON body `{"repository": "<owner/repo>", "workflow": "<workflow>"}`
-    and the resolved Bearer token. Time complexity O(1) plus network.
+    @details Sends `POST {CRATES_API}/trusted_publishing/github_configs` with
+    JSON body `{"github_config": {"crate", "repository_owner",
+    "repository_name", "workflow_filename"}}`, splitting the validated
+    `owner/repo` token on its single `/` separator, and the resolved Bearer
+    token. crates.io requires the `TrustedPublishing` token scope and
+    enforces at most five configs per crate; every HTTP failure aborts with
+    the distinct publication-without-trust diagnostic.
+    Time complexity O(1) plus network.
     @param token {str} Resolved crates.io Bearer token.
     @param package_name {str} Validated crate name token.
     @param github_repo {str} Validated GitHub `owner/repo` token.
@@ -566,10 +571,18 @@ def _register_trusted_publisher(token, package_name, github_repo, workflow_file)
     @return {None} Returns when the trusted publisher is created.
     @throws {SystemExit} Exit code `1` via `_die` with the
       publication-without-trust diagnostic on HTTP or connection failures.
-    @satisfies REQ-191
+    @satisfies REQ-191, REQ-195
     """
-    url = f"{CRATES_API}/crates/{package_name}/trusted_publishing/github_actions_config"
-    body = {"repository": github_repo, "workflow": workflow_file}
+    url = f"{CRATES_API}/trusted_publishing/github_configs"
+    owner, repo_name = github_repo.split("/", 1)
+    body = {
+        "github_config": {
+            "crate": package_name,
+            "repository_owner": owner,
+            "repository_name": repo_name,
+            "workflow_filename": workflow_file,
+        }
+    }
     try:
         _http_request(url, token=token, payload=body)
     except urllib.error.HTTPError as error:
@@ -618,9 +631,11 @@ def run(args):
     existing versions or a failure without an HTTP 404 marker; `[3/5]`
     placeholder crate creation in a fresh temporary directory;
     `[4/5]` publication via `cargo publish`; `[5/5]` GitHub trusted-publisher
-    creation through the crates.io trusted-publishing API plus trust
-    configuration verification. The temporary directory is removed on every
-    exit path; every failure aborts with exit code `1`.
+    creation via `POST {CRATES_API}/trusted_publishing/github_configs` plus
+    trust configuration printing from `GET
+    {CRATES_API}/trusted_publishing/github_configs?crate=<package>`. The
+    temporary directory is removed on every exit path; every failure aborts
+    with exit code `1`.
     @param args {list[str]} Command arguments (without the command token).
     @return {int} `0` after successful publication and trust verification.
     @throws {SystemExit} Exit code `1` on usage errors, invalid inputs,
@@ -628,7 +643,7 @@ def run(args):
       unverifiable crate name, failed publication, or failed trust
       creation/verification.
     @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-186, REQ-187, REQ-188,
-    REQ-189, REQ-190, REQ-191, REQ-192, REQ-193
+    REQ-189, REQ-190, REQ-191, REQ-192, REQ-193, REQ-194, REQ-195
     """
     parser = _build_parser()
     opts = parser.parse_args(args)
@@ -666,7 +681,7 @@ def run(args):
 
         print()
         print(f"Trust registered for {opts.package}:")
-        url = f"{CRATES_API}/crates/{opts.package}/trusted_publishing/github_actions_config"
+        url = f"{CRATES_API}/trusted_publishing/github_configs?crate={opts.package}"
         try:
             trust_payload = _http_request(url, token=token)
         except (urllib.error.HTTPError, urllib.error.URLError):

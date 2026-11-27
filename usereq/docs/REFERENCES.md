@@ -272,7 +272,7 @@ from shell_scripts.commands._yolo_common import (
 
 ---
 
-# cargo_bootstrap_trust.py | Python | 687L | 39 symbols | 15 imports | 110 comments
+# cargo_bootstrap_trust.py | Python | 702L | 39 symbols | 15 imports | 110 comments
 > Path: `src/shell_scripts/commands/cargo_bootstrap_trust.py`
 
 ## Imports
@@ -472,10 +472,10 @@ default `2`.
 
 ### fn `def _http_request(url, token=None, payload=None)` `priv` (L404-433)
 - @brief Execute one crates.io HTTP request and decode the JSON body.
-- @details Builds a GET (`payload` is `None`) or JSON PUT request carrying `USER_AGENT`, `Accept: application/json`, and an `Authorization: Bearer` header when a token is supplied. Time complexity O(n) over response size.
+- @details Builds a GET (`payload` is `None`) or JSON POST request carrying `USER_AGENT`, `Accept: application/json`, and an `Authorization: Bearer` header when a token is supplied. Time complexity O(n) over response size.
 - @param url {str} Absolute crates.io API endpoint URL.
 - @param token {str|None} Bearer token; the header is omitted when `None`.
-- @param payload {dict|None} JSON body serialized and sent via PUT when provided.
+- @param payload {dict|None} JSON body serialized and sent via POST when provided.
 - @return {Any} Parsed JSON response payload.
 - @throws {urllib.error.HTTPError} On HTTP error responses.
 - @throws {urllib.error.URLError} On connection failures.
@@ -516,31 +516,31 @@ default `2`.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-189, REQ-190
 
-### fn `def _register_trusted_publisher(token, package_name, github_repo, workflow_file)` `priv` (L556-590)
+### fn `def _register_trusted_publisher(token, package_name, github_repo, workflow_file)` `priv` (L556-603)
 - @brief Register the GitHub trusted publisher through the crates.io API.
-- @details Sends `PUT {CRATES_API}/crates/<package>/trusted_publishing/github_actions_config` with JSON body `{"repository": "<owner/repo>", "workflow": "<workflow>"}` and the resolved Bearer token. Time complexity O(1) plus network.
+- @details Sends `POST {CRATES_API}/trusted_publishing/github_configs` with JSON body `{"github_config": {"crate", "repository_owner", repository_name", "workflow_filename"}}`, splitting the validated `owner/repo` token on its single `/` separator, and the resolved Bearer token. crates.io requires the `TrustedPublishing` token scope and enforces at most five configs per crate; every HTTP failure aborts with the distinct publication-without-trust diagnostic. Time complexity O(1) plus network.
 - @param token {str} Resolved crates.io Bearer token.
 - @param package_name {str} Validated crate name token.
 - @param github_repo {str} Validated GitHub `owner/repo` token.
 - @param workflow_file {str} Validated bare workflow filename token.
 - @return {None} Returns when the trusted publisher is created.
 - @throws {SystemExit} Exit code `1` via `_die` with the publication-without-trust diagnostic on HTTP or connection failures.
-- @satisfies REQ-191
+- @satisfies REQ-191, REQ-195
 
-### fn `def print_help(version)` (L591-611)
+### fn `def print_help(version)` (L604-624)
 - @brief Print command-specific help text.
 - @details Renders usage line, option list, and behavioral summary in English, following the shared command help layout.
 - @param version {str} Current CLI version token rendered in the usage line.
 - @return {None} Writes to stdout.
 - @satisfies PRJ-002, REQ-182
 
-### fn `def run(args)` (L612-688)
+### fn `def run(args)` (L625-703)
 - @brief Execute the five-phase crates.io bootstrap and trust pipeline.
-- @details Phase order: `[1/5]` crates.io authentication via the `/me` endpoint using the token resolved by `_resolve_registry_token`; `[2/5]` crate availability via the crates.io crate endpoint, aborting on existing versions or a failure without an HTTP 404 marker; `[3/5]` placeholder crate creation in a fresh temporary directory; `[4/5]` publication via `cargo publish`; `[5/5]` GitHub trusted-publisher creation through the crates.io trusted-publishing API plus trust configuration verification. The temporary directory is removed on every exit path; every failure aborts with exit code `1`.
+- @details Phase order: `[1/5]` crates.io authentication via the `/me` endpoint using the token resolved by `_resolve_registry_token`; `[2/5]` crate availability via the crates.io crate endpoint, aborting on existing versions or a failure without an HTTP 404 marker; `[3/5]` placeholder crate creation in a fresh temporary directory; `[4/5]` publication via `cargo publish`; `[5/5]` GitHub trusted-publisher creation via `POST {CRATES_API}/trusted_publishing/github_configs` plus trust configuration printing from `GET {CRATES_API}/trusted_publishing/github_configs?crate=<package>`. The temporary directory is removed on every exit path; every failure aborts with exit code `1`.
 - @param args {list[str]} Command arguments (without the command token).
 - @return {int} `0` after successful publication and trust verification.
 - @throws {SystemExit} Exit code `1` on usage errors, invalid inputs, missing or incompatible toolchain, failed authentication, taken or unverifiable crate name, failed publication, or failed trust creation/verification.
-- @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-186, REQ-187, REQ-188, REQ-189, REQ-190, REQ-191, REQ-192, REQ-193
+- @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-186, REQ-187, REQ-188, REQ-189, REQ-190, REQ-191, REQ-192, REQ-193, REQ-194, REQ-195
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
@@ -581,9 +581,9 @@ default `2`.
 |`_is_website_only_auth_probe`|fn|priv|467-488|def _is_website_only_auth_probe(error)|
 |`_check_crate_availability`|fn|priv|489-516|def _check_crate_availability(package_name)|
 |`_write_placeholder_crate`|fn|priv|517-555|def _write_placeholder_crate(temp_dir, package_name, gith...|
-|`_register_trusted_publisher`|fn|priv|556-590|def _register_trusted_publisher(token, package_name, gith...|
-|`print_help`|fn|pub|591-611|def print_help(version)|
-|`run`|fn|pub|612-688|def run(args)|
+|`_register_trusted_publisher`|fn|priv|556-603|def _register_trusted_publisher(token, package_name, gith...|
+|`print_help`|fn|pub|604-624|def print_help(version)|
+|`run`|fn|pub|625-703|def run(args)|
 
 
 ---
