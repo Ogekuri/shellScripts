@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.26.8](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.8) - 2026-11-27
+## [0.26.9](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.9) - 2026-11-27
 ### ⛰️  Features
 - add cargo-bootstrap-trust command with crates.io trusted publishing [useReq] *(cargo-bootstrap-trust)*
   Adds PRJ-009, DES-070, and REQ-182 through REQ-192 to the SRS and implements
@@ -33,6 +33,13 @@
 - Remove files in dist/ dir.
 
 ### 🚜  Changes
+- render bootstrap-trust commands in dedicated help section [useReq] *(help)*
+  Move cargo-bootstrap-trust and npm-bootstrap-trust out of Develop Commands into the new Trusted-Publisher Bootstrap Commands help section placed between the Develop and Image sections (REQ-066, REQ-196).
+  Render each global help section with command tokens left-justified to the larger of the fixed minimum column width and the section's longest token, aligning the two bootstrap commands (REQ-197).
+  Update SRS REQ-066/REQ-196/REQ-197/TST-001 with traceability tables, refresh REFERENCES.md and the core.py print_help runtime-model node, and extend the TST-001 unit-test coverage.
+- align trust registration with crates.io API [useReq] *(cargo-bootstrap-trust)*
+  Rewrite REQ-191 to the real crates.io Trusted Publishing API (POST /api/v1/trusted_publishing/github_configs with wrapped github_config payload of crate, repository_owner, repository_name, workflow_filename); the previously mandated per-crate PUT endpoint does not exist and returned HTTP 404 during phase [5/5].
+  Add atomic REQ-194 (print trust via GET /trusted_publishing/github_configs?crate=<package>) and REQ-195 (distinct publication-without-trust failure), TST-025, SRS coverage/evidence updates, POST method in _http_request, list-endpoint trust printing in run(), HDT urllib-boundary tests capturing URL/method/body and 404/422 aborts.
 - classify /me website-only 403 as login [useReq] *(cargo-bootstrap-trust)*
   REQ-187 updated: /me probes auth with the resolved token and treats the upstream website-only 403 detail as authenticated; new REQ-193 aborts with the cargo login hint on missing token and every other /me outcome.
   _verify_crates_io_auth classifies via _is_website_only_auth_probe with WEBSITE_ONLY_DETAIL; 200 path unchanged.
@@ -867,7 +874,7 @@
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
 - \[0.26.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.0
-- \[0.26.8\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.8
+- \[0.26.9\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.9
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -895,4 +902,4 @@
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
 [0.26.0]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0
-[0.26.8]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.8
+[0.26.9]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.9
