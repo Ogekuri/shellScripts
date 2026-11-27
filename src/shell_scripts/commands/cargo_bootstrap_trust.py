@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import urllib.error
 import urllib.request
 from typing import NoReturn
@@ -60,6 +61,31 @@ TOKEN_ENV_VARIABLE = "CARGO_REGISTRIES_CRATES_IO_TOKEN"
 #  `$CARGO_HOME/credentials` with `CARGO_HOME` defaulting to `~/.cargo`.
 #  @satisfies REQ-186
 TOKEN_CREDENTIALS_KEY = "registry.crates.io-token"
+
+## @var TOKEN_TOML_FILE
+#  @brief Filename of the modern TOML cargo credentials file.
+#  @details Third token-resolution source filename, joined under
+#  `$CARGO_HOME` (defaulting to `~/.cargo`); written by `cargo login` of
+#  cargo >= 1.66, including the cargo >= 1.89 versions enforced by
+#  `MIN_CARGO_VERSION`.
+#  @satisfies REQ-186
+TOKEN_TOML_FILE = "credentials.toml"
+
+## @var TOML_REGISTRY_TOKEN_PATH
+#  @brief Dotted TOML path of the default-registry token inside
+#  `credentials.toml`.
+#  @details Preferred TOML token location `registry.token`, equivalent to
+#  the `[registry] token` section written by `cargo login`.
+#  @satisfies REQ-186
+TOML_REGISTRY_TOKEN_PATH = ("registry", "token")
+
+## @var TOML_REGISTRIES_TOKEN_PATH
+#  @brief Dotted TOML path of the named-registry token inside
+#  `credentials.toml`.
+#  @details Fallback TOML token location `registries.crates-io.token`,
+#  equivalent to the `[registries.crates-io] token` section.
+#  @satisfies REQ-186
+TOML_REGISTRIES_TOKEN_PATH = ("registries", "crates-io", "token")
 
 ## @var MIN_RUSTC_VERSION
 #  @brief Minimum supported rustc version tuple `(1, 89, 0)`.
@@ -262,19 +288,84 @@ def _require_toolchain():
 def _resolve_registry_token():
     """@brief Resolve the crates.io authentication token.
 
-    @details Reads `TOKEN_ENV_VARIABLE` from the environment first; when
-    unset or empty, reads the JSON credentials file
-    `$CARGO_HOME/credentials` (`CARGO_HOME` defaulting to `~/.cargo`) and
-    extracts `TOKEN_CREDENTIALS_KEY`. Time complexity O(n) over file size.
-    @return {str|None} Non-empty token string when resolvable; `None` when the
-      environment variable is absent and the credentials file is missing,
-      unreadable, malformed, or lacks the token key.
+    @details Checks sources in priority order: `TOKEN_ENV_VARIABLE` from the
+    environment; the TOML credentials file
+    `$CARGO_HOME/credentials.toml` (`CARGO_HOME` defaulting to `~/.cargo`)
+    via `_read_toml_credentials_token`; the legacy JSON credentials file
+    `$CARGO_HOME/credentials` via `_read_legacy_json_token`. Time complexity
+    O(n) over the largest credentials file size.
+    @return {str|None} Non-empty token string when resolvable; `None` when
+      every source is absent, unreadable, malformed, or lacks a token value.
     @satisfies REQ-186
     """
     env_token = os.environ.get(TOKEN_ENV_VARIABLE)
     if env_token:
         return env_token
     cargo_home = Path(os.environ.get("CARGO_HOME", str(Path.home() / ".cargo")))
+    toml_token = _read_toml_credentials_token(cargo_home)
+    if toml_token:
+        return toml_token
+    return _read_legacy_json_token(cargo_home)
+
+
+def _read_toml_credentials_token(cargo_home):
+    """@brief Read the crates.io token from the modern TOML credentials file.
+
+    @details Parses `$CARGO_HOME/credentials.toml` with `tomllib`, then tries
+    `TOML_REGISTRY_TOKEN_PATH` before `TOML_REGISTRIES_TOKEN_PATH` and
+    returns the first non-empty string token. Missing, unreadable, or
+    malformed files resolve to `None` so later sources stay consultable.
+    Time complexity O(n) over file size.
+    @param cargo_home {Path} Resolved cargo home directory containing
+      `credentials.toml`.
+    @return {str|None} Non-empty token string when resolvable; `None`
+      otherwise.
+    @satisfies REQ-186
+    """
+    credentials_file = cargo_home / TOKEN_TOML_FILE
+    try:
+        with credentials_file.open("rb") as handle:
+            payload = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    for path in (TOML_REGISTRY_TOKEN_PATH, TOML_REGISTRIES_TOKEN_PATH):
+        token = _lookup_toml_token_path(payload, path)
+        if token:
+            return token
+    return None
+
+
+def _lookup_toml_token_path(payload, path):
+    """@brief Walk one dotted TOML path and return its non-empty string leaf.
+
+    @details Traverses nested TOML tables segment by segment, rejecting
+    non-mapping intermediates and non-string or empty leaves. Time
+    complexity O(depth) over the requested path length.
+    @param payload {dict} Parsed TOML document.
+    @param path {tuple[str, ...]} Dotted path segments to resolve.
+    @return {str|None} Leaf string value when present and non-empty; `None`
+      otherwise.
+    """
+    node = payload
+    for part in path:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(part)
+    return node if isinstance(node, str) and node else None
+
+
+def _read_legacy_json_token(cargo_home):
+    """@brief Read the crates.io token from the legacy JSON credentials file.
+
+    @details Parses `$CARGO_HOME/credentials` as JSON and extracts
+    `TOKEN_CREDENTIALS_KEY`. Missing, unreadable, malformed, or tokenless
+    files resolve to `None`. Time complexity O(n) over file size.
+    @param cargo_home {Path} Resolved cargo home directory containing the
+      legacy `credentials` file.
+    @return {str|None} Non-empty token string when resolvable; `None`
+      otherwise.
+    @satisfies REQ-186
+    """
     credentials_file = cargo_home / "credentials"
     try:
         payload = json.loads(credentials_file.read_text(encoding="utf-8"))
