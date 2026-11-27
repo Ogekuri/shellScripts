@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.26.9](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.9) - 2026-11-27
+## [0.26.10](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.10) - 2026-11-27
 ### ⛰️  Features
 - add cargo-bootstrap-trust command with crates.io trusted publishing [useReq] *(cargo-bootstrap-trust)*
   Adds PRJ-009, DES-070, and REQ-182 through REQ-192 to the SRS and implements
@@ -874,7 +874,7 @@
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
 - \[0.26.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.0
-- \[0.26.9\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.9
+- \[0.26.10\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.10
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -902,4 +902,4 @@
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
 [0.26.0]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0
-[0.26.9]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.9
+[0.26.10]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.10
