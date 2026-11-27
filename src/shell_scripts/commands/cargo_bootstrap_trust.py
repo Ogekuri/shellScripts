@@ -15,6 +15,7 @@ project creation and publication use the cargo CLI.
 REQ-187, REQ-188, REQ-189, REQ-190, REQ-191, REQ-192
 """
 import argparse
+import http.client
 import json
 import os
 from pathlib import Path
@@ -86,6 +87,22 @@ TOML_REGISTRY_TOKEN_PATH = ("registry", "token")
 #  equivalent to the `[registries.crates-io] token` section.
 #  @satisfies REQ-186
 TOML_REGISTRIES_TOKEN_PATH = ("registries", "crates-io", "token")
+
+## @var WEBSITE_ONLY_DETAIL
+#  @brief Upstream crates.io `/me` error detail proving token authentication.
+#  @details crates.io emits this detail on HTTP 403 only after resolving the
+#  presented API token; invalid tokens yield HTTP 401 and absent tokens
+#  yield the `this action requires authentication` detail.
+#  @satisfies REQ-187
+WEBSITE_ONLY_DETAIL = "this action can only be performed on the crates.io website"
+
+## @var WEBSITE_ONLY_AUTH_EVIDENCE
+#  @brief English evidence line printed when the website-only 403
+#  classifies the token as authenticated.
+#  @details Success-path output of `_verify_crates_io_auth` when `/me`
+#  rejects the request as website-only after accepting the token.
+#  @satisfies REQ-187, REQ-193
+WEBSITE_ONLY_AUTH_EVIDENCE = "crates.io token accepted (the /me endpoint is restricted to the crates.io website)."
 
 ## @var MIN_RUSTC_VERSION
 #  @brief Minimum supported rustc version tuple `(1, 89, 0)`.
@@ -198,7 +215,7 @@ def _die(message) -> NoReturn:
     @return {None} Never returns; raises `SystemExit`.
     @throws {SystemExit} Always exit code `1`.
     @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-187, REQ-188, REQ-190,
-    REQ-191
+    REQ-191, REQ-193
     """
     print_error(message)
     sys.exit(1)
@@ -408,25 +425,56 @@ def _http_request(url, token=None, payload=None):
 def _verify_crates_io_auth(token):
     """@brief Verify crates.io authentication through the `/me` endpoint.
 
-    @details Sends `GET {CRATES_API}/me` with the resolved Bearer token and
-    prints the authenticated account login; any HTTP error, connection
-    failure, or malformed payload aborts with the `cargo login` hint.
-    @param token {str} Resolved crates.io Bearer token.
-    @return {None} Prints the account evidence line on success.
-    @throws {SystemExit} Exit code `1` via `_die` on non-200 responses,
-      connection failures, or malformed payloads.
-    @satisfies REQ-187
+    @details Sends `GET {CRATES_API}/me` with the resolved token and
+    classifies the outcome per REQ-187 and REQ-193: HTTP 200 proves
+    authentication and prints the account login; HTTP 403 whose JSON body
+    carries `WEBSITE_ONLY_DETAIL` proves the token was resolved and
+    accepted while the endpoint is restricted to website sessions, so
+    verification succeeds with the `WEBSITE_ONLY_AUTH_EVIDENCE` line;
+    HTTP 401, any other HTTP error, connection failure, or malformed
+    payload aborts with the `cargo login` hint. Time complexity O(n) over
+    response size.
+    @param token {str} Resolved crates.io API token.
+    @return {None} Prints the authentication evidence line on success.
+    @throws {SystemExit} Exit code `1` via `_die` on unauthenticated
+      responses, connection failures, or malformed payloads.
+    @satisfies REQ-187, REQ-193
     """
     try:
         payload = _http_request(f"{CRATES_API}/me", token=token)
         account = payload["user"]["login"]
     except urllib.error.HTTPError as error:
+        if _is_website_only_auth_probe(error):
+            print(WEBSITE_ONLY_AUTH_EVIDENCE)
+            return
         _die(f"crates.io authentication unavailable (HTTP {error.code}). Run: cargo login")
     except urllib.error.URLError as error:
         _die(f"crates.io authentication check failed ({error.reason}). Run: cargo login")
     except (KeyError, json.JSONDecodeError, ValueError):
         _die("crates.io authentication check returned an unexpected payload. Run: cargo login")
     print(f"crates.io account: {account}")
+
+
+def _is_website_only_auth_probe(error):
+    """@brief Test whether one `/me` HTTP error proves a valid token.
+
+    @details Parses the JSON error body of the captured `HTTPError` and
+    matches the first `errors[].detail` against `WEBSITE_ONLY_DETAIL`.
+    crates.io emits that detail only after resolving the presented API
+    token (probe evidence: invalid tokens yield HTTP 401 and absent
+    tokens yield the `this action requires authentication` detail), so a
+    match proves authentication. Time complexity O(n) over response size.
+    @param error {urllib.error.HTTPError} Captured `/me` HTTP error response.
+    @return {bool} `True` when the error body proves token authentication.
+    @satisfies REQ-187
+    """
+    try:
+        body = json.loads(error.read().decode("utf-8"))
+        detail = body["errors"][0]["detail"]
+    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError,
+            http.client.HTTPException):
+        return False
+    return detail == WEBSITE_ONLY_DETAIL
 
 
 def _check_crate_availability(package_name):
@@ -567,7 +615,7 @@ def run(args):
       unverifiable crate name, failed publication, or failed trust
       creation/verification.
     @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-186, REQ-187, REQ-188,
-    REQ-189, REQ-190, REQ-191, REQ-192
+    REQ-189, REQ-190, REQ-191, REQ-192, REQ-193
     """
     parser = _build_parser()
     opts = parser.parse_args(args)

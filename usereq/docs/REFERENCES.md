@@ -272,12 +272,13 @@ from shell_scripts.commands._yolo_common import (
 
 ---
 
-# cargo_bootstrap_trust.py | Python | 626L | 35 symbols | 14 imports | 90 comments
+# cargo_bootstrap_trust.py | Python | 674L | 38 symbols | 15 imports | 103 comments
 > Path: `src/shell_scripts/commands/cargo_bootstrap_trust.py`
 
 ## Imports
 ```
 import argparse
+import http.client
 import json
 import os
 from pathlib import Path
@@ -295,83 +296,95 @@ from shell_scripts.utils import print_error, require_commands
 
 ## Definitions
 
-- var `PROGRAM = "shellscripts"` (L33)
-- var `DESCRIPTION = "Bootstrap a new crates.io crate and register its GitHub trusted publisher."` (L34)
-- var `CRATES_API = "https://crates.io/api/v1"` (L41)
+- var `PROGRAM = "shellscripts"` (L34)
+- var `DESCRIPTION = "Bootstrap a new crates.io crate and register its GitHub trusted publisher."` (L35)
+- var `CRATES_API = "https://crates.io/api/v1"` (L42)
 - @brief Canonical crates.io API base URL used by every registry request.
 - @details Authentication, availability, and trusted-publishing calls all
 target this base so operations never depend on ambient registry mirrors.
 - @satisfies REQ-187, REQ-188, REQ-191
-- var `USER_AGENT = f"{PROGRAM} cargo-bootstrap-trust"` (L46)
+- var `USER_AGENT = f"{PROGRAM} cargo-bootstrap-trust"` (L47)
 - @brief HTTP User-Agent header value sent with every crates.io request.
 - @details crates.io rejects requests that omit a descriptive User-Agent.
-- var `HTTP_TIMEOUT = 10` (L50)
+- var `HTTP_TIMEOUT = 10` (L51)
 - @brief Timeout in seconds applied to every crates.io HTTP request.
-- var `TOKEN_ENV_VARIABLE = "CARGO_REGISTRIES_CRATES_IO_TOKEN"` (L56)
+- var `TOKEN_ENV_VARIABLE = "CARGO_REGISTRIES_CRATES_IO_TOKEN"` (L57)
 - @brief Environment variable holding the crates.io token override.
 - @details First token-resolution source; wins over the credentials file.
 - @satisfies REQ-186
-- var `TOKEN_CREDENTIALS_KEY = "registry.crates.io-token"` (L63)
+- var `TOKEN_CREDENTIALS_KEY = "registry.crates.io-token"` (L64)
 - @brief JSON key of the crates.io token inside the cargo credentials file.
 - @details Second token-resolution source, read from
 `$CARGO_HOME/credentials` with `CARGO_HOME` defaulting to `~/.cargo`.
 - @satisfies REQ-186
-- var `TOKEN_TOML_FILE = "credentials.toml"` (L72)
+- var `TOKEN_TOML_FILE = "credentials.toml"` (L73)
 - @brief Filename of the modern TOML cargo credentials file.
 - @details Third token-resolution source filename, joined under
 `$CARGO_HOME` (defaulting to `~/.cargo`); written by `cargo login` of
 cargo >= 1.66, including the cargo >= 1.89 versions enforced by
 `MIN_CARGO_VERSION`.
 - @satisfies REQ-186
-- var `TOML_REGISTRY_TOKEN_PATH = ("registry", "token")` (L80)
+- var `TOML_REGISTRY_TOKEN_PATH = ("registry", "token")` (L81)
 - @brief Dotted TOML path of the default-registry token inside
 `credentials.toml`.
 - @details Preferred TOML token location `registry.token`, equivalent to
 the `[registry] token` section written by `cargo login`.
 - @satisfies REQ-186
-- var `TOML_REGISTRIES_TOKEN_PATH = ("registries", "crates-io", "token")` (L88)
+- var `TOML_REGISTRIES_TOKEN_PATH = ("registries", "crates-io", "token")` (L89)
 - @brief Dotted TOML path of the named-registry token inside
 `credentials.toml`.
 - @details Fallback TOML token location `registries.crates-io.token`,
 equivalent to the `[registries.crates-io] token` section.
 - @satisfies REQ-186
-- var `MIN_RUSTC_VERSION = (1, 89, 0)` (L94)
+- var `WEBSITE_ONLY_DETAIL = "this action can only be performed on the crates.io website"` (L97)
+- @brief Upstream crates.io `/me` error detail proving token authentication.
+- @details crates.io emits this detail on HTTP 403 only after resolving the
+presented API token; invalid tokens yield HTTP 401 and absent tokens
+yield the `this action requires authentication` detail.
+- @satisfies REQ-187
+- var `WEBSITE_ONLY_AUTH_EVIDENCE = "crates.io token accepted (the /me endpoint is restricted to the crates.io website)."` (L105)
+- @brief English evidence line printed when the website-only 403
+classifies the token as authenticated.
+- @details Success-path output of `_verify_crates_io_auth` when `/me`
+rejects the request as website-only after accepting the token.
+- @satisfies REQ-187, REQ-193
+- var `MIN_RUSTC_VERSION = (1, 89, 0)` (L111)
 - @brief Minimum supported rustc version tuple `(1, 89, 0)`.
 - @details Versions comparing lower abort the command.
 - @satisfies REQ-185
-- var `MIN_CARGO_VERSION = (1, 89, 0)` (L101)
+- var `MIN_CARGO_VERSION = (1, 89, 0)` (L118)
 - @brief Minimum supported cargo version tuple `(1, 89, 0)`.
 - @details cargo 1.89 ships the crates.io Trusted Publishing support required
 by the OIDC publish executed from the configured GitHub workflow.
 - @satisfies REQ-185
-- var `CRATE_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")` (L108)
+- var `CRATE_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")` (L125)
 - @brief Anchored conservative crate-name regex `^[a-z0-9][a-z0-9_-]*$`.
 - @details Accepts only lowercase ASCII letters, digits, `-`, and `_` with a
 non-leading separator; uppercase letters and dots are rejected.
 - @satisfies REQ-183
-- var `MAX_CRATE_NAME_LENGTH = 64` (L113)
+- var `MAX_CRATE_NAME_LENGTH = 64` (L130)
 - @brief Maximum accepted crate-name length matching the crates.io limit.
 - @satisfies REQ-183
-- var `GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$")` (L120)
+- var `GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$")` (L137)
 - @brief Anchored `owner/repo` validation regex
 `^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$`.
 - @details Repository tokens MUST NOT be URLs or carry extra slashes.
 - @satisfies REQ-184
-- var `WORKFLOW_FILE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$")` (L127)
+- var `WORKFLOW_FILE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$")` (L144)
 - @brief Anchored bare workflow-filename regex
 `^[A-Za-z0-9][A-Za-z0-9._-]*\.(yml|yaml)$`.
 - @details Rejects paths, directory components, and unsupported extensions.
 - @satisfies REQ-184
-- var `VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")` (L134)
+- var `VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")` (L151)
 - @brief Anchored strict `X.Y.Z` semantic-version regex.
 - @details Used to locate the version token inside `rustc --version` and
 `cargo --version` output; malformed values abort the version gate.
 - @satisfies REQ-185
-### class `class _UsageParser(argparse.ArgumentParser)` : argparse.ArgumentParser `priv` (L137-161)
+### class `class _UsageParser(argparse.ArgumentParser)` : argparse.ArgumentParser `priv` (L154-178)
 - @brief `argparse` parser variant preserving the legacy exit code.
 - @details Overrides `error` so usage errors print the message plus usage text to stderr and terminate with exit code `1`, matching the `npm-bootstrap-trust` `usage(1)`/`die` semantics instead of the argparse default `2`.
 - @satisfies REQ-182
-- fn `def error(self, message)` (L147-161)
+- fn `def error(self, message)` (L164-178)
   - @brief `argparse` parser variant preserving the legacy exit code.
   - @brief Terminate argument parsing with the legacy failure contract.
   - @details Overrides `error` so usage errors print the message plus usage
@@ -385,21 +398,21 @@ default `2`.
   - @satisfies REQ-182
   - @satisfies REQ-182
 
-### fn `def _build_parser()` `priv` (L162-190)
+### fn `def _build_parser()` `priv` (L179-207)
 - @brief Build the `cargo-bootstrap-trust` argument parser.
 - @details Registers required `-p/--package`, `-r/--repo`, and `-f/--workflow` options plus the default `-h/--help` action on the `_UsageParser` variant.
 - @return {_UsageParser} Configured parser instance.
 - @satisfies REQ-182
 
-### fn `def _die(message) -> NoReturn` `priv` (L191-206)
+### fn `def _die(message) -> NoReturn` `priv` (L208-223)
 - @brief Print an error line and terminate with exit code `1`.
 - @details Mirrors the `npm-bootstrap-trust` `die` helper using the shared `[ERROR]` stderr renderer.
 - @param message {str} Failure description rendered after the `[ERROR]` prefix.
 - @return {None} Never returns; raises `SystemExit`.
 - @throws {SystemExit} Always exit code `1`.
-- @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-187, REQ-188, REQ-190, REQ-191
+- @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-187, REQ-188, REQ-190, REQ-191, REQ-193
 
-### fn `def _validate_inputs(package_name, github_repo, workflow_file)` `priv` (L207-235)
+### fn `def _validate_inputs(package_name, github_repo, workflow_file)` `priv` (L224-252)
 - @brief Validate the conservative crate, repository, and workflow tokens.
 - @details Applies `CRATE_NAME_PATTERN` plus `MAX_CRATE_NAME_LENGTH`, the `GITHUB_REPO_PATTERN` plus owner length at most 39 and owner not ending with `-`, and `WORKFLOW_FILE_PATTERN`, aborting with the shared English diagnostics on the first failure.
 - @param package_name {str} crates.io crate name token.
@@ -409,48 +422,48 @@ default `2`.
 - @throws {SystemExit} Exit code `1` via `_die` on the first invalid token.
 - @satisfies REQ-183, REQ-184
 
-### fn `def _parse_version(text)` `priv` (L236-254)
+### fn `def _parse_version(text)` `priv` (L253-271)
 - @brief Extract one strict `X.Y.Z` version tuple from tool output.
 - @details Scans whitespace-separated tokens of `rustc --version` or `cargo --version` output and returns the first token matching `VERSION_PATTERN`; tool banners prefix the version with the binary name, so no positional assumption is made.
 - @param text {str} Raw version output token.
 - @return {tuple[int, int, int]|None} Numeric version tuple, or `None` when no token matches the strict format.
 - @satisfies REQ-185
 
-### fn `def _require_toolchain()` `priv` (L255-287)
+### fn `def _require_toolchain()` `priv` (L272-304)
 - @brief Validate rustc and cargo presence plus minimum versions.
 - @details Checks `rustc` and `cargo` executables via `require_commands`, captures `rustc --version` and `cargo --version`, parses both with `_parse_version`, and aborts when either executable reports a version lower than `MIN_RUSTC_VERSION` or `MIN_CARGO_VERSION` respectively or an unparseable value.
 - @return {None} Returns when the toolchain satisfies the version gate.
 - @throws {SystemExit} Exit code `1` via `require_commands` on missing executables or via `_die` on incompatible versions.
 - @satisfies REQ-185, CTN-003, REQ-056
 
-### fn `def _resolve_registry_token()` `priv` (L288-310)
+### fn `def _resolve_registry_token()` `priv` (L305-327)
 - @brief Resolve the crates.io authentication token.
 - @details Checks sources in priority order: `TOKEN_ENV_VARIABLE` from the environment; the TOML credentials file `$CARGO_HOME/credentials.toml` (`CARGO_HOME` defaulting to `~/.cargo`) via `_read_toml_credentials_token`; the legacy JSON credentials file `$CARGO_HOME/credentials` via `_read_legacy_json_token`. Time complexity O(n) over the largest credentials file size.
 - @return {str|None} Non-empty token string when resolvable; `None` when every source is absent, unreadable, malformed, or lacks a token value.
 - @satisfies REQ-186
 
-### fn `def _read_toml_credentials_token(cargo_home)` `priv` (L311-337)
+### fn `def _read_toml_credentials_token(cargo_home)` `priv` (L328-354)
 - @brief Read the crates.io token from the modern TOML credentials file.
 - @details Parses `$CARGO_HOME/credentials.toml` with `tomllib`, then tries `TOML_REGISTRY_TOKEN_PATH` before `TOML_REGISTRIES_TOKEN_PATH` and returns the first non-empty string token. Missing, unreadable, or malformed files resolve to `None` so later sources stay consultable. Time complexity O(n) over file size.
 - @param cargo_home {Path} Resolved cargo home directory containing `credentials.toml`.
 - @return {str|None} Non-empty token string when resolvable; `None` otherwise.
 - @satisfies REQ-186
 
-### fn `def _lookup_toml_token_path(payload, path)` `priv` (L338-356)
+### fn `def _lookup_toml_token_path(payload, path)` `priv` (L355-373)
 - @brief Walk one dotted TOML path and return its non-empty string leaf.
 - @details Traverses nested TOML tables segment by segment, rejecting non-mapping intermediates and non-string or empty leaves. Time complexity O(depth) over the requested path length.
 - @param payload {dict} Parsed TOML document.
 - @param path {tuple[str, ...]} Dotted path segments to resolve.
 - @return {str|None} Leaf string value when present and non-empty; `None` otherwise.
 
-### fn `def _read_legacy_json_token(cargo_home)` `priv` (L357-377)
+### fn `def _read_legacy_json_token(cargo_home)` `priv` (L374-394)
 - @brief Read the crates.io token from the legacy JSON credentials file.
 - @details Parses `$CARGO_HOME/credentials` as JSON and extracts `TOKEN_CREDENTIALS_KEY`. Missing, unreadable, malformed, or tokenless files resolve to `None`. Time complexity O(n) over file size.
 - @param cargo_home {Path} Resolved cargo home directory containing the legacy `credentials` file.
 - @return {str|None} Non-empty token string when resolvable; `None` otherwise.
 - @satisfies REQ-186
 
-### fn `def _http_request(url, token=None, payload=None)` `priv` (L378-407)
+### fn `def _http_request(url, token=None, payload=None)` `priv` (L395-424)
 - @brief Execute one crates.io HTTP request and decode the JSON body.
 - @details Builds a GET (`payload` is `None`) or JSON PUT request carrying `USER_AGENT`, `Accept: application/json`, and an `Authorization: Bearer` header when a token is supplied. Time complexity O(n) over response size.
 - @param url {str} Absolute crates.io API endpoint URL.
@@ -462,15 +475,22 @@ default `2`.
 - @throws {json.JSONDecodeError} On malformed response bodies.
 - @satisfies REQ-187, REQ-188, REQ-191
 
-### fn `def _verify_crates_io_auth(token)` `priv` (L408-431)
+### fn `def _verify_crates_io_auth(token)` `priv` (L425-457)
 - @brief Verify crates.io authentication through the `/me` endpoint.
-- @details Sends `GET {CRATES_API}/me` with the resolved Bearer token and prints the authenticated account login; any HTTP error, connection failure, or malformed payload aborts with the `cargo login` hint.
-- @param token {str} Resolved crates.io Bearer token.
-- @return {None} Prints the account evidence line on success.
-- @throws {SystemExit} Exit code `1` via `_die` on non-200 responses, connection failures, or malformed payloads.
+- @details Sends `GET {CRATES_API}/me` with the resolved token and classifies the outcome per REQ-187 and REQ-193: HTTP 200 proves authentication and prints the account login; HTTP 403 whose JSON body carries `WEBSITE_ONLY_DETAIL` proves the token was resolved and accepted while the endpoint is restricted to website sessions, so verification succeeds with the `WEBSITE_ONLY_AUTH_EVIDENCE` line; HTTP 401, any other HTTP error, connection failure, or malformed payload aborts with the `cargo login` hint. Time complexity O(n) over response size.
+- @param token {str} Resolved crates.io API token.
+- @return {None} Prints the authentication evidence line on success.
+- @throws {SystemExit} Exit code `1` via `_die` on unauthenticated responses, connection failures, or malformed payloads.
+- @satisfies REQ-187, REQ-193
+
+### fn `def _is_website_only_auth_probe(error)` `priv` (L458-479)
+- @brief Test whether one `/me` HTTP error proves a valid token.
+- @details Parses the JSON error body of the captured `HTTPError` and matches the first `errors[].detail` against `WEBSITE_ONLY_DETAIL`. crates.io emits that detail only after resolving the presented API token (probe evidence: invalid tokens yield HTTP 401 and absent tokens yield the `this action requires authentication` detail), so a match proves authentication. Time complexity O(n) over response size.
+- @param error {urllib.error.HTTPError} Captured `/me` HTTP error response.
+- @return {bool} `True` when the error body proves token authentication.
 - @satisfies REQ-187
 
-### fn `def _check_crate_availability(package_name)` `priv` (L432-459)
+### fn `def _check_crate_availability(package_name)` `priv` (L480-507)
 - @brief Verify that the crate name is still available on crates.io.
 - @details Sends `GET {CRATES_API}/crates/<package>`; HTTP 404 proves availability, a 200 payload listing versions aborts as taken, and any other outcome aborts as unverifiable. Time complexity O(1) plus network.
 - @param package_name {str} Validated crate name token.
@@ -478,7 +498,7 @@ default `2`.
 - @throws {SystemExit} Exit code `1` via `_die` on existing versions, non-404 HTTP errors, connection failures, or malformed payloads.
 - @satisfies REQ-188
 
-### fn `def _write_placeholder_crate(temp_dir, package_name, github_repo)` `priv` (L460-494)
+### fn `def _write_placeholder_crate(temp_dir, package_name, github_repo)` `priv` (L508-542)
 - @brief Create the placeholder crate skeleton in the temporary directory.
 - @details Runs `cargo init --name <package> --vcs none <temp_dir>` with captured output, aborts on failure, then overwrites the generated `Cargo.toml` with version `0.0.0`, the placeholder description, and the repository URL `https://github.com/<repo>`. The `cargo init` binary entrypoint compiles offline, keeping the later `cargo publish` verify build dependency-free.
 - @param temp_dir {str|Path} Existing temporary crate directory.
@@ -489,7 +509,7 @@ default `2`.
 - @throws {OSError} Propagated on filesystem write failure.
 - @satisfies REQ-189
 
-### fn `def _register_trusted_publisher(token, package_name, github_repo, workflow_file)` `priv` (L495-529)
+### fn `def _register_trusted_publisher(token, package_name, github_repo, workflow_file)` `priv` (L543-577)
 - @brief Register the GitHub trusted publisher through the crates.io API.
 - @details Sends `PUT {CRATES_API}/crates/<package>/trusted_publishing/github_actions_config` with JSON body `{"repository": "<owner/repo>", "workflow": "<workflow>"}` and the resolved Bearer token. Time complexity O(1) plus network.
 - @param token {str} Resolved crates.io Bearer token.
@@ -500,59 +520,62 @@ default `2`.
 - @throws {SystemExit} Exit code `1` via `_die` with the publication-without-trust diagnostic on HTTP or connection failures.
 - @satisfies REQ-191
 
-### fn `def print_help(version)` (L530-550)
+### fn `def print_help(version)` (L578-598)
 - @brief Print command-specific help text.
 - @details Renders usage line, option list, and behavioral summary in English, following the shared command help layout.
 - @param version {str} Current CLI version token rendered in the usage line.
 - @return {None} Writes to stdout.
 - @satisfies PRJ-002, REQ-182
 
-### fn `def run(args)` (L551-627)
+### fn `def run(args)` (L599-675)
 - @brief Execute the five-phase crates.io bootstrap and trust pipeline.
 - @details Phase order: `[1/5]` crates.io authentication via the `/me` endpoint using the token resolved by `_resolve_registry_token`; `[2/5]` crate availability via the crates.io crate endpoint, aborting on existing versions or a failure without an HTTP 404 marker; `[3/5]` placeholder crate creation in a fresh temporary directory; `[4/5]` publication via `cargo publish`; `[5/5]` GitHub trusted-publisher creation through the crates.io trusted-publishing API plus trust configuration verification. The temporary directory is removed on every exit path; every failure aborts with exit code `1`.
 - @param args {list[str]} Command arguments (without the command token).
 - @return {int} `0` after successful publication and trust verification.
 - @throws {SystemExit} Exit code `1` on usage errors, invalid inputs, missing or incompatible toolchain, failed authentication, taken or unverifiable crate name, failed publication, or failed trust creation/verification.
-- @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-186, REQ-187, REQ-188, REQ-189, REQ-190, REQ-191, REQ-192
+- @satisfies REQ-182, REQ-183, REQ-184, REQ-185, REQ-186, REQ-187, REQ-188, REQ-189, REQ-190, REQ-191, REQ-192, REQ-193
 
 ## Symbol Index
 |Symbol|Kind|Vis|Lines|Sig|
 |---|---|---|---|---|
-|`PROGRAM`|var|pub|33||
-|`DESCRIPTION`|var|pub|34||
-|`CRATES_API`|var|pub|41||
-|`USER_AGENT`|var|pub|46||
-|`HTTP_TIMEOUT`|var|pub|50||
-|`TOKEN_ENV_VARIABLE`|var|pub|56||
-|`TOKEN_CREDENTIALS_KEY`|var|pub|63||
-|`TOKEN_TOML_FILE`|var|pub|72||
-|`TOML_REGISTRY_TOKEN_PATH`|var|pub|80||
-|`TOML_REGISTRIES_TOKEN_PATH`|var|pub|88||
-|`MIN_RUSTC_VERSION`|var|pub|94||
-|`MIN_CARGO_VERSION`|var|pub|101||
-|`CRATE_NAME_PATTERN`|var|pub|108||
-|`MAX_CRATE_NAME_LENGTH`|var|pub|113||
-|`GITHUB_REPO_PATTERN`|var|pub|120||
-|`WORKFLOW_FILE_PATTERN`|var|pub|127||
-|`VERSION_PATTERN`|var|pub|134||
-|`_UsageParser`|class|priv|137-161|class _UsageParser(argparse.ArgumentParser)|
-|`_UsageParser.error`|fn|pub|147-161|def error(self, message)|
-|`_build_parser`|fn|priv|162-190|def _build_parser()|
-|`_die`|fn|priv|191-206|def _die(message) -> NoReturn|
-|`_validate_inputs`|fn|priv|207-235|def _validate_inputs(package_name, github_repo, workflow_...|
-|`_parse_version`|fn|priv|236-254|def _parse_version(text)|
-|`_require_toolchain`|fn|priv|255-287|def _require_toolchain()|
-|`_resolve_registry_token`|fn|priv|288-310|def _resolve_registry_token()|
-|`_read_toml_credentials_token`|fn|priv|311-337|def _read_toml_credentials_token(cargo_home)|
-|`_lookup_toml_token_path`|fn|priv|338-356|def _lookup_toml_token_path(payload, path)|
-|`_read_legacy_json_token`|fn|priv|357-377|def _read_legacy_json_token(cargo_home)|
-|`_http_request`|fn|priv|378-407|def _http_request(url, token=None, payload=None)|
-|`_verify_crates_io_auth`|fn|priv|408-431|def _verify_crates_io_auth(token)|
-|`_check_crate_availability`|fn|priv|432-459|def _check_crate_availability(package_name)|
-|`_write_placeholder_crate`|fn|priv|460-494|def _write_placeholder_crate(temp_dir, package_name, gith...|
-|`_register_trusted_publisher`|fn|priv|495-529|def _register_trusted_publisher(token, package_name, gith...|
-|`print_help`|fn|pub|530-550|def print_help(version)|
-|`run`|fn|pub|551-627|def run(args)|
+|`PROGRAM`|var|pub|34||
+|`DESCRIPTION`|var|pub|35||
+|`CRATES_API`|var|pub|42||
+|`USER_AGENT`|var|pub|47||
+|`HTTP_TIMEOUT`|var|pub|51||
+|`TOKEN_ENV_VARIABLE`|var|pub|57||
+|`TOKEN_CREDENTIALS_KEY`|var|pub|64||
+|`TOKEN_TOML_FILE`|var|pub|73||
+|`TOML_REGISTRY_TOKEN_PATH`|var|pub|81||
+|`TOML_REGISTRIES_TOKEN_PATH`|var|pub|89||
+|`WEBSITE_ONLY_DETAIL`|var|pub|97||
+|`WEBSITE_ONLY_AUTH_EVIDENCE`|var|pub|105||
+|`MIN_RUSTC_VERSION`|var|pub|111||
+|`MIN_CARGO_VERSION`|var|pub|118||
+|`CRATE_NAME_PATTERN`|var|pub|125||
+|`MAX_CRATE_NAME_LENGTH`|var|pub|130||
+|`GITHUB_REPO_PATTERN`|var|pub|137||
+|`WORKFLOW_FILE_PATTERN`|var|pub|144||
+|`VERSION_PATTERN`|var|pub|151||
+|`_UsageParser`|class|priv|154-178|class _UsageParser(argparse.ArgumentParser)|
+|`_UsageParser.error`|fn|pub|164-178|def error(self, message)|
+|`_build_parser`|fn|priv|179-207|def _build_parser()|
+|`_die`|fn|priv|208-223|def _die(message) -> NoReturn|
+|`_validate_inputs`|fn|priv|224-252|def _validate_inputs(package_name, github_repo, workflow_...|
+|`_parse_version`|fn|priv|253-271|def _parse_version(text)|
+|`_require_toolchain`|fn|priv|272-304|def _require_toolchain()|
+|`_resolve_registry_token`|fn|priv|305-327|def _resolve_registry_token()|
+|`_read_toml_credentials_token`|fn|priv|328-354|def _read_toml_credentials_token(cargo_home)|
+|`_lookup_toml_token_path`|fn|priv|355-373|def _lookup_toml_token_path(payload, path)|
+|`_read_legacy_json_token`|fn|priv|374-394|def _read_legacy_json_token(cargo_home)|
+|`_http_request`|fn|priv|395-424|def _http_request(url, token=None, payload=None)|
+|`_verify_crates_io_auth`|fn|priv|425-457|def _verify_crates_io_auth(token)|
+|`_is_website_only_auth_probe`|fn|priv|458-479|def _is_website_only_auth_probe(error)|
+|`_check_crate_availability`|fn|priv|480-507|def _check_crate_availability(package_name)|
+|`_write_placeholder_crate`|fn|priv|508-542|def _write_placeholder_crate(temp_dir, package_name, gith...|
+|`_register_trusted_publisher`|fn|priv|543-577|def _register_trusted_publisher(token, package_name, gith...|
+|`print_help`|fn|pub|578-598|def print_help(version)|
+|`run`|fn|pub|599-675|def run(args)|
 
 
 ---
