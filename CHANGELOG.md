@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.26.5](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.5) - 2026-11-26
+## [0.26.6](https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.6) - 2026-11-27
 ### ⛰️  Features
 - add cargo-bootstrap-trust command with crates.io trusted publishing [useReq] *(cargo-bootstrap-trust)*
   Adds PRJ-009, DES-070, and REQ-182 through REQ-192 to the SRS and implements
@@ -30,6 +30,8 @@
 - Remove files in dist/ dir.
 
 ### 🚜  Changes
+- support credentials.toml token source [useReq] *(cargo-bootstrap-trust)*
+  REQ-186 now enumerates three token sources in priority order: env CARGO_REGISTRIES_CRATES_IO_TOKEN, TOML $CARGO_HOME/credentials.toml (registry.token, registries.crates-io.token), legacy JSON $CARGO_HOME/credentials.; _resolve_registry_token now parses credentials.toml via stdlib tomllib with dedicated helpers; env priority and legacy JSON fallback preserved; REQ-187 abort semantics unchanged.; Add tests/test_tst_023_cargo_bootstrap_trust.py (TST-023): 23 tests covering source priority, TOML/JSON fallbacks, malformed files, and the phase-[1/5] auth flow.; Regenerate REFERENCES.md; update WORKFLOW.md call-trace with new resolver helpers.
 - BREAKING CHANGE: remove req command, config group, and tests [useReq] *(commands)*
   REQUIREMENTS: drop REQ-048..054, REQ-062/063, REQ-070/071, TST-010 (v0.24.0); src: delete req_cmd.py; prune registry entry, help section, req config
   defaults/schema, get_req_profile, and _normalize_string_list
@@ -858,7 +860,7 @@
 - \[0.24.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.24.0
 - \[0.25.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.25.0
 - \[0.26.0\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.0
-- \[0.26.5\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.5
+- \[0.26.6\]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.26.6
 
 [0.1.0]: https://github.com/Ogekuri/shellScripts/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Ogekuri/shellScripts/compare/v0.1.0..v0.2.0
@@ -886,4 +888,4 @@
 [0.24.0]: https://github.com/Ogekuri/shellScripts/compare/v0.23.0..v0.24.0
 [0.25.0]: https://github.com/Ogekuri/shellScripts/compare/v0.24.0..v0.25.0
 [0.26.0]: https://github.com/Ogekuri/shellScripts/compare/v0.25.0..v0.26.0
-[0.26.5]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.5
+[0.26.6]: https://github.com/Ogekuri/shellScripts/compare/v0.26.0..v0.26.6
